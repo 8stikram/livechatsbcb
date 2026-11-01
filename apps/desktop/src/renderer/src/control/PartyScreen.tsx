@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { MAX_ONLINE_MEMBERS } from '@livechatsbcb/protocol';
 import type { ActionResult, AppState, ConnectionStatus, PartyView } from '../../../shared/ipc';
+import { Avatar } from '../Avatar';
+import { ConfirmButton } from './ConfirmButton';
 import { errorMessage } from './messages';
 
 const STATUS_TEXT: Record<ConnectionStatus, string> = {
@@ -10,34 +12,6 @@ const STATUS_TEXT: Record<ConnectionStatus, string> = {
   replaced: 'Tu es connecté sur une autre fenêtre ou un autre PC.',
   party_full: 'La party est pleine. Tu entreras dès qu’une place se libère.',
   update_required: 'Une mise à jour est nécessaire pour rejoindre la party.',
-};
-
-const CONFIRM_WINDOW_MS = 4_000;
-
-const ConfirmButton = ({ label, confirmLabel, onConfirm }: { label: string; confirmLabel: string; onConfirm: () => void }) => {
-  const [armed, setArmed] = useState(false);
-  const timer = useRef<number | undefined>(undefined);
-
-  useEffect(() => () => window.clearTimeout(timer.current), []);
-
-  return (
-    <button
-      type="button"
-      className={armed ? 'quiet danger' : 'quiet'}
-      onClick={() => {
-        window.clearTimeout(timer.current);
-        if (armed) {
-          setArmed(false);
-          onConfirm();
-          return;
-        }
-        setArmed(true);
-        timer.current = window.setTimeout(() => setArmed(false), CONFIRM_WINDOW_MS);
-      }}
-    >
-      {armed ? confirmLabel : label}
-    </button>
-  );
 };
 
 export const PartyScreen = ({ state, party }: { state: AppState; party: PartyView }) => {
@@ -65,17 +39,26 @@ export const PartyScreen = ({ state, party }: { state: AppState; party: PartyVie
 
   return (
     <main className="screen party">
-      <section className="code-card" aria-label="Code de la party">
-        <span className="eyebrow">Code de la party</span>
-        <div className="code-row">
-          <strong className="code" data-testid="party-code">
-            {party.code}
+      {party.channel ? (
+        <section className="code-card" aria-label="Salon Discord">
+          <span className="eyebrow">{party.channel.guildName}</span>
+          <strong className="channel-title" data-testid="party-channel">
+            #{party.channel.channelName}
           </strong>
-          <button type="button" className="secondary compact" onClick={() => void copyCode()}>
-            {copied ? 'Copié !' : 'Copier'}
-          </button>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <section className="code-card" aria-label="Code de la party">
+          <span className="eyebrow">Code de la party</span>
+          <div className="code-row">
+            <strong className="code" data-testid="party-code">
+              {party.code}
+            </strong>
+            <button type="button" className="secondary compact" onClick={() => void copyCode()}>
+              {copied ? 'Copié !' : 'Copier'}
+            </button>
+          </div>
+        </section>
+      )}
 
       <p className={`connection ${isOnline ? 'is-online' : 'is-away'}`} role="status" data-testid="connection">
         <span className="dot" aria-hidden="true" />
@@ -98,9 +81,7 @@ export const PartyScreen = ({ state, party }: { state: AppState; party: PartyVie
         <ul>
           {party.members.map((member) => (
             <li key={member.id} className={member.online ? 'member' : 'member is-offline'}>
-              <span className="avatar" aria-hidden="true">
-                {member.name.slice(0, 1).toUpperCase()}
-              </span>
+              <Avatar className="avatar" name={member.name} url={member.avatarUrl} testId="member-avatar" />
               <span className="member-name">
                 {member.name}
                 {member.id === party.memberId && <span className="you"> (toi)</span>}
@@ -118,13 +99,15 @@ export const PartyScreen = ({ state, party }: { state: AppState; party: PartyVie
       )}
 
       <footer className="party-actions">
+        {!party.channel && (
+          <ConfirmButton
+            label="Changer le code"
+            confirmLabel="Confirmer le changement ?"
+            onConfirm={() => void run(window.liveChat.rotateCode)}
+          />
+        )}
         <ConfirmButton
-          label="Changer le code"
-          confirmLabel="Confirmer le changement ?"
-          onConfirm={() => void run(window.liveChat.rotateCode)}
-        />
-        <ConfirmButton
-          label="Quitter la party"
+          label={party.channel ? 'Quitter le salon' : 'Quitter la party'}
           confirmLabel="Confirmer le départ ?"
           onConfirm={() => void run(window.liveChat.leaveParty)}
         />

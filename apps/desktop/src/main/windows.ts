@@ -18,7 +18,7 @@ export const isOwnPage = (url: string): boolean => {
   }
 };
 
-const openInBrowser = (url: string): void => {
+export const openInBrowser = (url: string): void => {
   try {
     const { protocol } = new URL(url);
     if (protocol === 'https:' || protocol === 'http:') void shell.openExternal(url);

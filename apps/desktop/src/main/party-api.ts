@@ -1,9 +1,14 @@
 import {
   ApiErrorSchema,
+  AuthRedeemResponseSchema,
+  AuthStartResponseSchema,
   CreateMediaResponseSchema,
+  MeResponseSchema,
   RotateCodeResponseSchema,
   SessionResponseSchema,
   UploadedPartSchema,
+  type AuthRedeemResponse,
+  type MeResponse,
   type MediaDraft,
   type SessionResponse,
   type UploadedPart,
@@ -45,12 +50,49 @@ const failure = async (response: Response | null): Promise<{ ok: false; error: A
 
 const sessionFrom = async (response: Response | null): Promise<ApiResult<SessionResponse>> => {
   if (!response?.ok) return failure(response);
-  return { ok: true, value: SessionResponseSchema.parse(await response.json()) };
+  const session = SessionResponseSchema.safeParse(await response.json().catch(() => undefined));
+  return session.success ? { ok: true, value: session.data } : { ok: false, error: 'network' };
 };
 
-export const createParty = async (name: string) => sessionFrom(await request('/v1/parties', { name }));
+export const startLogin = async (challenge: string, port: number): Promise<ApiResult<string>> => {
+  const response = await request('/v1/auth/start', { challenge, port });
+  if (!response?.ok) return failure(response);
+  return { ok: true, value: AuthStartResponseSchema.parse(await response.json()).url };
+};
 
-export const joinParty = async (code: string, name: string) => sessionFrom(await request('/v1/join', { code, name }));
+export const redeemLogin = async (ticket: string, verifier: string): Promise<ApiResult<AuthRedeemResponse>> => {
+  const response = await request('/v1/auth/redeem', { ticket, verifier });
+  if (!response?.ok) return failure(response);
+  return { ok: true, value: AuthRedeemResponseSchema.parse(await response.json()) };
+};
+
+export const logout = async (accountToken: string): Promise<void> => {
+  await request('/v1/auth/logout', {}, accountToken);
+};
+
+export const fetchMe = async (accountToken: string): Promise<ApiResult<MeResponse>> => {
+  let response: Response | null = null;
+  try {
+    response = await fetch(`${SERVER_URL}/v1/me`, {
+      headers: { authorization: `Bearer ${accountToken}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch {
+    // Reported below, like any other way of not getting an answer.
+  }
+  if (!response?.ok) return failure(response);
+  const me = MeResponseSchema.safeParse(await response.json().catch(() => undefined));
+  return me.success ? { ok: true, value: me.data } : { ok: false, error: 'network' };
+};
+
+export const createParty = async (accountToken: string) =>
+  sessionFrom(await request('/v1/parties', {}, accountToken));
+
+export const joinParty = async (accountToken: string, code: string) =>
+  sessionFrom(await request('/v1/join', { code }, accountToken));
+
+export const joinChannel = async (accountToken: string, guildId: string, channelId: string) =>
+  sessionFrom(await request(`/v1/guilds/${guildId}/channels/${channelId}/join`, {}, accountToken));
 
 export const rotateCode = async (session: SessionResponse): Promise<ApiResult<string>> => {
   const response = await request(`/v1/parties/${session.partyId}/rotate-code`, {}, session.token);

@@ -1,12 +1,34 @@
-import type { ApiErrorCode, FileKind, MediaKind, Member } from '@livechatsbcb/protocol';
+import type {
+  Account,
+  ApiErrorCode,
+  FileKind,
+  GuildSummary,
+  LobbyCategory,
+  LobbyMember,
+  MediaKind,
+  Member,
+  PartyChannel,
+} from '@livechatsbcb/protocol';
 
 export type ConnectionStatus = 'connecting' | 'online' | 'reconnecting' | 'replaced' | 'party_full' | 'update_required';
 
 export type PartyView = {
-  code: string;
+  partyId: string;
+  // Either a private party with its code, or a Discord channel.
+  code: string | null;
+  channel: PartyChannel | null;
   memberId: string;
   members: Member[];
   connection: ConnectionStatus;
+};
+
+export type LobbyStatus = 'connecting' | 'online' | 'reconnecting' | 'replaced' | 'update_required';
+
+export type LobbyView = {
+  guildId: string;
+  status: LobbyStatus;
+  categories: LobbyCategory[];
+  online: LobbyMember[];
 };
 
 export type UpdateStatus =
@@ -45,6 +67,7 @@ export type DisplayView = { id: number; label: string };
 export type PlaybackView = {
   id: string;
   senderName: string;
+  senderAvatarUrl: string | null;
   kind: MediaKind;
   caption: string;
   clipStartMs: number;
@@ -63,10 +86,18 @@ export type UploadView = { name: string; percent: number };
 export type AppState = {
   version: string;
   update: UpdateStatus;
-  lastName: string;
+  account: Account | null;
+  // Waiting for the browser to come back from Discord.
+  loggingIn: boolean;
+  // Null until the service has answered.
+  guilds: GuildSummary[] | null;
+  // Discord didn't answer for some server, so the list may be short.
+  guildsPartial: boolean;
+  selectedGuildId: string | null;
+  lobby: LobbyView | null;
   party: PartyView | null;
   // Set when the service dropped this member, so the home screen can say why they are back on it.
-  notice: 'session_expired' | null;
+  notice: 'session_expired' | 'channel_lost' | 'account_expired' | null;
   settings: Settings;
   displays: DisplayView[];
   overlayTest: boolean;
@@ -74,7 +105,7 @@ export type AppState = {
   upload: UploadView | null;
 };
 
-export type ActionError = ApiErrorCode | 'network' | 'cancelled';
+export type ActionError = ApiErrorCode | 'network' | 'cancelled' | 'login_denied' | 'login_timeout';
 export type ActionResult = { ok: true } | { ok: false; error: ActionError };
 
 export type PickResult =
@@ -91,6 +122,12 @@ export type SendMediaInput = {
 export const IpcChannel = {
   GetState: 'state:get',
   StateChanged: 'state:changed',
+  Login: 'account:login',
+  CancelLogin: 'account:cancel-login',
+  Logout: 'account:logout',
+  RefreshGuilds: 'guilds:refresh',
+  SelectGuild: 'guilds:select',
+  JoinChannel: 'guilds:join-channel',
   CreateParty: 'party:create',
   JoinParty: 'party:join',
   RotateCode: 'party:rotate-code',
@@ -110,8 +147,14 @@ export const IpcChannel = {
 export type LiveChatApi = {
   getState(): Promise<AppState>;
   onState(listener: (state: AppState) => void): () => void;
-  createParty(name: string): Promise<ActionResult>;
-  joinParty(code: string, name: string): Promise<ActionResult>;
+  login(): Promise<ActionResult>;
+  cancelLogin(): Promise<void>;
+  logout(): Promise<void>;
+  refreshGuilds(): Promise<void>;
+  selectGuild(guildId: string): Promise<void>;
+  joinChannel(guildId: string, channelId: string): Promise<ActionResult>;
+  createParty(): Promise<ActionResult>;
+  joinParty(code: string): Promise<ActionResult>;
   rotateCode(): Promise<ActionResult>;
   leaveParty(): Promise<ActionResult>;
   reconnect(): Promise<void>;

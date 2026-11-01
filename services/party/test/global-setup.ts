@@ -1,9 +1,10 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { FAKE_DISCORD } from './fake-discord';
 
 const TEST_PORT = 8799;
-// A second copy where media expires within seconds, so that deletion can be tested without waiting a day.
+// A second copy where everything happens within seconds, so that what normally takes a day can be tested.
 const SHORT_RETENTION_PORT = 8798;
 
 // Runs the real Worker in the local Cloudflare runtime, with fresh state in a throwaway folder.
@@ -66,9 +67,29 @@ export default async function setup() {
     }
   };
 
+  // The tests start the stand-in for Discord themselves, as they need to change what it says.
+  const discord = [
+    '--var',
+    `DISCORD_API_URL:${FAKE_DISCORD.url}`,
+    '--var',
+    `DISCORD_CLIENT_ID:${FAKE_DISCORD.clientId}`,
+    '--var',
+    `DISCORD_CLIENT_SECRET:${FAKE_DISCORD.clientSecret}`,
+    '--var',
+    `DISCORD_BOT_TOKEN:${FAKE_DISCORD.botToken}`,
+    '--var',
+    `DISCORD_OPEN_GUILDS:${FAKE_DISCORD.openGuildId}`,
+  ];
   const children = [
-    await start(TEST_PORT, 9239, stateDir),
-    await start(SHORT_RETENTION_PORT, 9238, `${stateDir}-short`, ['--var', 'MEDIA_RETENTION_MS:1500']),
+    await start(TEST_PORT, 9239, stateDir, discord),
+    // Also notices within a second what Discord says, instead of within 5 minutes.
+    await start(SHORT_RETENTION_PORT, 9238, `${stateDir}-short`, [
+      ...discord,
+      '--var',
+      'MEDIA_RETENTION_MS:1500',
+      '--var',
+      'DISCORD_REFRESH_MS:1000',
+    ]),
   ];
 
   return () => {

@@ -7,13 +7,24 @@
   "durable_objects": {
     "bindings": [
       { "name": "DIRECTORY", "class_name": "Directory" },
-      { "name": "PARTY", "class_name": "Party" }
+      { "name": "PARTY", "class_name": "Party" },
+      { "name": "GUILD", "class_name": "Guild" }
     ]
   },
   "r2_buckets": [
     { "binding": "UPDATES", "bucket_name": "livechatsbcb-updates" },
     { "binding": "MEDIA", "bucket_name": "livechatsbcb-media" }
   ],
-  "vars": { "MEDIA_RETENTION_MS": "86400000" },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Directory", "Party"] }]
+  "vars": {
+    "MEDIA_RETENTION_MS": "86400000",
+    "DISCORD_API_URL": "https://discord.com/api/v10",
+    "DISCORD_CLIENT_ID": "",
+    "DISCORD_REFRESH_MS": "300000",
+    // Servers whose members all get access, with no LiveChat role needed. Comma-separated ids.
+    "DISCORD_OPEN_GUILDS": ""
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Directory", "Party"] },
+    { "tag": "v2", "new_sqlite_classes": ["Guild"] }
+  ]
 }

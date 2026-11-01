@@ -1,13 +1,12 @@
 import { z } from 'zod';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 export const WS_SUBPROTOCOL = `livechatsbcb.v${PROTOCOL_VERSION}`;
 export const WS_SUBPROTOCOL_PREFIX = 'livechatsbcb.v';
 export const WS_TOKEN_PREFIX = 'token.';
 
 export const MAX_ONLINE_MEMBERS = 10;
 export const MAX_REGISTERED_MEMBERS = 30;
-export const MAX_NAME_LENGTH = 24;
 
 export const MAX_MEDIA_BYTES = 500 * 1024 * 1024;
 // R2 needs every part of an upload but the last to be the same size, and at least 5 MiB.
@@ -36,6 +35,8 @@ export const CloseCode = {
   PartyFull: 4003,
   UpdateRequired: 4004,
   Removed: 4005,
+  // The account behind a lobby connection is no longer valid.
+  SignedOut: 4006,
 } as const;
 
 export const normalizeCode = (input: string): string => input.toUpperCase().replace(/[^0-9A-Z]/g, '');
@@ -45,14 +46,62 @@ export const CodeSchema = z
   .transform(normalizeCode)
   .refine((code) => code.length === CODE_LENGTH && [...code].every((char) => CODE_ALPHABET.includes(char)));
 
-export const NameSchema = z.string().trim().min(1).max(MAX_NAME_LENGTH);
+export const JoinPartyRequestSchema = z.object({ code: CodeSchema });
 
-export const CreatePartyRequestSchema = z.object({ name: NameSchema });
-export const JoinPartyRequestSchema = z.object({ code: CodeSchema, name: NameSchema });
+// The only host the overlay may load a picture from: it shows them above whatever the member is doing.
+export const DISCORD_IMAGE_ORIGIN = 'https://cdn.discordapp.com';
+const ImageUrlSchema = z.string().startsWith(`${DISCORD_IMAGE_ORIGIN}/`);
+
+export const AccountSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  avatarUrl: ImageUrlSchema.nullable(),
+});
+export type Account = z.infer<typeof AccountSchema>;
+
+// A SHA-256 in base64url. The app keeps what it hashes, and needs it to collect the result of a login.
+export const AuthStartRequestSchema = z.object({
+  challenge: z.string().regex(/^[\w-]{43}$/),
+  port: z.number().int().min(1024).max(65_535),
+});
+export const AuthStartResponseSchema = z.object({ url: z.string() });
+export const AuthRedeemRequestSchema = z.object({
+  ticket: z.string().min(1).max(128),
+  verifier: z.string().min(43).max(128),
+});
+export const AuthRedeemResponseSchema = z.object({ token: z.string(), account: AccountSchema });
+export type AuthRedeemResponse = z.infer<typeof AuthRedeemResponseSchema>;
+
+export const GuildSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  iconUrl: ImageUrlSchema.nullable(),
+  // A member of the server, who still lacks what it takes to use the app there.
+  locked: z.boolean(),
+});
+export type GuildSummary = z.infer<typeof GuildSummarySchema>;
+
+export const MeResponseSchema = z.object({
+  account: AccountSchema,
+  guilds: z.array(GuildSummarySchema),
+  // Discord didn't answer for at least one server, so the list may be short.
+  partial: z.boolean(),
+});
+export type MeResponse = z.infer<typeof MeResponseSchema>;
+
+export const PartyChannelSchema = z.object({
+  guildId: z.string(),
+  guildName: z.string(),
+  channelId: z.string(),
+  channelName: z.string(),
+});
+export type PartyChannel = z.infer<typeof PartyChannelSchema>;
 
 export const SessionResponseSchema = z.object({
   partyId: z.string(),
-  code: z.string(),
+  // A party is either private, entered with a code, or tied to a Discord channel.
+  code: z.string().nullable(),
+  channel: PartyChannelSchema.nullable(),
   memberId: z.string(),
   token: z.string(),
 });
@@ -66,6 +115,10 @@ export const ApiErrorCodeSchema = z.enum([
   'party_full',
   'rate_limited',
   'unauthorized',
+  // The account is no longer valid: only logging in again helps.
+  'signed_out',
+  'forbidden',
+  'discord_unavailable',
   'not_found',
   'storage_full',
   'queue_full',
@@ -76,9 +129,43 @@ export const ApiErrorSchema = z.object({ error: ApiErrorCodeSchema });
 export const MemberSchema = z.object({
   id: z.string(),
   name: z.string(),
+  avatarUrl: ImageUrlSchema.nullable(),
   online: z.boolean(),
 });
 export type Member = z.infer<typeof MemberSchema>;
+
+export const LobbyMemberSchema = MemberSchema.omit({ online: true });
+export type LobbyMember = z.infer<typeof LobbyMemberSchema>;
+
+export const LobbyChannelSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.enum(['text', 'voice']),
+  occupants: z.array(LobbyMemberSchema),
+});
+export type LobbyChannel = z.infer<typeof LobbyChannelSchema>;
+
+export const LobbyCategorySchema = z.object({
+  // Null for the channels that sit above every category.
+  id: z.string().nullable(),
+  name: z.string(),
+  channels: z.array(LobbyChannelSchema),
+});
+export type LobbyCategory = z.infer<typeof LobbyCategorySchema>;
+
+export const LobbyMessageSchema = z.discriminatedUnion('t', [
+  z.object({
+    t: z.literal('lobby'),
+    guild: GuildSummarySchema.omit({ locked: true }),
+    // In the order Discord shows them, and only what this member may see.
+    categories: z.array(LobbyCategorySchema),
+    // Everyone with the app open on this server.
+    online: z.array(LobbyMemberSchema),
+  }),
+  z.object({ t: z.literal('pong') }),
+  z.object({ t: z.literal('closing'), code: z.number() }),
+]);
+export type LobbyMessage = z.infer<typeof LobbyMessageSchema>;
 
 export const MediaContentTypeSchema = z.enum([
   'image/png',
@@ -129,6 +216,7 @@ export const QueueItemSchema = z.object({
   id: z.uuid(),
   senderId: z.string(),
   senderName: z.string(),
+  senderAvatarUrl: ImageUrlSchema.nullable(),
   kind: z.enum(['image', 'video', 'audio', 'text']),
   contentType: MediaContentTypeSchema.nullable(),
   size: z.number(),
@@ -151,7 +239,7 @@ export const ServerMessageSchema = z.discriminatedUnion('t', [
   z.object({
     t: z.literal('welcome'),
     partyId: z.string(),
-    code: z.string(),
+    code: z.string().nullable(),
     memberId: z.string(),
     members: z.array(MemberSchema),
     queue: z.array(QueueItemSchema),

@@ -1,6 +1,7 @@
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { net, protocol } from 'electron';
+import { DISCORD_IMAGE_ORIGIN } from '@livechatsbcb/protocol';
 import { MEDIA_SCHEME } from './media-files';
 
 export const APP_SCHEME = 'app';
@@ -10,7 +11,7 @@ const CONTENT_SECURITY_POLICY = [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self'",
-  `img-src 'self' ${MEDIA_SCHEME}:`,
+  `img-src 'self' ${MEDIA_SCHEME}: ${DISCORD_IMAGE_ORIGIN}`,
   `media-src ${MEDIA_SCHEME}:`,
   "font-src 'self'",
   "base-uri 'none'",

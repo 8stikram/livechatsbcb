@@ -1,6 +1,8 @@
 import { StrictMode, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createRoot } from 'react-dom/client';
+import type { Account } from '@livechatsbcb/protocol';
 import type { OverlayLayout, PlaybackView, Zone } from '../../../shared/ipc';
+import { Avatar } from '../Avatar';
 import { useAppState } from '../use-app-state';
 import logo from '../assets/logo.png';
 import '../styles.css';
@@ -23,11 +25,9 @@ const captionSize = (text: string): string => {
   return text.length > 50 ? 'is-medium' : '';
 };
 
-const Profile = ({ name, zone }: { name: string; zone: Zone }) => (
+const Profile = ({ name, avatarUrl, zone }: { name: string; avatarUrl: string | null; zone: Zone }) => (
   <div className="zone zone-profile" style={zoneStyle(zone)} data-testid="overlay-profile">
-    <span className="profile-avatar" aria-hidden="true">
-      {name.slice(0, 1).toUpperCase()}
-    </span>
+    <Avatar className="profile-avatar" name={name} url={avatarUrl} testId="overlay-avatar" />
     <span className="profile-name outlined">{name}</span>
   </div>
 );
@@ -132,7 +132,7 @@ const Playing = ({
 
   return (
     <div className={onScreen ? 'scene' : 'scene is-waiting'} data-testid="overlay-scene" data-on-screen={onScreen}>
-      <Profile name={item.senderName} zone={layout.profile} />
+      <Profile name={item.senderName} avatarUrl={item.senderAvatarUrl} zone={layout.profile} />
       {item.mediaUrl && item.kind === 'image' && (
         <div className="zone zone-media" style={zoneStyle(layout.media)}>
           <img className="overlay-media" src={item.mediaUrl} alt="" data-testid="overlay-image" />
@@ -149,9 +149,9 @@ const Playing = ({
   );
 };
 
-const TestScene = ({ layout }: { layout: OverlayLayout }) => (
+const TestScene = ({ layout, account }: { layout: OverlayLayout; account: Account | null }) => (
   <div className="scene" data-testid="overlay-test">
-    <Profile name="Ton pseudo" zone={layout.profile} />
+    <Profile name={account?.name ?? 'Ton pseudo'} avatarUrl={account?.avatarUrl ?? null} zone={layout.profile} />
     <div className="zone zone-media" style={zoneStyle(layout.media)}>
       <img className="overlay-media" src={logo} alt="" />
     </div>
@@ -173,7 +173,7 @@ const Stage = () => {
       {playing && (
         <Playing key={playing.id} item={playing} startAt={playing.startAt!} layout={settings.layout} volume={volume} />
       )}
-      {!playing && overlayTest && <TestScene layout={settings.layout} />}
+      {!playing && overlayTest && <TestScene layout={settings.layout} account={state.account} />}
     </main>
   );
 };

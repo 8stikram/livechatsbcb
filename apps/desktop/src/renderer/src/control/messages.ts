@@ -9,9 +9,19 @@ export const errorMessage = (error: ActionError): string => {
     case 'rate_limited':
       return "Trop d'essais. Attends quelques minutes avant de réessayer.";
     case 'invalid_request':
-      return 'Vérifie ton pseudo et le code.';
+      return 'Vérifie le code.';
     case 'unauthorized':
       return "Tu ne fais plus partie de cette party.";
+    case 'signed_out':
+      return 'Ta connexion a expiré. Reconnecte-toi avec Discord.';
+    case 'forbidden':
+      return "Tu n'as pas accès à ce salon.";
+    case 'discord_unavailable':
+      return 'Discord ne répond pas pour le moment. Réessaie dans un instant.';
+    case 'login_denied':
+      return 'Connexion annulée sur Discord.';
+    case 'login_timeout':
+      return "Tu as mis trop de temps à répondre sur Discord. Réessaie.";
     case 'storage_full':
       return 'Le serveur est plein pour le moment. Réessaie plus tard ou envoie un fichier plus léger.';
     case 'queue_full':

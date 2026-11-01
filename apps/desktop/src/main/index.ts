@@ -3,17 +3,20 @@ import { basename, join } from 'node:path';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, screen, type IpcMainInvokeEvent } from 'electron';
 import { z } from 'zod';
 import {
+  CloseCode,
   CodeSchema,
   DEFAULT_DISPLAY_MS,
   MAX_MEDIA_BYTES,
-  NameSchema,
   fileKindOf,
+  type GuildSummary,
   type MediaContentType,
   type QueueItem,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
 import { IpcChannel, type ActionResult, type AppState, type PickResult, type PlaybackView } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
+import { loginWithDiscord } from './discord-login';
+import { LobbyConnection } from './lobby-connection';
 import { MediaCache } from './media-cache';
 import { CONTENT_TYPE_BY_EXTENSION, contentTypeOf, forgetMediaFile, registerMediaFile, serveMediaFiles } from './media-files';
 import { uploadFile } from './media-upload';
@@ -22,7 +25,7 @@ import { PartyConnection } from './party-connection';
 import { SessionStore } from './session-store';
 import { SettingsSchema, SettingsStore } from './settings-store';
 import { Updater } from './updater';
-import { createControlWindow, createStageWindow, denyAllPermissions, isOwnPage, placeOverlay } from './windows';
+import { createControlWindow, createStageWindow, denyAllPermissions, isOwnPage, openInBrowser, placeOverlay } from './windows';
 
 // Lets one PC run several members for testing; each profile has its own folder and its own single-instance lock.
 const profile = process.env['LIVECHATSBCB_PROFILE'];
@@ -43,6 +46,16 @@ const SendMediaInputSchema = z.object({
   withFile: z.boolean(),
 });
 
+const DISCORD_ID = z.string().regex(/^\d{17,20}$/);
+
+// Going back to the list on the window is what someone does after getting a role or adding the bot.
+const REFRESH_ON_FOCUS_AFTER_MS = 60_000;
+const RETRY_GUILDS_AFTER_MS = 30_000;
+// A connection refused for its token gets one quiet attempt at a new one: the account behind it may still have access.
+const REJOIN_AT_MOST_EVERY_MS = 30_000;
+// Refused by a server the list still shows as open: opening it again straight away would just go round in circles.
+const RETRY_REFUSED_GUILD_AFTER_MS = 60_000;
+
 function start(): void {
   denyAllPermissions();
   serveMediaFiles();
@@ -51,6 +64,14 @@ function start(): void {
   const store = new SessionStore();
   const settings = new SettingsStore();
   let connection: PartyConnection | null = null;
+  let lobby: LobbyConnection | null = null;
+  let guilds: GuildSummary[] | null = null;
+  let guildsPartial = false;
+  let guildsRefreshedAt = 0;
+  let guildsRetryTimer: NodeJS.Timeout | undefined;
+  let lastRejoinAt = 0;
+  let refusedGuild: { id: string; at: number } | null = null;
+  let login: AbortController | null = null;
   let notice: AppState['notice'] = null;
   let overlayTest = false;
   let overlayTestTimer: NodeJS.Timeout | undefined;
@@ -69,6 +90,7 @@ function start(): void {
   const toPlayback = (item: QueueItem): PlaybackView => ({
     id: item.id,
     senderName: item.senderName,
+    senderAvatarUrl: item.senderAvatarUrl,
     kind: item.kind,
     caption: item.caption,
     clipStartMs: item.clipStartMs,
@@ -81,19 +103,28 @@ function start(): void {
     const snapshot = connection?.current();
     const [head, ...rest] = snapshot?.queue ?? [];
     const primaryId = screen.getPrimaryDisplay().id;
+    const session = store.session;
     return {
       version: app.getVersion(),
       update: updater.current(),
-      lastName: store.lastName,
+      account: store.login?.account ?? null,
+      loggingIn: login !== null,
+      guilds,
+      guildsPartial,
+      selectedGuildId: store.guildId,
+      lobby: lobby && { guildId: lobby.guildId, ...lobby.current() },
       notice,
-      party: snapshot
-        ? {
-            code: snapshot.code,
-            memberId: snapshot.memberId,
-            members: snapshot.members,
-            connection: snapshot.status,
-          }
-        : null,
+      party:
+        snapshot && session
+          ? {
+              partyId: session.partyId,
+              code: snapshot.code,
+              channel: session.channel,
+              memberId: snapshot.memberId,
+              members: snapshot.members,
+              connection: snapshot.status,
+            }
+          : null,
       settings: settings.current,
       displays: screen.getAllDisplays().map((display, index) => ({
         id: display.id,
@@ -143,29 +174,151 @@ function start(): void {
     cache.clear();
   };
 
+  const closeLobby = (): void => {
+    lobby?.stop();
+    lobby = null;
+  };
+
+  const signOut = (reason: AppState['notice']): void => {
+    login?.abort();
+    leaveConnection();
+    closeLobby();
+    clearTimeout(guildsRetryTimer);
+    guilds = null;
+    guildsPartial = false;
+    notice = reason;
+    store.update({ login: null, session: null, guildId: null });
+    publishState();
+  };
+
+  const openLobby = (guildId: string): void => {
+    const auth = store.login;
+    if (!auth) return;
+
+    closeLobby();
+    lobby = new LobbyConnection(guildId, auth.token, {
+      onChange: (snapshot) => {
+        if (snapshot.status === 'update_required') updater.check();
+        publishState();
+      },
+      onAccessLost: () => {
+        refusedGuild = { id: guildId, at: Date.now() };
+        closeLobby();
+        publishState();
+        void refreshGuilds();
+      },
+      onSignedOut: () => signOut('account_expired'),
+    });
+    lobby.start();
+  };
+
+  // A server with no access is still shown, for the app to say what's missing, but there is nothing to connect to.
+  const followSelectedGuild = (): void => {
+    const known = guilds ?? [];
+    const saved = known.find(({ id }) => id === store.guildId);
+    // A short list may only mean that Discord didn't answer for the rest, which is no reason to forget the choice.
+    if (!saved && store.guildId && guildsPartial) return;
+
+    const chosen = saved ?? known.find(({ locked }) => !locked) ?? known[0];
+    if (chosen?.id !== store.guildId) store.update({ guildId: chosen?.id ?? null });
+
+    const justRefused =
+      refusedGuild?.id === chosen?.id && Date.now() - (refusedGuild?.at ?? 0) < RETRY_REFUSED_GUILD_AFTER_MS;
+    if (!chosen || chosen.locked || justRefused) closeLobby();
+    else if (lobby?.guildId !== chosen.id) openLobby(chosen.id);
+  };
+
+  const refreshGuilds = async (): Promise<void> => {
+    const auth = store.login;
+    if (!auth) return;
+
+    clearTimeout(guildsRetryTimer);
+    guildsRefreshedAt = Date.now();
+    const result = await partyApi.fetchMe(auth.token);
+    // Logged out while waiting for the answer.
+    if (store.login?.token !== auth.token) return;
+
+    if (!result.ok) {
+      if (result.error === 'signed_out') {
+        signOut('account_expired');
+        return;
+      }
+      guilds ??= [];
+      guildsPartial = true;
+    } else {
+      store.update({ login: { ...auth, account: result.value.account } });
+      guilds = result.value.guilds;
+      guildsPartial = result.value.partial;
+      followSelectedGuild();
+    }
+
+    if (guildsPartial) guildsRetryTimer = setTimeout(() => void refreshGuilds(), RETRY_GUILDS_AFTER_MS);
+    publishState();
+  };
+
   const connectTo = (session: SessionResponse): void => {
     connection?.stop();
     connection = new PartyConnection(session, {
       onChange: (snapshot) => {
         if (snapshot.status === 'update_required') updater.check();
+        // Someone may have changed the code, and it is what gets this member back in later.
+        const saved = store.session;
+        if (saved?.partyId === session.partyId && saved.code !== snapshot.code) {
+          store.update({ session: { ...saved, code: snapshot.code } });
+        }
         cache.sync(session, snapshot.queue);
         publishState();
       },
-      onSessionRevoked: () => {
-        leaveConnection();
-        notice = 'session_expired';
-        store.update({ session: null });
-        publishState();
+      onSessionRevoked: (closeCode) => {
+        if (closeCode === CloseCode.Unauthorized && Date.now() - lastRejoinAt > REJOIN_AT_MOST_EVERY_MS) {
+          void rejoin(session);
+          return;
+        }
+        loseParty(session);
       },
     });
     connection.start();
     publishState();
   };
 
-  const enterParty = (session: SessionResponse, name: string): void => {
+  const loseParty = (session: SessionResponse): void => {
+    leaveConnection();
+    notice = session.channel ? 'channel_lost' : 'session_expired';
+    store.update({ session: null });
+    publishState();
+  };
+
+  const enterParty = (session: SessionResponse): void => {
     notice = null;
-    store.update({ session, lastName: name });
+    store.update({ session });
     connectTo(session);
+  };
+
+  // A new token for the same place: on another PC, this account took over and the old token is gone.
+  const askForPlace = (token: string, session: SessionResponse) =>
+    session.channel
+      ? partyApi.joinChannel(token, session.channel.guildId, session.channel.channelId)
+      : partyApi.joinParty(token, session.code ?? '');
+
+  const rejoin = async (session: SessionResponse): Promise<void> => {
+    const auth = store.login;
+    if (!auth) return;
+
+    lastRejoinAt = Date.now();
+    const result = await askForPlace(auth.token, session);
+    if (store.session?.partyId !== session.partyId) return;
+
+    if (result.ok) enterParty(result.value);
+    else if (result.error === 'signed_out') signOut('account_expired');
+    else loseParty(session);
+  };
+
+  // Moving somewhere else. A Discord channel is simply left, but a private party keeps its member, who can come back.
+  const moveTo = (session: SessionResponse): void => {
+    const previous = store.session;
+    leaveConnection();
+    if (previous?.channel && previous.partyId !== session.partyId) void partyApi.leaveParty(previous);
+    enterParty(session);
   };
 
   const clearDraft = (): void => {
@@ -194,26 +347,90 @@ function start(): void {
     });
   };
 
+  // Joining anything goes through the account: this runs the request and deals with what every kind has in common.
+  const enterWith = async (
+    ask: (token: string) => Promise<partyApi.ApiResult<SessionResponse>>,
+  ): Promise<ActionResult> => {
+    const auth = store.login;
+    if (!auth) return { ok: false, error: 'signed_out' };
+
+    const result = await ask(auth.token);
+    if (!result.ok) {
+      if (result.error === 'signed_out') signOut('account_expired');
+      return result;
+    }
+    moveTo(result.value);
+    return { ok: true };
+  };
+
   handle(IpcChannel.GetState, getState);
 
-  handle(IpcChannel.CreateParty, async (rawName: unknown): Promise<ActionResult> => {
-    const name = NameSchema.safeParse(rawName);
-    if (!name.success) return { ok: false, error: 'invalid_request' };
+  handle(IpcChannel.Login, async (): Promise<ActionResult> => {
+    if (login || store.login) return { ok: true };
 
-    const result = await partyApi.createParty(name.data);
-    if (!result.ok) return result;
-    enterParty(result.value, name.data);
+    const controller = new AbortController();
+    login = controller;
+    publishState();
+
+    const result = await loginWithDiscord(openInBrowser, controller.signal);
+    login = null;
+    if (!result.ok) {
+      publishState();
+      return result;
+    }
+
+    notice = null;
+    store.update({ login: result.value });
+    if (controlWindow.isMinimized()) controlWindow.restore();
+    controlWindow.focus();
+    publishState();
+    void refreshGuilds();
     return { ok: true };
   });
 
-  handle(IpcChannel.JoinParty, async (rawCode: unknown, rawName: unknown): Promise<ActionResult> => {
-    const input = z.object({ code: CodeSchema, name: NameSchema }).safeParse({ code: rawCode, name: rawName });
-    if (!input.success) return { ok: false, error: 'invalid_request' };
+  handle(IpcChannel.CancelLogin, () => login?.abort());
 
-    const result = await partyApi.joinParty(input.data.code, input.data.name);
-    if (!result.ok) return result;
-    enterParty(result.value, input.data.name);
-    return { ok: true };
+  handle(IpcChannel.Logout, async () => {
+    const auth = store.login;
+    const session = store.session;
+    if (!auth) return;
+
+    signOut(null);
+    // Nothing left to do with the answers: this PC has already forgotten everything.
+    if (session?.channel) void partyApi.leaveParty(session);
+    void partyApi.logout(auth.token);
+  });
+
+  handle(IpcChannel.RefreshGuilds, () => refreshGuilds());
+
+  handle(IpcChannel.SelectGuild, (rawGuildId: unknown) => {
+    const guildId = DISCORD_ID.safeParse(rawGuildId);
+    if (!guildId.success || !guilds?.some(({ id }) => id === guildId.data)) return;
+
+    // Asking for it again is the way out of a refusal that has since been sorted out.
+    refusedGuild = null;
+    store.update({ guildId: guildId.data });
+    followSelectedGuild();
+    // The same server, after this account opened it on another PC.
+    if (lobby?.guildId === guildId.data && lobby.current().status === 'replaced') lobby.reconnectNow();
+    publishState();
+  });
+
+  handle(IpcChannel.JoinChannel, (rawGuildId: unknown, rawChannelId: unknown): Promise<ActionResult> | ActionResult => {
+    const guildId = DISCORD_ID.safeParse(rawGuildId);
+    const channelId = DISCORD_ID.safeParse(rawChannelId);
+    if (!guildId.success || !channelId.success) return { ok: false, error: 'invalid_request' };
+    if (store.session?.channel?.channelId === channelId.data) return { ok: true };
+
+    return enterWith((token) => partyApi.joinChannel(token, guildId.data, channelId.data));
+  });
+
+  handle(IpcChannel.CreateParty, () => enterWith((token) => partyApi.createParty(token)));
+
+  handle(IpcChannel.JoinParty, (rawCode: unknown): Promise<ActionResult> | ActionResult => {
+    const code = CodeSchema.safeParse(rawCode);
+    if (!code.success) return { ok: false, error: 'invalid_request' };
+    return enterWith((token) => partyApi.joinParty(token, code.data));
   });
 
   handle(IpcChannel.RotateCode, async (): Promise<ActionResult> => {
@@ -240,7 +457,12 @@ function start(): void {
     return { ok: true };
   });
 
-  handle(IpcChannel.Reconnect, () => connection?.reconnectNow());
+  handle(IpcChannel.Reconnect, async () => {
+    const session = store.session;
+    // On another PC, this account was given a new token and this one stopped working.
+    if (session && connection?.current().status === 'replaced') await rejoin(session);
+    else connection?.reconnectNow();
+  });
 
   handle(IpcChannel.CopyCode, () => {
     const code = connection?.current().code;
@@ -356,10 +578,15 @@ function start(): void {
   screen.on('display-removed', onDisplaysChanged);
   screen.on('display-metrics-changed', onDisplaysChanged);
 
+  controlWindow.on('focus', () => {
+    if (store.login && Date.now() - guildsRefreshedAt > REFRESH_ON_FOCUS_AFTER_MS) void refreshGuilds();
+  });
   controlWindow.on('closed', () => app.quit());
   app.on('before-quit', () => {
     quitting = true;
+    login?.abort();
     connection?.stop();
+    lobby?.stop();
     settings.flush();
   });
   app.on('second-instance', () => {
@@ -367,8 +594,11 @@ function start(): void {
     controlWindow.focus();
   });
 
-  const saved = store.session;
-  if (saved) connectTo(saved);
+  if (store.login) {
+    void refreshGuilds();
+    const saved = store.session;
+    if (saved) connectTo(saved);
+  }
 
   updater.start();
 }

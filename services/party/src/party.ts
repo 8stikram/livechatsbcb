@@ -13,13 +13,16 @@ import {
   fileKindOf,
   mediaPartBytes,
   mediaPartCount,
+  type Account,
+  type LobbyMember,
   type MediaDraft,
   type Member,
   type QueueItem,
   type ServerMessage,
 } from '@livechatsbcb/protocol';
+import { randomToken, sha256 } from './tokens';
 
-type MemberRow = { id: string; name: string };
+type MemberRow = { id: string; name: string; avatar_url: string | null };
 type Credentials = { memberId: string; token: string };
 type UploadRow = { media_id: string; member_id: string; upload_id: string; draft: string; attempts_left: number };
 type QueueRow = {
@@ -31,6 +34,7 @@ type QueueRow = {
   ready: string;
 };
 type Refusal<Error extends string> = { ok: false; error: Error };
+type Admission = { ok: true; member: Credentials } | Refusal<'party_full'>;
 
 // Long enough for every PC to load a file it already has and be ready at the same moment.
 const START_LEAD_MS = 1_500;
@@ -39,15 +43,16 @@ const MIN_PREPARE_MS = 15_000;
 const MAX_PREPARE_MS = 120_000;
 const PREPARE_BYTES_PER_MS = 2_000;
 
-const toHex = (bytes: Uint8Array): string => [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-
-const sha256 = async (value: string): Promise<string> =>
-  toHex(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))));
-
 export class Party extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    ctx.storage.sql.exec(`
+    this.createTables();
+    // Answered by the runtime, so keep-alive pings don't wake a hibernating party.
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(WS_PING, WS_PONG));
+  }
+
+  private createTables(): void {
+    this.ctx.storage.sql.exec(`
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS members (
         id TEXT PRIMARY KEY,
@@ -73,8 +78,11 @@ export class Party extends DurableObject<Env> {
         ready TEXT NOT NULL
       );
     `);
-    // Answered by the runtime, so keep-alive pings don't wake a hibernating party.
-    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(WS_PING, WS_PONG));
+    // Parties created before members had a picture.
+    const columns = this.ctx.storage.sql.exec<{ name: string }>('PRAGMA table_info(members)').toArray();
+    if (!columns.some(({ name }) => name === 'avatar_url')) {
+      this.ctx.storage.sql.exec('ALTER TABLE members ADD COLUMN avatar_url TEXT');
+    }
   }
 
   init(partyId: string, code: string): void {
@@ -82,27 +90,48 @@ export class Party extends DurableObject<Env> {
     this.setMeta('code', code);
   }
 
-  async addMember(name: string): Promise<{ ok: true; member: Credentials } | { ok: false; error: 'party_full' }> {
-    const token = toHex(crypto.getRandomValues(new Uint8Array(32)));
+  // A party tied to a Discord channel has no code, and is opened by whoever enters it first.
+  async enterChannel(partyId: string, guildId: string, channelId: string, account: Account): Promise<Admission> {
+    const token = randomToken();
     const tokenHash = await sha256(token);
 
-    // No await from here on: the capacity check and the insert must not interleave with another join.
-    if (this.onlineIds().size >= MAX_ONLINE_MEMBERS) return { ok: false, error: 'party_full' };
+    // No await from here on: someone leaving at this moment could otherwise wipe this between the two steps.
+    this.setMeta('partyId', partyId);
+    this.setMeta('guildId', guildId);
+    this.setMeta('channelId', channelId);
+    return this.admit(account, token, tokenHash);
+  }
 
-    this.evictIfRegistryFull();
+  async addMember(account: Account): Promise<Admission> {
+    const token = randomToken();
+    return this.admit(account, token, await sha256(token));
+  }
 
-    const id = crypto.randomUUID();
+  // Someone coming back, or on a second PC, gets a new token: there is one member per Discord account.
+  // Stays free of await: the capacity check and the insert must not interleave with another join.
+  private admit(account: Account, token: string, tokenHash: string): Admission {
+    const online = this.onlineIds();
+    if (online.size >= MAX_ONLINE_MEMBERS && !online.has(account.id)) return { ok: false, error: 'party_full' };
+
+    const [known] = this.ctx.storage.sql.exec('SELECT 1 FROM members WHERE id = ?', account.id).toArray();
+    if (!known) this.evictIfRegistryFull();
+
     const now = Date.now();
     this.ctx.storage.sql.exec(
-      'INSERT INTO members (id, name, token_hash, joined_at, last_seen) VALUES (?, ?, ?, ?, ?)',
-      id,
-      name,
+      `INSERT INTO members (id, name, avatar_url, token_hash, joined_at, last_seen) VALUES (?1, ?2, ?3, ?4, ?5, ?5)
+       ON CONFLICT (id) DO UPDATE SET
+         name = excluded.name,
+         avatar_url = excluded.avatar_url,
+         token_hash = excluded.token_hash,
+         last_seen = excluded.last_seen`,
+      account.id,
+      account.name,
+      account.avatarUrl,
       tokenHash,
-      now,
       now,
     );
     this.broadcast({ t: 'members', members: this.members() });
-    return { ok: true, member: { memberId: id, token } };
+    return { ok: true, member: { memberId: account.id, token } };
   }
 
   async codeForToken(token: string): Promise<string | null> {
@@ -118,19 +147,19 @@ export class Party extends DurableObject<Env> {
     const member = await this.memberForToken(token);
     if (!member) return { ok: false };
 
-    this.ctx.storage.sql.exec('DELETE FROM members WHERE id = ?', member.id);
-    for (const socket of this.ctx.getWebSockets(member.id)) this.dismiss(socket, CloseCode.Removed);
+    return { ok: true, releasedCode: await this.removeMember(member.id) };
+  }
 
-    if (this.members().length > 0) {
-      this.broadcast({ t: 'members', members: this.members() });
-      if (this.advanceQueue()) this.broadcastQueue();
-      return { ok: true, releasedCode: null };
-    }
+  // Told by the server's side of things, when Discord says this person shouldn't be here any more.
+  async revoke(memberId: string): Promise<void> {
+    const [member] = this.ctx.storage.sql.exec('SELECT 1 FROM members WHERE id = ?', memberId).toArray();
+    if (member) await this.removeMember(memberId);
+  }
 
-    const releasedCode = this.getMeta('code');
-    await this.ctx.storage.deleteAlarm();
-    await this.ctx.storage.deleteAll();
-    return { ok: true, releasedCode };
+  occupants(): LobbyMember[] {
+    return this.members()
+      .filter(({ online }) => online)
+      .map(({ id, name, avatarUrl }) => ({ id, name, avatarUrl }));
   }
 
   async isMember(token: string): Promise<boolean> {
@@ -144,7 +173,7 @@ export class Party extends DurableObject<Env> {
     draft: MediaDraft,
   ): Promise<{ ok: true } | Refusal<'unauthorized' | 'queue_full'>> {
     const member = await this.memberForToken(token);
-    if (!member) return { ok: false, error: 'unauthorized' };
+    if (!member || !(await this.mayStay(member))) return { ok: false, error: 'unauthorized' };
     if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
     this.enqueue(mediaId, member, draft);
     return { ok: true };
@@ -152,7 +181,7 @@ export class Party extends DurableObject<Env> {
 
   async canUpload(token: string): Promise<{ ok: true; memberId: string } | Refusal<'unauthorized' | 'queue_full'>> {
     const member = await this.memberForToken(token);
-    if (!member) return { ok: false, error: 'unauthorized' };
+    if (!member || !(await this.mayStay(member))) return { ok: false, error: 'unauthorized' };
     if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
     return { ok: true, memberId: member.id };
   }
@@ -206,7 +235,7 @@ export class Party extends DurableObject<Env> {
     const [row] = this.ctx.storage.sql.exec<UploadRow>('SELECT * FROM uploads WHERE media_id = ?', mediaId).toArray();
     if (!row) return;
     const [member] = this.ctx.storage.sql
-      .exec<MemberRow>('SELECT id, name FROM members WHERE id = ?', row.member_id)
+      .exec<MemberRow>('SELECT id, name, avatar_url FROM members WHERE id = ?', row.member_id)
       .toArray();
     this.forgetUpload(mediaId);
     if (member) this.enqueue(mediaId, member, JSON.parse(row.draft) as MediaDraft);
@@ -243,6 +272,7 @@ export class Party extends DurableObject<Env> {
 
     const member = await this.memberForToken(token);
     if (!member) return refuse(CloseCode.Unauthorized, 'unauthorized');
+    if (!(await this.mayStay(member))) return refuse(CloseCode.Removed, 'removed');
 
     const othersOnline = [...this.onlineIds()].filter((id) => id !== member.id).length;
     if (othersOnline >= MAX_ONLINE_MEMBERS) return refuse(CloseCode.PartyFull, 'party full');
@@ -257,13 +287,14 @@ export class Party extends DurableObject<Env> {
       JSON.stringify({
         t: 'welcome',
         partyId: this.getMeta('partyId'),
-        code: this.getMeta('code'),
+        code: this.getMeta('code') || null,
         memberId: member.id,
         members,
         queue: this.queue(),
       } satisfies ServerMessage),
     );
     this.broadcast({ t: 'members', members }, server);
+    this.reportOccupants();
     return response;
   }
 
@@ -312,8 +343,55 @@ export class Party extends DurableObject<Env> {
     const [memberId] = this.ctx.getTags(socket);
     if (memberId) this.touch(memberId);
     this.broadcast({ t: 'members', members: this.members(socket) }, socket);
+    this.reportOccupants(socket);
     // The queue may have been waiting for this member only.
     if (this.advanceQueue(socket)) this.broadcastQueue();
+  }
+
+  private async removeMember(memberId: string): Promise<string | null> {
+    this.ctx.storage.sql.exec('DELETE FROM members WHERE id = ?', memberId);
+    for (const socket of this.ctx.getWebSockets(memberId)) this.dismiss(socket, CloseCode.Removed);
+    this.reportOccupants();
+
+    const [left] = this.ctx.storage.sql.exec('SELECT 1 FROM members LIMIT 1').toArray();
+    if (left) {
+      this.broadcast({ t: 'members', members: this.members() });
+      if (this.advanceQueue()) this.broadcastQueue();
+      return null;
+    }
+
+    const releasedCode = this.getMeta('code');
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+    // This takes the tables too, and the next person to enter a channel will land on this same object.
+    this.createTables();
+    return releasedCode;
+  }
+
+  // Someone connected is checked regularly from the other side. Someone who isn't could have lost access since their
+  // last visit. If Discord doesn't answer, their token still stands: it proves they had access not long ago.
+  private async mayStay(member: MemberRow): Promise<boolean> {
+    const guildId = this.getMeta('guildId');
+    if (!guildId || this.onlineIds().has(member.id)) return true;
+
+    const guild = this.env.GUILD.get(this.env.GUILD.idFromName(guildId));
+    const access = await guild.access(guildId, member.id, this.getMeta('channelId'));
+    if (access.ok || access.error === 'discord_unavailable') return true;
+
+    await this.removeMember(member.id);
+    return false;
+  }
+
+  private reportOccupants(excluding?: WebSocket): void {
+    const guildId = this.getMeta('guildId');
+    if (!guildId) return;
+
+    const occupants = this.members(excluding)
+      .filter(({ online }) => online)
+      .map(({ id, name, avatarUrl }) => ({ id, name, avatarUrl }));
+    const guild = this.env.GUILD.get(this.env.GUILD.idFromName(guildId));
+    // Worth no more than a retry at its next check, if it gets lost.
+    this.ctx.waitUntil(guild.setOccupants(guildId, this.getMeta('channelId'), occupants, Date.now()).catch(() => {}));
   }
 
   private async uploadOf(
@@ -353,6 +431,7 @@ export class Party extends DurableObject<Env> {
       id: mediaId,
       senderId: sender.id,
       senderName: sender.name,
+      senderAvatarUrl: sender.avatar_url,
       kind: draft.file ? fileKindOf(draft.file.contentType) : 'text',
       contentType: draft.file?.contentType ?? null,
       size: draft.file?.size ?? 0,
@@ -440,10 +519,12 @@ export class Party extends DurableObject<Env> {
 
   private members(excluding?: WebSocket): Member[] {
     const online = this.onlineIds(excluding);
-    return this.ctx.storage.sql
-      .exec<MemberRow>('SELECT id, name FROM members ORDER BY joined_at')
+    const members = this.ctx.storage.sql
+      .exec<MemberRow>('SELECT id, name, avatar_url FROM members ORDER BY joined_at')
       .toArray()
-      .map(({ id, name }) => ({ id, name, online: online.has(id) }));
+      .map(({ id, name, avatar_url: avatarUrl }) => ({ id, name, avatarUrl, online: online.has(id) }));
+    // Past visitors of a Discord channel are nobody's business: a private party is the one with a fixed list.
+    return this.getMeta('guildId') ? members.filter((member) => member.online) : members;
   }
 
   private broadcast(message: ServerMessage, excluding?: WebSocket): void {
@@ -458,7 +539,7 @@ export class Party extends DurableObject<Env> {
 
     const online = this.onlineIds();
     const oldest = this.ctx.storage.sql
-      .exec<MemberRow>('SELECT id, name FROM members ORDER BY last_seen')
+      .exec<MemberRow>('SELECT id, name, avatar_url FROM members ORDER BY last_seen')
       .toArray()
       .find(({ id }) => !online.has(id));
     if (oldest) this.ctx.storage.sql.exec('DELETE FROM members WHERE id = ?', oldest.id);
@@ -468,7 +549,7 @@ export class Party extends DurableObject<Env> {
     if (!token) return undefined;
     const tokenHash = await sha256(token);
     const [row] = this.ctx.storage.sql
-      .exec<MemberRow>('SELECT id, name FROM members WHERE token_hash = ?', tokenHash)
+      .exec<MemberRow>('SELECT id, name, avatar_url FROM members WHERE token_hash = ?', tokenHash)
       .toArray();
     return row;
   }

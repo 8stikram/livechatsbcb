@@ -8,8 +8,14 @@ const api: LiveChatApi = {
     ipcRenderer.on(IpcChannel.StateChanged, handler);
     return () => ipcRenderer.removeListener(IpcChannel.StateChanged, handler);
   },
-  createParty: (name) => ipcRenderer.invoke(IpcChannel.CreateParty, name),
-  joinParty: (code, name) => ipcRenderer.invoke(IpcChannel.JoinParty, code, name),
+  login: () => ipcRenderer.invoke(IpcChannel.Login),
+  cancelLogin: () => ipcRenderer.invoke(IpcChannel.CancelLogin),
+  logout: () => ipcRenderer.invoke(IpcChannel.Logout),
+  refreshGuilds: () => ipcRenderer.invoke(IpcChannel.RefreshGuilds),
+  selectGuild: (guildId) => ipcRenderer.invoke(IpcChannel.SelectGuild, guildId),
+  joinChannel: (guildId, channelId) => ipcRenderer.invoke(IpcChannel.JoinChannel, guildId, channelId),
+  createParty: () => ipcRenderer.invoke(IpcChannel.CreateParty),
+  joinParty: (code) => ipcRenderer.invoke(IpcChannel.JoinParty, code),
   rotateCode: () => ipcRenderer.invoke(IpcChannel.RotateCode),
   leaveParty: () => ipcRenderer.invoke(IpcChannel.LeaveParty),
   reconnect: () => ipcRenderer.invoke(IpcChannel.Reconnect),

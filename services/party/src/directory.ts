@@ -1,9 +1,20 @@
 import { DurableObject } from 'cloudflare:workers';
-import { CODE_ALPHABET, CODE_LENGTH } from '@livechatsbcb/protocol';
+import { CODE_ALPHABET, CODE_LENGTH, type Account, type AuthRedeemResponse } from '@livechatsbcb/protocol';
+import { fetchBotGuilds, fetchUser, type BotGuild } from './discord';
+import { randomToken, sha256 } from './tokens';
 
 const MINUTE = 60_000;
 const FAILED_JOIN_LIMIT = { max: 10, windowMs: 10 * MINUTE };
 const CREATE_LIMIT = { max: 10, windowMs: 60 * MINUTE };
+const LOGIN_LIMIT = { max: 30, windowMs: 60 * MINUTE };
+
+const DAY = 24 * 60 * MINUTE;
+// Time to read Discord's page and click, then for the app to collect the result.
+const LOGIN_WINDOW_MS = 10 * MINUTE;
+const TICKET_WINDOW_MS = MINUTE;
+const SESSION_MS = 90 * DAY;
+const ACCOUNT_REFRESH_MS = DAY;
+const STALE_BOT_GUILDS_LIMIT_MS = DAY;
 
 // The project must stay free. R2 has no spending limit of its own, so these are what keeps it inside its free tier:
 // 10 GB stored, of which updates may use 600 MB, and 1 million paid-class operations a month.
@@ -14,6 +25,8 @@ const UPLOAD_WINDOW_MS = 120 * MINUTE;
 type Limit = { max: number; windowMs: number };
 type RateLimited = { ok: false; error: 'rate_limited' };
 type StoredMedia = { key: string; upload_id: string; size: number; expires_at: number };
+type SessionRow = { user_id: string; expires_at: number; last_used: number };
+type AccountRow = { user_id: string; data: string; refreshed_at: number };
 
 const randomCode = (): string => {
   // Bytes at or above this multiple of the alphabet size are redrawn, so every character is equally likely.
@@ -40,7 +53,158 @@ export class Directory extends DurableObject<Env> {
         expires_at INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS r2_usage (month TEXT PRIMARY KEY, class_a INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS logins (
+        state TEXT PRIMARY KEY,
+        challenge TEXT NOT NULL,
+        port INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS tickets (
+        ticket_hash TEXT PRIMARY KEY,
+        challenge TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS accounts (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, refreshed_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS sessions (
+        token_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        last_used INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS bot_guilds (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL, fetched_at INTEGER NOT NULL);
     `);
+  }
+
+  openLogin(ip: string, challenge: string, port: number): { ok: true; state: string } | RateLimited {
+    const key = `login:${ip}`;
+    if (this.isLimited(key, LOGIN_LIMIT)) return { ok: false, error: 'rate_limited' };
+    this.recordAttempt(key, LOGIN_LIMIT);
+
+    const now = Date.now();
+    this.ctx.storage.sql.exec('DELETE FROM logins WHERE expires_at < ?', now);
+    this.ctx.storage.sql.exec('DELETE FROM tickets WHERE expires_at < ?', now);
+    this.ctx.storage.sql.exec('DELETE FROM sessions WHERE expires_at < ?', now);
+
+    const state = randomToken();
+    this.ctx.storage.sql.exec(
+      'INSERT INTO logins (state, challenge, port, expires_at) VALUES (?, ?, ?, ?)',
+      state,
+      challenge,
+      port,
+      now + LOGIN_WINDOW_MS,
+    );
+    return { ok: true, state };
+  }
+
+  // Only once: the address Discord sends the browser back to can end up in its history.
+  takeLogin(state: string): { challenge: string; port: number } | null {
+    const [row] = this.ctx.storage.sql
+      .exec<{ challenge: string; port: number; expires_at: number }>('SELECT * FROM logins WHERE state = ?', state)
+      .toArray();
+    this.ctx.storage.sql.exec('DELETE FROM logins WHERE state = ?', state);
+    return row && row.expires_at > Date.now() ? { challenge: row.challenge, port: row.port } : null;
+  }
+
+  async issueTicket(challenge: string, account: Account): Promise<string> {
+    const ticket = randomToken();
+    const ticketHash = await sha256(ticket);
+    const now = Date.now();
+    this.storeAccount(account, now);
+    this.ctx.storage.sql.exec(
+      'INSERT INTO tickets (ticket_hash, challenge, user_id, expires_at) VALUES (?, ?, ?, ?)',
+      ticketHash,
+      challenge,
+      account.id,
+      now + TICKET_WINDOW_MS,
+    );
+    return ticket;
+  }
+
+  // Worthless without the secret behind the challenge, which only the app that started this login has.
+  async redeemTicket(ticket: string, challenge: string): Promise<AuthRedeemResponse | null> {
+    const ticketHash = await sha256(ticket);
+    const token = randomToken();
+    const tokenHash = await sha256(token);
+
+    // No await from here on: a ticket must not be redeemed twice.
+    const [row] = this.ctx.storage.sql
+      .exec<{ challenge: string; user_id: string; expires_at: number }>('SELECT * FROM tickets WHERE ticket_hash = ?', ticketHash)
+      .toArray();
+    this.ctx.storage.sql.exec('DELETE FROM tickets WHERE ticket_hash = ?', ticketHash);
+    if (!row || row.expires_at <= Date.now() || row.challenge !== challenge) return null;
+
+    const account = this.storedAccount(row.user_id);
+    if (!account) return null;
+
+    const now = Date.now();
+    this.ctx.storage.sql.exec(
+      'INSERT INTO sessions (token_hash, user_id, expires_at, last_used) VALUES (?, ?, ?, ?)',
+      tokenHash,
+      row.user_id,
+      now + SESSION_MS,
+      now,
+    );
+    return { token, account };
+  }
+
+  async accountForToken(token: string): Promise<Account | null> {
+    if (!token) return null;
+    const tokenHash = await sha256(token);
+    const [row] = this.ctx.storage.sql
+      .exec<SessionRow>('SELECT user_id, expires_at, last_used FROM sessions WHERE token_hash = ?', tokenHash)
+      .toArray();
+    const now = Date.now();
+    if (!row || row.expires_at <= now) return null;
+
+    // Someone who keeps using the app stays logged in. Once a day is enough, as each of these is a write.
+    if (now - row.last_used > DAY) {
+      this.ctx.storage.sql.exec(
+        'UPDATE sessions SET expires_at = ?, last_used = ? WHERE token_hash = ?',
+        now + SESSION_MS,
+        now,
+        tokenHash,
+      );
+    }
+    return this.storedAccount(row.user_id);
+  }
+
+  async endSession(token: string): Promise<void> {
+    this.ctx.storage.sql.exec('DELETE FROM sessions WHERE token_hash = ?', await sha256(token));
+  }
+
+  // A new pseudo or picture on Discord shows up here without having to log in again.
+  async refreshAccount(account: Account): Promise<Account> {
+    const [row] = this.ctx.storage.sql
+      .exec<AccountRow>('SELECT * FROM accounts WHERE user_id = ?', account.id)
+      .toArray();
+    if (row && Date.now() - row.refreshed_at < ACCOUNT_REFRESH_MS) return account;
+
+    const fresh = await fetchUser(this.env, account.id);
+    if (!fresh) return account;
+    this.storeAccount(fresh, Date.now());
+    return fresh;
+  }
+
+  async botGuilds(): Promise<{ guilds: BotGuild[]; complete: boolean }> {
+    const [row] = this.ctx.storage.sql
+      .exec<{ data: string; fetched_at: number }>('SELECT data, fetched_at FROM bot_guilds')
+      .toArray();
+    const now = Date.now();
+    const known = row ? (JSON.parse(row.data) as BotGuild[]) : null;
+    if (known && now - row!.fetched_at < Number(this.env.DISCORD_REFRESH_MS)) return { guilds: known, complete: true };
+
+    const answer = await fetchBotGuilds(this.env);
+    if (answer.status !== 'ok') {
+      const usable = known && now - row!.fetched_at < STALE_BOT_GUILDS_LIMIT_MS;
+      return { guilds: usable ? known : [], complete: false };
+    }
+    this.ctx.storage.sql.exec(
+      'INSERT OR REPLACE INTO bot_guilds (id, data, fetched_at) VALUES (1, ?, ?)',
+      JSON.stringify(answer.value),
+      now,
+    );
+    return { guilds: answer.value, complete: true };
   }
 
   allocate(ip: string): { ok: true; partyId: string; code: string } | RateLimited {
@@ -150,6 +314,22 @@ export class Directory extends DurableObject<Env> {
       .toArray();
     if (row?.next != null) void this.ctx.storage.setAlarm(row.next);
     else void this.ctx.storage.deleteAlarm();
+  }
+
+  private storeAccount(account: Account, at: number): void {
+    this.ctx.storage.sql.exec(
+      'INSERT OR REPLACE INTO accounts (user_id, data, refreshed_at) VALUES (?, ?, ?)',
+      account.id,
+      JSON.stringify(account),
+      at,
+    );
+  }
+
+  private storedAccount(userId: string): Account | null {
+    const [row] = this.ctx.storage.sql
+      .exec<AccountRow>('SELECT * FROM accounts WHERE user_id = ?', userId)
+      .toArray();
+    return row ? (JSON.parse(row.data) as Account) : null;
   }
 
   private unusedCode(): string {

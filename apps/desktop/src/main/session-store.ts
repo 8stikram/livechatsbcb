@@ -2,10 +2,11 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node
 import { dirname, join } from 'node:path';
 import { app, safeStorage } from 'electron';
 import { z } from 'zod';
-import { SessionResponseSchema, type SessionResponse } from '@livechatsbcb/protocol';
+import { AuthRedeemResponseSchema, SessionResponseSchema, type AuthRedeemResponse, type SessionResponse } from '@livechatsbcb/protocol';
 
 const StoredDataSchema = z.object({
-  lastName: z.string().default(''),
+  login: AuthRedeemResponseSchema.nullable().default(null),
+  guildId: z.string().nullable().default(null),
   session: SessionResponseSchema.nullable().default(null),
 });
 type StoredData = z.infer<typeof StoredDataSchema>;
@@ -29,8 +30,12 @@ export class SessionStore {
     this.data = this.load();
   }
 
-  get lastName(): string {
-    return this.data.lastName;
+  get login(): AuthRedeemResponse | null {
+    return this.data.login;
+  }
+
+  get guildId(): string | null {
+    return this.data.guildId;
   }
 
   get session(): SessionResponse | null {
@@ -43,11 +48,14 @@ export class SessionStore {
   }
 
   private load(): StoredData {
+    const nothing = { login: null, guildId: null, session: null };
     try {
-      return StoredDataSchema.parse(decode(readFileSync(dataPath())));
+      const stored = StoredDataSchema.parse(decode(readFileSync(dataPath())));
+      // A party needs an account, so what an older version saved doesn't count.
+      return stored.login ? stored : nothing;
     } catch {
       // No file yet, or one written by another Windows account: start again rather than refuse to open.
-      return { lastName: '', session: null };
+      return nothing;
     }
   }
 
