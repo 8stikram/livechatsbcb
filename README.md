@@ -18,6 +18,7 @@ Une image, une vidéo, un son ou un texte : tu l'envoies, et il s'affiche chez t
 <img src="https://img.shields.io/badge/Connexion-Discord-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Connexion avec Discord" />
 <img src="https://img.shields.io/badge/Party-jusqu%27%C3%A0_10_en_ligne-ff5ecb?style=flat-square" alt="Jusqu'à 10 en ligne" />
 <img src="https://img.shields.io/badge/Prix-gratuit-8ee6b4?style=flat-square" alt="Gratuit" />
+<a href="LICENSE"><img src="https://img.shields.io/badge/Licence-AGPL--3.0-c9a2ff?style=flat-square" alt="Licence AGPL-3.0" /></a>
 
 <br /><br />
 
@@ -169,6 +170,12 @@ Personne ne reçoit de flux vidéo : chaque PC télécharge les fichiers à l'av
 - **Connexion :** Discord (`identify` et `guilds`, sans bot)
 
 Tu veux lancer le projet ou comprendre comment il est construit ? Tout est dans le [guide de développement](docs/DEVELOPPEMENT.md).
+
+<br />
+
+## Licence
+
+LiveChatSBCB est sous licence [AGPL-3.0](LICENSE). Tu peux reprendre et modifier le code, à condition de partager tes changements sous la même licence, même si ta version tourne seulement en ligne.
 
 <br />
 
