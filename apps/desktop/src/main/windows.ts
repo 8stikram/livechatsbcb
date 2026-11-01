@@ -1,5 +1,6 @@
+import { release } from 'node:os';
 import { join } from 'node:path';
-import { BrowserWindow, nativeImage, screen, session, shell } from 'electron';
+import { BrowserWindow, nativeImage, nativeTheme, screen, session, shell } from 'electron';
 import { APP_ORIGIN } from './app-protocol';
 import iconPath from '../renderer/src/assets/logo.png?asset';
 
@@ -52,8 +53,15 @@ const secureWebPreferences = {
   webSecurity: true,
 };
 
+// Windows draws the blurred desktop behind the page from Windows 11 22H2 on. Older ones keep an opaque background.
+const canSeeThrough = (): boolean =>
+  process.platform === 'win32' && Number(release().split('.')[2]) >= 22621;
+
 export const createControlWindow = (startHidden: boolean): BrowserWindow => {
   const { workAreaSize } = screen.getPrimaryDisplay();
+  const seeThrough = canSeeThrough();
+  // The blur follows the theme of Windows, and this page is dark whatever that theme is.
+  if (seeThrough) nativeTheme.themeSource = 'dark';
   const window = new BrowserWindow({
     width: Math.min(1120, workAreaSize.width),
     height: Math.min(720, workAreaSize.height),
@@ -62,7 +70,8 @@ export const createControlWindow = (startHidden: boolean): BrowserWindow => {
     show: false,
     title: 'LiveChatSBCB',
     icon: nativeImage.createFromPath(iconPath),
-    backgroundColor: '#0a0a0d',
+    backgroundColor: seeThrough ? '#00000000' : '#0a0a0d',
+    ...(seeThrough ? { backgroundMaterial: 'acrylic' as const } : {}),
     // The page goes all the way up, and Windows keeps drawing its own buttons on top of it.
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#00000000', symbolColor: '#f4f4f5', height: 40 },
@@ -72,7 +81,7 @@ export const createControlWindow = (startHidden: boolean): BrowserWindow => {
   window.once('ready-to-show', () => {
     if (!startHidden) window.show();
   });
-  void window.loadURL(pageUrl('control'));
+  void window.loadURL(`${pageUrl('control')}${seeThrough ? '?see-through' : ''}`);
   return window;
 };
 

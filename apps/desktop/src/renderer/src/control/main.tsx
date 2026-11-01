@@ -5,6 +5,8 @@ import '@fontsource-variable/geist-mono/wght.css';
 import { App } from './App';
 import '../styles.css';
 
+if (location.search === '?see-through') document.documentElement.classList.add('see-through');
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

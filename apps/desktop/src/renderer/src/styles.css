@@ -62,6 +62,14 @@ html:not(.overlay) body {
     var(--ground);
 }
 
+/* Windows draws the blurred desktop behind the page: the tint is what keeps text readable on a bright wallpaper. */
+html.see-through body {
+  background:
+    radial-gradient(620px 460px at 18% 12%, rgb(255 255 255 / 7%), transparent 70%),
+    radial-gradient(760px 560px at 88% 92%, rgb(168 150 190 / 12%), transparent 70%),
+    rgb(10 10 13 / 62%);
+}
+
 h1,
 h2,
 p,
