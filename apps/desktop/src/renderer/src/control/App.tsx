@@ -3,6 +3,7 @@ import { useAppState } from '../use-app-state';
 import { GuildPicker } from './GuildPicker';
 import { Header, type View } from './Header';
 import { HistoryScreen } from './HistoryScreen';
+import { LibraryScreen } from './LibraryScreen';
 import { LoginScreen } from './LoginScreen';
 import { MediaScreen } from './MediaScreen';
 import { errorMessage } from './messages';
@@ -123,6 +124,14 @@ export const App = () => {
               <div className="view" hidden={view !== 'media'}>
                 <MediaScreen state={state} files={files} />
               </div>
+              <div className="view" hidden={view !== 'library'}>
+                <LibraryScreen
+                  state={state}
+                  files={files}
+                  active={view === 'library' && !showPicker}
+                  onOpenEditor={() => setChosenView('media')}
+                />
+              </div>
               <div className="view" hidden={view !== 'history'}>
                 <HistoryScreen state={state} active={view === 'history'} />
               </div>
@@ -133,7 +142,7 @@ export const App = () => {
           </div>
         </div>
 
-        {party && current && !showPicker && (view === 'media' || view === 'history') && (
+        {party && current && !showPicker && (view === 'media' || view === 'library' || view === 'history') && (
           <NowBar current={current} waiting={state.queue.upcoming.length} settings={state.settings} />
         )}
       </div>

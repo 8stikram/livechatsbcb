@@ -20,9 +20,10 @@ import {
   type QueueItem,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, type ActionResult, type AppState, type DraftSlot, type HistoryView, type PickResult, type PlaybackView } from '../shared/ipc';
+import { IpcChannel, type ActionResult, type AppState, type DraftMedia, type DraftSlot, type HistoryView, type PickResult, type PlaybackView } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
+import { Library, type SavedFile } from './library';
 import { MediaCache } from './media-cache';
 import { CONTENT_TYPE_BY_EXTENSION, contentTypeOf, forgetMediaFile, registerMediaFile, serveMediaFiles } from './media-files';
 import { uploadFile } from './media-upload';
@@ -50,9 +51,13 @@ const SendMediaInputSchema = z.object({
   caption: z.string(),
   clipStartMs: z.number(),
   durationMs: z.number(),
+  videoMuted: z.boolean(),
+  soundMuted: z.boolean(),
   withPicture: z.boolean(),
   withSound: z.boolean(),
 });
+
+const SaveLiveChatInputSchema = SendMediaInputSchema.extend({ name: z.string().trim().min(1).max(80) });
 
 const DISCORD_ID = z.string().regex(/^\d{17,20}$/);
 
@@ -99,7 +104,8 @@ function start(): void {
   let notice: AppState['notice'] = null;
   let overlayTest = false;
   let overlayTestTimer: NodeJS.Timeout | undefined;
-  type DraftFile = { path: string; name: string; size: number; contentType: MediaContentType; fileId: string };
+  const library = new Library(app.getPath('userData'));
+  type DraftFile = SavedFile & { fileId: string };
   const draft: Record<DraftSlot, DraftFile | null> = { picture: null, sound: null };
   let upload: { name: string; percent: number; controller: AbortController } | null = null;
   let quitting = false;
@@ -135,6 +141,8 @@ function start(): void {
     caption: item.caption,
     clipStartMs: item.clipStartMs,
     durationMs: item.durationMs,
+    videoMuted: item.videoMuted,
+    soundMuted: item.soundMuted,
     startAt: item.startAt === null || !connection ? null : connection.toLocalTime(item.startAt),
     ...playbackFiles(item.id, item.files),
   });
@@ -163,6 +171,8 @@ function start(): void {
         caption: item.caption,
         clipStartMs: item.clipStartMs,
         durationMs: item.durationMs,
+        videoMuted: item.videoMuted,
+        soundMuted: item.soundMuted,
         startAt,
         ...playbackFiles(key, item.files),
       },
@@ -485,6 +495,59 @@ function start(): void {
     draft[slot] = null;
   };
 
+  const slotOf = (contentType: MediaContentType): DraftSlot =>
+    fileKindOf(contentType) === 'audio' ? 'sound' : 'picture';
+
+  const putInDraft = (file: SavedFile): DraftMedia => {
+    const slot = slotOf(file.contentType);
+    clearDraft(slot);
+    const preview = registerMediaFile(file.path, file.contentType);
+    draft[slot] = { ...file, fileId: preview.id };
+    return { name: file.name, size: file.size, kind: fileKindOf(file.contentType), previewUrl: preview.url };
+  };
+
+  type Timing = Pick<z.infer<typeof SendMediaInputSchema>, 'caption' | 'clipStartMs' | 'durationMs' | 'videoMuted' | 'soundMuted'>;
+
+  const sendFiles = async (session: SessionResponse, files: SavedFile[], timing: Timing): Promise<ActionResult> => {
+    const created = await partyApi.createMedia(session, {
+      ...timing,
+      files: files.map(({ contentType, size, name }) => ({ contentType, size, name: name.slice(0, MAX_FILE_NAME_LENGTH) })),
+    });
+    if (!created.ok) return created;
+    if (files.length === 0) return { ok: true };
+
+    const { mediaId, fileIds } = created.value;
+    const controller = new AbortController();
+    const current = { name: files.map(({ name }) => name).join(' + '), percent: 0, controller };
+    upload = current;
+    publishState();
+
+    // Before the last step: the service can announce the media before it answers that step.
+    for (const [index, file] of files.entries()) cache.adopt(mediaId, fileIds[index]!, file.path, file.contentType);
+
+    const totalBytes = files.reduce((total, { size }) => total + size, 0);
+    let sentBytes = 0;
+    let result: Awaited<ReturnType<typeof uploadFile>> = { ok: true, value: null };
+    for (const [index, file] of files.entries()) {
+      result = await uploadFile(session, fileIds[index]!, file.path, file.size, controller.signal, (percent) => {
+        current.percent = Math.round(((sentBytes + (file.size * percent) / 100) / totalBytes) * 100);
+        publishState();
+      });
+      if (!result.ok) break;
+      sentBytes += file.size;
+    }
+    upload = null;
+
+    if (!result.ok) {
+      cache.forget(mediaId);
+      void partyApi.cancelMedia(session, mediaId);
+      publishState();
+      return result;
+    }
+    publishState();
+    return { ok: true };
+  };
+
   const showOverlayTest = (): void => {
     clearTimeout(overlayTestTimer);
     overlayTest = true;
@@ -645,10 +708,8 @@ function start(): void {
 
   handle(IpcChannel.PickMedia, async (rawSlot: unknown): Promise<PickResult> => {
     const wanted = rawSlot === 'picture' || rawSlot === 'sound' ? rawSlot : null;
-    const slotOfType = (contentType: MediaContentType): DraftSlot =>
-      fileKindOf(contentType) === 'audio' ? 'sound' : 'picture';
     const extensions = Object.entries(CONTENT_TYPE_BY_EXTENSION)
-      .filter(([, contentType]) => !wanted || slotOfType(contentType) === wanted)
+      .filter(([, contentType]) => !wanted || slotOf(contentType) === wanted)
       .map(([extension]) => extension);
     const picked = await dialog.showOpenDialog(controlWindow, {
       title: 'Choisir un média',
@@ -659,18 +720,14 @@ function start(): void {
     if (picked.canceled || !path) return { ok: false, error: 'cancelled' };
 
     const contentType = contentTypeOf(path);
-    if (!contentType || (wanted && slotOfType(contentType) !== wanted)) return { ok: false, error: 'unsupported' };
+    if (!contentType || (wanted && slotOf(contentType) !== wanted)) return { ok: false, error: 'unsupported' };
 
     const { size } = await stat(path);
     if (size === 0) return { ok: false, error: 'empty' };
-    const slot = slotOfType(contentType);
-    const other = draft[slot === 'sound' ? 'picture' : 'sound'];
+    const other = draft[slotOf(contentType) === 'sound' ? 'picture' : 'sound'];
     if (size + (other?.size ?? 0) > MAX_MEDIA_BYTES) return { ok: false, error: 'too_large' };
 
-    clearDraft(slot);
-    const preview = registerMediaFile(path, contentType);
-    draft[slot] = { path, name: basename(path), size, contentType, fileId: preview.id };
-    return { ok: true, draft: { name: basename(path), size, kind: fileKindOf(contentType), previewUrl: preview.url } };
+    return { ok: true, draft: putInDraft({ path, name: basename(path), size, contentType }) };
   });
 
   handle(IpcChannel.ClearDraft, (slot: unknown) => {
@@ -690,48 +747,116 @@ function start(): void {
     }
     const files = chosen.filter((file) => file !== null);
 
-    const created = await partyApi.createMedia(session, {
-      caption: input.data.caption,
-      clipStartMs: input.data.clipStartMs,
-      durationMs: input.data.durationMs,
-      files: files.map(({ contentType, size, name }) => ({ contentType, size, name: name.slice(0, MAX_FILE_NAME_LENGTH) })),
-    });
-    if (!created.ok) return created;
-    if (files.length === 0) return { ok: true };
-
-    const { mediaId, fileIds } = created.value;
-    const controller = new AbortController();
-    const current = { name: files.map(({ name }) => name).join(' + '), percent: 0, controller };
-    upload = current;
-    publishState();
-
-    // Before the last step: the service can announce the media before it answers that step.
-    for (const [index, file] of files.entries()) cache.adopt(mediaId, fileIds[index]!, file.path, file.contentType);
-
-    const totalBytes = files.reduce((total, { size }) => total + size, 0);
-    let sentBytes = 0;
-    let result: Awaited<ReturnType<typeof uploadFile>> = { ok: true, value: null };
-    for (const [index, file] of files.entries()) {
-      result = await uploadFile(session, fileIds[index]!, file.path, file.size, controller.signal, (percent) => {
-        current.percent = Math.round(((sentBytes + (file.size * percent) / 100) / totalBytes) * 100);
-        publishState();
-      });
-      if (!result.ok) break;
-      sentBytes += file.size;
-    }
-    upload = null;
-
-    if (!result.ok) {
-      cache.forget(mediaId);
-      void partyApi.cancelMedia(session, mediaId);
+    const result = await sendFiles(session, files, input.data);
+    if (result.ok && files.length > 0) {
+      clearDraft('picture');
+      clearDraft('sound');
       publishState();
-      return result;
     }
+    return result;
+  });
+
+  handle(IpcChannel.ScanLibrary, async () => {
+    await library.scan();
+    return library.view();
+  });
+
+  handle(IpcChannel.AddLibraryFolder, async () => {
+    const picked = await dialog.showOpenDialog(controlWindow, {
+      title: 'Choisir un dossier',
+      properties: ['openDirectory'],
+    });
+    const path = picked.filePaths[0];
+    if (picked.canceled || !path) return null;
+    library.addFolder(path);
+    await library.scan();
+    return library.view();
+  });
+
+  handle(IpcChannel.RemoveLibraryFolder, async (path: unknown) => {
+    if (typeof path === 'string') library.removeFolder(path);
+    await library.scan();
+    return library.view();
+  });
+
+  handle(IpcChannel.SetLibraryFavorite, (fileId: unknown, favorite: unknown) => {
+    if (typeof fileId === 'string') library.setFileFavorite(fileId, favorite === true);
+    return library.view();
+  });
+
+  handle(IpcChannel.UseLibraryFile, async (fileId: unknown) => {
+    const file = typeof fileId === 'string' ? library.fileById(fileId) : null;
+    const info = file && (await stat(file.path).catch(() => null));
+    if (!file || !info) return { ok: false };
+    return { ok: true, draft: putInDraft({ ...file, size: info.size }) };
+  });
+
+  handle(IpcChannel.SaveLiveChat, async (raw: unknown): Promise<ActionResult> => {
+    const input = SaveLiveChatInputSchema.safeParse(raw);
+    if (!input.success) return { ok: false, error: 'invalid_request' };
+    const { name, caption, clipStartMs, durationMs, videoMuted, soundMuted, withPicture, withSound } = input.data;
+
+    const chosen = [withPicture ? draft.picture : null, withSound ? draft.sound : null].filter((file) => file !== null);
+    const files = chosen.map(({ path, name: fileName, size, contentType }) => ({ path, name: fileName, size, contentType }));
+    if (files.length === 0 && !caption.trim()) return { ok: false, error: 'invalid_request' };
+
+    await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, files });
+    return { ok: true };
+  });
+
+  handle(IpcChannel.SendSaved, async (savedId: unknown): Promise<ActionResult> => {
+    const session = store.session;
+    if (!session) return { ok: false, error: 'unauthorized' };
+    const saved = typeof savedId === 'string' ? library.savedById(savedId) : null;
+    if (!saved || upload) return { ok: false, error: 'invalid_request' };
+    // Never half of it: the button is already off, but a file can go missing while it is on screen.
+    if (!(await library.allThere(saved))) return { ok: false, error: 'not_found' };
+    return sendFiles(session, saved.files, saved);
+  });
+
+  handle(IpcChannel.EditSaved, async (savedId: unknown) => {
+    const saved = typeof savedId === 'string' ? library.savedById(savedId) : null;
+    if (!saved || !(await library.allThere(saved))) return { ok: false };
 
     clearDraft('picture');
     clearDraft('sound');
-    publishState();
-    return { ok: true };
+    const loaded = saved.files.map((file) => putInDraft(file));
+    const { caption, clipStartMs, durationMs, videoMuted, soundMuted } = saved;
+    return {
+      ok: true,
+      draft: {
+        picture: loaded.find(({ kind }) => kind !== 'audio') ?? null,
+        sound: loaded.find(({ kind }) => kind === 'audio') ?? null,
+        caption,
+        clipStartMs,
+        durationMs,
+        videoMuted,
+        soundMuted,
+      },
+    };
+  });
+
+  handle(IpcChannel.RelocateSaved, async (savedId: unknown) => {
+    const id = typeof savedId === 'string' ? savedId : '';
+    const picked = await dialog.showOpenDialog(controlWindow, {
+      title: 'Montrer un des fichiers qui manquent',
+      properties: ['openFile'],
+      filters: [{ name: 'Images, vidéos et sons', extensions: Object.keys(CONTENT_TYPE_BY_EXTENSION) }],
+    });
+    const path = picked.filePaths[0];
+    const outcome =
+      picked.canceled || !path ? ('cancelled' as const) : (await library.relocate(id, path)) ? ('found' as const) : ('wrong_file' as const);
+    return { outcome, library: await library.view() };
+  });
+
+  handle(IpcChannel.SetSavedFavorite, (savedId: unknown, favorite: unknown) => {
+    if (typeof savedId === 'string') library.setSavedFavorite(savedId, favorite === true);
+    return library.view();
+  });
+
+  handle(IpcChannel.DeleteSaved, (savedId: unknown) => {
+    if (typeof savedId === 'string') library.deleteSaved(savedId);
+    return library.view();
   });
 
   handle(IpcChannel.CancelUpload, () => upload?.controller.abort());

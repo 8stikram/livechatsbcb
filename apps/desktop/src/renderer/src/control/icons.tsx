@@ -76,6 +76,12 @@ export const IconPlay = (props: IconProps) => (
   </Stroke>
 );
 
+export const IconStar = (props: IconProps) => (
+  <Stroke {...props}>
+    <path d="m12 4 2.5 5.1 5.6.8-4 4 .9 5.6-5-2.7-5 2.7.9-5.6-4-4 5.6-.8z" />
+  </Stroke>
+);
+
 export const IconSend = (props: IconProps) => (
   <Stroke {...props}>
     <path d="M12 19V5M6 11l6-6 6 6" />

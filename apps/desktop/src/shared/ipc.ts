@@ -70,9 +70,11 @@ export type PlaybackView = {
   startAt: number | null;
   // Null until the file has reached this PC.
   mediaUrl: string | null;
-  // A sound played beside the picture. It leads: the passage is its own, and a video stays silent and starts at 0.
+  // A sound played beside the picture. Beside a video it starts at 0, as the passage is the video's.
   hasSound: boolean;
   soundUrl: string | null;
+  videoMuted: boolean;
+  soundMuted: boolean;
 };
 
 export type UpcomingView = {
@@ -103,6 +105,46 @@ export type LocalReplayView = { historyId: string; playback: PlaybackView | null
 export type DraftMedia = { name: string; size: number; kind: FileKind; previewUrl: string };
 // What is being asked for: anything at first, then whichever of the two is still missing.
 export type DraftSlot = 'picture' | 'sound';
+
+export type LibraryFileView = {
+  id: string;
+  url: string;
+  name: string;
+  size: number;
+  kind: FileKind;
+  modifiedAt: number;
+  favorite: boolean;
+};
+
+export type SavedView = {
+  id: string;
+  name: string;
+  caption: string;
+  favorite: boolean;
+  savedAt: number;
+  kind: MediaKind;
+  files: Array<{ name: string; kind: FileKind; missing: boolean }>;
+  thumbnailUrl: string | null;
+};
+
+export type LibraryView = {
+  folders: Array<{ path: string; missing: boolean }>;
+  files: LibraryFileView[];
+  // Too many files in the folders: only the first ones are listed.
+  truncated: boolean;
+  saved: SavedView[];
+};
+
+// A saved LiveChat put back in the editor.
+export type LoadedDraft = {
+  picture: DraftMedia | null;
+  sound: DraftMedia | null;
+  caption: string;
+  clipStartMs: number;
+  durationMs: number;
+  videoMuted: boolean;
+  soundMuted: boolean;
+};
 export type UploadView = { name: string; percent: number };
 
 export type AppState = {
@@ -144,9 +186,13 @@ export type SendMediaInput = {
   caption: string;
   clipStartMs: number;
   durationMs: number;
+  videoMuted: boolean;
+  soundMuted: boolean;
   withPicture: boolean;
   withSound: boolean;
 };
+
+export type SaveLiveChatInput = SendMediaInput & { name: string };
 
 export const IpcChannel = {
   GetState: 'state:get',
@@ -169,6 +215,17 @@ export const IpcChannel = {
   SendMedia: 'media:send',
   CancelUpload: 'media:cancel-upload',
   SkipMedia: 'media:skip',
+  ScanLibrary: 'library:scan',
+  AddLibraryFolder: 'library:add-folder',
+  RemoveLibraryFolder: 'library:remove-folder',
+  SetLibraryFavorite: 'library:set-favorite',
+  UseLibraryFile: 'library:use-file',
+  SaveLiveChat: 'library:save',
+  SendSaved: 'library:send-saved',
+  EditSaved: 'library:edit-saved',
+  RelocateSaved: 'library:relocate-saved',
+  SetSavedFavorite: 'library:set-saved-favorite',
+  DeleteSaved: 'library:delete-saved',
   ReplayForAll: 'history:replay-for-all',
   ReplayForMe: 'history:replay-for-me',
   StopLocalReplay: 'history:stop-local-replay',
@@ -198,6 +255,18 @@ export type LiveChatApi = {
   sendMedia(input: SendMediaInput): Promise<ActionResult>;
   cancelUpload(): Promise<void>;
   skipMedia(mediaId: string): Promise<void>;
+  scanLibrary(): Promise<LibraryView>;
+  // Null when the person changed their mind.
+  addLibraryFolder(): Promise<LibraryView | null>;
+  removeLibraryFolder(path: string): Promise<LibraryView>;
+  setLibraryFavorite(fileId: string, favorite: boolean): Promise<LibraryView>;
+  useLibraryFile(fileId: string): Promise<{ ok: true; draft: DraftMedia } | { ok: false }>;
+  saveLiveChat(input: SaveLiveChatInput): Promise<ActionResult>;
+  sendSaved(savedId: string): Promise<ActionResult>;
+  editSaved(savedId: string): Promise<{ ok: true; draft: LoadedDraft } | { ok: false }>;
+  relocateSaved(savedId: string): Promise<{ outcome: 'found' | 'cancelled' | 'wrong_file'; library: LibraryView }>;
+  setSavedFavorite(savedId: string, favorite: boolean): Promise<LibraryView>;
+  deleteSaved(savedId: string): Promise<LibraryView>;
   replayForAll(historyId: string): Promise<ActionResult>;
   replayForMe(historyId: string): Promise<ActionResult>;
   stopLocalReplay(): Promise<void>;

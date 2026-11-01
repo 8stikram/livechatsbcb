@@ -109,10 +109,10 @@ const Playing = ({
           <SyncedMedia
             kind="video"
             url={item.mediaUrl}
-            clipStartMs={item.hasSound ? 0 : item.clipStartMs}
+            clipStartMs={item.clipStartMs}
             durationMs={item.durationMs}
             startAt={startAt}
-            volume={item.hasSound ? 0 : volume}
+            volume={item.hasSound && item.videoMuted ? 0 : volume}
           />
         </div>
       )}
@@ -120,10 +120,10 @@ const Playing = ({
         <SyncedMedia
           kind="audio"
           url={item.hasSound ? item.soundUrl : item.mediaUrl}
-          clipStartMs={item.clipStartMs}
+          clipStartMs={item.kind === 'video' ? 0 : item.clipStartMs}
           durationMs={item.durationMs}
           startAt={startAt}
-          volume={volume}
+          volume={item.hasSound && item.soundMuted ? 0 : volume}
         />
       )}
       {item.caption && <Caption text={item.caption} zone={layout.text} />}

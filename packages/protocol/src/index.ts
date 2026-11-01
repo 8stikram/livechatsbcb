@@ -148,7 +148,7 @@ export const fileKindOf = (contentType: MediaContentType): FileKind => contentTy
 
 type WithType = { contentType: MediaContentType };
 
-// Whatever is on screen. With a sound beside it, the sound leads: the passage and the duration are the sound's.
+// Whatever is on screen. A video sets the passage and the duration. Otherwise, a sound beside the picture does.
 export const pictureOf = <File extends WithType>(files: File[]): File | null =>
   files.find(({ contentType }) => fileKindOf(contentType) !== 'audio') ?? null;
 export const soundOf = <File extends WithType>(files: File[]): File | null =>
@@ -167,6 +167,9 @@ export const MediaDraftSchema = z
     caption: z.string().trim().max(MAX_CAPTION_LENGTH),
     clipStartMs: z.number().int().min(0).max(24 * MAX_CLIP_MS),
     durationMs: z.number().int().min(MIN_DISPLAY_MS).max(MAX_CLIP_MS),
+    // With a video and a sound together, whoever sends chooses which of the two is heard: one, both or neither.
+    videoMuted: z.boolean().default(false),
+    soundMuted: z.boolean().default(false),
     files: z
       .array(
         z.object({
@@ -212,6 +215,8 @@ export const QueueItemSchema = z.object({
   caption: z.string(),
   clipStartMs: z.number(),
   durationMs: z.number(),
+  videoMuted: z.boolean(),
+  soundMuted: z.boolean(),
   // When the service forgets it, and deletes its file. Playing it again doesn't push this back.
   expiresAt: z.number(),
   // On the service's clock. Null until the item may start: only the first item of the queue ever has one.

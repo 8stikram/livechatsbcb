@@ -1,6 +1,5 @@
-import { useRef, useState, type CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import {
-  DEFAULT_DISPLAY_MS,
   MAX_CAPTION_LENGTH,
   MAX_CLIP_MS,
   MAX_DISPLAY_MS,
@@ -10,6 +9,7 @@ import type { AppState, DraftMedia, DraftSlot } from '../../../shared/ipc';
 import { IconPlay, KindIcon } from './icons';
 import { mediaErrorMessage } from './messages';
 import { Slider } from './NowPlaying';
+import { Switch } from './SettingsScreen';
 import type { Clip, DraftFiles } from './use-draft';
 
 const formatTime = (ms: number): string => {
@@ -49,7 +49,8 @@ const ClipEditor = ({
     const length = Math.round(element.duration * 1000);
     element.currentTime = 0;
     setLengthMs(length);
-    onClip({ startMs: 0, endMs: Math.min(length, MAX_CLIP_MS) });
+    // A saved LiveChat comes back with its passage already chosen.
+    if (!clip || clip.endMs > length) onClip({ startMs: 0, endMs: Math.min(length, MAX_CLIP_MS) });
   };
 
   // Some recorders write no duration in the file: asking for a far-off position makes the browser work it out.
@@ -200,10 +201,10 @@ const DraftRow = ({
 );
 
 export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFiles }) => {
-  const { picture, sound, leader, hasFiles, clip, unreadable } = files;
-  const [caption, setCaption] = useState('');
-  const [displayMs, setDisplayMs] = useState(DEFAULT_DISPLAY_MS);
+  const { picture, sound, leader, hasFiles, clip, unreadable, caption, displayMs, videoMuted, soundMuted } = files;
   const [error, setError] = useState<string | null>(null);
+  const [saveName, setSaveName] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const isUploading = state.upload !== null;
   const plays = leader !== null;
@@ -215,18 +216,38 @@ export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFil
     setError((await files.pick(slot)).error);
   };
 
+  const recipe = () => ({
+    caption,
+    videoMuted,
+    soundMuted,
+    withPicture: picture !== null,
+    withSound: sound !== null,
+    ...(plays && clip
+      ? { clipStartMs: clip.startMs, durationMs: Math.max(MIN_DISPLAY_MS, clip.endMs - clip.startMs) }
+      : { clipStartMs: 0, durationMs: displayMs }),
+  });
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!saveName?.trim()) return;
+    setError(null);
+    const result = await window.liveChat.saveLiveChat({ ...recipe(), name: saveName });
+    if (result.ok) {
+      setSaveName(null);
+      setSaved(true);
+    } else {
+      setError(mediaErrorMessage(result.error));
+    }
+  };
+
   const send = async () => {
     setError(null);
-    const timing =
-      plays && clip
-        ? { clipStartMs: clip.startMs, durationMs: Math.max(MIN_DISPLAY_MS, clip.endMs - clip.startMs) }
-        : { clipStartMs: 0, durationMs: displayMs };
-
-    const result = await window.liveChat.sendMedia({ caption, withPicture: picture !== null, withSound: sound !== null, ...timing });
+    setSaved(false);
+    const result = await window.liveChat.sendMedia(recipe());
     if (result.ok) {
       files.reset();
       // Keeps whatever was typed while this one was on its way.
-      setCaption((typed) => (typed === caption ? '' : typed));
+      files.setCaption((typed) => (typed === caption ? '' : typed));
     } else if (result.error !== 'cancelled') {
       setError(mediaErrorMessage(result.error));
     }
@@ -234,7 +255,7 @@ export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFil
 
   return (
     <div className="media-grid">
-      <section className="glass media-main" aria-label="Ton meme">
+      <section className="glass media-main" aria-label="Ton LiveChat">
         {hasFiles ? (
           <>
             {picture && <DraftRow file={picture} slot="picture" locked={isUploading} onRemove={files.remove} />}
@@ -254,18 +275,6 @@ export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFil
                   className="draft-media"
                   src={picture.previewUrl}
                   alt=""
-                  onError={() => files.setUnreadable(true)}
-                />
-              </div>
-            )}
-            {picture?.kind === 'video' && sound && (
-              <div className="draft-picture">
-                <video
-                  className="draft-media"
-                  src={picture.previewUrl}
-                  muted
-                  playsInline
-                  preload="metadata"
                   onError={() => files.setUnreadable(true)}
                 />
               </div>
@@ -297,7 +306,7 @@ export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFil
         )}
       </section>
 
-      <section className="glass panel media-side" aria-label="Envoyer ton meme">
+      <section className="glass panel media-side" aria-label="Envoyer ton LiveChat">
         <h2>Envoyer à la party</h2>
 
         <label className="field">
@@ -306,12 +315,63 @@ export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFil
             className="input is-area"
             value={caption}
             maxLength={MAX_CAPTION_LENGTH}
-            onChange={(event) => setCaption(event.target.value)}
+            onChange={(event) => files.setCaption(event.target.value)}
             placeholder="Ton message, en bas de l’écran de tout le monde"
           />
         </label>
 
+        {picture?.kind === 'video' && sound && (
+          <div className="stack">
+            <Switch checked={!videoMuted} onChange={(on) => files.setVideoMuted(!on)}>
+              Son de la vidéo
+            </Switch>
+            <Switch checked={!soundMuted} onChange={(on) => files.setSoundMuted(!on)}>
+              Son ajouté
+            </Switch>
+          </div>
+        )}
+
         <span className="spacer" />
+
+        {saveName !== null ? (
+          <form className="save-form" onSubmit={(event) => void save(event)}>
+            <label className="field">
+              <span>Nom de ce LiveChat</span>
+              <input
+                className="input"
+                autoFocus
+                maxLength={80}
+                value={saveName}
+                onChange={(event) => setSaveName(event.target.value)}
+              />
+            </label>
+            <div className="field-line">
+              <button type="button" className="pill quiet small" onClick={() => setSaveName(null)}>
+                Annuler
+              </button>
+              <button type="submit" className="pill secondary small" disabled={!saveName.trim()}>
+                Sauvegarder
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button
+            type="button"
+            className="pill quiet small"
+            disabled={!hasContent}
+            onClick={() => {
+              setSaved(false);
+              setSaveName('');
+            }}
+          >
+            Sauvegarder dans la bibliothèque
+          </button>
+        )}
+        {saved && (
+          <p className="hint" role="status">
+            Sauvegardé sur ce PC.
+          </p>
+        )}
 
         {!plays && (
           <label className="field">
@@ -323,7 +383,7 @@ export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFil
               min={MIN_DISPLAY_MS}
               max={MAX_DISPLAY_MS}
               step={1000}
-              onChange={setDisplayMs}
+              onChange={files.setDisplayMs}
             />
           </label>
         )}

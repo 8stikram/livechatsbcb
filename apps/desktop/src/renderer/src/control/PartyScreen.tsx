@@ -30,6 +30,8 @@ const QuickSend = ({
     const sent = text;
     const result = await window.liveChat.sendMedia({
       caption: sent,
+      videoMuted: false,
+      soundMuted: false,
       withPicture: false,
       withSound: false,
       clipStartMs: 0,
@@ -79,7 +81,7 @@ const QuickSend = ({
           </div>
         </div>
         <button type="button" className="pill primary" disabled={isUploading} onClick={() => void pick()}>
-          {files.hasFiles ? 'Reprendre ton meme' : 'Choisir un fichier'}
+          {files.hasFiles ? 'Reprendre ton LiveChat' : 'Choisir un fichier'}
         </button>
       </form>
       {error && (

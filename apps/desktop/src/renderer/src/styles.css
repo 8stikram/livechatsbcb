@@ -1720,6 +1720,162 @@ select.input {
   }
 }
 
+/* Library */
+
+.library {
+  height: 100%;
+  min-height: 0;
+}
+
+.library-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.library-count {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.library-search {
+  width: 180px;
+  height: 36px;
+}
+
+.library-sort {
+  width: 104px;
+  height: 36px;
+  padding-block: 0;
+}
+
+.library-sort option {
+  background: #17171c;
+  color: var(--text);
+}
+
+.library-manage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-inner);
+  background: var(--well);
+}
+
+.library-folders {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.library-folder {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.library-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -8px -8px;
+  padding: 0 8px 8px;
+}
+
+.library-list .history-list {
+  margin: 0;
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.library-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.library-picture {
+  aspect-ratio: 16 / 10;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-inner);
+  background: var(--well);
+  cursor: pointer;
+  transition: border-color var(--fast) var(--ease);
+}
+
+.library-picture:hover,
+.library-picture:focus-visible {
+  border-color: var(--line-bright);
+}
+
+.library-picture img,
+.library-picture video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.library-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.library-card-foot .row-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.library-more {
+  display: flex;
+  margin: 12px auto 0;
+}
+
+.star {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.star.is-on {
+  color: var(--text);
+}
+
+.star.is-on svg {
+  fill: currentColor;
+}
+
+.saved-picture {
+  flex: none;
+  width: 56px;
+  height: 40px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.is-missing {
+  color: var(--danger);
+}
+
+.save-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* The overlay. It keeps its own look, separate from the rest of the app: its big outlined text and plain media are the
    whole joke, and it is what the party actually sees. Only this page: without it, the dark theme would paint its window
    opaque. */

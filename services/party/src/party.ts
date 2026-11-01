@@ -529,6 +529,8 @@ export class Party extends DurableObject<Env> {
       caption: draft.caption,
       clipStartMs: draft.clipStartMs,
       durationMs: draft.durationMs,
+      videoMuted: draft.videoMuted,
+      soundMuted: draft.soundMuted,
       expiresAt: Date.now() + Number(this.env.MEDIA_RETENTION_MS),
     });
   }

@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { ActionError, ConnectionStatus, PartyView } from '../../../shared/ipc';
 import { IconCheck, IconCopy } from './icons';
 
-export type View = 'party' | 'media' | 'history' | 'settings';
+export type View = 'party' | 'media' | 'library' | 'history' | 'settings';
 
 const TABS: Array<[View, string]> = [
   ['party', 'Party'],
-  ['media', 'Meme'],
+  ['media', 'LiveChat'],
+  ['library', 'Bibliothèque'],
   ['history', 'Historique'],
 ];
 

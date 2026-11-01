@@ -11,7 +11,7 @@ const ZONE_LABELS: Record<keyof OverlayLayout, string> = {
 };
 const ZONES = Object.keys(ZONE_LABELS) as Array<keyof OverlayLayout>;
 
-const Switch = ({
+export const Switch = ({
   checked,
   onChange,
   children,

@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core';
@@ -294,10 +294,13 @@ const overlayState = async (member: Member, state: string, timeout = 30_000): Pr
 };
 
 // The real file picker can't be driven from a test, so it answers with this file.
-const pickFile = async (member: Member, path: string): Promise<void> => {
-  await member.app.evaluate(({ dialog }, file) => {
+const answerDialogWith = (member: Member, path: string) =>
+  member.app.evaluate(({ dialog }, file) => {
     dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [file] })) as typeof dialog.showOpenDialog;
   }, path);
+
+const pickFile = async (member: Member, path: string): Promise<void> => {
+  await answerDialogWith(member, path);
   await member.control.getByRole('button', { name: 'Choisir un fichier' }).click();
 };
 
@@ -656,8 +659,8 @@ describe.skipIf(online)('party flow in the real app', () => {
   });
 
   it('opens the media tabs', async () => {
-    await openTab(host, 'Meme');
-    await openTab(guest, 'Meme');
+    await openTab(host, 'LiveChat');
+    await openTab(guest, 'LiveChat');
     await picture(host.control, '7-media-empty.png');
   });
 
@@ -718,7 +721,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     console.log(`Screen beside the image: ${beside}, on the image: ${onImage}`);
 
     await host.app.evaluate(() => (globalThis as unknown as { backdrop: Electron.BrowserWindow }).backdrop.destroy());
-    await openTab(host, 'Meme');
+    await openTab(host, 'LiveChat');
     await overlayState(host, 'idle', 10_000);
 
     expect(beside).toEqual([0, 255, 0]);
@@ -744,7 +747,7 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await overlayState(host, 'idle', 10_000);
     await expect.poll(() => stageVisible(host), { timeout: 5_000 }).toBe(false);
-    await openTab(host, 'Meme');
+    await openTab(host, 'LiveChat');
   });
 
   it('shows a text on both screens at the same moment, with who sent it', async () => {
@@ -908,7 +911,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByTestId('draft-name').filter({ hasText: 'logo.png' }).waitFor();
     await host.control.getByRole('button', { name: 'Retirer', exact: true }).click();
     await host.control.getByTestId('draft-name').waitFor({ state: 'detached' });
-    await openTab(guest, 'Meme');
+    await openTab(guest, 'LiveChat');
   });
 
   it('applies the local volume, plays sounds, and keeps settings after a restart', async () => {
@@ -941,13 +944,11 @@ describe.skipIf(online)('party flow in the real app', () => {
   });
 
   it('sends a picture and a sound together, with a text on several lines', async () => {
-    await openTab(host, 'Meme');
+    await openTab(host, 'LiveChat');
     await pickFile(host, join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png'));
     const sound = join(sandbox, 'son-meme.wav');
     writeFileSync(sound, silentWav(3));
-    await host.app.evaluate(({ dialog }, file) => {
-      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [file] })) as typeof dialog.showOpenDialog;
-    }, sound);
+    await answerDialogWith(host, sound);
     await host.control.getByRole('button', { name: 'Ajouter un son' }).click();
     await host.control.getByTestId('clip-start').waitFor({ timeout: 15_000 });
     await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(2);
@@ -968,6 +969,111 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByRole('button', { name: 'Passer' }).click();
     await overlayState(guest, 'idle');
     await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(0);
+  });
+
+  it('plays a video with a sound for the length of the video, silent as whoever sends chose', async () => {
+    await openTab(host, 'LiveChat');
+    await pickFile(host, join(sandbox, 'clip.webm'));
+    await host.control.getByTestId('clip-start').waitFor({ timeout: 15_000 });
+    const sound = join(sandbox, 'son-video.wav');
+    writeFileSync(sound, silentWav(2));
+    await answerDialogWith(host, sound);
+    await host.control.getByRole('button', { name: 'Ajouter un son' }).click();
+    await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(2);
+    await host.control.getByTestId('clip-end').waitFor({ timeout: 15_000 });
+
+    await host.control.getByText('Son de la vidéo').click();
+    await sendButton(host).click();
+
+    await overlayState(guest, 'playing');
+    const video = guest.stage.getByTestId('overlay-video');
+    await video.waitFor();
+    await guest.stage.getByTestId('overlay-audio').waitFor({ state: 'attached' });
+    expect(await video.evaluate((element: HTMLVideoElement) => element.volume)).toBe(0);
+    expect(await guest.stage.getByTestId('overlay-audio').evaluate((element: HTMLAudioElement) => element.volume)).toBeGreaterThan(0);
+
+    const { queue } = await guest.control.evaluate(() => window.liveChat.getState());
+    expect(queue.current!.durationMs).toBeGreaterThan(5_000);
+
+    await host.control.getByRole('button', { name: 'Passer' }).click();
+    await overlayState(guest, 'idle');
+  });
+
+  it('finds files in a folder, and saves a LiveChat that comes back even after its file moved', async () => {
+    const folder = join(sandbox, 'mes-memes');
+    mkdirSync(join(folder, 'sous-dossier'), { recursive: true });
+    const image = join(folder, 'sous-dossier', 'cowboy.png');
+    copyFileSync(join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png'), image);
+    writeFileSync(join(folder, 'bruit.wav'), silentWav(1));
+    writeFileSync(join(folder, 'pas-un-media.txt'), 'rien');
+
+    await openTab(host, 'Bibliothèque');
+    await answerDialogWith(host, folder);
+    await host.control.getByRole('button', { name: 'Ajouter un dossier' }).click();
+    const cards = host.control.getByTestId('library-file');
+    await cards.filter({ hasText: 'cowboy.png' }).waitFor();
+    expect(await cards.count()).toBe(1);
+    await picture(host.control, '13-library.png');
+
+    await host.control.getByRole('button', { name: /^Sons/ }).click();
+    await cards.filter({ hasText: 'bruit.wav' }).waitFor();
+    await host.control.getByRole('button', { name: /^Images/ }).click();
+    await host.control.getByLabel('Rechercher par nom').fill('nope');
+    await host.control.getByText('Rien à ce nom').waitFor();
+    await host.control.getByLabel('Rechercher par nom').fill('COWBOY');
+
+    await cards.filter({ hasText: 'cowboy.png' }).getByRole('button', { name: 'Épingler en favori' }).click();
+    await cards.filter({ hasText: 'cowboy.png' }).getByRole('button', { name: 'Retirer des favoris' }).waitFor();
+
+    await host.control.getByRole('button', { name: 'Utiliser cowboy.png' }).click();
+    await host.control.getByTestId('draft-name').filter({ hasText: 'cowboy.png' }).waitFor();
+    await host.control.getByLabel('Texte à afficher').fill('Le cowboy');
+    await host.control.getByRole('button', { name: 'Sauvegarder dans la bibliothèque' }).click();
+    await host.control.getByLabel('Nom de ce LiveChat').fill('Mon cowboy');
+    await host.control.getByRole('button', { name: 'Sauvegarder', exact: true }).click();
+    await host.control.getByText('Sauvegardé sur ce PC.').waitFor();
+
+    await openTab(host, 'Bibliothèque');
+    await host.control.getByLabel('Rechercher par nom').fill('');
+    await host.control.getByRole('button', { name: /^Sauvegardés/ }).click();
+    const saved = host.control.getByTestId('saved-livechat').filter({ hasText: 'Mon cowboy' });
+    await saved.waitFor();
+    await picture(host.control, '14-library-saved.png');
+
+    await saved.getByRole('button', { name: 'Envoyer' }).click();
+    await overlayState(guest, 'playing');
+    await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Le cowboy' }).waitFor();
+    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+
+    // Moved: said so, can't be sent, and showing the file again brings it back.
+    const moved = join(sandbox, 'cowboy-range.png');
+    renameSync(image, moved);
+    await openTab(host, 'Party');
+    await openTab(host, 'Bibliothèque');
+    await saved.getByTestId('saved-missing').filter({ hasText: '1 fichier introuvable' }).waitFor();
+    await expect(saved.getByRole('button', { name: 'Envoyer' }).isDisabled()).resolves.toBe(true);
+
+    writeFileSync(join(sandbox, 'mauvais.png'), 'pas le bon');
+    await answerDialogWith(host, join(sandbox, 'mauvais.png'));
+    await saved.getByRole('button', { name: 'Retrouver' }).click();
+    await host.control.getByRole('alert').filter({ hasText: 'pas un des fichiers' }).waitFor();
+
+    await answerDialogWith(host, moved);
+    await saved.getByRole('button', { name: 'Retrouver' }).click();
+    await expect.poll(() => saved.getByTestId('saved-missing').count()).toBe(0);
+    await expect(saved.getByRole('button', { name: 'Envoyer' }).isDisabled()).resolves.toBe(false);
+
+    await saved.getByRole('button', { name: 'Modifier' }).click();
+    await host.control.getByTestId('draft-name').filter({ hasText: 'cowboy-range.png' }).waitFor();
+    await expect(host.control.getByLabel('Texte à afficher').inputValue()).resolves.toBe('Le cowboy');
+    await host.control.getByRole('button', { name: 'Retirer', exact: true }).click();
+    await host.control.getByLabel('Texte à afficher').fill('');
+
+    await openTab(host, 'Bibliothèque');
+    await saved.getByRole('button', { name: 'Supprimer' }).click();
+    await saved.getByRole('button', { name: 'Vraiment ?' }).click();
+    await expect.poll(() => saved.count()).toBe(0);
   });
 
   it('moves a zone of the overlay, and shows the result on the real screen', async () => {
