@@ -177,6 +177,8 @@ Tu veux lancer le projet ou comprendre comment il est construit ? Tout est dans 
 
 LiveChatSBCB est sous licence [AGPL-3.0](LICENSE). Tu peux reprendre et modifier le code, à condition de partager tes changements sous la même licence, même si ta version tourne seulement en ligne.
 
+Le nom et le logo ne sont pas concernés : ils restent à l'auteur du projet, et une version modifiée doit utiliser les siens. Détails dans [NOTICE](NOTICE).
+
 <br />
 
 <div align="center">
