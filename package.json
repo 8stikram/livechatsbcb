@@ -1,0 +1,21 @@
+{
+  "name": "livechatsbcb",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["packages/*", "services/*", "apps/*"],
+  "scripts": {
+    "dev:server": "npm run dev -w @livechatsbcb/party",
+    "dev:app": "npm run dev -w @livechatsbcb/desktop",
+    "icons": "node tools/generate-icons.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e -w @livechatsbcb/desktop",
+    "build:exe": "npm run build:exe -w @livechatsbcb/desktop"
+  },
+  "devDependencies": {
+    "png-to-ico": "3.0.2",
+    "sharp": "0.35.5",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

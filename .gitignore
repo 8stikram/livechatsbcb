@@ -1,0 +1,8 @@
+node_modules/
+out/
+release/
+dist/
+.wrangler/
+.dev.vars
+*.log
+apps/desktop/test/.artifacts/
