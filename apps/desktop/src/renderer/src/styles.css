@@ -1154,6 +1154,11 @@ select.input {
   min-height: 0;
 }
 
+.draft-add {
+  align-self: flex-start;
+  margin: 0 0 8px 16px;
+}
+
 .draft-head {
   flex: none;
   display: flex;
@@ -1809,6 +1814,7 @@ html.overlay body {
 }
 
 .zone-text p {
+  white-space: pre-line;
   max-height: 100%;
   overflow: hidden;
   font-size: min(40cqh, 7cqw);

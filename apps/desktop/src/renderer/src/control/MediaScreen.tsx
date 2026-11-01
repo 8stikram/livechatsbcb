@@ -6,7 +6,7 @@ import {
   MAX_DISPLAY_MS,
   MIN_DISPLAY_MS,
 } from '@livechatsbcb/protocol';
-import type { AppState, DraftMedia } from '../../../shared/ipc';
+import type { AppState, DraftMedia, DraftSlot } from '../../../shared/ipc';
 import { IconPlay, KindIcon } from './icons';
 import { mediaErrorMessage } from './messages';
 import { Slider } from './NowPlaying';
@@ -26,11 +26,14 @@ const formatSize = (bytes: number): string =>
 
 const ClipEditor = ({
   draft,
+  besidePicture,
   clip,
   onClip,
   onUnreadable,
 }: {
   draft: DraftMedia;
+  // The picture is shown above it, so a sound doesn't need its own place.
+  besidePicture: boolean;
   clip: Clip | null;
   onClip: (clip: Clip) => void;
   onUnreadable: () => void;
@@ -107,18 +110,22 @@ const ClipEditor = ({
 
   return (
     <>
-      <div className="draft-picture">
-        {draft.kind === 'video' ? (
-          <video className="draft-media" playsInline {...handlers} />
-        ) : (
-          <>
-            <span className="kind-tile is-large">
-              <KindIcon kind="audio" size={28} />
-            </span>
-            <audio {...handlers} />
-          </>
-        )}
-      </div>
+      {besidePicture ? (
+        <audio {...handlers} />
+      ) : (
+        <div className="draft-picture">
+          {draft.kind === 'video' ? (
+            <video className="draft-media" playsInline {...handlers} />
+          ) : (
+            <>
+              <span className="kind-tile is-large">
+                <KindIcon kind="audio" size={28} />
+              </span>
+              <audio {...handlers} />
+            </>
+          )}
+        </div>
+      )}
 
       {clip && lengthMs !== null && lengthMs > MIN_DISPLAY_MS && (
         <div className="clip">
@@ -165,20 +172,47 @@ const ClipEditor = ({
   );
 };
 
+const DraftRow = ({
+  file,
+  slot,
+  locked,
+  onRemove,
+}: {
+  file: DraftMedia;
+  slot: DraftSlot;
+  locked: boolean;
+  onRemove: (slot: DraftSlot) => void;
+}) => (
+  <header className="draft-head">
+    <span className="kind-tile is-small">
+      <KindIcon kind={file.kind} size={16} />
+    </span>
+    <span className="draft-name" title={file.name} data-testid="draft-name">
+      {file.name}
+    </span>
+    <span className="count mono">{formatSize(file.size)}</span>
+    {!locked && (
+      <button type="button" className="pill quiet small" onClick={() => onRemove(slot)}>
+        Retirer
+      </button>
+    )}
+  </header>
+);
+
 export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFiles }) => {
-  const { draft, clip, unreadable } = files;
+  const { picture, sound, leader, hasFiles, clip, unreadable } = files;
   const [caption, setCaption] = useState('');
   const [displayMs, setDisplayMs] = useState(DEFAULT_DISPLAY_MS);
   const [error, setError] = useState<string | null>(null);
 
   const isUploading = state.upload !== null;
-  const plays = draft !== null && draft.kind !== 'image';
-  const hasContent = draft ? !unreadable && (!plays || clip !== null) : caption.trim().length > 0;
+  const plays = leader !== null;
+  const hasContent = hasFiles ? !unreadable && (!plays || clip !== null) : caption.trim().length > 0;
   const isOnline = state.party?.connection === 'online';
 
-  const pick = async () => {
+  const pick = async (slot?: DraftSlot) => {
     setError(null);
-    setError((await files.pick()).error);
+    setError((await files.pick(slot)).error);
   };
 
   const send = async () => {
@@ -188,7 +222,7 @@ export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFil
         ? { clipStartMs: clip.startMs, durationMs: Math.max(MIN_DISPLAY_MS, clip.endMs - clip.startMs) }
         : { clipStartMs: 0, durationMs: displayMs };
 
-    const result = await window.liveChat.sendMedia({ caption, withFile: draft !== null, ...timing });
+    const result = await window.liveChat.sendMedia({ caption, withPicture: picture !== null, withSound: sound !== null, ...timing });
     if (result.ok) {
       files.reset();
       // Keeps whatever was typed while this one was on its way.
@@ -200,36 +234,47 @@ export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFil
 
   return (
     <div className="media-grid">
-      <section className="glass media-main" aria-label="Ton média">
-        {draft ? (
+      <section className="glass media-main" aria-label="Ton meme">
+        {hasFiles ? (
           <>
-            <header className="draft-head">
-              <span className="kind-tile is-small">
-                <KindIcon kind={draft.kind} size={16} />
-              </span>
-              <span className="draft-name" title={draft.name} data-testid="draft-name">
-                {draft.name}
-              </span>
-              <span className="count mono">{formatSize(draft.size)}</span>
-              {!isUploading && (
-                <button type="button" className="pill quiet small" onClick={files.remove}>
-                  Retirer
-                </button>
-              )}
-            </header>
-            {draft.kind === 'image' ? (
+            {picture && <DraftRow file={picture} slot="picture" locked={isUploading} onRemove={files.remove} />}
+            {sound && <DraftRow file={sound} slot="sound" locked={isUploading} onRemove={files.remove} />}
+            {!isUploading && (!picture || !sound) && (
+              <button
+                type="button"
+                className="pill quiet small draft-add"
+                onClick={() => void pick(picture ? 'sound' : 'picture')}
+              >
+                {picture ? 'Ajouter un son' : 'Ajouter une image ou une vidéo'}
+              </button>
+            )}
+            {picture?.kind === 'image' && (
               <div className="draft-picture">
                 <img
                   className="draft-media"
-                  src={draft.previewUrl}
+                  src={picture.previewUrl}
                   alt=""
                   onError={() => files.setUnreadable(true)}
                 />
               </div>
-            ) : (
+            )}
+            {picture?.kind === 'video' && sound && (
+              <div className="draft-picture">
+                <video
+                  className="draft-media"
+                  src={picture.previewUrl}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  onError={() => files.setUnreadable(true)}
+                />
+              </div>
+            )}
+            {leader && (
               <ClipEditor
-                key={draft.previewUrl}
-                draft={draft}
+                key={leader.previewUrl}
+                draft={leader}
+                besidePicture={leader === sound && picture !== null}
                 clip={clip}
                 onClip={files.setClip}
                 onUnreadable={() => files.setUnreadable(true)}
@@ -243,7 +288,7 @@ export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFil
           </>
         ) : (
           <div className="draft-empty">
-            <p className="draft-empty-title">Une image, une vidéo ou un son</p>
+            <p className="draft-empty-title">Une image ou une vidéo, avec un son si tu veux</p>
             <p className="hint">500 Mo maximum. Effacé du serveur après 1 jour.</p>
             <button type="button" className="pill primary" disabled={isUploading} onClick={() => void pick()}>
               Choisir un fichier
@@ -252,11 +297,11 @@ export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFil
         )}
       </section>
 
-      <section className="glass panel media-side" aria-label="Envoyer un média">
+      <section className="glass panel media-side" aria-label="Envoyer ton meme">
         <h2>Envoyer à la party</h2>
 
         <label className="field">
-          <span>{draft ? 'Texte à afficher (facultatif)' : 'Texte à afficher'}</span>
+          <span>{hasFiles ? 'Texte à afficher (facultatif)' : 'Texte à afficher'}</span>
           <textarea
             className="input is-area"
             value={caption}

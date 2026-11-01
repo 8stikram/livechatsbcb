@@ -179,7 +179,7 @@ const authorized = (session: SessionResponse) => ({ authorization: `Bearer ${ses
 const sendText = async (session: SessionResponse, caption: string, durationMs = 1_000) => {
   const response = await post(
     `/v1/parties/${session.partyId}/media`,
-    { caption, clipStartMs: 0, durationMs, file: null },
+    { caption, clipStartMs: 0, durationMs, files: [] },
     authorized(session),
   );
   expect(response.status).toBe(201);
@@ -190,7 +190,7 @@ const sendQuickText = async (session: SessionResponse) => {
   const response = await fetch(`${QUICK_BASE}/v1/parties/${session.partyId}/media`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...authorized(session) },
-    body: JSON.stringify({ caption: 'Vite', clipStartMs: 0, durationMs: 1_000, file: null }),
+    body: JSON.stringify({ caption: 'Vite', clipStartMs: 0, durationMs: 1_000, files: [] }),
   });
   return ((await response.json()) as { mediaId: string }).mediaId;
 };
@@ -199,7 +199,7 @@ const openUpload = (session: SessionResponse, size: number, contentType = 'video
   fetch(`${base}/v1/parties/${session.partyId}/media`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...authorized(session) },
-    body: JSON.stringify({ caption: '', clipStartMs: 0, durationMs: 2_000, file: { contentType, size, name: 'clip.mp4' } }),
+    body: JSON.stringify({ caption: '', clipStartMs: 0, durationMs: 2_000, files: [{ contentType, size, name: 'clip.mp4' }] }),
   });
 
 const uploadFile = async (session: SessionResponse, bytes: Uint8Array, base = BASE): Promise<string> => {
@@ -301,6 +301,83 @@ describe('party service', () => {
     socket.close();
   });
 
+  it('takes a picture and a sound as one media, announced with its last file', async () => {
+    const host = await createParty();
+    const guest = await joinParty(host.code, 'Invite');
+    const guestSocket = new TestSocket(guest);
+    await guestSocket.welcome();
+    const media = `${BASE}/v1/parties/${host.partyId}/media`;
+    const headers = { 'content-type': 'application/json', ...authorized(host) };
+    const create = (files: { contentType: string; size: number; name: string }[]) =>
+      fetch(media, { method: 'POST', headers, body: JSON.stringify({ caption: 'Ligne 1\nLigne 2', clipStartMs: 500, durationMs: 2_000, files }) });
+
+    const picture = { contentType: 'image/png', size: 10, name: 'image.png' };
+    const sound = { contentType: 'audio/mpeg', size: 20, name: 'son.mp3' };
+    expect((await create([picture, picture])).status).toBe(400);
+    expect((await create([picture, sound, sound])).status).toBe(400);
+    expect((await create([{ ...picture, size: MAX_MEDIA_BYTES }, { ...sound, size: 1 }])).status).toBe(400);
+
+    const created = await create([picture, sound]);
+    expect(created.status).toBe(201);
+    const { mediaId, fileIds } = (await created.json()) as { mediaId: string; fileIds: string[] };
+    expect(fileIds).toHaveLength(2);
+    expect(fileIds[0]).toBe(mediaId);
+
+    const finish = async (fileId: string, size: number) => {
+      const part = await fetch(`${media}/${fileId}/parts/1`, { method: 'PUT', headers: authorized(host), body: testBytes(size) });
+      expect(part.status).toBe(200);
+      const done = await fetch(`${media}/${fileId}/complete`, { method: 'POST', headers, body: JSON.stringify({ parts: [await part.json()] }) });
+      expect(done.status).toBe(204);
+    };
+
+    await finish(fileIds[0]!, 10);
+    await new Promise((done) => setTimeout(done, 200));
+    expect(guestSocket.latestQueue()).toEqual([]);
+
+    await finish(fileIds[1]!, 20);
+    const [item] = await guestSocket.queueWhere((queue) => queue.length === 1, 'the whole media');
+    expect(item).toMatchObject({
+      id: mediaId,
+      kind: 'image',
+      caption: 'Ligne 1\nLigne 2',
+      clipStartMs: 500,
+      files: [
+        { id: fileIds[0], name: 'image.png', contentType: 'image/png', size: 10 },
+        { id: fileIds[1], name: 'son.mp3', contentType: 'audio/mpeg', size: 20 },
+      ],
+    });
+    for (const fileId of fileIds) {
+      expect((await fetch(`${media}/${fileId}`, { headers: authorized(guest) })).status).toBe(200);
+    }
+    guestSocket.close();
+  });
+
+  it('gives up on the whole media when asked to, whichever files were already sent', async () => {
+    const host = await createParty();
+    const media = `${BASE}/v1/parties/${host.partyId}/media`;
+    const headers = { 'content-type': 'application/json', ...authorized(host) };
+    const created = await fetch(media, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        caption: '',
+        clipStartMs: 0,
+        durationMs: 2_000,
+        files: [
+          { contentType: 'image/png', size: 10, name: 'image.png' },
+          { contentType: 'audio/mpeg', size: 20, name: 'son.mp3' },
+        ],
+      }),
+    });
+    const { mediaId, fileIds } = (await created.json()) as { mediaId: string; fileIds: string[] };
+    const part = await fetch(`${media}/${mediaId}/parts/1`, { method: 'PUT', headers: authorized(host), body: testBytes(10) });
+    await fetch(`${media}/${mediaId}/complete`, { method: 'POST', headers, body: JSON.stringify({ parts: [await part.json()] }) });
+
+    expect((await fetch(`${media}/${mediaId}`, { method: 'DELETE', headers: authorized(host) })).status).toBe(204);
+    expect((await fetch(`${media}/${fileIds[1]}/parts/1`, { method: 'PUT', headers: authorized(host), body: testBytes(20) })).status).toBe(404);
+    expect((await fetch(`${media}/${mediaId}`, { method: 'DELETE', headers: authorized(host) })).status).toBe(404);
+  });
+
   it('uploads a file in parts, waits for everyone, and serves it to members only', async () => {
     const host = await createParty();
     const guest = await joinParty(host.code, 'Invite');
@@ -314,7 +391,7 @@ describe('party service', () => {
     const mediaId = await uploadFile(host, bytes);
 
     const waiting = await guestSocket.queueWhere((queue) => queue.length === 1, 'announcement');
-    expect(waiting[0]).toMatchObject({ id: mediaId, kind: 'video', contentType: 'video/mp4', size: bytes.length, startAt: null });
+    expect(waiting[0]).toMatchObject({ id: mediaId, kind: 'video', files: [{ id: mediaId, contentType: 'video/mp4', size: bytes.length }], startAt: null });
 
     const url = `${BASE}/v1/parties/${host.partyId}/media/${mediaId}`;
     const download = await fetch(url, { headers: authorized(guest) });
@@ -365,13 +442,13 @@ describe('party service', () => {
     const foreign = await fetch(`${BASE}/v1/parties/${host.partyId}/media`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...authorized(stranger) },
-      body: JSON.stringify({ caption: 'intrus', clipStartMs: 0, durationMs: 2_000, file: null }),
+      body: JSON.stringify({ caption: 'intrus', clipStartMs: 0, durationMs: 2_000, files: [] }),
     });
     expect(foreign.status).toBe(401);
 
     const noAuth = await fetch(`${BASE}/v1/parties/${host.partyId}/media`, {
       method: 'POST',
-      body: JSON.stringify({ caption: '', clipStartMs: 0, durationMs: 2_000, file: { contentType: 'video/mp4', size: 10, name: 'clip.mp4' } }),
+      body: JSON.stringify({ caption: '', clipStartMs: 0, durationMs: 2_000, files: [{ contentType: 'video/mp4', size: 10, name: 'clip.mp4' }] }),
     });
     expect(noAuth.status).toBe(401);
 
@@ -395,8 +472,8 @@ describe('party service', () => {
     expect((await cancel(host)).status).toBe(204);
     expect((await part(2, testBytes(10))).status).toBe(404);
 
-    expect((await post(`/v1/parties/${host.partyId}/media`, { caption: '  ', clipStartMs: 0, durationMs: 2_000, file: null }, authorized(host))).status).toBe(400);
-    expect((await post(`/v1/parties/${host.partyId}/media`, { caption: 'trop long', clipStartMs: 0, durationMs: 61_000, file: null }, authorized(host))).status).toBe(400);
+    expect((await post(`/v1/parties/${host.partyId}/media`, { caption: '  ', clipStartMs: 0, durationMs: 2_000, files: [] }, authorized(host))).status).toBe(400);
+    expect((await post(`/v1/parties/${host.partyId}/media`, { caption: 'trop long', clipStartMs: 0, durationMs: 61_000, files: [] }, authorized(host))).status).toBe(400);
   });
 
   it('refuses uploads past the storage cap, and frees the space when one is cancelled', async () => {
@@ -460,13 +537,13 @@ describe('party service', () => {
 
     await sendText(host, 'Bonjour');
     const [text] = await socket.historyWhere((history) => history.length === 1, 'the text in the history');
-    expect(text).toMatchObject({ kind: 'text', caption: 'Bonjour', fileId: null, fileName: null, senderName: 'Nono' });
+    expect(text).toMatchObject({ kind: 'text', caption: 'Bonjour', files: [], senderName: 'Nono' });
 
     const mediaId = await uploadFile(host, testBytes(1_000));
     await socket.queueWhere((queue) => queue.some((item) => item.id === mediaId), 'the file in the queue');
     socket.send(JSON.stringify({ t: 'ready', mediaId }));
     const history = await socket.historyWhere((list) => list.length === 2, 'the file in the history');
-    expect(history[0]).toMatchObject({ id: mediaId, fileId: mediaId, fileName: 'clip.mp4', kind: 'video' });
+    expect(history[0]).toMatchObject({ id: mediaId, files: [{ id: mediaId, name: 'clip.mp4' }], kind: 'video' });
     expect(history[1]!.caption).toBe('Bonjour');
 
     // Someone arriving later finds it too.
@@ -514,11 +591,11 @@ describe('party service', () => {
 
     expect((await replay(guest, original!.id)).status).toBe(204);
     const [again] = await hostSocket.queueWhere((queue) => queue.length === 1, 'the replay in the queue');
-    expect(again).toMatchObject({ fileId: mediaId, replay: true, senderName: 'Invite', expiresAt: original!.expiresAt });
+    expect(again).toMatchObject({ files: [{ id: mediaId }], replay: true, senderName: 'Invite', expiresAt: original!.expiresAt });
     expect(again!.id).not.toBe(mediaId);
 
     // It waits for everyone to have the file, like the first time, and the file is the one already there.
-    const download = await fetch(`${BASE}/v1/parties/${host.partyId}/media/${again!.fileId}`, { headers: authorized(guest) });
+    const download = await fetch(`${BASE}/v1/parties/${host.partyId}/media/${again!.files[0]!.id}`, { headers: authorized(guest) });
     expect(Buffer.from(await download.arrayBuffer()).equals(Buffer.from(bytes))).toBe(true);
     for (const socket of [hostSocket, guestSocket]) socket.send(JSON.stringify({ t: 'ready', mediaId: again!.id }));
     await guestSocket.queueWhere((queue) => queue[0]?.startAt != null, 'the replay starting');
@@ -910,7 +987,7 @@ describe('Discord servers', () => {
 
     const sent = await post(
       `/v1/parties/${first.partyId}/media`,
-      { caption: 'Salut', clipStartMs: 0, durationMs: 1_000, file: null },
+      { caption: 'Salut', clipStartMs: 0, durationMs: 1_000, files: [] },
       authorized(first),
       QUICK_BASE,
     );

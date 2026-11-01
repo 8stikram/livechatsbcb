@@ -11,13 +11,16 @@ import {
   MAX_FILE_NAME_LENGTH,
   MAX_MEDIA_BYTES,
   fileKindOf,
+  fileNamesOf,
+  pictureOf,
+  soundOf,
   type GuildSummary,
   type HistoryItem,
   type MediaContentType,
   type QueueItem,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, type ActionResult, type AppState, type HistoryView, type PickResult, type PlaybackView } from '../shared/ipc';
+import { IpcChannel, type ActionResult, type AppState, type DraftSlot, type HistoryView, type PickResult, type PlaybackView } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { MediaCache } from './media-cache';
@@ -47,7 +50,8 @@ const SendMediaInputSchema = z.object({
   caption: z.string(),
   clipStartMs: z.number(),
   durationMs: z.number(),
-  withFile: z.boolean(),
+  withPicture: z.boolean(),
+  withSound: z.boolean(),
 });
 
 const DISCORD_ID = z.string().regex(/^\d{17,20}$/);
@@ -95,7 +99,8 @@ function start(): void {
   let notice: AppState['notice'] = null;
   let overlayTest = false;
   let overlayTestTimer: NodeJS.Timeout | undefined;
-  let draft: { path: string; name: string; size: number; contentType: MediaContentType; fileId: string } | null = null;
+  type DraftFile = { path: string; name: string; size: number; contentType: MediaContentType; fileId: string };
+  const draft: Record<DraftSlot, DraftFile | null> = { picture: null, sound: null };
   let upload: { name: string; percent: number; controller: AbortController } | null = null;
   let quitting = false;
   let localReplay: { key: string; historyId: string; item: HistoryItem; startAt: number | null } | null = null;
@@ -109,17 +114,29 @@ function start(): void {
     publishState();
   });
 
+  // Files stay under the media they came with, which is the replay's own key when played on this PC alone.
+  const playbackFiles = (key: string, files: QueueItem['files']): Pick<PlaybackView, 'fileName' | 'mediaUrl' | 'hasSound' | 'soundUrl'> => {
+    const picture = pictureOf(files);
+    const sound = soundOf(files);
+    const urlOf = (file: QueueItem['files'][number] | null) => (file ? cache.urlOf(key, file.id) : null);
+    return {
+      fileName: fileNamesOf(files),
+      mediaUrl: urlOf(picture ?? sound),
+      hasSound: picture !== null && sound !== null,
+      soundUrl: picture ? urlOf(sound) : null,
+    };
+  };
+
   const toPlayback = (item: QueueItem): PlaybackView => ({
     id: item.id,
     senderName: item.senderName,
     senderAvatarUrl: item.senderAvatarUrl,
     kind: item.kind,
     caption: item.caption,
-    fileName: item.fileName,
     clipStartMs: item.clipStartMs,
     durationMs: item.durationMs,
     startAt: item.startAt === null || !connection ? null : connection.toLocalTime(item.startAt),
-    mediaUrl: cache.urlOf(item.id),
+    ...playbackFiles(item.id, item.files),
   });
 
   const toHistoryView = (item: HistoryItem, party: PartyConnection): HistoryView => ({
@@ -128,7 +145,7 @@ function start(): void {
     senderAvatarUrl: item.senderAvatarUrl,
     kind: item.kind,
     caption: item.caption,
-    fileName: item.fileName,
+    fileName: fileNamesOf(item.files),
     playedAt: party.toLocalTime(item.playedAt),
   });
 
@@ -144,11 +161,10 @@ function start(): void {
         senderAvatarUrl: item.senderAvatarUrl,
         kind: item.kind,
         caption: item.caption,
-        fileName: item.fileName,
         clipStartMs: item.clipStartMs,
         durationMs: item.durationMs,
         startAt,
-        mediaUrl: cache.urlOf(key),
+        ...playbackFiles(key, item.files),
       },
     };
   };
@@ -190,12 +206,12 @@ function start(): void {
       overlayTest,
       queue: {
         current: head ? toPlayback(head) : null,
-        upcoming: rest.map(({ id, senderName, kind, caption, fileName, replay }) => ({
+        upcoming: rest.map(({ id, senderName, kind, caption, files, replay }) => ({
           id,
           senderName,
           kind,
           caption,
-          fileName,
+          fileName: fileNamesOf(files),
           replay,
         })),
       },
@@ -463,9 +479,10 @@ function start(): void {
     await enterGuild(guild.id);
   };
 
-  const clearDraft = (): void => {
-    if (draft) forgetMediaFile(draft.fileId);
-    draft = null;
+  const clearDraft = (slot: DraftSlot): void => {
+    const file = draft[slot];
+    if (file) forgetMediaFile(file.fileId);
+    draft[slot] = null;
   };
 
   const showOverlayTest = (): void => {
@@ -626,29 +643,39 @@ function start(): void {
     if (code) clipboard.writeText(code);
   });
 
-  handle(IpcChannel.PickMedia, async (): Promise<PickResult> => {
+  handle(IpcChannel.PickMedia, async (rawSlot: unknown): Promise<PickResult> => {
+    const wanted = rawSlot === 'picture' || rawSlot === 'sound' ? rawSlot : null;
+    const slotOfType = (contentType: MediaContentType): DraftSlot =>
+      fileKindOf(contentType) === 'audio' ? 'sound' : 'picture';
+    const extensions = Object.entries(CONTENT_TYPE_BY_EXTENSION)
+      .filter(([, contentType]) => !wanted || slotOfType(contentType) === wanted)
+      .map(([extension]) => extension);
     const picked = await dialog.showOpenDialog(controlWindow, {
       title: 'Choisir un média',
       properties: ['openFile'],
-      filters: [{ name: 'Images, vidéos et sons', extensions: Object.keys(CONTENT_TYPE_BY_EXTENSION) }],
+      filters: [{ name: wanted === 'sound' ? 'Sons' : wanted ? 'Images et vidéos' : 'Images, vidéos et sons', extensions }],
     });
     const path = picked.filePaths[0];
     if (picked.canceled || !path) return { ok: false, error: 'cancelled' };
 
     const contentType = contentTypeOf(path);
-    if (!contentType) return { ok: false, error: 'unsupported' };
+    if (!contentType || (wanted && slotOfType(contentType) !== wanted)) return { ok: false, error: 'unsupported' };
 
     const { size } = await stat(path);
     if (size === 0) return { ok: false, error: 'empty' };
-    if (size > MAX_MEDIA_BYTES) return { ok: false, error: 'too_large' };
+    const slot = slotOfType(contentType);
+    const other = draft[slot === 'sound' ? 'picture' : 'sound'];
+    if (size + (other?.size ?? 0) > MAX_MEDIA_BYTES) return { ok: false, error: 'too_large' };
 
-    clearDraft();
+    clearDraft(slot);
     const preview = registerMediaFile(path, contentType);
-    draft = { path, name: basename(path), size, contentType, fileId: preview.id };
-    return { ok: true, draft: { name: draft.name, size, kind: fileKindOf(contentType), previewUrl: preview.url } };
+    draft[slot] = { path, name: basename(path), size, contentType, fileId: preview.id };
+    return { ok: true, draft: { name: basename(path), size, kind: fileKindOf(contentType), previewUrl: preview.url } };
   });
 
-  handle(IpcChannel.ClearDraft, clearDraft);
+  handle(IpcChannel.ClearDraft, (slot: unknown) => {
+    if (slot === 'picture' || slot === 'sound') clearDraft(slot);
+  });
 
   handle(IpcChannel.SendMedia, async (raw: unknown): Promise<ActionResult> => {
     const session = store.session;
@@ -657,31 +684,41 @@ function start(): void {
     const input = SendMediaInputSchema.safeParse(raw);
     if (!input.success || upload) return { ok: false, error: 'invalid_request' };
 
-    const file = input.data.withFile ? draft : null;
-    if (input.data.withFile && !file) return { ok: false, error: 'invalid_request' };
+    const chosen = [input.data.withPicture ? draft.picture : null, input.data.withSound ? draft.sound : null];
+    if ((input.data.withPicture && !draft.picture) || (input.data.withSound && !draft.sound)) {
+      return { ok: false, error: 'invalid_request' };
+    }
+    const files = chosen.filter((file) => file !== null);
 
     const created = await partyApi.createMedia(session, {
       caption: input.data.caption,
       clipStartMs: input.data.clipStartMs,
       durationMs: input.data.durationMs,
-      file: file && { contentType: file.contentType, size: file.size, name: file.name.slice(0, MAX_FILE_NAME_LENGTH) },
+      files: files.map(({ contentType, size, name }) => ({ contentType, size, name: name.slice(0, MAX_FILE_NAME_LENGTH) })),
     });
     if (!created.ok) return created;
-    if (!file) return { ok: true };
+    if (files.length === 0) return { ok: true };
 
-    const mediaId = created.value;
+    const { mediaId, fileIds } = created.value;
     const controller = new AbortController();
-    const current = { name: file.name, percent: 0, controller };
+    const current = { name: files.map(({ name }) => name).join(' + '), percent: 0, controller };
     upload = current;
     publishState();
 
     // Before the last step: the service can announce the media before it answers that step.
-    cache.adopt(mediaId, file.path, file.contentType);
+    for (const [index, file] of files.entries()) cache.adopt(mediaId, fileIds[index]!, file.path, file.contentType);
 
-    const result = await uploadFile(session, mediaId, file.path, file.size, controller.signal, (percent) => {
-      current.percent = percent;
-      publishState();
-    });
+    const totalBytes = files.reduce((total, { size }) => total + size, 0);
+    let sentBytes = 0;
+    let result: Awaited<ReturnType<typeof uploadFile>> = { ok: true, value: null };
+    for (const [index, file] of files.entries()) {
+      result = await uploadFile(session, fileIds[index]!, file.path, file.size, controller.signal, (percent) => {
+        current.percent = Math.round(((sentBytes + (file.size * percent) / 100) / totalBytes) * 100);
+        publishState();
+      });
+      if (!result.ok) break;
+      sentBytes += file.size;
+    }
     upload = null;
 
     if (!result.ok) {
@@ -691,7 +728,8 @@ function start(): void {
       return result;
     }
 
-    clearDraft();
+    clearDraft('picture');
+    clearDraft('sound');
     publishState();
     return { ok: true };
   });
@@ -720,7 +758,7 @@ function start(): void {
     localReplay = replay;
     publishState();
 
-    if (item.fileId && !(await cache.fetchForMe(replay.key, session, item))) {
+    if (!(await cache.fetchForMe(replay.key, session, item.files))) {
       if (localReplay === replay) stopLocalReplay();
       publishState();
       return { ok: false, error: 'not_found' };

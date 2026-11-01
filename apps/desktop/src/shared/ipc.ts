@@ -70,6 +70,9 @@ export type PlaybackView = {
   startAt: number | null;
   // Null until the file has reached this PC.
   mediaUrl: string | null;
+  // A sound played beside the picture. It leads: the passage is its own, and a video stays silent and starts at 0.
+  hasSound: boolean;
+  soundUrl: string | null;
 };
 
 export type UpcomingView = {
@@ -98,6 +101,8 @@ export type HistoryView = {
 export type LocalReplayView = { historyId: string; playback: PlaybackView | null };
 
 export type DraftMedia = { name: string; size: number; kind: FileKind; previewUrl: string };
+// What is being asked for: anything at first, then whichever of the two is still missing.
+export type DraftSlot = 'picture' | 'sound';
 export type UploadView = { name: string; percent: number };
 
 export type AppState = {
@@ -139,7 +144,8 @@ export type SendMediaInput = {
   caption: string;
   clipStartMs: number;
   durationMs: number;
-  withFile: boolean;
+  withPicture: boolean;
+  withSound: boolean;
 };
 
 export const IpcChannel = {
@@ -187,8 +193,8 @@ export type LiveChatApi = {
   leaveParty(): Promise<ActionResult>;
   reconnect(): Promise<void>;
   copyCode(): Promise<void>;
-  pickMedia(): Promise<PickResult>;
-  clearDraft(): Promise<void>;
+  pickMedia(slot?: DraftSlot): Promise<PickResult>;
+  clearDraft(slot: DraftSlot): Promise<void>;
   sendMedia(input: SendMediaInput): Promise<ActionResult>;
   cancelUpload(): Promise<void>;
   skipMedia(mediaId: string): Promise<void>;

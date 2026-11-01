@@ -3,6 +3,7 @@ import {
   AuthRedeemResponseSchema,
   AuthStartResponseSchema,
   CreateMediaResponseSchema,
+  type CreateMediaResponse,
   MeResponseSchema,
   RotateCodeResponseSchema,
   SessionResponseSchema,
@@ -112,10 +113,10 @@ export const replayMedia = async (session: SessionResponse, historyId: string): 
 
 const mediaPath = (session: SessionResponse, mediaId: string) => `/v1/parties/${session.partyId}/media/${mediaId}`;
 
-export const createMedia = async (session: SessionResponse, draft: MediaDraft): Promise<ApiResult<string>> => {
+export const createMedia = async (session: SessionResponse, draft: MediaDraft): Promise<ApiResult<CreateMediaResponse>> => {
   const response = await request(`/v1/parties/${session.partyId}/media`, draft, session.token);
   if (!response?.ok) return failure(response);
-  return { ok: true, value: CreateMediaResponseSchema.parse(await response.json()).mediaId };
+  return { ok: true, value: CreateMediaResponseSchema.parse(await response.json()) };
 };
 
 export const putMediaPart = async (

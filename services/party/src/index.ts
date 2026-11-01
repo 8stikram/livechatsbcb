@@ -207,6 +207,8 @@ const replayMedia = async (request: Request, env: Env, partyId: string, historyI
   return result.ok ? new Response(null, { status: 204 }) : fail(result.error, STATUS_BY_ERROR[result.error]);
 };
 
+type PendingUpload = Parameters<ReturnType<typeof partyOf>['registerUpload']>[3][number];
+
 const mediaKey = (partyId: string, mediaId: string) => `${partyId}/${mediaId}`;
 
 const createMedia = async (request: Request, env: Env, partyId: string): Promise<Response> => {
@@ -218,26 +220,30 @@ const createMedia = async (request: Request, env: Env, partyId: string): Promise
   const token = bearerToken(request);
   const mediaId = crypto.randomUUID();
 
-  if (!draft.file) {
+  if (draft.files.length === 0) {
     const sent = await party.sendText(token, mediaId, draft);
-    return sent.ok ? json({ mediaId }, 201) : fail(sent.error, STATUS_BY_ERROR[sent.error]);
+    return sent.ok ? json({ mediaId, fileIds: [] }, 201) : fail(sent.error, STATUS_BY_ERROR[sent.error]);
   }
 
   const allowed = await party.canUpload(token);
   if (!allowed.ok) return fail(allowed.error, STATUS_BY_ERROR[allowed.error]);
 
-  // One retry per part is plenty, and the monthly budget counts it: creating, finishing, and two attempts per part.
-  const attempts = 2 * mediaPartCount(draft.file.size);
-  const opened = await directoryOf(env).openUpload(
-    mediaKey(partyId, mediaId),
-    draft.file.size,
-    draft.file.contentType,
-    attempts + 2,
-  );
-  if (!opened.ok) return fail(opened.error, STATUS_BY_ERROR[opened.error]);
+  const uploads: PendingUpload[] = [];
+  for (const [index, file] of draft.files.entries()) {
+    const fileId = index === 0 ? mediaId : crypto.randomUUID();
+    // One retry per part is plenty, and the monthly budget counts it: creating, finishing, and two attempts per part.
+    const attempts = 2 * mediaPartCount(file.size);
+    const opened = await directoryOf(env).openUpload(mediaKey(partyId, fileId), file.size, file.contentType, attempts + 2);
+    if (!opened.ok) {
+      // All the files or none: half a media is never sent.
+      for (const { fileId: done } of uploads) await directoryOf(env).closeUpload(mediaKey(partyId, done));
+      return fail(opened.error, STATUS_BY_ERROR[opened.error]);
+    }
+    uploads.push({ fileId, uploadId: opened.uploadId, size: file.size, attempts });
+  }
 
-  await party.registerUpload(mediaId, allowed.memberId, opened.uploadId, draft, attempts);
-  return json({ mediaId }, 201);
+  await party.registerUpload(mediaId, allowed.memberId, draft, uploads);
+  return json({ mediaId, fileIds: uploads.map(({ fileId }) => fileId) }, 201);
 };
 
 const putMediaPart = async (
@@ -275,8 +281,7 @@ const completeMedia = async (request: Request, env: Env, partyId: string, mediaI
 
   // The space was reserved for the announced size, so nothing else may be kept.
   if (object?.size !== upload.size) {
-    await directoryOf(env).closeUpload(key);
-    await party.forgetUpload(mediaId);
+    await closeUploads(env, partyId, await party.cancelUpload(bearerToken(request), mediaId));
     return fail('invalid_request', 400);
   }
 
@@ -285,13 +290,15 @@ const completeMedia = async (request: Request, env: Env, partyId: string, mediaI
   return new Response(null, { status: 204 });
 };
 
-const cancelMedia = async (request: Request, env: Env, partyId: string, mediaId: string): Promise<Response> => {
-  const party = partyOf(env, partyId);
-  const upload = await party.uploadFor(bearerToken(request), mediaId);
-  if (!upload.ok) return fail(upload.error, STATUS_BY_ERROR[upload.error]);
+const closeUploads = async (env: Env, partyId: string, fileIds: string[]): Promise<void> => {
+  for (const fileId of fileIds) await directoryOf(env).closeUpload(mediaKey(partyId, fileId));
+};
 
-  await directoryOf(env).closeUpload(mediaKey(partyId, mediaId));
-  await party.forgetUpload(mediaId);
+const cancelMedia = async (request: Request, env: Env, partyId: string, mediaId: string): Promise<Response> => {
+  const fileIds = await partyOf(env, partyId).cancelUpload(bearerToken(request), mediaId);
+  if (fileIds.length === 0) return fail('not_found', 404);
+
+  await closeUploads(env, partyId, fileIds);
   return new Response(null, { status: 204 });
 };
 

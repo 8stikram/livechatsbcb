@@ -6,7 +6,7 @@ export type View = 'party' | 'media' | 'history' | 'settings';
 
 const TABS: Array<[View, string]> = [
   ['party', 'Party'],
-  ['media', 'Médias'],
+  ['media', 'Meme'],
   ['history', 'Historique'],
 ];
 

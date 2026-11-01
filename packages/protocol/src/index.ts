@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 export const WS_SUBPROTOCOL = `livechatsbcb.v${PROTOCOL_VERSION}`;
 export const WS_SUBPROTOCOL_PREFIX = 'livechatsbcb.v';
 export const WS_TOKEN_PREFIX = 'token.';
@@ -9,6 +9,8 @@ export const MAX_ONLINE_MEMBERS = 10;
 export const MAX_REGISTERED_MEMBERS = 30;
 
 export const MAX_MEDIA_BYTES = 500 * 1024 * 1024;
+// A picture or a video, and a sound.
+export const MAX_MEDIA_FILES = 2;
 // R2 needs every part of an upload but the last to be the same size, and at least 5 MiB.
 export const MEDIA_PART_BYTES = 8 * 1024 * 1024;
 export const MAX_CAPTION_LENGTH = 300;
@@ -144,27 +146,50 @@ export type FileKind = 'image' | 'video' | 'audio';
 export type MediaKind = FileKind | 'text';
 export const fileKindOf = (contentType: MediaContentType): FileKind => contentType.split('/')[0] as FileKind;
 
+type WithType = { contentType: MediaContentType };
+
+// Whatever is on screen. With a sound beside it, the sound leads: the passage and the duration are the sound's.
+export const pictureOf = <File extends WithType>(files: File[]): File | null =>
+  files.find(({ contentType }) => fileKindOf(contentType) !== 'audio') ?? null;
+export const soundOf = <File extends WithType>(files: File[]): File | null =>
+  files.find(({ contentType }) => fileKindOf(contentType) === 'audio') ?? null;
+
+export const mediaKindOf = (files: WithType[]): MediaKind => {
+  const file = pictureOf(files) ?? soundOf(files);
+  return file ? fileKindOf(file.contentType) : 'text';
+};
+
+export const fileNamesOf = (files: { name: string }[]): string | null =>
+  files.length > 0 ? files.map(({ name }) => name).join(' + ') : null;
+
 export const MediaDraftSchema = z
   .object({
     caption: z.string().trim().max(MAX_CAPTION_LENGTH),
     clipStartMs: z.number().int().min(0).max(24 * MAX_CLIP_MS),
     durationMs: z.number().int().min(MIN_DISPLAY_MS).max(MAX_CLIP_MS),
-    file: z
-      .object({
-        contentType: MediaContentTypeSchema,
-        size: z.number().int().positive().max(MAX_MEDIA_BYTES),
-        name: z.string().trim().min(1).max(MAX_FILE_NAME_LENGTH),
-      })
-      .nullable(),
+    files: z
+      .array(
+        z.object({
+          contentType: MediaContentTypeSchema,
+          size: z.number().int().positive().max(MAX_MEDIA_BYTES),
+          name: z.string().trim().min(1).max(MAX_FILE_NAME_LENGTH),
+        }),
+      )
+      .max(MAX_MEDIA_FILES),
   })
-  .refine((draft) => draft.file !== null || draft.caption.length > 0)
+  .refine((draft) => draft.files.length > 0 || draft.caption.length > 0)
+  .refine((draft) => draft.files.reduce((total, { size }) => total + size, 0) <= MAX_MEDIA_BYTES)
+  // Two files are one to look at and one to listen to, never two of the same.
+  .refine(({ files }) => files.length < 2 || (pictureOf(files) !== null && soundOf(files) !== null))
   .refine((draft) => {
-    const plays = draft.file !== null && fileKindOf(draft.file.contentType) !== 'image';
+    const plays = draft.files.some(({ contentType }) => fileKindOf(contentType) !== 'image');
     return plays || (draft.clipStartMs === 0 && draft.durationMs <= MAX_DISPLAY_MS);
   });
 export type MediaDraft = z.infer<typeof MediaDraftSchema>;
 
-export const CreateMediaResponseSchema = z.object({ mediaId: z.string() });
+// The media takes the name of its first file. Parts and the end of the upload are then sent file by file.
+export const CreateMediaResponseSchema = z.object({ mediaId: z.string(), fileIds: z.array(z.uuid()) });
+export type CreateMediaResponse = z.infer<typeof CreateMediaResponseSchema>;
 
 export const UploadedPartSchema = z.object({ partNumber: z.number().int().positive(), etag: z.string() });
 export type UploadedPart = z.infer<typeof UploadedPartSchema>;
@@ -176,17 +201,14 @@ export const CompleteMediaRequestSchema = z.object({
 export const QueueItemSchema = z.object({
   // A UUID, because the app names a file after it.
   id: z.uuid(),
-  // The stored file, which playing something again shares with the first time: nothing is uploaded twice.
-  fileId: z.uuid().nullable(),
-  fileName: z.string().nullable(),
+  // The stored files, which playing something again shares with the first time: nothing is uploaded twice.
+  files: z.array(z.object({ id: z.uuid(), name: z.string(), contentType: MediaContentTypeSchema, size: z.number() })),
   // Asked for again from the history, by whoever is named as the sender.
   replay: z.boolean(),
   senderId: z.string(),
   senderName: z.string(),
   senderAvatarUrl: ImageUrlSchema.nullable(),
   kind: z.enum(['image', 'video', 'audio', 'text']),
-  contentType: MediaContentTypeSchema.nullable(),
-  size: z.number(),
   caption: z.string(),
   clipStartMs: z.number(),
   durationMs: z.number(),

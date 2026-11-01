@@ -11,7 +11,7 @@ import {
   WS_SUBPROTOCOL,
   WS_SUBPROTOCOL_PREFIX,
   WS_TOKEN_PREFIX,
-  fileKindOf,
+  mediaKindOf,
   mediaPartBytes,
   mediaPartCount,
   type Account,
@@ -25,7 +25,9 @@ import { randomToken, sha256 } from './tokens';
 
 type MemberRow = { id: string; name: string; avatar_url: string | null };
 type Credentials = { memberId: string; token: string };
-type UploadRow = { media_id: string; member_id: string; upload_id: string; draft: string; attempts_left: number };
+type UploadRow = { file_id: string; media_id: string; member_id: string; upload_id: string; size: number; attempts_left: number };
+type PendingRow = { media_id: string; member_id: string; draft: string; file_ids: string };
+export type PendingUpload = { fileId: string; uploadId: string; size: number; attempts: number };
 type QueueRow = {
   id: string;
   item: string;
@@ -45,6 +47,8 @@ const START_LEAD_MS = 1_500;
 const MIN_PREPARE_MS = 15_000;
 const MAX_PREPARE_MS = 120_000;
 const PREPARE_BYTES_PER_MS = 2_000;
+// Changes when what is stored in the queue and the history stops being readable by the current apps.
+const ITEM_FORMAT = '5';
 
 export const guildPartyId = (guildId: string): string => `g-${guildId}`;
 
@@ -66,12 +70,19 @@ export class Party extends DurableObject<Env> {
         joined_at INTEGER NOT NULL,
         last_seen INTEGER NOT NULL
       );
-      CREATE TABLE IF NOT EXISTS uploads (
-        media_id TEXT PRIMARY KEY,
+      CREATE TABLE IF NOT EXISTS file_uploads (
+        file_id TEXT PRIMARY KEY,
+        media_id TEXT NOT NULL,
         member_id TEXT NOT NULL,
         upload_id TEXT NOT NULL,
-        draft TEXT NOT NULL,
+        size INTEGER NOT NULL,
         attempts_left INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS pending_media (
+        media_id TEXT PRIMARY KEY,
+        member_id TEXT NOT NULL,
+        draft TEXT NOT NULL,
+        file_ids TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS queue (
         seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,6 +104,11 @@ export class Party extends DurableObject<Env> {
     const columns = this.ctx.storage.sql.exec<{ name: string }>('PRAGMA table_info(members)').toArray();
     if (!columns.some(({ name }) => name === 'avatar_url')) {
       this.ctx.storage.sql.exec('ALTER TABLE members ADD COLUMN avatar_url TEXT');
+    }
+    // What played before this format is at most a day old: it isn't worth converting.
+    if (this.getMeta('itemFormat') !== ITEM_FORMAT) {
+      this.ctx.storage.sql.exec('DELETE FROM queue; DELETE FROM history; DROP TABLE IF EXISTS uploads;');
+      this.setMeta('itemFormat', ITEM_FORMAT);
     }
   }
 
@@ -173,7 +189,7 @@ export class Party extends DurableObject<Env> {
     const member = await this.memberForToken(token);
     if (!member || !(await this.mayStay(member))) return { ok: false, error: 'unauthorized' };
     if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
-    this.enqueue(mediaId, member, draft);
+    this.enqueue(mediaId, member, draft, []);
     return { ok: true };
   }
 
@@ -207,59 +223,95 @@ export class Party extends DurableObject<Env> {
     return { ok: true, memberId: member.id };
   }
 
-  registerUpload(mediaId: string, memberId: string, uploadId: string, draft: MediaDraft, attempts: number): void {
+  registerUpload(mediaId: string, memberId: string, draft: MediaDraft, uploads: PendingUpload[]): void {
     this.ctx.storage.sql.exec(
-      'INSERT INTO uploads (media_id, member_id, upload_id, draft, attempts_left) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO pending_media (media_id, member_id, draft, file_ids) VALUES (?, ?, ?, ?)',
       mediaId,
       memberId,
-      uploadId,
       JSON.stringify(draft),
-      attempts,
+      JSON.stringify(uploads.map(({ fileId }) => fileId)),
     );
+    for (const { fileId, uploadId, size, attempts } of uploads) {
+      this.ctx.storage.sql.exec(
+        'INSERT INTO file_uploads (file_id, media_id, member_id, upload_id, size, attempts_left) VALUES (?, ?, ?, ?, ?, ?)',
+        fileId,
+        mediaId,
+        memberId,
+        uploadId,
+        size,
+        attempts,
+      );
+    }
   }
 
   async claimPart(
     token: string,
-    mediaId: string,
+    fileId: string,
     part: number,
     bytes: number,
   ): Promise<{ ok: true; uploadId: string } | Refusal<'unauthorized' | 'not_found' | 'invalid_request' | 'rate_limited'>> {
-    const upload = await this.uploadOf(token, mediaId);
+    const upload = await this.uploadOf(token, fileId);
     if (!upload.ok) return upload;
 
-    const size = (JSON.parse(upload.row.draft) as MediaDraft).file!.size;
+    const { size } = upload.row;
     if (part > mediaPartCount(size) || bytes !== mediaPartBytes(size, part)) {
       return { ok: false, error: 'invalid_request' };
     }
     // Each attempt is a paid-class R2 operation, and the monthly budget only counted so many.
     if (upload.row.attempts_left <= 0) return { ok: false, error: 'rate_limited' };
 
-    this.ctx.storage.sql.exec('UPDATE uploads SET attempts_left = attempts_left - 1 WHERE media_id = ?', mediaId);
+    this.ctx.storage.sql.exec('UPDATE file_uploads SET attempts_left = attempts_left - 1 WHERE file_id = ?', fileId);
     return { ok: true, uploadId: upload.row.upload_id };
   }
 
   async uploadFor(
     token: string,
-    mediaId: string,
+    fileId: string,
   ): Promise<{ ok: true; uploadId: string; size: number } | Refusal<'unauthorized' | 'not_found'>> {
-    const upload = await this.uploadOf(token, mediaId);
+    const upload = await this.uploadOf(token, fileId);
     if (!upload.ok) return upload;
-    const size = (JSON.parse(upload.row.draft) as MediaDraft).file!.size;
-    return { ok: true, uploadId: upload.row.upload_id, size };
+    return { ok: true, uploadId: upload.row.upload_id, size: upload.row.size };
   }
 
-  forgetUpload(mediaId: string): void {
-    this.ctx.storage.sql.exec('DELETE FROM uploads WHERE media_id = ?', mediaId);
+  // Given any file of a media, gives up on the whole media and says which files were still on their way.
+  async cancelUpload(token: string, fileId: string): Promise<string[]> {
+    const upload = await this.uploadOf(token, fileId);
+    const mediaId = upload.ok ? upload.row.media_id : fileId;
+    const member = await this.memberForToken(token);
+    if (!member) return [];
+
+    const [pending] = this.ctx.storage.sql
+      .exec<PendingRow>('SELECT * FROM pending_media WHERE media_id = ? AND member_id = ?', mediaId, member.id)
+      .toArray();
+    if (!pending) return [];
+
+    const open = this.ctx.storage.sql
+      .exec<UploadRow>('SELECT * FROM file_uploads WHERE media_id = ?', mediaId)
+      .toArray()
+      .map(({ file_id: id }) => id);
+    this.ctx.storage.sql.exec('DELETE FROM file_uploads WHERE media_id = ?', mediaId);
+    this.ctx.storage.sql.exec('DELETE FROM pending_media WHERE media_id = ?', mediaId);
+    return open;
   }
 
-  finishUpload(mediaId: string): void {
-    const [row] = this.ctx.storage.sql.exec<UploadRow>('SELECT * FROM uploads WHERE media_id = ?', mediaId).toArray();
+  // The media goes in the queue with its last file, and not before.
+  finishUpload(fileId: string): void {
+    const [row] = this.ctx.storage.sql.exec<UploadRow>('SELECT * FROM file_uploads WHERE file_id = ?', fileId).toArray();
     if (!row) return;
+    this.ctx.storage.sql.exec('DELETE FROM file_uploads WHERE file_id = ?', fileId);
+
+    const mediaId = row.media_id;
+    const [left] = this.ctx.storage.sql.exec('SELECT 1 FROM file_uploads WHERE media_id = ? LIMIT 1', mediaId).toArray();
+    if (left) return;
+
+    const [pending] = this.ctx.storage.sql.exec<PendingRow>('SELECT * FROM pending_media WHERE media_id = ?', mediaId).toArray();
+    this.ctx.storage.sql.exec('DELETE FROM pending_media WHERE media_id = ?', mediaId);
     const [member] = this.ctx.storage.sql
       .exec<MemberRow>('SELECT id, name, avatar_url FROM members WHERE id = ?', row.member_id)
       .toArray();
-    this.forgetUpload(mediaId);
-    if (member) this.enqueue(mediaId, member, JSON.parse(row.draft) as MediaDraft);
+    if (pending && member) {
+      this.enqueue(mediaId, member, JSON.parse(pending.draft) as MediaDraft, JSON.parse(pending.file_ids) as string[]);
+    }
   }
 
   override async alarm(): Promise<void> {
@@ -435,12 +487,12 @@ export class Party extends DurableObject<Env> {
 
   private async uploadOf(
     token: string,
-    mediaId: string,
+    fileId: string,
   ): Promise<{ ok: true; row: UploadRow } | Refusal<'unauthorized' | 'not_found'>> {
     const member = await this.memberForToken(token);
     if (!member) return { ok: false, error: 'unauthorized' };
     const [row] = this.ctx.storage.sql
-      .exec<UploadRow>('SELECT * FROM uploads WHERE media_id = ? AND member_id = ?', mediaId, member.id)
+      .exec<UploadRow>('SELECT * FROM file_uploads WHERE file_id = ? AND member_id = ?', fileId, member.id)
       .toArray();
     return row ? { ok: true, row } : { ok: false, error: 'not_found' };
   }
@@ -465,18 +517,15 @@ export class Party extends DurableObject<Env> {
     this.broadcast({ t: 'queue', queue: this.queue() });
   }
 
-  private enqueue(mediaId: string, sender: MemberRow, draft: MediaDraft): void {
+  private enqueue(mediaId: string, sender: MemberRow, draft: MediaDraft, fileIds: string[]): void {
     this.enqueueItem({
       id: mediaId,
-      fileId: draft.file ? mediaId : null,
-      fileName: draft.file?.name ?? null,
+      files: draft.files.map((file, index) => ({ ...file, id: fileIds[index]! })),
       replay: false,
       senderId: sender.id,
       senderName: sender.name,
       senderAvatarUrl: sender.avatar_url,
-      kind: draft.file ? fileKindOf(draft.file.contentType) : 'text',
-      contentType: draft.file?.contentType ?? null,
-      size: draft.file?.size ?? 0,
+      kind: mediaKindOf(draft.files),
       caption: draft.caption,
       clipStartMs: draft.clipStartMs,
       durationMs: draft.durationMs,
@@ -485,7 +534,8 @@ export class Party extends DurableObject<Env> {
   }
 
   private enqueueItem(item: StoredItem): void {
-    const prepareMs = item.fileId ? Math.min(MAX_PREPARE_MS, Math.max(MIN_PREPARE_MS, item.size / PREPARE_BYTES_PER_MS)) : 0;
+    const size = item.files.reduce((total, file) => total + file.size, 0);
+    const prepareMs = size > 0 ? Math.min(MAX_PREPARE_MS, Math.max(MIN_PREPARE_MS, size / PREPARE_BYTES_PER_MS)) : 0;
     this.ctx.storage.sql.exec(
       'INSERT INTO queue (id, item, prepare_ms, ready) VALUES (?, ?, ?, ?)',
       item.id,

@@ -656,8 +656,8 @@ describe.skipIf(online)('party flow in the real app', () => {
   });
 
   it('opens the media tabs', async () => {
-    await openTab(host, 'Médias');
-    await openTab(guest, 'Médias');
+    await openTab(host, 'Meme');
+    await openTab(guest, 'Meme');
     await picture(host.control, '7-media-empty.png');
   });
 
@@ -718,7 +718,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     console.log(`Screen beside the image: ${beside}, on the image: ${onImage}`);
 
     await host.app.evaluate(() => (globalThis as unknown as { backdrop: Electron.BrowserWindow }).backdrop.destroy());
-    await openTab(host, 'Médias');
+    await openTab(host, 'Meme');
     await overlayState(host, 'idle', 10_000);
 
     expect(beside).toEqual([0, 255, 0]);
@@ -744,7 +744,7 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await overlayState(host, 'idle', 10_000);
     await expect.poll(() => stageVisible(host), { timeout: 5_000 }).toBe(false);
-    await openTab(host, 'Médias');
+    await openTab(host, 'Meme');
   });
 
   it('shows a text on both screens at the same moment, with who sent it', async () => {
@@ -908,7 +908,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByTestId('draft-name').filter({ hasText: 'logo.png' }).waitFor();
     await host.control.getByRole('button', { name: 'Retirer', exact: true }).click();
     await host.control.getByTestId('draft-name').waitFor({ state: 'detached' });
-    await openTab(guest, 'Médias');
+    await openTab(guest, 'Meme');
   });
 
   it('applies the local volume, plays sounds, and keeps settings after a restart', async () => {
@@ -938,6 +938,36 @@ describe.skipIf(online)('party flow in the real app', () => {
     await connected(guest);
     await openTab(guest, 'Réglages');
     await guest.control.getByTestId('volume-value').filter({ hasText: '30 %' }).waitFor();
+  });
+
+  it('sends a picture and a sound together, with a text on several lines', async () => {
+    await openTab(host, 'Meme');
+    await pickFile(host, join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png'));
+    const sound = join(sandbox, 'son-meme.wav');
+    writeFileSync(sound, silentWav(3));
+    await host.app.evaluate(({ dialog }, file) => {
+      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [file] })) as typeof dialog.showOpenDialog;
+    }, sound);
+    await host.control.getByRole('button', { name: 'Ajouter un son' }).click();
+    await host.control.getByTestId('clip-start').waitFor({ timeout: 15_000 });
+    await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(2);
+    await picture(host.control, '11-meme-base.png');
+
+    await host.control.getByLabel('Texte à afficher').fill('Première ligne\nDeuxième ligne');
+    await sendButton(host).click();
+
+    await overlayState(guest, 'playing');
+    await guest.stage.getByTestId('overlay-image').waitFor();
+    const audio = guest.stage.getByTestId('overlay-audio');
+    await audio.waitFor({ state: 'attached' });
+    await expect.poll(() => audio.evaluate((element: HTMLAudioElement) => element.paused), { timeout: 10_000 }).toBe(false);
+    const text = guest.stage.getByTestId('overlay-text').locator('p');
+    await expect.poll(() => text.evaluate((element) => (element as HTMLElement).innerText)).toContain('\n');
+    await picture(guest.stage, '12-overlay-meme.png');
+
+    await host.control.getByRole('button', { name: 'Passer' }).click();
+    await overlayState(guest, 'idle');
+    await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(0);
   });
 
   it('moves a zone of the overlay, and shows the result on the real screen', async () => {

@@ -33,19 +33,33 @@ const Caption = ({ text, zone }: { text: string; zone: Zone }) => (
   </div>
 );
 
-const SyncedMedia = ({ item, startAt, volume }: { item: PlaybackView; startAt: number; volume: number }) => {
+const SyncedMedia = ({
+  kind,
+  url,
+  clipStartMs,
+  durationMs,
+  startAt,
+  volume,
+}: {
+  kind: 'video' | 'audio';
+  url: string | null;
+  clipStartMs: number;
+  durationMs: number;
+  startAt: number;
+  volume: number;
+}) => {
   const element = useRef<HTMLVideoElement & HTMLAudioElement>(null);
-  useSyncedMedia(element, { ...item, startAt });
+  useSyncedMedia(element, { clipStartMs, durationMs, startAt, mediaUrl: url });
 
   useEffect(() => {
     if (element.current) element.current.volume = volume;
   }, [volume]);
 
-  const url = item.mediaUrl ?? undefined;
-  return item.kind === 'video' ? (
-    <video ref={element} className="overlay-media" src={url} preload="auto" playsInline data-testid="overlay-video" />
+  const src = url ?? undefined;
+  return kind === 'video' ? (
+    <video ref={element} className="overlay-media" src={src} preload="auto" playsInline data-testid="overlay-video" />
   ) : (
-    <audio ref={element} src={url} preload="auto" data-testid="overlay-audio" />
+    <audio ref={element} src={src} preload="auto" data-testid="overlay-audio" />
   );
 };
 
@@ -92,10 +106,26 @@ const Playing = ({
       )}
       {item.kind === 'video' && (
         <div className="zone zone-media" style={zoneStyle(layout.media)}>
-          <SyncedMedia item={item} startAt={startAt} volume={volume} />
+          <SyncedMedia
+            kind="video"
+            url={item.mediaUrl}
+            clipStartMs={item.hasSound ? 0 : item.clipStartMs}
+            durationMs={item.durationMs}
+            startAt={startAt}
+            volume={item.hasSound ? 0 : volume}
+          />
         </div>
       )}
-      {item.kind === 'audio' && <SyncedMedia item={item} startAt={startAt} volume={volume} />}
+      {(item.kind === 'audio' || item.hasSound) && (
+        <SyncedMedia
+          kind="audio"
+          url={item.hasSound ? item.soundUrl : item.mediaUrl}
+          clipStartMs={item.clipStartMs}
+          durationMs={item.durationMs}
+          startAt={startAt}
+          volume={volume}
+        />
+      )}
       {item.caption && <Caption text={item.caption} zone={layout.text} />}
     </div>
   );

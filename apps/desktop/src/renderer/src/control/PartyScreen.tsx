@@ -30,7 +30,8 @@ const QuickSend = ({
     const sent = text;
     const result = await window.liveChat.sendMedia({
       caption: sent,
-      withFile: false,
+      withPicture: false,
+      withSound: false,
       clipStartMs: 0,
       durationMs: DEFAULT_DISPLAY_MS,
     });
@@ -40,7 +41,7 @@ const QuickSend = ({
 
   const pick = async () => {
     // A file already being prepared is what the media tab is for.
-    if (files.draft) {
+    if (files.hasFiles) {
       onOpenMedia();
       return;
     }
@@ -78,7 +79,7 @@ const QuickSend = ({
           </div>
         </div>
         <button type="button" className="pill primary" disabled={isUploading} onClick={() => void pick()}>
-          {files.draft ? 'Reprendre ton fichier' : 'Choisir un fichier'}
+          {files.hasFiles ? 'Reprendre ton meme' : 'Choisir un fichier'}
         </button>
       </form>
       {error && (

@@ -70,7 +70,7 @@ const SkipButton = ({ mediaId }: { mediaId: string | null }) => (
 
 const PreviewVideo = ({ item, startAt }: { item: PlaybackView; startAt: number }) => {
   const element = useRef<HTMLVideoElement>(null);
-  useSyncedMedia(element, { ...item, startAt });
+  useSyncedMedia(element, { ...item, startAt, clipStartMs: item.hasSound ? 0 : item.clipStartMs });
   // The sound is the overlay's job: this is only there to see what everyone is seeing.
   return <video ref={element} className="now-media" src={item.mediaUrl ?? undefined} muted playsInline preload="auto" />;
 };
