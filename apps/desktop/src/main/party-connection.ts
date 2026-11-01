@@ -5,6 +5,7 @@ import {
   WS_SUBPROTOCOL,
   WS_TOKEN_PREFIX,
   type ClientMessage,
+  type HistoryItem,
   type Member,
   type QueueItem,
   type ServerMessage,
@@ -25,6 +26,7 @@ export type ConnectionSnapshot = {
   memberId: string;
   members: Member[];
   queue: QueueItem[];
+  history: HistoryItem[];
 };
 
 type Listener = {
@@ -50,7 +52,7 @@ export class PartyConnection {
     private readonly session: SessionResponse,
     private readonly listener: Listener,
   ) {
-    this.snapshot = { status: 'connecting', code: session.code, memberId: session.memberId, members: [], queue: [] };
+    this.snapshot = { status: 'connecting', code: session.code, memberId: session.memberId, members: [], queue: [], history: [] };
   }
 
   start(): void {
@@ -134,6 +136,7 @@ export class PartyConnection {
           memberId: message.memberId,
           members: message.members,
           queue: message.queue,
+          history: message.history,
         });
         // The service forgets nothing, but anything reported while disconnected never reached it.
         for (const mediaId of this.readyIds) this.send({ t: 'ready', mediaId });
@@ -155,6 +158,9 @@ export class PartyConnection {
         if (hasNewItem) this.syncClock();
         break;
       }
+      case 'history':
+        this.publish({ history: message.history });
+        break;
       case 'time':
         this.onClockSample(message.c, message.s);
         break;

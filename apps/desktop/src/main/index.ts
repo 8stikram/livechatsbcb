@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, screen, type IpcMainInvokeEvent } from 'electron';
@@ -6,14 +8,16 @@ import {
   CloseCode,
   CodeSchema,
   DEFAULT_DISPLAY_MS,
+  MAX_FILE_NAME_LENGTH,
   MAX_MEDIA_BYTES,
   fileKindOf,
   type GuildSummary,
+  type HistoryItem,
   type MediaContentType,
   type QueueItem,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, type ActionResult, type AppState, type PickResult, type PlaybackView } from '../shared/ipc';
+import { IpcChannel, type ActionResult, type AppState, type HistoryView, type PickResult, type PlaybackView } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { MediaCache } from './media-cache';
@@ -23,6 +27,7 @@ import * as partyApi from './party-api';
 import { PartyConnection } from './party-connection';
 import { SessionStore } from './session-store';
 import { SettingsSchema, SettingsStore } from './settings-store';
+import { AppTray } from './tray';
 import { Updater } from './updater';
 import { createControlWindow, createStageWindow, denyAllPermissions, isOwnPage, openInBrowser, placeOverlay } from './windows';
 
@@ -54,6 +59,21 @@ const RETRY_GUILDS_AFTER_MS = 30_000;
 const REJOIN_AT_MOST_EVERY_MS = 30_000;
 // Put out of a server's party: trying it again straight away by itself would just go round in circles.
 const RETRY_REFUSED_GUILD_AFTER_MS = 60_000;
+// Long enough for the overlay to load a file this PC already has.
+const LOCAL_REPLAY_LEAD_MS = 400;
+
+// How Windows starts the app at login: no window, only the icon near the clock.
+const START_HIDDEN_ARG = '--hidden';
+
+// An update installed unnoticed should come back the same way, and an installer can't pass an argument along.
+const quietRestartFlag = () => join(app.getPath('userData'), 'restart-quietly');
+
+const takeQuietRestart = (): boolean => {
+  const flag = quietRestartFlag();
+  if (!existsSync(flag)) return false;
+  rmSync(flag, { force: true });
+  return true;
+};
 
 function start(): void {
   denyAllPermissions();
@@ -78,9 +98,11 @@ function start(): void {
   let draft: { path: string; name: string; size: number; contentType: MediaContentType; fileId: string } | null = null;
   let upload: { name: string; percent: number; controller: AbortController } | null = null;
   let quitting = false;
+  let localReplay: { key: string; historyId: string; item: HistoryItem; startAt: number | null } | null = null;
+  let localReplayTimer: NodeJS.Timeout | undefined;
 
   const stageWindow = createStageWindow(settings.current.displayId);
-  const controlWindow = createControlWindow();
+  const controlWindow = createControlWindow(process.argv.includes(START_HIDDEN_ARG) || takeQuietRestart());
 
   const cache = new MediaCache(join(app.getPath('userData'), 'media-cache'), (mediaId) => {
     connection?.reportReady(mediaId);
@@ -93,11 +115,43 @@ function start(): void {
     senderAvatarUrl: item.senderAvatarUrl,
     kind: item.kind,
     caption: item.caption,
+    fileName: item.fileName,
     clipStartMs: item.clipStartMs,
     durationMs: item.durationMs,
     startAt: item.startAt === null || !connection ? null : connection.toLocalTime(item.startAt),
     mediaUrl: cache.urlOf(item.id),
   });
+
+  const toHistoryView = (item: HistoryItem, party: PartyConnection): HistoryView => ({
+    id: item.id,
+    senderName: item.senderName,
+    senderAvatarUrl: item.senderAvatarUrl,
+    kind: item.kind,
+    caption: item.caption,
+    fileName: item.fileName,
+    playedAt: party.toLocalTime(item.playedAt),
+  });
+
+  const localReplayView = (): AppState['localReplay'] => {
+    if (!localReplay) return null;
+    const { key, historyId, item, startAt } = localReplay;
+    if (startAt === null) return { historyId, playback: null };
+    return {
+      historyId,
+      playback: {
+        id: key,
+        senderName: item.senderName,
+        senderAvatarUrl: item.senderAvatarUrl,
+        kind: item.kind,
+        caption: item.caption,
+        fileName: item.fileName,
+        clipStartMs: item.clipStartMs,
+        durationMs: item.durationMs,
+        startAt,
+        mediaUrl: cache.urlOf(key),
+      },
+    };
+  };
 
   const getState = (): AppState => {
     const snapshot = connection?.current();
@@ -134,7 +188,23 @@ function start(): void {
         }`,
       })),
       overlayTest,
-      queue: { current: head ? toPlayback(head) : null, waiting: rest.length },
+      queue: {
+        current: head ? toPlayback(head) : null,
+        upcoming: rest.map(({ id, senderName, kind, caption, fileName, replay }) => ({
+          id,
+          senderName,
+          kind,
+          caption,
+          fileName,
+          replay,
+        })),
+      },
+      history: connection
+        ? snapshot!.history
+            .filter((item) => connection!.toLocalTime(item.expiresAt) > Date.now())
+            .map((item) => toHistoryView(item, connection!))
+        : [],
+      localReplay: localReplayView(),
       upload: upload && { name: upload.name, percent: upload.percent },
     };
   };
@@ -145,7 +215,8 @@ function start(): void {
     if (stageWindow.isDestroyed()) return;
 
     const playing = connection?.current().queue[0]?.startAt != null;
-    const wanted = overlayTest || (playing && settings.current.overlayEnabled);
+    // Asked for on this PC, like the test: it shows even for someone who keeps the overlay off.
+    const wanted = overlayTest || localReplay?.startAt != null || (playing && settings.current.overlayEnabled);
 
     if (wanted && !stageWindow.isVisible()) {
       placeOverlay(stageWindow, settings.current.displayId);
@@ -158,18 +229,62 @@ function start(): void {
     }
   };
 
+  // Someone living near the clock never sees the button to restart, and an old version ends up shut out of the party.
+  const installUpdateUnnoticed = (): void => {
+    if (quitting || updater.current().state !== 'ready') return;
+    if (controlWindow.isVisible() || upload || localReplay || connection?.current().queue.length) return;
+
+    writeFileSync(quietRestartFlag(), '');
+    quitting = true;
+    updater.installNow();
+  };
+
   const publishState = (): void => {
     const state = getState();
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(IpcChannel.StateChanged, state);
     }
     syncOverlay();
+    tray.showMuted(settings.current.muted);
+    installUpdateUnnoticed();
   };
 
   const updater = new Updater(publishState);
 
+  const showControlWindow = (): void => {
+    controlWindow.show();
+    if (controlWindow.isMinimized()) controlWindow.restore();
+    controlWindow.focus();
+  };
+
+  const tray = new AppTray({
+    open: showControlWindow,
+    setMuted: (muted) => {
+      settings.update({ muted });
+      publishState();
+    },
+    quit: () => app.quit(),
+  });
+
+  // Only for a real install: anything else would have Windows launch a test copy at every start.
+  const applyLaunchAtStartup = (): void => {
+    if (!app.isPackaged || profile) return;
+    app.setLoginItemSettings({
+      openAtLogin: settings.current.launchAtStartup,
+      name: 'LiveChatSBCB',
+      args: [START_HIDDEN_ARG],
+    });
+  };
+
+  const stopLocalReplay = (): void => {
+    clearTimeout(localReplayTimer);
+    if (localReplay) cache.forget(localReplay.key);
+    localReplay = null;
+  };
+
   const leaveConnection = (): void => {
     upload?.controller.abort();
+    stopLocalReplay();
     connection?.stop();
     connection = null;
     cache.clear();
@@ -236,6 +351,8 @@ function start(): void {
           });
         }
         cache.sync(session, snapshot.queue);
+        // What is for everyone comes first, and the moment it starts is already decided.
+        if (snapshot.queue[0]?.startAt != null) stopLocalReplay();
         publishState();
       },
       onSessionRevoked: (closeCode) => {
@@ -390,6 +507,7 @@ function start(): void {
 
     notice = null;
     store.update({ login: result.value });
+    if (!controlWindow.isVisible()) controlWindow.show();
     if (controlWindow.isMinimized()) controlWindow.restore();
     controlWindow.focus();
     publishState();
@@ -546,7 +664,7 @@ function start(): void {
       caption: input.data.caption,
       clipStartMs: input.data.clipStartMs,
       durationMs: input.data.durationMs,
-      file: file && { contentType: file.contentType, size: file.size },
+      file: file && { contentType: file.contentType, size: file.size, name: file.name.slice(0, MAX_FILE_NAME_LENGTH) },
     });
     if (!created.ok) return created;
     if (!file) return { ok: true };
@@ -584,11 +702,52 @@ function start(): void {
     if (typeof mediaId === 'string') connection?.skip(mediaId);
   });
 
+  handle(IpcChannel.ReplayForAll, async (rawId: unknown): Promise<ActionResult> => {
+    const session = store.session;
+    if (!session || typeof rawId !== 'string') return { ok: false, error: 'unauthorized' };
+    return partyApi.replayMedia(session, rawId);
+  });
+
+  handle(IpcChannel.ReplayForMe, async (rawId: unknown): Promise<ActionResult> => {
+    const session = store.session;
+    const item = connection?.current().history.find(({ id }) => id === rawId);
+    if (!session || !item) return { ok: false, error: 'not_found' };
+    // Nothing for everyone is ever interrupted, and the button says so too.
+    if (connection?.current().queue[0]?.startAt != null) return { ok: true };
+
+    stopLocalReplay();
+    const replay = { key: randomUUID(), historyId: item.id, item, startAt: null as number | null };
+    localReplay = replay;
+    publishState();
+
+    if (item.fileId && !(await cache.fetchForMe(replay.key, session, item))) {
+      if (localReplay === replay) stopLocalReplay();
+      publishState();
+      return { ok: false, error: 'not_found' };
+    }
+    // Stopped, or replaced by something else, while the file was on its way.
+    if (localReplay !== replay) return { ok: true };
+
+    replay.startAt = Date.now() + LOCAL_REPLAY_LEAD_MS;
+    localReplayTimer = setTimeout(() => {
+      stopLocalReplay();
+      publishState();
+    }, LOCAL_REPLAY_LEAD_MS + item.durationMs);
+    publishState();
+    return { ok: true };
+  });
+
+  handle(IpcChannel.StopLocalReplay, () => {
+    stopLocalReplay();
+    publishState();
+  });
+
   handle(IpcChannel.SetSettings, (raw: unknown) => {
     const change = SettingsSchema.partial().safeParse(raw);
     if (!change.success) return;
 
     settings.update(change.data);
+    if (change.data.launchAtStartup !== undefined) applyLaunchAtStartup();
     if (change.data.displayId !== undefined) placeOverlay(stageWindow, settings.current.displayId);
 
     // Moving something is only useful if you can see where it lands on the real screen.
@@ -604,10 +763,31 @@ function start(): void {
     updater.installNow();
   });
 
-  // Nothing should close the overlay but quitting: the control window remains the way to do that.
+  // Nothing should close the overlay but quitting.
   stageWindow.on('close', (event) => {
     if (!quitting) event.preventDefault();
   });
+
+  // The cross only puts the app away: medias keep arriving, and quitting is on the icon near the clock.
+  controlWindow.on('close', (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    controlWindow.hide();
+    if (settings.current.backgroundHintShown) return;
+
+    settings.update({ backgroundHintShown: true });
+    // Not during the tests: the point of them is to leave this PC alone.
+    if (!profile) tray.explain();
+  });
+  controlWindow.on('hide', installUpdateUnnoticed);
+
+  // Windows doesn't announce a quit when it shuts down, and a window refusing to close would hold up the shutdown.
+  for (const window of [controlWindow, stageWindow]) {
+    window.on('session-end', () => {
+      quitting = true;
+      settings.flush();
+    });
+  }
 
   const onDisplaysChanged = (): void => {
     placeOverlay(stageWindow, settings.current.displayId);
@@ -620,17 +800,16 @@ function start(): void {
   controlWindow.on('focus', () => {
     if (store.login && Date.now() - guildsRefreshedAt > REFRESH_ON_FOCUS_AFTER_MS) void refreshGuilds();
   });
-  controlWindow.on('closed', () => app.quit());
   app.on('before-quit', () => {
     quitting = true;
     login?.abort();
     connection?.stop();
     settings.flush();
+    tray.destroy();
   });
-  app.on('second-instance', () => {
-    if (controlWindow.isMinimized()) controlWindow.restore();
-    controlWindow.focus();
-  });
+  app.on('second-instance', showControlWindow);
+
+  applyLaunchAtStartup();
 
   if (store.login) {
     void refreshGuilds();

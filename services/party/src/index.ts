@@ -202,6 +202,11 @@ const leaveParty = async (request: Request, env: Env, partyId: string): Promise<
   return new Response(null, { status: 204 });
 };
 
+const replayMedia = async (request: Request, env: Env, partyId: string, historyId: string): Promise<Response> => {
+  const result = await partyOf(env, partyId).replay(bearerToken(request), historyId);
+  return result.ok ? new Response(null, { status: 204 }) : fail(result.error, STATUS_BY_ERROR[result.error]);
+};
+
 const mediaKey = (partyId: string, mediaId: string) => `${partyId}/${mediaId}`;
 
 const createMedia = async (request: Request, env: Env, partyId: string): Promise<Response> => {
@@ -312,7 +317,7 @@ const privacyPage = (): Response =>
 <ul>
 <li><strong>Gardé :</strong> ton identifiant Discord, ton pseudo et ta photo, pour t'afficher aux autres membres.</li>
 <li><strong>Gardé tant que tu es connecté :</strong> la liste de tes serveurs Discord (nom et image) et un jeton Discord chiffré, qui sert seulement à tenir cette liste à jour. Les autres membres ne voient que le serveur de la party où tu es.</li>
-<li><strong>Gardé 1 jour :</strong> les médias envoyés dans une party, puis ils sont effacés.</li>
+<li><strong>Gardé 1 jour :</strong> les médias envoyés dans une party, leur nom et leur historique, puis ils sont effacés.</li>
 <li><strong>Jamais demandé :</strong> ton e-mail, ton mot de passe, tes messages.</li>
 </ul>
 <p>Te déconnecter de l'app efface le jeton et la liste. Tu peux aussi retirer son autorisation dans Discord (Paramètres, Applications autorisées).</p>`,
@@ -377,6 +382,9 @@ export default {
       if (method === 'POST' && action === 'rotate-code') return rotateCode(request, env, partyId);
       if (method === 'POST' && action === 'leave') return leaveParty(request, env, partyId);
     }
+
+    const replay = pathname.match(/^\/v1\/parties\/([0-9a-f-]{36}|g-\d{17,20})\/history\/([0-9a-f-]{36})\/replay$/);
+    if (replay && method === 'POST') return replayMedia(request, env, replay[1]!, replay[2]!);
 
     const media = pathname.match(
       /^\/v1\/parties\/([0-9a-f-]{36}|g-\d{17,20})\/media(?:\/([0-9a-f-]{36})(?:\/(complete|parts\/(\d{1,4})))?)?$/,

@@ -1,23 +1,16 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import {
   DEFAULT_DISPLAY_MS,
   MAX_CAPTION_LENGTH,
   MAX_CLIP_MS,
   MAX_DISPLAY_MS,
   MIN_DISPLAY_MS,
-  type MediaKind,
 } from '@livechatsbcb/protocol';
-import type { AppState, DraftMedia, PlaybackView } from '../../../shared/ipc';
-import { mediaErrorMessage, pickErrorMessage } from './messages';
-
-const KIND_TEXT: Record<MediaKind, string> = {
-  image: 'une image',
-  video: 'une vidéo',
-  audio: 'un son',
-  text: 'un texte',
-};
-
-type Clip = { startMs: number; endMs: number };
+import type { AppState, DraftMedia } from '../../../shared/ipc';
+import { IconPlay, KindIcon } from './icons';
+import { mediaErrorMessage } from './messages';
+import { Slider } from './NowPlaying';
+import type { Clip, DraftFiles } from './use-draft';
 
 const formatTime = (ms: number): string => {
   const tenths = Math.floor(ms / 100);
@@ -110,76 +103,72 @@ const ClipEditor = ({
     onError: onUnreadable,
   };
 
+  const edge = (ms: number) => (lengthMs ? ms / lengthMs : 0);
+
   return (
     <>
-      {draft.kind === 'video' ? <video className="draft-preview" playsInline {...handlers} /> : <audio {...handlers} />}
+      <div className="draft-picture">
+        {draft.kind === 'video' ? (
+          <video className="draft-media" playsInline {...handlers} />
+        ) : (
+          <>
+            <span className="kind-tile is-large">
+              <KindIcon kind="audio" size={28} />
+            </span>
+            <audio {...handlers} />
+          </>
+        )}
+      </div>
+
       {clip && lengthMs !== null && lengthMs > MIN_DISPLAY_MS && (
         <div className="clip">
-          <label className="field">
-            <span>
-              Début du passage : <strong data-testid="clip-start">{formatTime(clip.startMs)}</strong>
-            </span>
+          <div
+            className="clip-range"
+            style={{ '--start': edge(clip.startMs), '--end': edge(clip.endMs) } as CSSProperties}
+          >
+            <i className="clip-chosen" aria-hidden="true" />
             <input
               type="range"
+              aria-label="Début du passage"
               min={0}
               max={lengthMs}
               step={100}
               value={clip.startMs}
               onChange={(event) => setStart(Number(event.target.value))}
             />
-          </label>
-          <label className="field">
-            <span>
-              Fin du passage : <strong data-testid="clip-end">{formatTime(clip.endMs)}</strong>
-            </span>
             <input
               type="range"
+              aria-label="Fin du passage"
               min={0}
               max={lengthMs}
               step={100}
               value={clip.endMs}
               onChange={(event) => setEnd(Number(event.target.value))}
             />
-          </label>
-          <button type="button" className="secondary compact" onClick={preview}>
-            Prévisualiser le passage ({formatTime(clip.endMs - clip.startMs)})
-          </button>
+          </div>
+          <div className="clip-foot">
+            <span className="clip-time">
+              Début <strong className="mono" data-testid="clip-start">{formatTime(clip.startMs)}</strong>
+            </span>
+            <span className="clip-time">
+              Fin <strong className="mono" data-testid="clip-end">{formatTime(clip.endMs)}</strong>
+            </span>
+            <span className="spacer" />
+            <button type="button" className="pill secondary small" onClick={preview}>
+              <IconPlay size={16} />
+              Prévisualiser <span className="mono">{formatTime(clip.endMs - clip.startMs)}</span>
+            </button>
+          </div>
         </div>
       )}
     </>
   );
 };
 
-const NowPlaying = ({ current, waiting }: { current: PlaybackView | null; waiting: number }) => (
-  <section className="panel" aria-label="File d’attente">
-    <h2>À l’écran</h2>
-    {current ? (
-      <div className="now-playing">
-        <p data-testid="now-playing">
-          {current.startAt === null ? 'Bientôt : ' : ''}
-          {current.senderName} a envoyé {KIND_TEXT[current.kind]}
-        </p>
-        <button type="button" className="secondary compact" onClick={() => void window.liveChat.skipMedia(current.id)}>
-          Passer
-        </button>
-      </div>
-    ) : (
-      <p className="hint">Rien pour le moment.</p>
-    )}
-    {waiting > 0 && (
-      <p className="hint" data-testid="queue-waiting">
-        {waiting} en attente
-      </p>
-    )}
-  </section>
-);
-
-export const MediaScreen = ({ state }: { state: AppState }) => {
-  const [draft, setDraft] = useState<DraftMedia | null>(null);
+export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFiles }) => {
+  const { draft, clip, unreadable } = files;
   const [caption, setCaption] = useState('');
-  const [clip, setClip] = useState<Clip | null>(null);
   const [displayMs, setDisplayMs] = useState(DEFAULT_DISPLAY_MS);
-  const [unreadable, setUnreadable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const isUploading = state.upload !== null;
@@ -187,27 +176,9 @@ export const MediaScreen = ({ state }: { state: AppState }) => {
   const hasContent = draft ? !unreadable && (!plays || clip !== null) : caption.trim().length > 0;
   const isOnline = state.party?.connection === 'online';
 
-  const reset = () => {
-    setDraft(null);
-    setClip(null);
-    setUnreadable(false);
-  };
-
   const pick = async () => {
     setError(null);
-    const result = await window.liveChat.pickMedia();
-    if (result.ok) {
-      setClip(null);
-      setUnreadable(false);
-      setDraft(result.draft);
-    } else if (result.error !== 'cancelled') {
-      setError(pickErrorMessage(result.error));
-    }
-  };
-
-  const remove = () => {
-    reset();
-    void window.liveChat.clearDraft();
+    setError((await files.pick()).error);
   };
 
   const send = async () => {
@@ -219,7 +190,7 @@ export const MediaScreen = ({ state }: { state: AppState }) => {
 
     const result = await window.liveChat.sendMedia({ caption, withFile: draft !== null, ...timing });
     if (result.ok) {
-      reset();
+      files.reset();
       // Keeps whatever was typed while this one was on its way.
       setCaption((typed) => (typed === caption ? '' : typed));
     } else if (result.error !== 'cancelled') {
@@ -228,63 +199,66 @@ export const MediaScreen = ({ state }: { state: AppState }) => {
   };
 
   return (
-    <main className="screen">
-      <section className="panel" aria-label="Envoyer un média">
-        <h2>Envoyer à la party</h2>
-
+    <div className="media-grid">
+      <section className="glass media-main" aria-label="Ton média">
         {draft ? (
-          <div className="draft">
-            <div className="draft-head">
-              <span className="draft-name" data-testid="draft-name">
+          <>
+            <header className="draft-head">
+              <span className="kind-tile is-small">
+                <KindIcon kind={draft.kind} size={16} />
+              </span>
+              <span className="draft-name" title={draft.name} data-testid="draft-name">
                 {draft.name}
               </span>
-              <span className="hint">{formatSize(draft.size)}</span>
+              <span className="count mono">{formatSize(draft.size)}</span>
               {!isUploading && (
-                <button type="button" className="quiet" onClick={remove}>
+                <button type="button" className="pill quiet small" onClick={files.remove}>
                   Retirer
                 </button>
               )}
-            </div>
+            </header>
             {draft.kind === 'image' ? (
-              <img className="draft-preview" src={draft.previewUrl} alt="" onError={() => setUnreadable(true)} />
+              <div className="draft-picture">
+                <img
+                  className="draft-media"
+                  src={draft.previewUrl}
+                  alt=""
+                  onError={() => files.setUnreadable(true)}
+                />
+              </div>
             ) : (
-              <ClipEditor key={draft.previewUrl} draft={draft} clip={clip} onClip={setClip} onUnreadable={() => setUnreadable(true)} />
+              <ClipEditor
+                key={draft.previewUrl}
+                draft={draft}
+                clip={clip}
+                onClip={files.setClip}
+                onUnreadable={() => files.setUnreadable(true)}
+              />
             )}
             {unreadable && (
               <p className="error" role="alert">
                 Ce fichier ne peut pas être lu. Essaie un autre format.
               </p>
             )}
-          </div>
+          </>
         ) : (
           <div className="draft-empty">
-            <button type="button" className="secondary" disabled={isUploading} onClick={() => void pick()}>
+            <p className="draft-empty-title">Une image, une vidéo ou un son</p>
+            <p className="hint">500 Mo maximum. Effacé du serveur après 1 jour.</p>
+            <button type="button" className="pill primary" disabled={isUploading} onClick={() => void pick()}>
               Choisir un fichier
             </button>
-            <p className="hint">Image, vidéo ou son, 500 Mo maximum. Effacé du serveur après 1 jour.</p>
           </div>
         )}
+      </section>
 
-        {!plays && (
-          <label className="field">
-            <span>
-              Durée d’affichage : <strong data-testid="display-seconds">{displayMs / 1000} s</strong>
-            </span>
-            <input
-              type="range"
-              min={MIN_DISPLAY_MS}
-              max={MAX_DISPLAY_MS}
-              step={1000}
-              value={displayMs}
-              onChange={(event) => setDisplayMs(Number(event.target.value))}
-            />
-          </label>
-        )}
+      <section className="glass panel media-side" aria-label="Envoyer un média">
+        <h2>Envoyer à la party</h2>
 
         <label className="field">
           <span>{draft ? 'Texte à afficher (facultatif)' : 'Texte à afficher'}</span>
           <textarea
-            rows={2}
+            className="input is-area"
             value={caption}
             maxLength={MAX_CAPTION_LENGTH}
             onChange={(event) => setCaption(event.target.value)}
@@ -292,18 +266,37 @@ export const MediaScreen = ({ state }: { state: AppState }) => {
           />
         </label>
 
+        <span className="spacer" />
+
+        {!plays && (
+          <label className="field">
+            <span className="field-line">
+              Durée d’affichage <strong className="mono" data-testid="display-seconds">{displayMs / 1000} s</strong>
+            </span>
+            <Slider
+              value={displayMs}
+              min={MIN_DISPLAY_MS}
+              max={MAX_DISPLAY_MS}
+              step={1000}
+              onChange={setDisplayMs}
+            />
+          </label>
+        )}
+
         {state.upload ? (
           <div className="upload" role="status">
-            <div className="upload-head">
-              <span>Envoi… {state.upload.percent} %</span>
-              <button type="button" className="quiet" onClick={() => void window.liveChat.cancelUpload()}>
+            <div className="field-line">
+              <span>
+                Envoi… <span className="mono">{state.upload.percent} %</span>
+              </span>
+              <button type="button" className="pill quiet small" onClick={() => void window.liveChat.cancelUpload()}>
                 Annuler
               </button>
             </div>
             <progress max={100} value={state.upload.percent} />
           </div>
         ) : (
-          <button type="button" className="primary" disabled={!hasContent || !isOnline} onClick={() => void send()}>
+          <button type="button" className="pill primary" disabled={!hasContent || !isOnline} onClick={() => void send()}>
             Envoyer à tout le monde
           </button>
         )}
@@ -314,8 +307,6 @@ export const MediaScreen = ({ state }: { state: AppState }) => {
           </p>
         )}
       </section>
-
-      <NowPlaying current={state.queue.current} waiting={state.queue.waiting} />
-    </main>
+    </div>
   );
 };

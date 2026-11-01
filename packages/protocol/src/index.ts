@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 export const WS_SUBPROTOCOL = `livechatsbcb.v${PROTOCOL_VERSION}`;
 export const WS_SUBPROTOCOL_PREFIX = 'livechatsbcb.v';
 export const WS_TOKEN_PREFIX = 'token.';
@@ -12,7 +12,9 @@ export const MAX_MEDIA_BYTES = 500 * 1024 * 1024;
 // R2 needs every part of an upload but the last to be the same size, and at least 5 MiB.
 export const MEDIA_PART_BYTES = 8 * 1024 * 1024;
 export const MAX_CAPTION_LENGTH = 300;
+export const MAX_FILE_NAME_LENGTH = 200;
 export const MAX_QUEUE_LENGTH = 50;
+export const MAX_HISTORY_LENGTH = 50;
 export const MIN_DISPLAY_MS = 1_000;
 export const DEFAULT_DISPLAY_MS = 5_000;
 export const MAX_DISPLAY_MS = 60_000;
@@ -148,7 +150,11 @@ export const MediaDraftSchema = z
     clipStartMs: z.number().int().min(0).max(24 * MAX_CLIP_MS),
     durationMs: z.number().int().min(MIN_DISPLAY_MS).max(MAX_CLIP_MS),
     file: z
-      .object({ contentType: MediaContentTypeSchema, size: z.number().int().positive().max(MAX_MEDIA_BYTES) })
+      .object({
+        contentType: MediaContentTypeSchema,
+        size: z.number().int().positive().max(MAX_MEDIA_BYTES),
+        name: z.string().trim().min(1).max(MAX_FILE_NAME_LENGTH),
+      })
       .nullable(),
   })
   .refine((draft) => draft.file !== null || draft.caption.length > 0)
@@ -170,6 +176,11 @@ export const CompleteMediaRequestSchema = z.object({
 export const QueueItemSchema = z.object({
   // A UUID, because the app names a file after it.
   id: z.uuid(),
+  // The stored file, which playing something again shares with the first time: nothing is uploaded twice.
+  fileId: z.uuid().nullable(),
+  fileName: z.string().nullable(),
+  // Asked for again from the history, by whoever is named as the sender.
+  replay: z.boolean(),
   senderId: z.string(),
   senderName: z.string(),
   senderAvatarUrl: ImageUrlSchema.nullable(),
@@ -179,10 +190,15 @@ export const QueueItemSchema = z.object({
   caption: z.string(),
   clipStartMs: z.number(),
   durationMs: z.number(),
+  // When the service forgets it, and deletes its file. Playing it again doesn't push this back.
+  expiresAt: z.number(),
   // On the service's clock. Null until the item may start: only the first item of the queue ever has one.
   startAt: z.number().nullable(),
 });
 export type QueueItem = z.infer<typeof QueueItemSchema>;
+
+export const HistoryItemSchema = QueueItemSchema.omit({ replay: true, startAt: true }).extend({ playedAt: z.number() });
+export type HistoryItem = z.infer<typeof HistoryItemSchema>;
 
 export const ClientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('ready'), mediaId: z.string() }),
@@ -199,9 +215,11 @@ export const ServerMessageSchema = z.discriminatedUnion('t', [
     memberId: z.string(),
     members: z.array(MemberSchema),
     queue: z.array(QueueItemSchema),
+    history: z.array(HistoryItemSchema),
   }),
   z.object({ t: z.literal('members'), members: z.array(MemberSchema) }),
   z.object({ t: z.literal('queue'), queue: z.array(QueueItemSchema) }),
+  z.object({ t: z.literal('history'), history: z.array(HistoryItemSchema) }),
   z.object({ t: z.literal('time'), c: z.number(), s: z.number() }),
   z.object({ t: z.literal('code'), code: z.string() }),
   z.object({ t: z.literal('pong') }),

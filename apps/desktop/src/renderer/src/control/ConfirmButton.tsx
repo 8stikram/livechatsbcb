@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 const CONFIRM_WINDOW_MS = 4_000;
 
@@ -6,10 +6,10 @@ export const ConfirmButton = ({
   label,
   confirmLabel,
   onConfirm,
-  className = 'quiet',
+  className = 'pill quiet small',
   title,
 }: {
-  label: string;
+  label: ReactNode;
   confirmLabel: string;
   onConfirm: () => void;
   className?: string;
@@ -23,7 +23,7 @@ export const ConfirmButton = ({
   return (
     <button
       type="button"
-      className={armed ? `${className} danger` : className}
+      className={armed ? `${className} is-armed` : className}
       title={title}
       aria-label={title}
       onClick={() => {

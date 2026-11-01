@@ -105,6 +105,11 @@ export const leaveParty = async (session: SessionResponse): Promise<ApiResult<nu
   return response?.ok ? { ok: true, value: null } : failure(response);
 };
 
+export const replayMedia = async (session: SessionResponse, historyId: string): Promise<ApiResult<null>> => {
+  const response = await request(`/v1/parties/${session.partyId}/history/${historyId}/replay`, {}, session.token);
+  return response?.ok ? { ok: true, value: null } : failure(response);
+};
+
 const mediaPath = (session: SessionResponse, mediaId: string) => `/v1/parties/${session.partyId}/media/${mediaId}`;
 
 export const createMedia = async (session: SessionResponse, draft: MediaDraft): Promise<ApiResult<string>> => {

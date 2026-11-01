@@ -8,7 +8,7 @@ import { redeemLogin, startLogin, type ApiResult } from './party-api';
 const LOGIN_TIMEOUT_MS = 5 * 60_000;
 
 const pageFor = (title: string, text: string): string =>
-  `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${title}</title></head><body style="font-family:'Segoe UI',sans-serif;background:#120a1f;color:#f6effc;display:grid;place-items:center;height:100vh;margin:0;text-align:center"><div><h1>${title}</h1><p>${text}</p></div></body></html>`;
+  `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${title}</title></head><body style="font-family:'Segoe UI',sans-serif;background:#0a0a0d;color:#f4f4f5;display:grid;place-items:center;height:100vh;margin:0;text-align:center"><div><h1>${title}</h1><p>${text}</p></div></body></html>`;
 
 const DONE_PAGE = pageFor('C’est bon !', 'Tu peux fermer cet onglet et retourner dans LiveChatSBCB.');
 const FAILED_PAGE = pageFor('La connexion n’a pas abouti', 'Retourne dans LiveChatSBCB pour réessayer.');

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { CODE_LENGTH, normalizeCode } from '@livechatsbcb/protocol';
 import type { ActionResult, AppState } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
+import { IconCheck } from './icons';
 import { errorMessage } from './messages';
 
 const searchable = (text: string) =>
@@ -32,30 +33,32 @@ const PrivateParty = () => {
   return (
     <details className="private-corner">
       <summary>Party privée</summary>
-      <form className="panel" onSubmit={join}>
-        <label className="field">
-          <span>Code de la party</span>
-          <input
-            className="code-input"
-            value={code}
-            maxLength={CODE_LENGTH + 2}
-            spellCheck={false}
-            onChange={(event) => setCode(normalizeCode(event.target.value))}
-            placeholder="K7M2QX"
-          />
-        </label>
-        <button className="primary" type="submit" disabled={busy || code.length !== CODE_LENGTH}>
-          Rejoindre
-        </button>
-        <button className="secondary" type="button" disabled={busy} onClick={() => void run(window.liveChat.createParty)}>
-          Créer une party privée
-        </button>
-      </form>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      <div className="private-popover">
+        <form className="stack" onSubmit={join}>
+          <label className="field">
+            <span>Code de la party</span>
+            <input
+              className="input is-code"
+              value={code}
+              maxLength={CODE_LENGTH + 2}
+              spellCheck={false}
+              onChange={(event) => setCode(normalizeCode(event.target.value))}
+              placeholder="K7M2QX"
+            />
+          </label>
+          <button className="pill primary" type="submit" disabled={busy || code.length !== CODE_LENGTH}>
+            Rejoindre
+          </button>
+          <button className="pill secondary" type="button" disabled={busy} onClick={() => void run(window.liveChat.createParty)}>
+            Créer une party privée
+          </button>
+        </form>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
     </details>
   );
 };
@@ -89,71 +92,82 @@ export const GuildPicker = ({ state, onClose }: { state: AppState; onClose: () =
 
   const wanted = searchable(search.trim());
   const shown = (guilds ?? []).filter(({ name }) => searchable(name).includes(wanted));
+  const hasGuilds = guilds !== null && guilds.length > 0;
 
   return (
-    <main className="screen picker">
-      <h1 className="picker-title">Avec quel serveur veux-tu utiliser LiveChatSBCB ?</h1>
+    <main className="picker glass">
+      <header className="picker-head">
+        <h1>Avec quel serveur veux-tu utiliser LiveChatSBCB ?</h1>
+        {hasGuilds && (
+          <input
+            className="input"
+            type="search"
+            aria-label="Rechercher un serveur"
+            placeholder="Rechercher un serveur"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        )}
+      </header>
 
-      {guilds === null && <p className="hint">Chargement de tes serveurs…</p>}
-      {guilds?.length === 0 && !state.guildsPartial && (
-        <p className="hint" data-testid="no-guilds">
-          Tu n'es sur aucun serveur Discord pour l'instant.
-        </p>
-      )}
-      {state.guildsPartial && (
-        <p className="banner" role="status" data-testid="guilds-partial">
-          Discord ne répond pas pour le moment : la liste de tes serveurs est peut-être incomplète.
-        </p>
-      )}
+      <div className="picker-body">
+        {guilds === null && <p className="hint">Chargement de tes serveurs…</p>}
+        {guilds?.length === 0 && !state.guildsPartial && (
+          <p className="hint" data-testid="no-guilds">
+            Tu n'es sur aucun serveur Discord pour l'instant.
+          </p>
+        )}
+        {state.guildsPartial && (
+          <p className="banner" role="status" data-testid="guilds-partial">
+            Discord ne répond pas pour le moment : la liste de tes serveurs est peut-être incomplète.
+          </p>
+        )}
 
-      {guilds !== null && guilds.length > 0 && (
-        <input
-          type="search"
-          aria-label="Rechercher un serveur"
-          placeholder="Rechercher un serveur"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      )}
-
-      <div className="guild-grid" role="group" aria-label="Tes serveurs">
-        {shown.map(({ id, name, iconUrl }) => (
-          <button
-            key={id}
-            type="button"
-            className={chosen.includes(id) ? 'guild-card is-chosen' : 'guild-card'}
-            aria-pressed={chosen.includes(id)}
-            onClick={() => toggle(id)}
-            data-testid="guild-card"
-          >
-            <Avatar className="guild-card-icon" name={name} url={iconUrl} />
-            <span className="guild-card-name">{name}</span>
-          </button>
-        ))}
+        <div className="guild-grid" role="group" aria-label="Tes serveurs">
+          {shown.map(({ id, name, iconUrl }) => (
+            <button
+              key={id}
+              type="button"
+              className={chosen.includes(id) ? 'guild-card is-chosen' : 'guild-card'}
+              aria-pressed={chosen.includes(id)}
+              onClick={() => toggle(id)}
+              data-testid="guild-card"
+            >
+              <span className="guild-card-picture">
+                <Avatar className="guild-card-icon" name={name} url={iconUrl} />
+                <span className="guild-card-check" aria-hidden="true">
+                  <IconCheck size={14} />
+                </span>
+              </span>
+              <span className="guild-card-name">{name}</span>
+            </button>
+          ))}
+        </div>
+        {hasGuilds && shown.length === 0 && <p className="hint">Aucun serveur à ce nom.</p>}
       </div>
-      {guilds !== null && guilds.length > 0 && shown.length === 0 && <p className="hint">Aucun serveur à ce nom.</p>}
 
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-
-      <button
-        className="primary"
-        type="button"
-        disabled={busy || (chosen.length === 0 && addedGuilds.length === 0)}
-        onClick={() => void validate()}
-      >
-        Valider
-      </button>
-      {(addedGuilds.length > 0 || state.party) && (
-        <button className="quiet" type="button" onClick={onClose}>
-          Annuler
+      <footer className="picker-foot">
+        <PrivateParty />
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        <span className="spacer" />
+        {(addedGuilds.length > 0 || state.party) && (
+          <button className="pill quiet" type="button" onClick={onClose}>
+            Annuler
+          </button>
+        )}
+        <button
+          className="pill primary"
+          type="button"
+          disabled={busy || (chosen.length === 0 && addedGuilds.length === 0)}
+          onClick={() => void validate()}
+        >
+          Valider
         </button>
-      )}
-
-      <PrivateParty />
+      </footer>
     </main>
   );
 };

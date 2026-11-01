@@ -1,25 +1,130 @@
-import { useEffect, useRef, useState } from 'react';
-import { MAX_ONLINE_MEMBERS } from '@livechatsbcb/protocol';
-import type { ActionResult, AppState, ConnectionStatus, PartyView } from '../../../shared/ipc';
+import { useState, type FormEvent } from 'react';
+import { DEFAULT_DISPLAY_MS, MAX_CAPTION_LENGTH, MAX_ONLINE_MEMBERS } from '@livechatsbcb/protocol';
+import type { ActionResult, AppState, PartyView, UpcomingView } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { ConfirmButton } from './ConfirmButton';
-import { errorMessage } from './messages';
+import { IconSend, KindIcon } from './icons';
+import { errorMessage, mediaErrorMessage } from './messages';
+import { mediaTitle, NowCard } from './NowPlaying';
+import type { DraftFiles } from './use-draft';
 
-const STATUS_TEXT: Record<ConnectionStatus, string> = {
-  connecting: 'Connexion…',
-  online: 'Connecté',
-  reconnecting: 'Connexion perdue, nouvelle tentative…',
-  replaced: 'Tu es connecté sur une autre fenêtre ou un autre PC.',
-  party_full: 'La party est pleine. Tu entreras dès qu’une place se libère.',
-  update_required: 'Une mise à jour est nécessaire pour rejoindre la party.',
+const QuickSend = ({
+  isOnline,
+  isUploading,
+  files,
+  onOpenMedia,
+}: {
+  isOnline: boolean;
+  isUploading: boolean;
+  files: DraftFiles;
+  onOpenMedia: () => void;
+}) => {
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!text.trim() || !isOnline) return;
+
+    setError(null);
+    const sent = text;
+    const result = await window.liveChat.sendMedia({
+      caption: sent,
+      withFile: false,
+      clipStartMs: 0,
+      durationMs: DEFAULT_DISPLAY_MS,
+    });
+    if (result.ok) setText((typed) => (typed === sent ? '' : typed));
+    else setError(mediaErrorMessage(result.error));
+  };
+
+  const pick = async () => {
+    // A file already being prepared is what the media tab is for.
+    if (files.draft) {
+      onOpenMedia();
+      return;
+    }
+    setError(null);
+    const { picked, error: refused } = await files.pick();
+    if (picked) onOpenMedia();
+    setError(refused);
+  };
+
+  return (
+    <section className="glass panel" aria-labelledby="quick-send-title">
+      <h2 id="quick-send-title">Envoyer à tout le monde</h2>
+      <form className="stack" onSubmit={(event) => void send(event)}>
+        <div className="field">
+          <label htmlFor="quick-text">Un texte</label>
+          <div className="input-action">
+            <input
+              id="quick-text"
+              className="input"
+              value={text}
+              maxLength={MAX_CAPTION_LENGTH}
+              placeholder="Écris pour tout le monde"
+              autoComplete="off"
+              onChange={(event) => setText(event.target.value)}
+            />
+            <button
+              type="submit"
+              className="round tiny solid"
+              title="Envoyer le texte"
+              aria-label="Envoyer le texte"
+              disabled={!text.trim() || !isOnline}
+            >
+              <IconSend size={16} />
+            </button>
+          </div>
+        </div>
+        <button type="button" className="pill primary" disabled={isUploading} onClick={() => void pick()}>
+          {files.draft ? 'Reprendre ton fichier' : 'Choisir un fichier'}
+        </button>
+      </form>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
+  );
 };
 
-export const PartyScreen = ({ state, party }: { state: AppState; party: PartyView }) => {
-  const [copied, setCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const copyTimer = useRef<number | undefined>(undefined);
+const Upcoming = ({ upcoming, active }: { upcoming: UpcomingView[]; active: boolean }) => (
+  <section className="glass panel is-short" aria-labelledby="upcoming-title">
+    <h2 id="upcoming-title" className="panel-title">
+      À suivre
+      {active && upcoming.length > 0 && (
+        <span className="count mono" data-testid="queue-waiting">
+          {upcoming.length} en attente
+        </span>
+      )}
+    </h2>
+    {upcoming.length === 0 ? (
+      <p className="hint">Personne n'attend.</p>
+    ) : (
+      <ul className="rows scroll">
+        {upcoming.map((item) => (
+          <li key={item.id} className="row">
+            <span className="kind-tile is-small">
+              <KindIcon kind={item.kind} size={16} />
+            </span>
+            <span className="row-text">
+              <span className="row-title" title={mediaTitle(item)}>
+                {mediaTitle(item)}
+              </span>
+              <span className="row-sub">{item.replay ? `Relancé par ${item.senderName}` : item.senderName}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+);
 
-  useEffect(() => () => window.clearTimeout(copyTimer.current), []);
+const Members = ({ party }: { party: PartyView }) => {
+  const [error, setError] = useState<string | null>(null);
+  const online = party.members.filter((member) => member.online).length;
 
   const run = async (action: () => Promise<ActionResult>) => {
     setError(null);
@@ -27,70 +132,31 @@ export const PartyScreen = ({ state, party }: { state: AppState; party: PartyVie
     if (!result.ok) setError(errorMessage(result.error));
   };
 
-  const copyCode = async () => {
-    await window.liveChat.copyCode();
-    setCopied(true);
-    window.clearTimeout(copyTimer.current);
-    copyTimer.current = window.setTimeout(() => setCopied(false), 1_500);
-  };
-
-  const online = party.members.filter((member) => member.online).length;
-  const isOnline = party.connection === 'online';
-
   return (
-    <main className="screen party">
-      {party.guild ? (
-        <section className="code-card" aria-label="Serveur Discord">
-          <span className="eyebrow">Party du serveur</span>
-          <strong className="party-title" data-testid="party-guild">
-            {party.guild.name}
-          </strong>
-        </section>
-      ) : (
-        <section className="code-card" aria-label="Code de la party">
-          <span className="eyebrow">Code de la party</span>
-          <div className="code-row">
-            <strong className="code" data-testid="party-code">
-              {party.code}
-            </strong>
-            <button type="button" className="secondary compact" onClick={() => void copyCode()}>
-              {copied ? 'Copié !' : 'Copier'}
-            </button>
-          </div>
-        </section>
-      )}
-
-      <p className={`connection ${isOnline ? 'is-online' : 'is-away'}`} role="status" data-testid="connection">
-        <span className="dot" aria-hidden="true" />
-        {STATUS_TEXT[party.connection]}
-      </p>
-
-      {party.connection === 'replaced' && (
-        <button type="button" className="primary" onClick={() => void window.liveChat.reconnect()}>
-          Reprendre ici
-        </button>
-      )}
-
-      <section className="members" aria-label="Membres">
-        <h2>
-          Membres
-          <span className="count" data-testid="online-count">
-            {online} / {MAX_ONLINE_MEMBERS} en ligne
-          </span>
-        </h2>
-        <ul>
-          {party.members.map((member) => (
-            <li key={member.id} className={member.online ? 'member' : 'member is-offline'}>
-              <Avatar className="avatar" name={member.name} url={member.avatarUrl} testId="member-avatar" />
-              <span className="member-name">
+    <section className="glass panel is-fill" aria-labelledby="members-title">
+      <h2 id="members-title" className="panel-title">
+        Membres
+        <span className="count" data-testid="online-count">
+          <span className="mono">
+            {online} / {MAX_ONLINE_MEMBERS}
+          </span>{' '}
+          en ligne
+        </span>
+      </h2>
+      <ul className="rows scroll">
+        {party.members.map((member) => (
+          <li key={member.id} className={member.online ? 'row' : 'row is-offline'}>
+            <Avatar className="avatar" name={member.name} url={member.avatarUrl} testId="member-avatar" />
+            <span className="row-text">
+              <span className="row-title">
                 {member.name}
-                {member.id === party.memberId && <span className="you"> (toi)</span>}
+                {member.id === party.memberId && <span className="row-you"> (toi)</span>}
               </span>
-              <span className="member-status">{member.online ? 'En ligne' : 'Hors ligne'}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+            </span>
+            {member.online && <span className="dot is-online" title="En ligne" />}
+          </li>
+        ))}
+      </ul>
 
       {error && (
         <p className="error" role="alert">
@@ -99,7 +165,7 @@ export const PartyScreen = ({ state, party }: { state: AppState; party: PartyVie
       )}
 
       {!party.guild && (
-        <footer className="party-actions">
+        <footer className="panel-actions">
           <ConfirmButton
             label="Changer le code"
             confirmLabel="Confirmer le changement ?"
@@ -112,7 +178,34 @@ export const PartyScreen = ({ state, party }: { state: AppState; party: PartyVie
           />
         </footer>
       )}
-      <footer className="version">Version {state.version}</footer>
-    </main>
+    </section>
   );
 };
+
+export const PartyScreen = ({
+  state,
+  party,
+  files,
+  active,
+  onOpenMedia,
+}: {
+  state: AppState;
+  party: PartyView;
+  files: DraftFiles;
+  active: boolean;
+  onOpenMedia: () => void;
+}) => (
+  <div className="party-grid">
+    <NowCard current={state.queue.current} settings={state.settings} active={active} />
+    <aside className="party-side">
+      <QuickSend
+        isOnline={party.connection === 'online'}
+        isUploading={state.upload !== null}
+        files={files}
+        onOpenMedia={onOpenMedia}
+      />
+      <Upcoming upcoming={state.queue.upcoming} active={active} />
+      <Members party={party} />
+    </aside>
+  </div>
+);

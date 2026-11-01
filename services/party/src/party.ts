@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import {
   ClientMessageSchema,
   CloseCode,
+  MAX_HISTORY_LENGTH,
   MAX_ONLINE_MEMBERS,
   MAX_QUEUE_LENGTH,
   MAX_REGISTERED_MEMBERS,
@@ -14,6 +15,7 @@ import {
   mediaPartBytes,
   mediaPartCount,
   type Account,
+  type HistoryItem,
   type MediaDraft,
   type Member,
   type QueueItem,
@@ -32,6 +34,8 @@ type QueueRow = {
   prepare_deadline: number | null;
   ready: string;
 };
+type StoredItem = Omit<QueueItem, 'startAt'>;
+type HistoryRow = { item: string; played_at: number };
 type Refusal<Error extends string> = { ok: false; error: Error };
 type Admission = { ok: true; member: Credentials } | Refusal<'party_full'>;
 
@@ -77,6 +81,12 @@ export class Party extends DurableObject<Env> {
         prepare_ms INTEGER NOT NULL,
         prepare_deadline INTEGER,
         ready TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS history (
+        id TEXT PRIMARY KEY,
+        item TEXT NOT NULL,
+        played_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
       );
     `);
     // Parties created before members had a picture.
@@ -164,6 +174,29 @@ export class Party extends DurableObject<Env> {
     if (!member || !(await this.mayStay(member))) return { ok: false, error: 'unauthorized' };
     if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
     this.enqueue(mediaId, member, draft);
+    return { ok: true };
+  }
+
+  // The file is already there, so this costs no upload: only a new place in the queue, under the name of whoever asked.
+  async replay(token: string, historyId: string): Promise<{ ok: true } | Refusal<'unauthorized' | 'not_found' | 'queue_full'>> {
+    const member = await this.memberForToken(token);
+    if (!member || !(await this.mayStay(member))) return { ok: false, error: 'unauthorized' };
+
+    const [row] = this.ctx.storage.sql
+      .exec<HistoryRow>('SELECT item, played_at FROM history WHERE id = ? AND expires_at > ?', historyId, Date.now())
+      .toArray();
+    if (!row) return { ok: false, error: 'not_found' };
+    if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
+
+    const { playedAt: _, ...original } = this.toHistoryItem(row);
+    this.enqueueItem({
+      ...original,
+      id: crypto.randomUUID(),
+      replay: true,
+      senderId: member.id,
+      senderName: member.name,
+      senderAvatarUrl: member.avatar_url,
+    });
     return { ok: true };
   }
 
@@ -281,6 +314,7 @@ export class Party extends DurableObject<Env> {
         memberId: member.id,
         members,
         queue: this.queue(),
+        history: this.history(),
       } satisfies ServerMessage),
     );
     this.broadcast({ t: 'members', members }, server);
@@ -432,8 +466,11 @@ export class Party extends DurableObject<Env> {
   }
 
   private enqueue(mediaId: string, sender: MemberRow, draft: MediaDraft): void {
-    const item: Omit<QueueItem, 'startAt'> = {
+    this.enqueueItem({
       id: mediaId,
+      fileId: draft.file ? mediaId : null,
+      fileName: draft.file?.name ?? null,
+      replay: false,
       senderId: sender.id,
       senderName: sender.name,
       senderAvatarUrl: sender.avatar_url,
@@ -443,19 +480,53 @@ export class Party extends DurableObject<Env> {
       caption: draft.caption,
       clipStartMs: draft.clipStartMs,
       durationMs: draft.durationMs,
-    };
-    const prepareMs = draft.file
-      ? Math.min(MAX_PREPARE_MS, Math.max(MIN_PREPARE_MS, draft.file.size / PREPARE_BYTES_PER_MS))
-      : 0;
+      expiresAt: Date.now() + Number(this.env.MEDIA_RETENTION_MS),
+    });
+  }
+
+  private enqueueItem(item: StoredItem): void {
+    const prepareMs = item.fileId ? Math.min(MAX_PREPARE_MS, Math.max(MIN_PREPARE_MS, item.size / PREPARE_BYTES_PER_MS)) : 0;
     this.ctx.storage.sql.exec(
       'INSERT INTO queue (id, item, prepare_ms, ready) VALUES (?, ?, ?, ?)',
-      mediaId,
+      item.id,
       JSON.stringify(item),
       Math.round(prepareMs),
       '[]',
     );
     this.advanceQueue();
     this.broadcastQueue();
+  }
+
+  private toHistoryItem({ item, played_at: playedAt }: HistoryRow): HistoryItem {
+    const { replay: _, ...stored } = JSON.parse(item) as StoredItem;
+    return { ...stored, playedAt };
+  }
+
+  private history(): HistoryItem[] {
+    return this.ctx.storage.sql
+      .exec<HistoryRow>('SELECT item, played_at FROM history WHERE expires_at > ? ORDER BY played_at DESC', Date.now())
+      .toArray()
+      .map((row) => this.toHistoryItem(row));
+  }
+
+  // Only what is really shown counts, and only once: playing something again doesn't add a line.
+  private remember(row: QueueRow, playedAt: number): void {
+    const item = JSON.parse(row.item) as StoredItem;
+    if (item.replay) return;
+
+    this.ctx.storage.sql.exec(
+      'INSERT OR REPLACE INTO history (id, item, played_at, expires_at) VALUES (?, ?, ?, ?)',
+      item.id,
+      row.item,
+      playedAt,
+      item.expiresAt,
+    );
+    this.ctx.storage.sql.exec(
+      'DELETE FROM history WHERE expires_at <= ?1 OR id NOT IN (SELECT id FROM history ORDER BY played_at DESC LIMIT ?2)',
+      playedAt,
+      MAX_HISTORY_LENGTH,
+    );
+    this.broadcast({ t: 'history', history: this.history() });
   }
 
   private markReady(memberId: string, mediaId: string): void {
@@ -504,6 +575,7 @@ export class Party extends DurableObject<Env> {
       if (now >= deadline || everyoneReady) {
         const startAt = now + START_LEAD_MS;
         this.ctx.storage.sql.exec('UPDATE queue SET start_at = ? WHERE id = ?', startAt, head.id);
+        this.remember(head, startAt);
         this.wakeAt(startAt + durationMs, leaving);
         return true;
       }

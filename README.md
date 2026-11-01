@@ -56,7 +56,7 @@ Les tests utilisent un faux Discord (`services/party/test/fake-discord.ts`), et 
 
 ## Médias
 
-Un média part de l'onglet Médias : image, vidéo, son ou texte. Le service l'annonce, chaque PC le télécharge, puis tout le monde le lance au même instant. Les médias passent l'un après l'autre, sans s'interrompre.
+Un média part de l'onglet Médias : image, vidéo, son ou texte. Un texte seul peut aussi partir de l'onglet Party. Le service l'annonce, chaque PC le télécharge, puis tout le monde le lance au même instant. Les médias passent l'un après l'autre, sans s'interrompre.
 
 Pour que le projet reste gratuit, le service applique lui-même ces limites :
 
@@ -68,6 +68,14 @@ Pour que le projet reste gratuit, le service applique lui-même ces limites :
 Les réglages de l'overlay (écran, volume, position des zones) sont propres à chaque PC.
 
 L'overlay ne s'affiche pas par-dessus un jeu en plein écran exclusif : il faut le mode fenêtré sans bordure.
+
+L'onglet Historique garde ce qui est passé dans la party, 50 médias au maximum et jamais plus d'1 jour. « Rejouer pour tous » remet le média dans la file de la party, sans rien renvoyer au stockage. « Revoir pour moi » ne l'affiche que sur son propre écran.
+
+## Fenêtre et démarrage
+
+Fermer la fenêtre laisse l'app ouverte près de l'horloge, pour continuer à afficher ce que les autres envoient. On la quitte par un clic droit sur son icône, et la lancer une seconde fois ramène simplement sa fenêtre.
+
+Une fois installée, l'app se lance discrètement au démarrage de Windows, sauf si on décoche la case dans Réglages. Le compte reste connecté tant qu'il sert au moins une fois tous les 90 jours.
 
 ## Publier le service
 

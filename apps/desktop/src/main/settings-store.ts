@@ -15,6 +15,8 @@ export const SettingsSchema = z.object({
   volume: percent,
   muted: z.boolean(),
   layout: z.object({ profile: ZoneSchema, media: ZoneSchema, text: ZoneSchema }),
+  launchAtStartup: z.boolean(),
+  backgroundHintShown: z.boolean(),
 });
 
 const settingsPath = () => join(app.getPath('userData'), 'settings.json');

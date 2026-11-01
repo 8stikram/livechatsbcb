@@ -34,6 +34,9 @@ export type Settings = {
   volume: number;
   muted: boolean;
   layout: OverlayLayout;
+  launchAtStartup: boolean;
+  // Closing the window keeps the app running, which is worth explaining the first time and only then.
+  backgroundHintShown: boolean;
 };
 
 export const DEFAULT_LAYOUT: OverlayLayout = {
@@ -48,6 +51,8 @@ export const DEFAULT_SETTINGS: Settings = {
   volume: 100,
   muted: false,
   layout: DEFAULT_LAYOUT,
+  launchAtStartup: true,
+  backgroundHintShown: false,
 };
 
 export type DisplayView = { id: number; label: string };
@@ -58,6 +63,7 @@ export type PlaybackView = {
   senderAvatarUrl: string | null;
   kind: MediaKind;
   caption: string;
+  fileName: string | null;
   clipStartMs: number;
   durationMs: number;
   // On this PC's clock. Null while the party is still getting ready.
@@ -66,7 +72,30 @@ export type PlaybackView = {
   mediaUrl: string | null;
 };
 
-export type QueueView = { current: PlaybackView | null; waiting: number };
+export type UpcomingView = {
+  id: string;
+  senderName: string;
+  kind: MediaKind;
+  caption: string;
+  fileName: string | null;
+  replay: boolean;
+};
+
+export type QueueView = { current: PlaybackView | null; upcoming: UpcomingView[] };
+
+export type HistoryView = {
+  id: string;
+  senderName: string;
+  senderAvatarUrl: string | null;
+  kind: MediaKind;
+  caption: string;
+  fileName: string | null;
+  // On this PC's clock.
+  playedAt: number;
+};
+
+// Played again on this PC alone. Null playback while the file is on its way.
+export type LocalReplayView = { historyId: string; playback: PlaybackView | null };
 
 export type DraftMedia = { name: string; size: number; kind: FileKind; previewUrl: string };
 export type UploadView = { name: string; percent: number };
@@ -94,6 +123,8 @@ export type AppState = {
   displays: DisplayView[];
   overlayTest: boolean;
   queue: QueueView;
+  history: HistoryView[];
+  localReplay: LocalReplayView | null;
   upload: UploadView | null;
 };
 
@@ -132,6 +163,9 @@ export const IpcChannel = {
   SendMedia: 'media:send',
   CancelUpload: 'media:cancel-upload',
   SkipMedia: 'media:skip',
+  ReplayForAll: 'history:replay-for-all',
+  ReplayForMe: 'history:replay-for-me',
+  StopLocalReplay: 'history:stop-local-replay',
   SetSettings: 'settings:set',
   TestOverlay: 'overlay:test',
   InstallUpdate: 'update:install',
@@ -158,6 +192,9 @@ export type LiveChatApi = {
   sendMedia(input: SendMediaInput): Promise<ActionResult>;
   cancelUpload(): Promise<void>;
   skipMedia(mediaId: string): Promise<void>;
+  replayForAll(historyId: string): Promise<ActionResult>;
+  replayForMe(historyId: string): Promise<ActionResult>;
+  stopLocalReplay(): Promise<void>;
   setSettings(change: Partial<Settings>): Promise<void>;
   testOverlay(): Promise<void>;
   installUpdate(): Promise<void>;

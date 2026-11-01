@@ -129,11 +129,13 @@ const windowExStyle = (handle: string): number =>
     ),
   );
 
-const launch = async (profile: string): Promise<Member> => {
+const launchArgs = (extra: string[]): string[] =>
+  packagedExecutable ? [KEEP_DRAWING, ...extra] : [KEEP_DRAWING, join(__dirname, '..'), ...extra];
+
+const launch = async (profile: string, extraArgs: string[] = []): Promise<Member> => {
   const app = await electron.launch({
-    ...(packagedExecutable
-      ? { executablePath: packagedExecutable, args: [KEEP_DRAWING] }
-      : { args: [KEEP_DRAWING, join(__dirname, '..')] }),
+    ...(packagedExecutable ? { executablePath: packagedExecutable } : {}),
+    args: launchArgs(extraArgs),
     env: { ...process.env, LIVECHATSBCB_PROFILE: join(sandbox, profile) } as Record<string, string>,
   });
 
@@ -262,7 +264,22 @@ const stageVisible = (member: Member) =>
     BrowserWindow.getAllWindows().some((window) => window.getTitle().includes('Scène') && window.isVisible()),
   );
 
-const openTab = (member: Member, name: string) => member.control.getByRole('tab', { name }).click();
+// Réglages isn't one of the tabs of a party: it stays reachable from the rail, with or without a party.
+// Once what just appeared has finished arriving, so that the picture shows what people really look at.
+const picture = async (page: Page, name: string): Promise<void> => {
+  await new Promise((done) => setTimeout(done, 500));
+  await page.screenshot({ path: join(artifacts, name) });
+};
+
+const openTab = (member: Member, name: string) =>
+  name === 'Réglages'
+    ? member.control.getByRole('button', { name, exact: true }).click()
+    : member.control.getByRole('tab', { name }).click();
+
+const mainWindowVisible = (member: Member) =>
+  member.app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().some((window) => !window.getTitle().includes('Scène') && window.isVisible()),
+  );
 
 const overlayState = async (member: Member, state: string, timeout = 30_000): Promise<void> => {
   try {
@@ -375,13 +392,13 @@ afterAll(async () => {
 
 // Logging in for real takes a person and a real Discord account, so online this stops at the door.
 describe.runIf(online)('the published app and the online service', () => {
-  it('sends people to Discord asking for nothing more than who they are', async () => {
+  it('sends people to Discord asking for nothing more than who they are and their servers', async () => {
     const member = await launch('online');
     await loginButton(member).click();
 
     const authorize = await nextOpenedUrl(member);
     expect(authorize.origin + authorize.pathname).toBe('https://discord.com/oauth2/authorize');
-    expect(authorize.searchParams.get('scope')).toBe('identify');
+    expect(authorize.searchParams.get('scope')).toBe('identify guilds');
     expect(authorize.searchParams.get('client_id')).toMatch(/^\d{17,20}$/);
     expect(authorize.searchParams.get('redirect_uri')).toMatch(/^https:\/\/.+\/v1\/auth\/callback$/);
 
@@ -405,7 +422,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     host = await launch('host');
     await loginButton(host).waitFor();
     expect(await stageVisible(host)).toBe(false);
-    await host.control.screenshot({ path: join(artifacts, '1-login.png') });
+    await picture(host.control, '1-login.png');
   });
 
   it('keeps pages away from Node and applies the content security policy', async () => {
@@ -465,7 +482,7 @@ describe.skipIf(online)('party flow in the real app', () => {
   it('asks which servers to use, among the real ones of each person, with a search bar', async () => {
     await host.control.getByRole('heading', { name: 'Avec quel serveur' }).waitFor();
     await expect.poll(() => guildCards(host)).toEqual(['Les potes']);
-    await host.control.screenshot({ path: join(artifacts, '2-picker.png') });
+    await picture(host.control, '2-picker.png');
 
     guest = await launch('guest');
     await logIn(guest, pote);
@@ -492,7 +509,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     const box = await validate.boundingBox();
     const windowHeight = await crowded.control.evaluate(() => window.innerHeight);
     expect(box!.y + box!.height).toBeLessThanOrEqual(windowHeight);
-    await crowded.control.screenshot({ path: join(artifacts, '2-picker-crowded.png') });
+    await picture(crowded.control, '2-picker-crowded.png');
     await crowded.app.close();
   });
 
@@ -514,7 +531,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await partyMember(host, 'Pote').waitFor();
     await partyMember(guest, 'Nono').waitFor();
     await pictureLoaded(guest.control, 'member-avatar');
-    await guest.control.screenshot({ path: join(artifacts, '3-party-guest.png') });
+    await picture(guest.control, '3-party-guest.png');
   });
 
   it('switches party with one click on the picture of a server', async () => {
@@ -629,7 +646,7 @@ describe.skipIf(online)('party flow in the real app', () => {
       .getByTestId('connection')
       .filter({ hasText: 'nouvelle tentative' })
       .waitFor({ timeout: 15_000 });
-    await host.control.screenshot({ path: join(artifacts, '4-reconnecting.png') });
+    await picture(host.control, '4-reconnecting.png');
 
     await startServer();
     const backAt = Date.now();
@@ -641,6 +658,7 @@ describe.skipIf(online)('party flow in the real app', () => {
   it('opens the media tabs', async () => {
     await openTab(host, 'Médias');
     await openTab(guest, 'Médias');
+    await picture(host.control, '7-media-empty.png');
   });
 
   it('makes the stage a transparent, click-through overlay that never takes focus', async () => {
@@ -719,7 +737,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     expect(await focused()).toBe(before);
     await host.stage.getByTestId('overlay-text').filter({ hasText: 'texte de test' }).waitFor();
     await host.stage.getByTestId('overlay-profile').filter({ hasText: 'Nono' }).waitFor();
-    await host.stage.screenshot({ path: join(artifacts, '5-overlay-test.png') });
+    await picture(host.stage, '5-overlay-test.png');
 
     expect(await stageVisible(guest)).toBe(false);
     await overlayState(guest, 'idle');
@@ -756,7 +774,7 @@ describe.skipIf(online)('party flow in the real app', () => {
   it('sends an image from one PC to the other, with its text', async () => {
     await pickFile(host, join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png'));
     await host.control.getByTestId('draft-name').filter({ hasText: 'logo.png' }).waitFor();
-    await host.control.screenshot({ path: join(artifacts, '7-media-tab.png') });
+    await picture(host.control, '7-media-tab.png');
     // Long enough to be caught on screen by the checks below, which only look every second or so.
     await setRange(host, /Durée d’affichage/, 5_000);
     await host.control.getByLabel('Texte à afficher').fill('Regarde cette image');
@@ -770,7 +788,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Regarde cette image' }).waitFor();
     // The picture of whoever sent it, and not just their initial.
     await pictureLoaded(guest.stage, 'overlay-avatar');
-    await guest.stage.screenshot({ path: join(artifacts, '6-overlay-image.png') });
+    await picture(guest.stage, '6-overlay-image.png');
     await overlayState(guest, 'idle');
   });
 
@@ -784,6 +802,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await setRange(host, /Fin du passage/, 5_000);
     await host.control.getByTestId('clip-start').filter({ hasText: '0:01,0' }).waitFor();
     await host.control.getByTestId('clip-end').filter({ hasText: '0:05,0' }).waitFor();
+    await picture(host.control, '7-media-clip.png');
     await sendButton(host).click();
 
     await overlayState(host, 'playing');
@@ -829,6 +848,69 @@ describe.skipIf(online)('party flow in the real app', () => {
     await overlayState(guest, 'idle');
   });
 
+  const historyRow = (member: Member, title: string) =>
+    member.control.getByTestId('history-item').filter({ hasText: title }).first();
+
+  it('keeps what played in the history, and replays it for the whole party', async () => {
+    await openTab(host, 'Historique');
+    await openTab(guest, 'Historique');
+    await historyRow(guest, 'logo.png').waitFor({ timeout: 10_000 });
+    await picture(guest.control, '10-history-tab.png');
+    const rows = await guest.control.getByTestId('history-item').count();
+
+    await historyRow(guest, 'logo.png').getByRole('button', { name: 'Rejouer pour tous' }).click();
+    for (const member of [host, guest]) {
+      await overlayState(member, 'playing');
+      await member.stage.getByTestId('overlay-image').waitFor();
+      // Whoever brought it back is who the others see.
+      await member.stage.getByTestId('overlay-profile').filter({ hasText: 'Pote' }).waitFor();
+    }
+    await picture(host.control, '10-history-playing.png');
+    await host.control.getByRole('button', { name: 'Passer' }).click();
+    await overlayState(host, 'idle');
+    await overlayState(guest, 'idle');
+
+    // A replay is already in there: playing it again doesn't add a line.
+    expect(await guest.control.getByTestId('history-item').count()).toBe(rows);
+  });
+
+  it('replays for one person only, without anyone else noticing', async () => {
+    await historyRow(guest, 'logo.png').getByRole('button', { name: 'Revoir pour moi' }).click();
+    await overlayState(guest, 'replay');
+    await guest.stage.getByTestId('overlay-image').waitFor();
+    await guest.stage.getByTestId('overlay-profile').filter({ hasText: 'Nono' }).waitFor();
+    await picture(guest.stage, '6-overlay-replay.png');
+    expect(await stageVisible(guest)).toBe(true);
+
+    await overlayState(host, 'idle');
+    expect(await stageVisible(host)).toBe(false);
+
+    await guest.control.getByRole('button', { name: 'Arrêter' }).click();
+    await overlayState(guest, 'idle');
+  });
+
+  it('sends a text or picks a file straight from the party', async () => {
+    await openTab(host, 'Party');
+    await openTab(guest, 'Party');
+    await host.control.getByLabel('Un texte').fill('Vite fait');
+    await host.control.getByRole('button', { name: 'Envoyer le texte' }).click();
+
+    await overlayState(guest, 'playing');
+    await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Vite fait' }).waitFor();
+    await host.control.getByTestId('now-playing').filter({ hasText: 'Vite fait' }).waitFor();
+    await picture(host.control, '3-party-playing.png');
+    await guest.control.getByRole('button', { name: 'Passer' }).click();
+    await overlayState(guest, 'idle');
+    await overlayState(host, 'idle');
+    expect(await host.control.getByLabel('Un texte').inputValue()).toBe('');
+
+    await pickFile(host, join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png'));
+    await host.control.getByTestId('draft-name').filter({ hasText: 'logo.png' }).waitFor();
+    await host.control.getByRole('button', { name: 'Retirer', exact: true }).click();
+    await host.control.getByTestId('draft-name').waitFor({ state: 'detached' });
+    await openTab(guest, 'Médias');
+  });
+
   it('applies the local volume, plays sounds, and keeps settings after a restart', async () => {
     await openTab(guest, 'Réglages');
     await setRange(guest, /Volume/, 30);
@@ -861,7 +943,7 @@ describe.skipIf(online)('party flow in the real app', () => {
   it('moves a zone of the overlay, and shows the result on the real screen', async () => {
     await openTab(guest, 'Réglages');
     await guest.control.getByTestId('layout-box').scrollIntoViewIfNeeded();
-    await guest.control.screenshot({ path: join(artifacts, '8-settings-tab.png') });
+    await picture(guest.control, '8-settings-tab.png');
     const zone = await guest.control.getByTestId('layout-text').boundingBox();
     await guest.control.mouse.move(zone!.x + 20, zone!.y + 10);
     await guest.control.mouse.down();
@@ -889,7 +971,7 @@ describe.skipIf(online)('party flow in the real app', () => {
 
   it('creates a private party from its discreet corner, and shows its code', async () => {
     await openPrivateParty(host);
-    await host.control.screenshot({ path: join(artifacts, '9-private-corner.png') });
+    await picture(host.control, '9-private-corner.png');
     await host.control.getByRole('button', { name: 'Créer une party privée' }).click();
     await host.control.getByTestId('party-code').waitFor();
     await connected(host);
@@ -996,5 +1078,63 @@ describe.skipIf(online)('party flow in the real app', () => {
     guest = await launch('guest');
     await loginButton(guest).waitFor();
     expect((await guest.control.evaluate(() => window.liveChat.getState())).account).toBeNull();
+  });
+
+  it('starts with Windows unless told otherwise, and remembers that', async () => {
+    const launchAtStartup = async () =>
+      (await host.control.evaluate(() => window.liveChat.getState())).settings.launchAtStartup;
+
+    await openTab(host, 'Réglages');
+    expect(await launchAtStartup()).toBe(true);
+    const box = host.control.getByRole('checkbox', { name: 'Lancer LiveChatSBCB au démarrage de Windows' });
+    expect(await box.isChecked()).toBe(true);
+
+    await host.control.getByText('Lancer LiveChatSBCB au démarrage de Windows').click();
+    await expect.poll(launchAtStartup).toBe(false);
+    await host.control.getByText('Lancer LiveChatSBCB au démarrage de Windows').click();
+    await expect.poll(launchAtStartup).toBe(true);
+  });
+
+  it('starts hidden with Windows, already in the party', async () => {
+    await host.app.close();
+    host = await launch('host', ['--hidden']);
+    await connected(host);
+    expect(await mainWindowVisible(host)).toBe(false);
+  });
+
+  it('stays in the background once closed, still playing what the others send', async () => {
+    const other = await launch('other');
+    await logIn(other, pote);
+    await other.control.getByTestId('guild-card').filter({ hasText: 'Les potes' }).waitFor();
+    await pickServers(other, ['Les potes']);
+    await connected(other);
+    await onlineCount(other, 2);
+
+    await other.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()
+        .find((window) => !window.getTitle().includes('Scène'))!
+        .close(),
+    );
+    await expect.poll(() => mainWindowVisible(other)).toBe(false);
+    await onlineCount(host, 2);
+
+    await openTab(host, 'Party');
+    await host.control.getByLabel('Un texte').fill('Toujours là ?');
+    await host.control.getByRole('button', { name: 'Envoyer le texte' }).click();
+    await overlayState(other, 'playing');
+    await other.stage.getByTestId('overlay-text').filter({ hasText: 'Toujours là ?' }).waitFor();
+    expect(await stageVisible(other)).toBe(true);
+
+    // Opening the app a second time brings back the one already running, instead of starting another.
+    const executable = await other.app.evaluate(() => process.execPath);
+    const secondLaunch = spawn(executable, launchArgs([]), {
+      stdio: 'ignore',
+      env: { ...process.env, LIVECHATSBCB_PROFILE: join(sandbox, 'other') },
+    });
+    await new Promise((done) => secondLaunch.once('exit', done));
+    await expect.poll(() => mainWindowVisible(other)).toBe(true);
+
+    await other.app.close();
+    await onlineCount(host, 1);
   });
 });

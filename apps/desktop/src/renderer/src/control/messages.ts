@@ -37,6 +37,9 @@ export const errorMessage = (error: ActionError): string => {
 export const mediaErrorMessage = (error: ActionError): string =>
   error === 'invalid_request' ? 'Ce média n’a pas pu être envoyé. Vérifie le fichier et réessaie.' : errorMessage(error);
 
+export const replayErrorMessage = (error: ActionError): string =>
+  error === 'not_found' ? 'Ce média n’est plus disponible : tout est effacé après 1 jour.' : errorMessage(error);
+
 export const pickErrorMessage = (error: Exclude<Extract<PickResult, { ok: false }>['error'], 'cancelled'>): string => {
   switch (error) {
     case 'too_large':

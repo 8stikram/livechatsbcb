@@ -4,14 +4,9 @@ import type { Account } from '@livechatsbcb/protocol';
 import type { OverlayLayout, PlaybackView, Zone } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { useAppState } from '../use-app-state';
+import { useSyncedMedia } from '../use-synced-media';
 import logo from '../assets/logo.png';
 import '../styles.css';
-
-const DRIFT_CHECK_MS = 500;
-// Too far off to catch up unnoticed: jump. Close enough: play a touch faster or slower, which nobody hears.
-const SEEK_DRIFT_S = 0.5;
-const NUDGE_DRIFT_S = 0.06;
-const NUDGE_RATE = 0.04;
 
 const zoneStyle = ({ x, y, w, h }: Zone): CSSProperties => ({
   left: `${x}%`,
@@ -40,54 +35,11 @@ const Caption = ({ text, zone }: { text: string; zone: Zone }) => (
 
 const SyncedMedia = ({ item, startAt, volume }: { item: PlaybackView; startAt: number; volume: number }) => {
   const element = useRef<HTMLVideoElement & HTMLAudioElement>(null);
-  // The clock correction can still shift the start by a few ms: that must adjust playback, not restart it.
-  const timing = useRef({ startAt, clipStartMs: item.clipStartMs, durationMs: item.durationMs });
-  timing.current = { startAt, clipStartMs: item.clipStartMs, durationMs: item.durationMs };
+  useSyncedMedia(element, { ...item, startAt });
 
   useEffect(() => {
     if (element.current) element.current.volume = volume;
   }, [volume]);
-
-  useEffect(() => {
-    const media = element.current;
-    if (!media) return;
-
-    const correct = () => {
-      const { startAt: start, clipStartMs, durationMs } = timing.current;
-      const elapsedMs = Date.now() - start;
-      if (elapsedMs < 0 || media.ended) return;
-      if (elapsedMs >= durationMs) {
-        media.pause();
-        return;
-      }
-
-      const target = (clipStartMs + elapsedMs) / 1000;
-      if (media.paused) {
-        media.currentTime = target;
-        void media.play().catch(() => {});
-        return;
-      }
-
-      const drift = media.currentTime - target;
-      if (Math.abs(drift) > SEEK_DRIFT_S) {
-        media.currentTime = target;
-        media.playbackRate = 1;
-      } else if (Math.abs(drift) > NUDGE_DRIFT_S) {
-        media.playbackRate = drift > 0 ? 1 - NUDGE_RATE : 1 + NUDGE_RATE;
-      } else {
-        media.playbackRate = 1;
-      }
-    };
-
-    media.currentTime = timing.current.clipStartMs / 1000;
-    const first = setTimeout(correct, Math.max(0, timing.current.startAt - Date.now()));
-    const interval = setInterval(correct, DRIFT_CHECK_MS);
-    return () => {
-      clearTimeout(first);
-      clearInterval(interval);
-      media.pause();
-    };
-  }, [item.mediaUrl]);
 
   const url = item.mediaUrl ?? undefined;
   return item.kind === 'video' ? (
@@ -165,11 +117,14 @@ const Stage = () => {
 
   const { settings, overlayTest } = state;
   const { current } = state.queue;
-  const playing = settings.overlayEnabled && current?.startAt != null ? current : null;
+  const shared = settings.overlayEnabled && current?.startAt != null ? current : null;
+  const replay = state.localReplay?.playback ?? null;
+  const playing = shared ?? replay;
   const volume = settings.muted ? 0 : settings.volume / 100;
+  const scene = shared ? 'playing' : replay ? 'replay' : overlayTest ? 'test' : 'idle';
 
   return (
-    <main className="stage" data-testid="stage" data-state={playing ? 'playing' : overlayTest ? 'test' : 'idle'}>
+    <main className="stage" data-testid="stage" data-state={scene}>
       {playing && (
         <Playing key={playing.id} item={playing} startAt={playing.startAt!} layout={settings.layout} volume={volume} />
       )}

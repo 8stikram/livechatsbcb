@@ -1,7 +1,8 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { DEFAULT_LAYOUT, type AppState, type OverlayLayout, type Settings, type Zone } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { ConfirmButton } from './ConfirmButton';
+import { Slider } from './NowPlaying';
 
 const ZONE_LABELS: Record<keyof OverlayLayout, string> = {
   profile: 'Photo et pseudo',
@@ -9,6 +10,22 @@ const ZONE_LABELS: Record<keyof OverlayLayout, string> = {
   text: 'Texte',
 };
 const ZONES = Object.keys(ZONE_LABELS) as Array<keyof OverlayLayout>;
+
+const Switch = ({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children: ReactNode;
+}) => (
+  <label className="switch">
+    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+    <span className="switch-track" aria-hidden="true" />
+    <span>{children}</span>
+  </label>
+);
 
 const MIN_ZONE_PERCENT = 6;
 const SEND_EVERY_MS = 100;
@@ -93,80 +110,92 @@ export const SettingsScreen = ({ state }: { state: AppState }) => {
   const set = (change: Partial<Settings>) => void window.liveChat.setSettings(change);
 
   return (
-    <main className="screen">
-      {state.account && (
-        <section className="account-bar" aria-label="Ton compte">
-          <Avatar className="avatar" name={state.account.name} url={state.account.avatarUrl} testId="account-avatar" />
-          <span className="account-name" data-testid="account-name">
-            {state.account.name}
-          </span>
-          <ConfirmButton
-            label="Se déconnecter"
-            confirmLabel="Confirmer ?"
-            onConfirm={() => void window.liveChat.logout()}
-          />
+    <div className="settings-grid scroll">
+      <div className="settings-column">
+        {state.account && (
+          <section className="glass panel" aria-labelledby="account-title">
+            <h2 id="account-title">Ton compte</h2>
+            <div className="account">
+              <Avatar className="avatar is-large" name={state.account.name} url={state.account.avatarUrl} testId="account-avatar" />
+              <span className="row-text">
+                <span className="row-title" data-testid="account-name">
+                  {state.account.name}
+                </span>
+                <span className="row-sub">Reste connecté sur ce PC.</span>
+              </span>
+              <ConfirmButton
+                label="Se déconnecter"
+                confirmLabel="Confirmer ?"
+                onConfirm={() => void window.liveChat.logout()}
+              />
+            </div>
+          </section>
+        )}
+
+        <section className="glass panel" aria-labelledby="startup-title">
+          <h2 id="startup-title">Démarrage</h2>
+          <Switch checked={settings.launchAtStartup} onChange={(launchAtStartup) => set({ launchAtStartup })}>
+            Lancer LiveChatSBCB au démarrage de Windows
+          </Switch>
+          <p className="hint">
+            Il démarre discrètement près de l'horloge. Fermer la fenêtre le laisse ouvert : pour quitter, fais un clic
+            droit sur son icône.
+          </p>
         </section>
-      )}
 
-      <section className="panel" aria-label="Overlay">
-        <h2>Overlay</h2>
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={settings.overlayEnabled}
-            onChange={(event) => set({ overlayEnabled: event.target.checked })}
-          />
-          Afficher les médias sur mon écran
-        </label>
-        <label className="field">
-          <span>Écran</span>
-          <select
-            value={settings.displayId ?? displays[0]?.id ?? ''}
-            onChange={(event) => set({ displayId: Number(event.target.value) })}
-          >
-            {displays.map((display) => (
-              <option key={display.id} value={display.id}>
-                {display.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="button" className="primary" onClick={() => void window.liveChat.testOverlay()}>
-          Test d’affichage
-        </button>
-        <p className="hint">Affiche une image et un texte de test sur ton écran. Les autres ne voient rien.</p>
-      </section>
+        <section className="glass panel" aria-labelledby="sound-title">
+          <h2 id="sound-title">Son</h2>
+          <label className="field">
+            <span className="field-line">
+              Volume <strong className="mono" data-testid="volume-value">{settings.volume} %</strong>
+            </span>
+            <Slider value={settings.volume} min={0} max={100} onChange={(volume) => set({ volume })} />
+          </label>
+          <Switch checked={settings.muted} onChange={(muted) => set({ muted })}>
+            Couper le son
+          </Switch>
+        </section>
 
-      <section className="panel" aria-label="Son">
-        <h2>Son</h2>
-        <label className="field">
-          <span>
-            Volume : <strong data-testid="volume-value">{settings.volume} %</strong>
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={settings.volume}
-            onChange={(event) => set({ volume: Number(event.target.value) })}
-          />
-        </label>
-        <label className="toggle">
-          <input type="checkbox" checked={settings.muted} onChange={(event) => set({ muted: event.target.checked })} />
-          Couper le son
-        </label>
-      </section>
+        <p className="version mono">Version {state.version}</p>
+      </div>
 
-      <section className="panel" aria-label="Recadrer">
-        <h2>Recadrer</h2>
-        <p className="hint">Déplace les zones, ou tire leur coin pour les redimensionner. Ton écran montre le résultat.</p>
-        <LayoutEditor layout={settings.layout} />
-        <button type="button" className="secondary compact" onClick={() => set({ layout: DEFAULT_LAYOUT })}>
-          Remettre par défaut
-        </button>
-      </section>
+      <div className="settings-column">
+        <section className="glass panel" aria-labelledby="overlay-title">
+          <h2 id="overlay-title">Affichage en jeu</h2>
+          <Switch checked={settings.overlayEnabled} onChange={(overlayEnabled) => set({ overlayEnabled })}>
+            Afficher les médias sur mon écran
+          </Switch>
+          <label className="field">
+            <span>Écran</span>
+            <select
+              className="input"
+              value={settings.displayId ?? displays[0]?.id ?? ''}
+              onChange={(event) => set({ displayId: Number(event.target.value) })}
+            >
+              {displays.map((display) => (
+                <option key={display.id} value={display.id}>
+                  {display.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="pill primary" onClick={() => void window.liveChat.testOverlay()}>
+            Test d’affichage
+          </button>
+          <p className="hint">Affiche une image et un texte de test sur ton écran. Les autres ne voient rien.</p>
+        </section>
 
-      <footer className="version">Version {state.version}</footer>
-    </main>
+        <section className="glass panel" aria-labelledby="layout-title">
+          <h2 id="layout-title" className="panel-title">
+            Recadrer
+            <button type="button" className="pill quiet small" onClick={() => set({ layout: DEFAULT_LAYOUT })}>
+              Remettre par défaut
+            </button>
+          </h2>
+          <p className="hint">Déplace les zones, ou tire leur coin pour les redimensionner. Ton écran montre le résultat.</p>
+          <LayoutEditor layout={settings.layout} />
+        </section>
+      </div>
+    </div>
   );
 };

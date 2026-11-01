@@ -52,20 +52,26 @@ const secureWebPreferences = {
   webSecurity: true,
 };
 
-export const createControlWindow = (): BrowserWindow => {
+export const createControlWindow = (startHidden: boolean): BrowserWindow => {
+  const { workAreaSize } = screen.getPrimaryDisplay();
   const window = new BrowserWindow({
-    width: 480,
-    height: 760,
-    minWidth: 420,
-    minHeight: 560,
+    width: Math.min(1120, workAreaSize.width),
+    height: Math.min(720, workAreaSize.height),
+    minWidth: 940,
+    minHeight: 620,
     show: false,
     title: 'LiveChatSBCB',
     icon: nativeImage.createFromPath(iconPath),
-    backgroundColor: '#120a1f',
+    backgroundColor: '#0a0a0d',
+    // The page goes all the way up, and Windows keeps drawing its own buttons on top of it.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#00000000', symbolColor: '#f4f4f5', height: 40 },
     webPreferences: secureWebPreferences,
   });
   lockDown(window);
-  window.once('ready-to-show', () => window.show());
+  window.once('ready-to-show', () => {
+    if (!startHidden) window.show();
+  });
   void window.loadURL(pageUrl('control'));
   return window;
 };

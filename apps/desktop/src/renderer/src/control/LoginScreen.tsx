@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { AppState } from '../../../shared/ipc';
 import logo from '../assets/logo.png';
+import { IconDiscord } from './icons';
 import { errorMessage } from './messages';
 
 export const LoginScreen = ({ state }: { state: AppState }) => {
@@ -13,45 +14,49 @@ export const LoginScreen = ({ state }: { state: AppState }) => {
   };
 
   return (
-    <main className="screen home">
-      <header className="brand">
-        <img src={logo} alt="" width={88} height={88} />
-        <h1>LiveChatSBCB</h1>
-      </header>
+    <div className="login">
+      <span className="login-shade" aria-hidden="true" />
+      <main className="login-card">
+        <img className="login-logo" src={logo} alt="" width={72} height={72} />
+        <div>
+          <h1>LiveChatSBCB</h1>
+          <p className="login-tagline">Ce que tu envoies s'affiche chez tout le monde, au même moment.</p>
+        </div>
 
-      {state.notice === 'account_expired' && (
-        <p className="banner" role="status">
-          Ta connexion a expiré. Reconnecte-toi avec Discord.
-        </p>
-      )}
-
-      <p className="hint">
-        Connecte-toi avec ton compte Discord pour retrouver ton pseudo, ta photo et tes serveurs. L'app voit la liste de
-        tes serveurs, mais jamais ton mot de passe ni tes messages.
-      </p>
-
-      {state.loggingIn ? (
-        <>
-          <p className="banner" role="status" data-testid="login-waiting">
-            Termine la connexion dans ton navigateur, puis reviens ici.
+        {state.notice === 'account_expired' && (
+          <p className="banner" role="status">
+            Ta connexion a expiré. Reconnecte-toi avec Discord.
           </p>
-          <button type="button" className="secondary" onClick={() => void window.liveChat.cancelLogin()}>
-            Annuler
+        )}
+
+        {state.loggingIn ? (
+          <div className="login-waiting">
+            <p role="status" data-testid="login-waiting">
+              <span className="spinner" aria-hidden="true" />
+              Termine la connexion dans ton navigateur, puis reviens ici.
+            </p>
+            <button type="button" className="pill secondary is-wide" onClick={() => void window.liveChat.cancelLogin()}>
+              Annuler
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="pill primary is-large is-wide" onClick={() => void login()}>
+            <IconDiscord />
+            Se connecter avec Discord
           </button>
-        </>
-      ) : (
-        <button type="button" className="primary" onClick={() => void login()}>
-          Se connecter avec Discord
-        </button>
-      )}
+        )}
 
-      {error && (
-        <p className="error" role="alert">
-          {error}
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <p className="login-fine">
+          L'app voit ton pseudo, ta photo et la liste de tes serveurs. Jamais ton mot de passe ni tes messages.
         </p>
-      )}
-
-      <footer className="version">Version {state.version}</footer>
-    </main>
+      </main>
+      <p className="login-version mono">Version {state.version}</p>
+    </div>
   );
 };

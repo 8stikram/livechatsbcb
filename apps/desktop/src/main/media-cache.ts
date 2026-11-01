@@ -23,6 +23,8 @@ type Entry = {
   reported: boolean;
 };
 
+type RemoteFile = Pick<QueueItem, 'fileId' | 'size' | 'contentType'>;
+
 // Files are fetched ahead of playback, so everyone can start on time and the service only serves each one once per PC.
 export class MediaCache {
   private readonly entries = new Map<string, Entry>();
@@ -82,6 +84,11 @@ export class MediaCache {
     void this.pump();
   }
 
+  // For this PC alone: nobody is waiting for it, and it stays until forgotten.
+  fetchForMe(key: string, session: SessionResponse, file: RemoteFile): Promise<boolean> {
+    return this.download(session, key, file, { reported: true, seenInQueue: false });
+  }
+
   private reportIfReady(mediaId: string): void {
     const entry = this.entries.get(mediaId);
     if (!entry?.file || entry.reported) return;
@@ -97,25 +104,24 @@ export class MediaCache {
       for (;;) {
         const next = this.queue.find((item) => item.contentType && !this.entries.has(item.id));
         if (!next || !this.session) return;
-        await this.download(this.session, next);
+        await this.download(this.session, next.id, next, { reported: false, seenInQueue: true });
       }
     } finally {
       this.pumping = false;
     }
   }
 
-  private async download(session: SessionResponse, item: QueueItem): Promise<void> {
-    const entry: Entry = {
-      controller: new AbortController(),
-      file: null,
-      downloadedTo: null,
-      seenInQueue: true,
-      reported: false,
-    };
-    this.entries.set(item.id, entry);
+  private async download(
+    session: SessionResponse,
+    key: string,
+    file: RemoteFile,
+    tracking: Pick<Entry, 'reported' | 'seenInQueue'>,
+  ): Promise<boolean> {
+    const entry: Entry = { controller: new AbortController(), file: null, downloadedTo: null, ...tracking };
+    this.entries.set(key, entry);
 
     const { signal } = entry.controller;
-    const target = join(this.root, item.id);
+    const target = join(this.root, key);
     const partial = `${target}.part`;
     await mkdir(this.root, { recursive: true });
 
@@ -124,20 +130,20 @@ export class MediaCache {
       if (signal.aborted) break;
 
       try {
-        const response = await fetchMedia(session, item.id, signal);
+        const response = await fetchMedia(session, file.fileId!, signal);
         if (response.status === 401 || response.status === 404) break;
         if (!response.ok || !response.body) continue;
 
         await pipeline(Readable.fromWeb(response.body as NodeReadableStream), createWriteStream(partial), { signal });
-        if ((await stat(partial)).size !== item.size) continue;
+        if ((await stat(partial)).size !== file.size) continue;
 
         await rename(partial, target);
         entry.downloadedTo = target;
-        entry.file = registerMediaFile(target, item.contentType!);
+        entry.file = registerMediaFile(target, file.contentType!);
         // Left the queue while finishing: nobody is going to ask for it.
         if (signal.aborted) break;
-        this.reportIfReady(item.id);
-        return;
+        this.reportIfReady(key);
+        return true;
       } catch {
         // Lost connection or a full disk: retried below, and in the end this PC just shows the rest without the file.
       }
@@ -146,5 +152,6 @@ export class MediaCache {
     if (entry.file) forgetMediaFile(entry.file.id);
     await rm(partial, { force: true }).catch(() => {});
     await rm(target, { force: true }).catch(() => {});
+    return false;
   }
 }

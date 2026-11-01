@@ -13,6 +13,7 @@ import {
   WS_SUBPROTOCOL,
   WS_TOKEN_PREFIX,
   type Account,
+  type HistoryItem,
   type QueueItem,
   type ServerMessage,
   type SessionResponse,
@@ -143,6 +144,15 @@ class TestSocket {
     return this.until(() => (check(this.latestQueue()) ? this.latestQueue() : undefined), label);
   }
 
+  latestHistory(): HistoryItem[] {
+    const latest = this.messages.findLast((message) => message.t === 'history' || message.t === 'welcome');
+    return latest && 'history' in latest ? latest.history : [];
+  }
+
+  historyWhere(check: (history: HistoryItem[]) => boolean, label: string) {
+    return this.until(() => (check(this.latestHistory()) ? this.latestHistory() : undefined), label);
+  }
+
   latestMembers() {
     const latest = this.messages.findLast((message) => message.t === 'members' || message.t === 'welcome');
     return latest && 'members' in latest ? latest.members : [];
@@ -176,11 +186,20 @@ const sendText = async (session: SessionResponse, caption: string, durationMs = 
   return ((await response.json()) as { mediaId: string }).mediaId;
 };
 
+const sendQuickText = async (session: SessionResponse) => {
+  const response = await fetch(`${QUICK_BASE}/v1/parties/${session.partyId}/media`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...authorized(session) },
+    body: JSON.stringify({ caption: 'Vite', clipStartMs: 0, durationMs: 1_000, file: null }),
+  });
+  return ((await response.json()) as { mediaId: string }).mediaId;
+};
+
 const openUpload = (session: SessionResponse, size: number, contentType = 'video/mp4', base = BASE) =>
   fetch(`${base}/v1/parties/${session.partyId}/media`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...authorized(session) },
-    body: JSON.stringify({ caption: '', clipStartMs: 0, durationMs: 2_000, file: { contentType, size } }),
+    body: JSON.stringify({ caption: '', clipStartMs: 0, durationMs: 2_000, file: { contentType, size, name: 'clip.mp4' } }),
   });
 
 const uploadFile = async (session: SessionResponse, bytes: Uint8Array, base = BASE): Promise<string> => {
@@ -352,7 +371,7 @@ describe('party service', () => {
 
     const noAuth = await fetch(`${BASE}/v1/parties/${host.partyId}/media`, {
       method: 'POST',
-      body: JSON.stringify({ caption: '', clipStartMs: 0, durationMs: 2_000, file: { contentType: 'video/mp4', size: 10 } }),
+      body: JSON.stringify({ caption: '', clipStartMs: 0, durationMs: 2_000, file: { contentType: 'video/mp4', size: 10, name: 'clip.mp4' } }),
     });
     expect(noAuth.status).toBe(401);
 
@@ -425,6 +444,108 @@ describe('party service', () => {
       status = (await fetch(url, { headers: authorized(host) })).status;
     }
     expect(status).toBe(404);
+  });
+
+  const replay = (session: SessionResponse, historyId: string, base = BASE) =>
+    fetch(`${base}/v1/parties/${session.partyId}/history/${historyId}/replay`, {
+      method: 'POST',
+      headers: authorized(session),
+    });
+
+  it('remembers what really played, newest first, with the name of the file', async () => {
+    const host = await createParty();
+    const socket = new TestSocket(host);
+    await socket.welcome();
+    expect(socket.latestHistory()).toEqual([]);
+
+    await sendText(host, 'Bonjour');
+    const [text] = await socket.historyWhere((history) => history.length === 1, 'the text in the history');
+    expect(text).toMatchObject({ kind: 'text', caption: 'Bonjour', fileId: null, fileName: null, senderName: 'Nono' });
+
+    const mediaId = await uploadFile(host, testBytes(1_000));
+    await socket.queueWhere((queue) => queue.some((item) => item.id === mediaId), 'the file in the queue');
+    socket.send(JSON.stringify({ t: 'ready', mediaId }));
+    const history = await socket.historyWhere((list) => list.length === 2, 'the file in the history');
+    expect(history[0]).toMatchObject({ id: mediaId, fileId: mediaId, fileName: 'clip.mp4', kind: 'video' });
+    expect(history[1]!.caption).toBe('Bonjour');
+
+    // Someone arriving later finds it too.
+    const later = new TestSocket(host);
+    await later.welcome();
+    expect(later.latestHistory().map((item) => item.id)).toEqual(history.map((item) => item.id));
+    socket.close();
+    later.close();
+  });
+
+  it('forgets what was skipped before it ever started', async () => {
+    const host = await createParty();
+    const socket = new TestSocket(host);
+    await socket.welcome();
+
+    const mediaId = await uploadFile(host, testBytes(1_000));
+    await socket.queueWhere((queue) => queue[0]?.id === mediaId, 'the file in the queue');
+    socket.send(JSON.stringify({ t: 'skip', mediaId }));
+    await socket.queueWhere((queue) => queue.length === 0, 'an empty queue');
+
+    await sendText(host, 'Suite');
+    const history = await socket.historyWhere((list) => list.length > 0, 'the history');
+    expect(history.map((item) => item.caption)).toEqual(['Suite']);
+    socket.close();
+  });
+
+  it('plays something again for everyone, from the same file, under the name of whoever asked', async () => {
+    const host = await createParty();
+    const guest = await joinParty(host.code, 'Invite');
+    const stranger = await createParty('Inconnu');
+    const hostSocket = new TestSocket(host);
+    const guestSocket = new TestSocket(guest);
+    await hostSocket.welcome();
+    await guestSocket.welcome();
+
+    const bytes = testBytes(2_000);
+    const mediaId = await uploadFile(host, bytes);
+    await guestSocket.queueWhere((queue) => queue[0]?.id === mediaId, 'the file in the queue');
+    for (const socket of [hostSocket, guestSocket]) socket.send(JSON.stringify({ t: 'ready', mediaId }));
+    const [original] = await guestSocket.historyWhere((list) => list.length === 1, 'the file in the history');
+    await guestSocket.queueWhere((queue) => queue.length === 0, 'the end of the file');
+
+    expect((await replay({ ...stranger, partyId: host.partyId }, original!.id)).status).toBe(401);
+    expect((await replay(guest, crypto.randomUUID())).status).toBe(404);
+
+    expect((await replay(guest, original!.id)).status).toBe(204);
+    const [again] = await hostSocket.queueWhere((queue) => queue.length === 1, 'the replay in the queue');
+    expect(again).toMatchObject({ fileId: mediaId, replay: true, senderName: 'Invite', expiresAt: original!.expiresAt });
+    expect(again!.id).not.toBe(mediaId);
+
+    // It waits for everyone to have the file, like the first time, and the file is the one already there.
+    const download = await fetch(`${BASE}/v1/parties/${host.partyId}/media/${again!.fileId}`, { headers: authorized(guest) });
+    expect(Buffer.from(await download.arrayBuffer()).equals(Buffer.from(bytes))).toBe(true);
+    for (const socket of [hostSocket, guestSocket]) socket.send(JSON.stringify({ t: 'ready', mediaId: again!.id }));
+    await guestSocket.queueWhere((queue) => queue[0]?.startAt != null, 'the replay starting');
+    await guestSocket.queueWhere((queue) => queue.length === 0, 'the end of the replay');
+
+    // No second line for the same thing.
+    expect(guestSocket.latestHistory().map((item) => item.id)).toEqual([mediaId]);
+    hostSocket.close();
+    guestSocket.close();
+  });
+
+  it('forgets the history along with the files, once their retention is over', async () => {
+    const host = await createParty('Nono', QUICK_BASE);
+    const socket = new TestSocket(host, WS_SUBPROTOCOL, QUICK_BASE);
+    await socket.welcome();
+
+    // Remembered only once it starts, which here is just about when it should be gone.
+    const id = await sendQuickText(host);
+    await socket.queueWhere((queue) => queue[0]?.startAt != null, 'the start');
+    await new Promise((done) => setTimeout(done, 1_600));
+
+    const later = new TestSocket(host, WS_SUBPROTOCOL, QUICK_BASE);
+    await later.welcome();
+    expect(later.latestHistory()).toEqual([]);
+    expect((await replay(host, id, QUICK_BASE)).status).toBe(404);
+    socket.close();
+    later.close();
   });
 
   it('creates a party with a well-formed code', async () => {
