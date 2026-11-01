@@ -16,6 +16,7 @@ const api: LiveChatApi = {
   copyCode: () => ipcRenderer.invoke(IpcChannel.CopyCode),
   setStageVisible: (visible) => ipcRenderer.invoke(IpcChannel.SetStageVisible, visible),
   setStagePinned: (pinned) => ipcRenderer.invoke(IpcChannel.SetStagePinned, pinned),
+  installUpdate: () => ipcRenderer.invoke(IpcChannel.InstallUpdate),
 };
 
 contextBridge.exposeInMainWorld('liveChat', api);

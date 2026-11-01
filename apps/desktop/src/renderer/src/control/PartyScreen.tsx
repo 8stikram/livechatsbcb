@@ -9,7 +9,7 @@ const STATUS_TEXT: Record<ConnectionStatus, string> = {
   reconnecting: 'Connexion perdue, nouvelle tentative…',
   replaced: 'Tu es connecté sur une autre fenêtre ou un autre PC.',
   party_full: 'La party est pleine. Tu entreras dès qu’une place se libère.',
-  update_required: 'Mets à jour LiveChatSBCB pour rejoindre la party.',
+  update_required: 'Une mise à jour est nécessaire pour rejoindre la party.',
 };
 
 const CONFIRM_WINDOW_MS = 4_000;

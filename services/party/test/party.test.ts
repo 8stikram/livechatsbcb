@@ -242,6 +242,30 @@ describe('party service', () => {
     expect((await post('/v1/join', { code: host.code, name: 'Invite' })).status).toBe(404);
   });
 
+  it('serves the update manifest and the installer', async () => {
+    const manifest = await fetch(`${BASE}/updates/latest.yml`);
+    expect(manifest.status).toBe(200);
+    expect(manifest.headers.get('cache-control')).toBe('no-store');
+    expect(await manifest.text()).toContain('version: 9.9.9');
+
+    const installer = await fetch(`${BASE}/updates/LiveChatSBCB-Setup-9.9.9.exe`);
+    expect(installer.status).toBe(200);
+    expect(await installer.text()).toBe('fake installer');
+  });
+
+  it('serves nothing else from the update storage', async () => {
+    expect((await fetch(`${BASE}/updates/private.txt`)).status).toBe(404);
+    expect((await fetch(`${BASE}/updates/`)).status).toBe(404);
+    expect((await fetch(`${BASE}/updates/LiveChatSBCB-Setup-1.0.0.exe`)).status).toBe(404);
+    expect((await fetch(`${BASE}/updates/..%2Fprivate.txt`)).status).toBe(404);
+  });
+
+  it('redirects the download link to the latest installer', async () => {
+    const response = await fetch(`${BASE}/download`, { redirect: 'manual' });
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toBe(`${BASE}/updates/LiveChatSBCB-Setup-9.9.9.exe`);
+  });
+
   it('answers keep-alive pings', async () => {
     const host = await createParty();
     const socket = new TestSocket(host);

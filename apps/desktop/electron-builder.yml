@@ -14,6 +14,9 @@ electronFuses:
   runAsNode: false
   enableNodeOptionsEnvironmentVariable: false
   onlyLoadAppFromAsar: true
+publish:
+  provider: generic
+  url: https://livechatsbcb-party.livechatsbcb-party.workers.dev/updates
 win:
   target: nsis
   icon: build/icon.ico

@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 const TEST_PORT = 8799;
 
@@ -7,6 +8,23 @@ const TEST_PORT = 8799;
 export default async function setup() {
   const stateDir = resolve('.wrangler', `test-state-${Date.now()}`);
   const wrangler = resolve('..', '..', 'node_modules', 'wrangler', 'bin', 'wrangler.js');
+
+  mkdirSync(stateDir, { recursive: true });
+  const seeds: Record<string, string> = {
+    'latest.yml': 'version: 9.9.9\npath: LiveChatSBCB-Setup-9.9.9.exe\nsha512: fake\n',
+    'LiveChatSBCB-Setup-9.9.9.exe': 'fake installer',
+    'private.txt': 'must not be served',
+  };
+  for (const [key, content] of Object.entries(seeds)) {
+    const seedFile = join(stateDir, `seed-${key}`);
+    writeFileSync(seedFile, content);
+    spawnSync(
+      process.execPath,
+      [wrangler, 'r2', 'object', 'put', `livechatsbcb-updates/${key}`, '--file', seedFile, '--local', '--persist-to', stateDir],
+      { stdio: 'ignore', env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' } },
+    );
+  }
+
   const child = spawn(
     process.execPath,
     [wrangler, 'dev', '--port', String(TEST_PORT), '--ip', '127.0.0.1', '--persist-to', stateDir],

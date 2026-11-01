@@ -6,6 +6,7 @@ import { registerAppScheme, serveRenderer } from './app-protocol';
 import * as partyApi from './party-api';
 import { PartyConnection } from './party-connection';
 import { SessionStore } from './session-store';
+import { Updater } from './updater';
 import { createControlWindow, createStageWindow, denyAllPermissions, isOwnPage } from './windows';
 
 // Lets one PC run several members for testing; each profile has its own folder and its own single-instance lock.
@@ -37,6 +38,7 @@ function start(): void {
     const snapshot = connection?.current();
     return {
       version: app.getVersion(),
+      update: updater.current(),
       lastName: store.lastName,
       notice,
       party: snapshot
@@ -58,10 +60,15 @@ function start(): void {
     }
   };
 
+  const updater = new Updater(publishState);
+
   const connectTo = (session: SessionResponse): void => {
     connection?.stop();
     connection = new PartyConnection(session, {
-      onChange: publishState,
+      onChange: (snapshot) => {
+        if (snapshot.status === 'update_required') updater.check();
+        publishState();
+      },
       onSessionRevoked: () => {
         connection?.stop();
         connection = null;
@@ -158,6 +165,12 @@ function start(): void {
     publishState();
   });
 
+  handle(IpcChannel.InstallUpdate, () => {
+    // The updater closes every window before it emits before-quit, so the stage must already allow closing.
+    quitting = true;
+    updater.installNow();
+  });
+
   // Closing the stage only hides it: it stays ready, and the control window remains the way to quit.
   stageWindow.on('close', (event) => {
     if (quitting) return;
@@ -182,4 +195,6 @@ function start(): void {
     connectTo(saved);
     stageWindow.once('ready-to-show', () => stageWindow.showInactive());
   }
+
+  updater.start();
 }

@@ -83,12 +83,45 @@ const leaveParty = async (request: Request, env: Env, partyId: string): Promise<
   return new Response(null, { status: 204 });
 };
 
+const UPDATE_MANIFEST = 'latest.yml';
+const UPDATE_FILE = /^(latest\.yml|LiveChatSBCB-Setup-\d+\.\d+\.\d+\.exe)$/;
+
+const serveUpdateFile = async (env: Env, file: string): Promise<Response> => {
+  if (!UPDATE_FILE.test(file)) return fail('not_found', 404);
+
+  const object = await env.UPDATES.get(file);
+  if (!object) return fail('not_found', 404);
+
+  const isManifest = file === UPDATE_MANIFEST;
+  return new Response(object.body, {
+    headers: {
+      'content-type': isManifest ? 'text/yaml; charset=utf-8' : 'application/octet-stream',
+      // The manifest decides who updates, so it must never be served stale.
+      'cache-control': isManifest ? 'no-store' : 'public, max-age=86400',
+      etag: object.httpEtag,
+      ...(isManifest ? {} : { 'content-disposition': `attachment; filename="${file}"` }),
+    },
+  });
+};
+
+// A stable link to share with friends: always the installer of the latest version.
+const redirectToLatestInstaller = async (request: Request, env: Env): Promise<Response> => {
+  const manifest = await env.UPDATES.get(UPDATE_MANIFEST);
+  const installer = (await manifest?.text())?.match(/^path:\s*(\S+)\s*$/m)?.[1];
+  if (!installer || !UPDATE_FILE.test(installer)) return fail('not_found', 404);
+  return Response.redirect(new URL(`/updates/${installer}`, request.url).toString(), 302);
+};
+
 export default {
   async fetch(request, env): Promise<Response> {
     const { pathname } = new URL(request.url);
     const { method } = request;
 
     if (method === 'GET' && pathname === '/v1/health') return json({ ok: true });
+    if (method === 'GET' && pathname === '/download') return redirectToLatestInstaller(request, env);
+    if (method === 'GET' && pathname.startsWith('/updates/')) {
+      return serveUpdateFile(env, pathname.slice('/updates/'.length));
+    }
     if (method === 'POST' && pathname === '/v1/parties') return createParty(request, env);
     if (method === 'POST' && pathname === '/v1/join') return joinParty(request, env);
 

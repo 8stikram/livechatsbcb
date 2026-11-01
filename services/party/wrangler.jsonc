@@ -10,5 +10,6 @@
       { "name": "PARTY", "class_name": "Party" }
     ]
   },
+  "r2_buckets": [{ "binding": "UPDATES", "bucket_name": "livechatsbcb-updates" }],
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Directory", "Party"] }]
 }

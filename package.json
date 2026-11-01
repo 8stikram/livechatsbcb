@@ -10,7 +10,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "npm run test:e2e -w @livechatsbcb/desktop",
-    "build:exe": "npm run build:exe -w @livechatsbcb/desktop"
+    "build:exe": "npm run build:exe -w @livechatsbcb/desktop",
+    "release": "node tools/release.mjs"
   },
   "devDependencies": {
     "png-to-ico": "3.0.2",

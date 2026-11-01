@@ -9,8 +9,14 @@ export type PartyView = {
   connection: ConnectionStatus;
 };
 
+export type UpdateStatus =
+  | { state: 'idle' }
+  | { state: 'downloading'; version: string; percent: number }
+  | { state: 'ready'; version: string };
+
 export type AppState = {
   version: string;
+  update: UpdateStatus;
   lastName: string;
   party: PartyView | null;
   // Set when the service dropped this member, so the home screen can say why they are back on it.
@@ -32,6 +38,7 @@ export const IpcChannel = {
   CopyCode: 'party:copy-code',
   SetStageVisible: 'stage:set-visible',
   SetStagePinned: 'stage:set-pinned',
+  InstallUpdate: 'update:install',
 } as const;
 
 export type LiveChatApi = {
@@ -45,4 +52,5 @@ export type LiveChatApi = {
   copyCode(): Promise<void>;
   setStageVisible(visible: boolean): Promise<void>;
   setStagePinned(pinned: boolean): Promise<void>;
+  installUpdate(): Promise<void>;
 };

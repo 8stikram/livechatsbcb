@@ -40,6 +40,14 @@ Le service se publie depuis `services/party` avec `npx wrangler deploy`. Pour le
 
 `node test/online-smoke.mjs https://livechatsbcb-party.livechatsbcb-party.workers.dev`
 
+## Publier une version de l'app
+
+`npm run release -- 1.2.3` construit l'installateur et l'envoie sur le stockage des mises à jour. Les apps installées le détectent à leur lancement, puis toutes les heures.
+
+Le lien à donner à un nouveau membre est toujours le même : `https://livechatsbcb-party.livechatsbcb-party.workers.dev/download`.
+
+Pour vérifier une vraie mise à jour : installer une version publiée, publier une version plus récente, puis lancer `node test/update-check.mjs` depuis `apps/desktop`.
+
 ## Sécurité
 
 - Le jeton de chaque membre reste dans le processus principal, chiffré sur le disque, et n'atteint jamais les fenêtres.
