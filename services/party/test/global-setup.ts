@@ -3,6 +3,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const TEST_PORT = 8799;
+// A second copy where media expires within seconds, so that deletion can be tested without waiting a day.
+const SHORT_RETENTION_PORT = 8798;
 
 // Runs the real Worker in the local Cloudflare runtime, with fresh state in a throwaway folder.
 export default async function setup() {
@@ -25,34 +27,55 @@ export default async function setup() {
     );
   }
 
-  const child = spawn(
-    process.execPath,
-    [wrangler, 'dev', '--port', String(TEST_PORT), '--ip', '127.0.0.1', '--persist-to', stateDir],
-    { stdio: 'pipe', env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' } },
-  );
+  const start = async (port: number, inspectorPort: number, persistTo: string, extraArgs: string[] = []) => {
+    const child = spawn(
+      process.execPath,
+      [
+        wrangler,
+        'dev',
+        '--port',
+        String(port),
+        '--inspector-port',
+        String(inspectorPort),
+        '--ip',
+        '127.0.0.1',
+        '--persist-to',
+        persistTo,
+        ...extraArgs,
+      ],
+      { stdio: 'pipe', env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' } },
+    );
 
-  let output = '';
-  child.stdout.on('data', (chunk) => (output += chunk));
-  child.stderr.on('data', (chunk) => (output += chunk));
+    let output = '';
+    child.stdout.on('data', (chunk) => (output += chunk));
+    child.stderr.on('data', (chunk) => (output += chunk));
 
-  const deadline = Date.now() + 90_000;
-  for (;;) {
-    try {
-      const response = await fetch(`http://127.0.0.1:${TEST_PORT}/v1/health`);
-      if (response.ok) break;
-    } catch {
-      // Not listening yet.
+    const deadline = Date.now() + 90_000;
+    for (;;) {
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/v1/health`);
+        if (response.ok) return child;
+      } catch {
+        // Not listening yet.
+      }
+      if (Date.now() > deadline) {
+        child.kill();
+        throw new Error(`wrangler dev did not start:\n${output}`);
+      }
+      await new Promise((done) => setTimeout(done, 300));
     }
-    if (Date.now() > deadline) {
-      child.kill();
-      throw new Error(`wrangler dev did not start:\n${output}`);
-    }
-    await new Promise((done) => setTimeout(done, 300));
-  }
+  };
+
+  const children = [
+    await start(TEST_PORT, 9239, stateDir),
+    await start(SHORT_RETENTION_PORT, 9238, `${stateDir}-short`, ['--var', 'MEDIA_RETENTION_MS:1500']),
+  ];
 
   return () => {
-    // wrangler starts the runtime as a child process, so on Windows the whole tree has to go.
-    if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']);
-    else child.kill();
+    for (const child of children) {
+      // wrangler starts the runtime as a child process, so on Windows the whole tree has to go.
+      if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+      else child.kill();
+    }
   };
 }

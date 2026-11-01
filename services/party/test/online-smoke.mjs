@@ -3,7 +3,7 @@
 const base = process.argv[2];
 if (!base) throw new Error('Pass the service URL');
 
-const SUBPROTOCOL = 'livechatsbcb.v1';
+const SUBPROTOCOL = 'livechatsbcb.v2';
 const IDLE_MS = 25_000;
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 

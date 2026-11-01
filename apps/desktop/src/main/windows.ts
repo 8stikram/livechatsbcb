@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { BrowserWindow, nativeImage, session, shell } from 'electron';
+import { BrowserWindow, nativeImage, screen, session, shell } from 'electron';
 import { APP_ORIGIN } from './app-protocol';
 import iconPath from '../renderer/src/assets/logo.png?asset';
 
@@ -54,9 +54,9 @@ const secureWebPreferences = {
 
 export const createControlWindow = (): BrowserWindow => {
   const window = new BrowserWindow({
-    width: 440,
-    height: 680,
-    minWidth: 380,
+    width: 480,
+    height: 760,
+    minWidth: 420,
     minHeight: 560,
     show: false,
     title: 'LiveChatSBCB',
@@ -70,22 +70,41 @@ export const createControlWindow = (): BrowserWindow => {
   return window;
 };
 
-export const createStageWindow = (): BrowserWindow => {
+export const placeOverlay = (window: BrowserWindow, displayId: number | null): void => {
+  const display = screen.getAllDisplays().find(({ id }) => id === displayId) ?? screen.getPrimaryDisplay();
+  // One pixel short of the full screen: Windows takes a topmost window covering a whole monitor for a fullscreen app,
+  // and would hide the taskbar and silence notifications because of it.
+  window.setBounds({ ...display.bounds, height: display.bounds.height - 1 });
+};
+
+export const createStageWindow = (displayId: number | null): BrowserWindow => {
   const window = new BrowserWindow({
-    width: 960,
-    height: 540,
-    minWidth: 320,
-    minHeight: 180,
     show: false,
     title: 'LiveChatSBCB — Scène',
-    icon: nativeImage.createFromPath(iconPath),
-    backgroundColor: '#000000',
+    transparent: true,
+    backgroundColor: '#00000000',
+    frame: false,
+    hasShadow: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    // Never takes the keyboard from the game, and has no place in the taskbar or in Alt+Tab.
+    focusable: false,
+    skipTaskbar: true,
     webPreferences: {
       ...secureWebPreferences,
       // Medias must start on the shared timeline, with no click in this window.
       autoplayPolicy: 'no-user-gesture-required',
+      // The page gets ready while the window is hidden, and its timers must stay on time.
+      backgroundThrottling: false,
     },
   });
+  // Clicks go through to whatever is underneath.
+  window.setIgnoreMouseEvents(true);
+  window.setAlwaysOnTop(true, 'screen-saver');
+  placeOverlay(window, displayId);
   lockDown(window);
   void window.loadURL(pageUrl('stage'));
   return window;

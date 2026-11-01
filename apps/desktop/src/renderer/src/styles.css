@@ -41,7 +41,9 @@ ul {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -150,7 +152,9 @@ button:disabled {
   font-size: 0.87rem;
 }
 
-input:not([type='checkbox']) {
+input:not([type='checkbox'], [type='range']),
+select,
+textarea {
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -158,7 +162,17 @@ input:not([type='checkbox']) {
   padding: 10px 12px;
 }
 
-input::placeholder {
+textarea {
+  resize: vertical;
+}
+
+input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent-strong);
+}
+
+input::placeholder,
+textarea::placeholder {
   color: #7c6b96;
 }
 
@@ -325,12 +339,6 @@ input::placeholder {
   font-size: 0.82rem;
 }
 
-.stage-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .toggle {
   display: flex;
   align-items: center;
@@ -350,22 +358,248 @@ input::placeholder {
   gap: 8px;
 }
 
-.stage-body {
-  background: #000;
+.tabs {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  padding: 10px 20px 0;
+  border-bottom: 1px solid var(--border);
 }
 
-.stage {
+.tab {
+  background: none;
+  color: var(--text-muted);
+  border-radius: 10px 10px 0 0;
+  padding: 8px 14px;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab.is-active {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.tab-panel {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.tab-panel[hidden] {
+  display: none;
+}
+
+.panel h2 {
+  font-size: 1rem;
+}
+
+.hint {
   color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.draft,
+.clip,
+.draft-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.draft-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.draft-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-preview {
+  display: block;
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  background: var(--bg);
+  border-radius: 10px;
+}
+
+.upload {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.upload-head,
+.now-playing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--accent-strong);
+}
+
+.layout-box {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.layout-zone {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border: 1px dashed currentColor;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  text-align: center;
+  cursor: move;
+  user-select: none;
   overflow: hidden;
 }
 
-.stage-logo {
-  width: min(32vh, 32vw);
-  border-radius: 12%;
+.layout-zone.is-profile {
+  color: #ff8a8a;
+  background: rgb(255 138 138 / 18%);
+}
+
+.layout-zone.is-media {
+  color: #ffd76b;
+  background: rgb(255 215 107 / 14%);
+}
+
+.layout-zone.is-text {
+  color: #ffb26b;
+  background: rgb(255 178 107 / 18%);
+}
+
+.layout-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  border-radius: 4px 0 0;
+  cursor: nwse-resize;
+}
+
+/* Only this page: without it, the dark theme would paint the overlay window opaque. */
+html.overlay {
+  color-scheme: normal;
+  background: transparent;
+}
+
+html.overlay body {
+  background: transparent;
+  overflow: hidden;
+}
+
+.stage {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+}
+
+.scene.is-waiting {
+  visibility: hidden;
+}
+
+/* Sizes below follow the zone, so that resizing a zone also resizes what is in it. */
+.zone {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  container-type: size;
+}
+
+.zone-media {
+  justify-content: center;
+}
+
+.overlay-media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.outlined {
+  color: #fff;
+  font-weight: 800;
+  line-height: 1.1;
+  -webkit-text-stroke: 0.07em #000;
+  paint-order: stroke fill;
+  text-shadow: 0 0.04em 0.18em rgb(0 0 0 / 80%);
+}
+
+.zone-profile {
+  gap: 5cqh;
+}
+
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  height: 92cqh;
+  aspect-ratio: 1;
+  border: 4cqh solid #fff;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: var(--on-accent);
+  font-size: 50cqh;
+  font-weight: 800;
+}
+
+.profile-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 46cqh;
+  padding: 0.1em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.zone-text {
+  justify-content: center;
+  text-align: center;
+}
+
+.zone-text p {
+  max-height: 100%;
+  overflow: hidden;
+  font-size: min(40cqh, 7cqw);
+  overflow-wrap: anywhere;
+}
+
+.zone-text p.is-medium {
+  font-size: min(26cqh, 5cqw);
+}
+
+.zone-text p.is-long {
+  font-size: min(17cqh, 3.2cqw);
 }

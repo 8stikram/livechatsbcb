@@ -111,25 +111,6 @@ export const PartyScreen = ({ state, party }: { state: AppState; party: PartyVie
         </ul>
       </section>
 
-      <section className="stage-controls" aria-label="Scène">
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={state.stage.visible}
-            onChange={(event) => void window.liveChat.setStageVisible(event.target.checked)}
-          />
-          Afficher la scène
-        </label>
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={state.stage.pinned}
-            onChange={(event) => void window.liveChat.setStagePinned(event.target.checked)}
-          />
-          Garder la scène au premier plan
-        </label>
-      </section>
-
       {error && (
         <p className="error" role="alert">
           {error}

@@ -4,7 +4,9 @@ import {
   WS_PING,
   WS_SUBPROTOCOL,
   WS_TOKEN_PREFIX,
+  type ClientMessage,
   type Member,
+  type QueueItem,
   type ServerMessage,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
@@ -15,12 +17,14 @@ const RECONNECT_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000];
 const PING_INTERVAL_MS = 3_000;
 // A socket whose peer vanished can stay "open" for minutes, so silence is what counts as a lost connection.
 const SILENCE_LIMIT_MS = 7_000;
+const CLOCK_SAMPLES = 4;
 
 export type ConnectionSnapshot = {
   status: ConnectionStatus;
   code: string;
   memberId: string;
   members: Member[];
+  queue: QueueItem[];
 };
 
 type Listener = {
@@ -37,12 +41,16 @@ export class PartyConnection {
   private pingTimer: NodeJS.Timeout | null = null;
   private stopped = false;
   private snapshot: ConnectionSnapshot;
+  private clockOffsetMs = 0;
+  private bestRoundTripMs = Infinity;
+  private clockSamplesLeft = 0;
+  private readonly readyIds = new Set<string>();
 
   constructor(
     private readonly session: SessionResponse,
     private readonly listener: Listener,
   ) {
-    this.snapshot = { status: 'connecting', code: session.code, memberId: session.memberId, members: [] };
+    this.snapshot = { status: 'connecting', code: session.code, memberId: session.memberId, members: [], queue: [] };
   }
 
   start(): void {
@@ -74,6 +82,23 @@ export class PartyConnection {
     return this.snapshot;
   }
 
+  toLocalTime(serviceTime: number): number {
+    return Math.round(serviceTime - this.clockOffsetMs);
+  }
+
+  reportReady(mediaId: string): void {
+    this.readyIds.add(mediaId);
+    this.send({ t: 'ready', mediaId });
+  }
+
+  skip(mediaId: string): void {
+    this.send({ t: 'skip', mediaId });
+  }
+
+  private send(message: ClientMessage): void {
+    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
+  }
+
   private open(): void {
     const url = `${SERVER_URL.replace(/^http/, 'ws')}/v1/parties/${this.session.partyId}/ws`;
     const socket = new WebSocket(url, [WS_SUBPROTOCOL, `${WS_TOKEN_PREFIX}${this.session.token}`]);
@@ -103,13 +128,35 @@ export class PartyConnection {
     switch (message.t) {
       case 'welcome':
         this.attempts = 0;
-        this.publish({ status: 'online', code: message.code, memberId: message.memberId, members: message.members });
+        this.publish({
+          status: 'online',
+          code: message.code,
+          memberId: message.memberId,
+          members: message.members,
+          queue: message.queue,
+        });
+        // The service forgets nothing, but anything reported while disconnected never reached it.
+        for (const mediaId of this.readyIds) this.send({ t: 'ready', mediaId });
+        this.syncClock();
         break;
       case 'members':
         this.publish({ members: message.members });
         break;
       case 'code':
         this.publish({ code: message.code });
+        break;
+      case 'queue': {
+        const known = new Set(this.snapshot.queue.map((item) => item.id));
+        const hasNewItem = message.queue.some((item) => !known.has(item.id));
+        const queued = new Set(message.queue.map((item) => item.id));
+        for (const mediaId of this.readyIds) if (!queued.has(mediaId)) this.readyIds.delete(mediaId);
+        this.publish({ queue: message.queue });
+        // Clocks drift slowly, so correcting whenever something new arrives is often enough.
+        if (hasNewItem) this.syncClock();
+        break;
+      }
+      case 'time':
+        this.onClockSample(message.c, message.s);
         break;
       case 'closing':
         this.onClosed(message.code);
@@ -143,6 +190,30 @@ export class PartyConnection {
     }
   }
 
+  private syncClock(): void {
+    if (this.clockSamplesLeft > 0) return;
+    this.bestRoundTripMs = Infinity;
+    this.clockSamplesLeft = CLOCK_SAMPLES;
+    this.send({ t: 'time', c: Date.now() });
+  }
+
+  // The quickest exchange is the one least distorted by the network, so it is the one to trust.
+  private onClockSample(sentAt: number, serviceTime: number): void {
+    const now = Date.now();
+    const roundTrip = now - sentAt;
+    if (roundTrip < this.bestRoundTripMs) {
+      this.bestRoundTripMs = roundTrip;
+      this.clockOffsetMs = serviceTime - (sentAt + now) / 2;
+    }
+
+    this.clockSamplesLeft -= 1;
+    if (this.clockSamplesLeft > 0) {
+      this.send({ t: 'time', c: Date.now() });
+    } else {
+      this.publish({});
+    }
+  }
+
   private scheduleRetry(): void {
     if (this.stopped || this.retryTimer) return;
     const delay = RECONNECT_DELAYS_MS[Math.min(this.attempts, RECONNECT_DELAYS_MS.length - 1)]!;
@@ -168,6 +239,7 @@ export class PartyConnection {
   private dropSocket(): void {
     const socket = this.socket;
     this.socket = null;
+    this.clockSamplesLeft = 0;
     if (socket && socket.readyState !== WebSocket.CLOSED) socket.close();
   }
 

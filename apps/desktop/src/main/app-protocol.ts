@@ -1,6 +1,7 @@
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { net, protocol } from 'electron';
+import { MEDIA_SCHEME } from './media-files';
 
 export const APP_SCHEME = 'app';
 export const APP_ORIGIN = `${APP_SCHEME}://bundle`;
@@ -9,7 +10,8 @@ const CONTENT_SECURITY_POLICY = [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self'",
-  "img-src 'self'",
+  `img-src 'self' ${MEDIA_SCHEME}:`,
+  `media-src ${MEDIA_SCHEME}:`,
   "font-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",
@@ -20,6 +22,8 @@ const CONTENT_SECURITY_POLICY = [
 export const registerAppScheme = (): void => {
   protocol.registerSchemesAsPrivileged([
     { scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+    // "stream" is what lets a video element read it progressively and seek.
+    { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, stream: true } },
   ]);
 };
 

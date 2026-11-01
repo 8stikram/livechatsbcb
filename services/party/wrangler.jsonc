@@ -10,6 +10,10 @@
       { "name": "PARTY", "class_name": "Party" }
     ]
   },
-  "r2_buckets": [{ "binding": "UPDATES", "bucket_name": "livechatsbcb-updates" }],
+  "r2_buckets": [
+    { "binding": "UPDATES", "bucket_name": "livechatsbcb-updates" },
+    { "binding": "MEDIA", "bucket_name": "livechatsbcb-media" }
+  ],
+  "vars": { "MEDIA_RETENTION_MS": "86400000" },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Directory", "Party"] }]
 }

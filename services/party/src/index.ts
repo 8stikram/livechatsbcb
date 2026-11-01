@@ -1,6 +1,9 @@
 import {
+  CompleteMediaRequestSchema,
   CreatePartyRequestSchema,
   JoinPartyRequestSchema,
+  MediaDraftSchema,
+  mediaPartCount,
   type ApiErrorCode,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
@@ -20,7 +23,9 @@ const STATUS_BY_ERROR: Record<ApiErrorCode, number> = {
   code_not_found: 404,
   not_found: 404,
   party_full: 409,
+  queue_full: 409,
   rate_limited: 429,
+  storage_full: 507,
 };
 
 const directoryOf = (env: Env) => env.DIRECTORY.get(env.DIRECTORY.idFromName('global'));
@@ -83,6 +88,109 @@ const leaveParty = async (request: Request, env: Env, partyId: string): Promise<
   return new Response(null, { status: 204 });
 };
 
+const mediaKey = (partyId: string, mediaId: string) => `${partyId}/${mediaId}`;
+
+const createMedia = async (request: Request, env: Env, partyId: string): Promise<Response> => {
+  const body = MediaDraftSchema.safeParse(await readJson(request));
+  if (!body.success) return fail('invalid_request', 400);
+  const draft = body.data;
+
+  const party = partyOf(env, partyId);
+  const token = bearerToken(request);
+  const mediaId = crypto.randomUUID();
+
+  if (!draft.file) {
+    const sent = await party.sendText(token, mediaId, draft);
+    return sent.ok ? json({ mediaId }, 201) : fail(sent.error, STATUS_BY_ERROR[sent.error]);
+  }
+
+  const allowed = await party.canUpload(token);
+  if (!allowed.ok) return fail(allowed.error, STATUS_BY_ERROR[allowed.error]);
+
+  // One retry per part is plenty, and the monthly budget counts it: creating, finishing, and two attempts per part.
+  const attempts = 2 * mediaPartCount(draft.file.size);
+  const opened = await directoryOf(env).openUpload(
+    mediaKey(partyId, mediaId),
+    draft.file.size,
+    draft.file.contentType,
+    attempts + 2,
+  );
+  if (!opened.ok) return fail(opened.error, STATUS_BY_ERROR[opened.error]);
+
+  await party.registerUpload(mediaId, allowed.memberId, opened.uploadId, draft, attempts);
+  return json({ mediaId }, 201);
+};
+
+const putMediaPart = async (
+  request: Request,
+  env: Env,
+  partyId: string,
+  mediaId: string,
+  part: number,
+): Promise<Response> => {
+  if (!request.body) return fail('invalid_request', 400);
+
+  const bytes = Number(request.headers.get('content-length'));
+  const claim = await partyOf(env, partyId).claimPart(bearerToken(request), mediaId, part, bytes);
+  if (!claim.ok) return fail(claim.error, STATUS_BY_ERROR[claim.error]);
+
+  const uploaded = await env.MEDIA.resumeMultipartUpload(mediaKey(partyId, mediaId), claim.uploadId).uploadPart(
+    part,
+    request.body,
+  );
+  return json({ partNumber: uploaded.partNumber, etag: uploaded.etag });
+};
+
+const completeMedia = async (request: Request, env: Env, partyId: string, mediaId: string): Promise<Response> => {
+  const body = CompleteMediaRequestSchema.safeParse(await readJson(request));
+  if (!body.success) return fail('invalid_request', 400);
+
+  const party = partyOf(env, partyId);
+  const upload = await party.uploadFor(bearerToken(request), mediaId);
+  if (!upload.ok) return fail(upload.error, STATUS_BY_ERROR[upload.error]);
+
+  const key = mediaKey(partyId, mediaId);
+  const object = await env.MEDIA.resumeMultipartUpload(key, upload.uploadId)
+    .complete(body.data.parts)
+    .catch(() => null);
+
+  // The space was reserved for the announced size, so nothing else may be kept.
+  if (object?.size !== upload.size) {
+    await directoryOf(env).closeUpload(key);
+    await party.forgetUpload(mediaId);
+    return fail('invalid_request', 400);
+  }
+
+  await directoryOf(env).confirmUpload(key);
+  await party.finishUpload(mediaId);
+  return new Response(null, { status: 204 });
+};
+
+const cancelMedia = async (request: Request, env: Env, partyId: string, mediaId: string): Promise<Response> => {
+  const party = partyOf(env, partyId);
+  const upload = await party.uploadFor(bearerToken(request), mediaId);
+  if (!upload.ok) return fail(upload.error, STATUS_BY_ERROR[upload.error]);
+
+  await directoryOf(env).closeUpload(mediaKey(partyId, mediaId));
+  await party.forgetUpload(mediaId);
+  return new Response(null, { status: 204 });
+};
+
+const downloadMedia = async (request: Request, env: Env, partyId: string, mediaId: string): Promise<Response> => {
+  if (!(await partyOf(env, partyId).isMember(bearerToken(request)))) return fail('unauthorized', 401);
+
+  const object = await env.MEDIA.get(mediaKey(partyId, mediaId));
+  if (!object) return fail('not_found', 404);
+
+  return new Response(object.body, {
+    headers: {
+      'content-type': object.httpMetadata?.contentType ?? 'application/octet-stream',
+      'content-length': String(object.size),
+      'x-content-type-options': 'nosniff',
+    },
+  });
+};
+
 const UPDATE_MANIFEST = 'latest.yml';
 const UPDATE_FILE = /^(latest\.yml|LiveChatSBCB-Setup-\d+\.\d+\.\d+\.exe)$/;
 
@@ -132,6 +240,23 @@ export default {
       if (method === 'GET' && action === 'ws') return partyOf(env, partyId).fetch(request);
       if (method === 'POST' && action === 'rotate-code') return rotateCode(request, env, partyId);
       if (method === 'POST' && action === 'leave') return leaveParty(request, env, partyId);
+    }
+
+    const media = pathname.match(
+      /^\/v1\/parties\/([0-9a-f-]{36})\/media(?:\/([0-9a-f-]{36})(?:\/(complete|parts\/(\d{1,4})))?)?$/,
+    );
+    if (media) {
+      const partyId = media[1]!;
+      const mediaId = media[2];
+      const action = media[3];
+      const part = Number(media[4]);
+      if (!mediaId && method === 'POST') return createMedia(request, env, partyId);
+      if (mediaId && !action && method === 'GET') return downloadMedia(request, env, partyId, mediaId);
+      if (mediaId && !action && method === 'DELETE') return cancelMedia(request, env, partyId, mediaId);
+      if (mediaId && action === 'complete' && method === 'POST') return completeMedia(request, env, partyId, mediaId);
+      if (mediaId && action?.startsWith('parts/') && part > 0 && method === 'PUT') {
+        return putMediaPart(request, env, partyId, mediaId, part);
+      }
     }
 
     return fail('not_found', 404);

@@ -14,8 +14,13 @@ const api: LiveChatApi = {
   leaveParty: () => ipcRenderer.invoke(IpcChannel.LeaveParty),
   reconnect: () => ipcRenderer.invoke(IpcChannel.Reconnect),
   copyCode: () => ipcRenderer.invoke(IpcChannel.CopyCode),
-  setStageVisible: (visible) => ipcRenderer.invoke(IpcChannel.SetStageVisible, visible),
-  setStagePinned: (pinned) => ipcRenderer.invoke(IpcChannel.SetStagePinned, pinned),
+  pickMedia: () => ipcRenderer.invoke(IpcChannel.PickMedia),
+  clearDraft: () => ipcRenderer.invoke(IpcChannel.ClearDraft),
+  sendMedia: (input) => ipcRenderer.invoke(IpcChannel.SendMedia, input),
+  cancelUpload: () => ipcRenderer.invoke(IpcChannel.CancelUpload),
+  skipMedia: (mediaId) => ipcRenderer.invoke(IpcChannel.SkipMedia, mediaId),
+  setSettings: (change) => ipcRenderer.invoke(IpcChannel.SetSettings, change),
+  testOverlay: () => ipcRenderer.invoke(IpcChannel.TestOverlay),
   installUpdate: () => ipcRenderer.invoke(IpcChannel.InstallUpdate),
 };
 

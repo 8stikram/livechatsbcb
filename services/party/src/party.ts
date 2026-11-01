@@ -1,19 +1,43 @@
 import { DurableObject } from 'cloudflare:workers';
 import {
+  ClientMessageSchema,
   CloseCode,
   MAX_ONLINE_MEMBERS,
+  MAX_QUEUE_LENGTH,
   MAX_REGISTERED_MEMBERS,
   WS_PING,
   WS_PONG,
   WS_SUBPROTOCOL,
   WS_SUBPROTOCOL_PREFIX,
   WS_TOKEN_PREFIX,
+  fileKindOf,
+  mediaPartBytes,
+  mediaPartCount,
+  type MediaDraft,
   type Member,
+  type QueueItem,
   type ServerMessage,
 } from '@livechatsbcb/protocol';
 
 type MemberRow = { id: string; name: string };
 type Credentials = { memberId: string; token: string };
+type UploadRow = { media_id: string; member_id: string; upload_id: string; draft: string; attempts_left: number };
+type QueueRow = {
+  id: string;
+  item: string;
+  start_at: number | null;
+  prepare_ms: number;
+  prepare_deadline: number | null;
+  ready: string;
+};
+type Refusal<Error extends string> = { ok: false; error: Error };
+
+// Long enough for every PC to load a file it already has and be ready at the same moment.
+const START_LEAD_MS = 1_500;
+// How long a slow connection can hold up the others. Whoever isn't ready by then joins in progress.
+const MIN_PREPARE_MS = 15_000;
+const MAX_PREPARE_MS = 120_000;
+const PREPARE_BYTES_PER_MS = 2_000;
 
 const toHex = (bytes: Uint8Array): string => [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 
@@ -31,6 +55,22 @@ export class Party extends DurableObject<Env> {
         token_hash TEXT NOT NULL UNIQUE,
         joined_at INTEGER NOT NULL,
         last_seen INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS uploads (
+        media_id TEXT PRIMARY KEY,
+        member_id TEXT NOT NULL,
+        upload_id TEXT NOT NULL,
+        draft TEXT NOT NULL,
+        attempts_left INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS queue (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT NOT NULL UNIQUE,
+        item TEXT NOT NULL,
+        start_at INTEGER,
+        prepare_ms INTEGER NOT NULL,
+        prepare_deadline INTEGER,
+        ready TEXT NOT NULL
       );
     `);
     // Answered by the runtime, so keep-alive pings don't wake a hibernating party.
@@ -83,12 +123,97 @@ export class Party extends DurableObject<Env> {
 
     if (this.members().length > 0) {
       this.broadcast({ t: 'members', members: this.members() });
+      if (this.advanceQueue()) this.broadcastQueue();
       return { ok: true, releasedCode: null };
     }
 
     const releasedCode = this.getMeta('code');
+    await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
     return { ok: true, releasedCode };
+  }
+
+  async isMember(token: string): Promise<boolean> {
+    return (await this.memberForToken(token)) !== undefined;
+  }
+
+  // Text never touches storage, so it goes straight in the queue.
+  async sendText(
+    token: string,
+    mediaId: string,
+    draft: MediaDraft,
+  ): Promise<{ ok: true } | Refusal<'unauthorized' | 'queue_full'>> {
+    const member = await this.memberForToken(token);
+    if (!member) return { ok: false, error: 'unauthorized' };
+    if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
+    this.enqueue(mediaId, member, draft);
+    return { ok: true };
+  }
+
+  async canUpload(token: string): Promise<{ ok: true; memberId: string } | Refusal<'unauthorized' | 'queue_full'>> {
+    const member = await this.memberForToken(token);
+    if (!member) return { ok: false, error: 'unauthorized' };
+    if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
+    return { ok: true, memberId: member.id };
+  }
+
+  registerUpload(mediaId: string, memberId: string, uploadId: string, draft: MediaDraft, attempts: number): void {
+    this.ctx.storage.sql.exec(
+      'INSERT INTO uploads (media_id, member_id, upload_id, draft, attempts_left) VALUES (?, ?, ?, ?, ?)',
+      mediaId,
+      memberId,
+      uploadId,
+      JSON.stringify(draft),
+      attempts,
+    );
+  }
+
+  async claimPart(
+    token: string,
+    mediaId: string,
+    part: number,
+    bytes: number,
+  ): Promise<{ ok: true; uploadId: string } | Refusal<'unauthorized' | 'not_found' | 'invalid_request' | 'rate_limited'>> {
+    const upload = await this.uploadOf(token, mediaId);
+    if (!upload.ok) return upload;
+
+    const size = (JSON.parse(upload.row.draft) as MediaDraft).file!.size;
+    if (part > mediaPartCount(size) || bytes !== mediaPartBytes(size, part)) {
+      return { ok: false, error: 'invalid_request' };
+    }
+    // Each attempt is a paid-class R2 operation, and the monthly budget only counted so many.
+    if (upload.row.attempts_left <= 0) return { ok: false, error: 'rate_limited' };
+
+    this.ctx.storage.sql.exec('UPDATE uploads SET attempts_left = attempts_left - 1 WHERE media_id = ?', mediaId);
+    return { ok: true, uploadId: upload.row.upload_id };
+  }
+
+  async uploadFor(
+    token: string,
+    mediaId: string,
+  ): Promise<{ ok: true; uploadId: string; size: number } | Refusal<'unauthorized' | 'not_found'>> {
+    const upload = await this.uploadOf(token, mediaId);
+    if (!upload.ok) return upload;
+    const size = (JSON.parse(upload.row.draft) as MediaDraft).file!.size;
+    return { ok: true, uploadId: upload.row.upload_id, size };
+  }
+
+  forgetUpload(mediaId: string): void {
+    this.ctx.storage.sql.exec('DELETE FROM uploads WHERE media_id = ?', mediaId);
+  }
+
+  finishUpload(mediaId: string): void {
+    const [row] = this.ctx.storage.sql.exec<UploadRow>('SELECT * FROM uploads WHERE media_id = ?', mediaId).toArray();
+    if (!row) return;
+    const [member] = this.ctx.storage.sql
+      .exec<MemberRow>('SELECT id, name FROM members WHERE id = ?', row.member_id)
+      .toArray();
+    this.forgetUpload(mediaId);
+    if (member) this.enqueue(mediaId, member, JSON.parse(row.draft) as MediaDraft);
+  }
+
+  override alarm(): void {
+    if (this.advanceQueue()) this.broadcastQueue();
   }
 
   override async fetch(request: Request): Promise<Response> {
@@ -135,14 +260,38 @@ export class Party extends DurableObject<Env> {
         code: this.getMeta('code'),
         memberId: member.id,
         members,
+        queue: this.queue(),
       } satisfies ServerMessage),
     );
     this.broadcast({ t: 'members', members }, server);
     return response;
   }
 
-  override webSocketMessage(): void {
-    // Keep-alive is handled by the auto-response; clients have nothing else to send yet.
+  // Keep-alive never gets here: it is handled by the auto-response.
+  override webSocketMessage(socket: WebSocket, raw: string | ArrayBuffer): void {
+    const [memberId] = this.ctx.getTags(socket);
+    if (!memberId || typeof raw !== 'string') return;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    const message = ClientMessageSchema.safeParse(parsed);
+    if (!message.success) return;
+
+    switch (message.data.t) {
+      case 'time':
+        socket.send(JSON.stringify({ t: 'time', c: message.data.c, s: Date.now() } satisfies ServerMessage));
+        break;
+      case 'ready':
+        this.markReady(memberId, message.data.mediaId);
+        break;
+      case 'skip':
+        this.skip(message.data.mediaId);
+        break;
+    }
   }
 
   override webSocketClose(socket: WebSocket): void {
@@ -163,6 +312,122 @@ export class Party extends DurableObject<Env> {
     const [memberId] = this.ctx.getTags(socket);
     if (memberId) this.touch(memberId);
     this.broadcast({ t: 'members', members: this.members(socket) }, socket);
+    // The queue may have been waiting for this member only.
+    if (this.advanceQueue(socket)) this.broadcastQueue();
+  }
+
+  private async uploadOf(
+    token: string,
+    mediaId: string,
+  ): Promise<{ ok: true; row: UploadRow } | Refusal<'unauthorized' | 'not_found'>> {
+    const member = await this.memberForToken(token);
+    if (!member) return { ok: false, error: 'unauthorized' };
+    const [row] = this.ctx.storage.sql
+      .exec<UploadRow>('SELECT * FROM uploads WHERE media_id = ? AND member_id = ?', mediaId, member.id)
+      .toArray();
+    return row ? { ok: true, row } : { ok: false, error: 'not_found' };
+  }
+
+  private queueIsFull(): boolean {
+    const [row] = this.ctx.storage.sql.exec<{ total: number }>('SELECT COUNT(*) AS total FROM queue').toArray();
+    return (row?.total ?? 0) >= MAX_QUEUE_LENGTH;
+  }
+
+  private queueRows(): QueueRow[] {
+    return this.ctx.storage.sql.exec<QueueRow>('SELECT * FROM queue ORDER BY seq').toArray();
+  }
+
+  private queue(): QueueItem[] {
+    return this.queueRows().map((row) => ({
+      ...(JSON.parse(row.item) as Omit<QueueItem, 'startAt'>),
+      startAt: row.start_at,
+    }));
+  }
+
+  private broadcastQueue(): void {
+    this.broadcast({ t: 'queue', queue: this.queue() });
+  }
+
+  private enqueue(mediaId: string, sender: MemberRow, draft: MediaDraft): void {
+    const item: Omit<QueueItem, 'startAt'> = {
+      id: mediaId,
+      senderId: sender.id,
+      senderName: sender.name,
+      kind: draft.file ? fileKindOf(draft.file.contentType) : 'text',
+      contentType: draft.file?.contentType ?? null,
+      size: draft.file?.size ?? 0,
+      caption: draft.caption,
+      clipStartMs: draft.clipStartMs,
+      durationMs: draft.durationMs,
+    };
+    const prepareMs = draft.file
+      ? Math.min(MAX_PREPARE_MS, Math.max(MIN_PREPARE_MS, draft.file.size / PREPARE_BYTES_PER_MS))
+      : 0;
+    this.ctx.storage.sql.exec(
+      'INSERT INTO queue (id, item, prepare_ms, ready) VALUES (?, ?, ?, ?)',
+      mediaId,
+      JSON.stringify(item),
+      Math.round(prepareMs),
+      '[]',
+    );
+    this.advanceQueue();
+    this.broadcastQueue();
+  }
+
+  private markReady(memberId: string, mediaId: string): void {
+    const [row] = this.ctx.storage.sql.exec<QueueRow>('SELECT * FROM queue WHERE id = ?', mediaId).toArray();
+    if (!row) return;
+    const ready = new Set(JSON.parse(row.ready) as string[]).add(memberId);
+    this.ctx.storage.sql.exec('UPDATE queue SET ready = ? WHERE id = ?', JSON.stringify([...ready]), mediaId);
+    if (this.advanceQueue()) this.broadcastQueue();
+  }
+
+  // Names the media so that two people pressing at once can't skip the one after it too.
+  private skip(mediaId: string): void {
+    if (this.queueRows()[0]?.id !== mediaId) return;
+    this.ctx.storage.sql.exec('DELETE FROM queue WHERE id = ?', mediaId);
+    this.advanceQueue();
+    this.broadcastQueue();
+  }
+
+  // Runs the queue forward and arms the alarm for its next step. Returns whether anyone needs telling.
+  private advanceQueue(leaving?: WebSocket): boolean {
+    const now = Date.now();
+    let changed = false;
+
+    for (;;) {
+      const head = this.queueRows()[0];
+      if (!head) {
+        void this.ctx.storage.deleteAlarm();
+        return changed;
+      }
+
+      const { durationMs } = JSON.parse(head.item) as QueueItem;
+      if (head.start_at !== null) {
+        if (now < head.start_at + durationMs) {
+          void this.ctx.storage.setAlarm(head.start_at + durationMs);
+          return changed;
+        }
+        this.ctx.storage.sql.exec('DELETE FROM queue WHERE id = ?', head.id);
+        changed = true;
+        continue;
+      }
+
+      const deadline = head.prepare_deadline ?? now + head.prepare_ms;
+      const ready = new Set(JSON.parse(head.ready) as string[]);
+      const everyoneReady = [...this.onlineIds(leaving)].every((id) => ready.has(id));
+
+      if (now >= deadline || everyoneReady) {
+        const startAt = now + START_LEAD_MS;
+        this.ctx.storage.sql.exec('UPDATE queue SET start_at = ? WHERE id = ?', startAt, head.id);
+        void this.ctx.storage.setAlarm(startAt + durationMs);
+        return true;
+      }
+
+      this.ctx.storage.sql.exec('UPDATE queue SET prepare_deadline = ? WHERE id = ?', deadline, head.id);
+      void this.ctx.storage.setAlarm(deadline);
+      return changed;
+    }
   }
 
   private openSockets(excluding?: WebSocket): WebSocket[] {
