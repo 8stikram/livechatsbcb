@@ -123,6 +123,9 @@ const launch = async (profile: string): Promise<Member> => {
   const stage = await findPage('stage');
   await control.waitForLoadState('domcontentloaded');
   await stage.waitForLoadState('domcontentloaded');
+  for (const page of [control, stage]) {
+    page.on('pageerror', (error) => console.error(`[${profile}] ${page.url()}: ${error.message}`));
+  }
   await keepOutOfTheWay(app);
   return { app, control, stage };
 };
@@ -133,8 +136,17 @@ const onlineCount = (member: Member, count: number) =>
     .filter({ hasText: `${count} / 10 en ligne` })
     .waitFor({ state: 'attached', timeout: 15_000 });
 
-const connected = (member: Member, timeout = 15_000) =>
-  member.control.getByTestId('connection').filter({ hasText: 'Connecté' }).waitFor({ state: 'attached', timeout });
+const connected = async (member: Member, timeout = 15_000): Promise<void> => {
+  try {
+    await member.control
+      .getByTestId('connection')
+      .filter({ hasText: 'Connecté' })
+      .waitFor({ state: 'attached', timeout });
+  } catch (error) {
+    const shown = await member.control.getByRole('alert').allTextContents();
+    throw new Error(`Not connected. Message on screen: ${shown.join(' | ') || 'none'}`, { cause: error });
+  }
+};
 
 const partyCode = async (member: Member): Promise<string> =>
   (await member.control.getByTestId('party-code').textContent())!.trim();
@@ -146,8 +158,17 @@ const stageVisible = (member: Member) =>
 
 const openTab = (member: Member, name: string) => member.control.getByRole('tab', { name }).click();
 
-const overlayState = (member: Member, state: string, timeout = 30_000) =>
-  member.stage.locator(`[data-testid="stage"][data-state="${state}"]`).waitFor({ state: 'attached', timeout });
+const overlayState = async (member: Member, state: string, timeout = 30_000): Promise<void> => {
+  try {
+    await member.stage.locator(`[data-testid="stage"][data-state="${state}"]`).waitFor({ state: 'attached', timeout });
+  } catch (error) {
+    const seen = await member.control.evaluate(() => window.liveChat.getState());
+    const mounted = await member.stage.getByTestId('stage').count();
+    const shown = await member.control.getByRole('alert').allTextContents();
+    const details = { connection: seen.party?.connection, queue: seen.queue, mounted, shown };
+    throw new Error(`The overlay never reached "${state}": ${JSON.stringify(details)}`, { cause: error });
+  }
+};
 
 // The real file picker can't be driven from a test, so it answers with this file.
 const pickFile = async (member: Member, path: string): Promise<void> => {
@@ -312,7 +333,6 @@ describe('party flow in the real app', () => {
     await host.control.getByText('Pote').waitFor();
     await guest.control.getByText('Nono').waitFor();
     await host.control.screenshot({ path: join(artifacts, '2-party-host.png') });
-    await guest.stage.screenshot({ path: join(artifacts, '3-stage.png') });
   });
 
   it('rejoins alone after the app restarts', async () => {
