@@ -26,8 +26,8 @@ export const LoginScreen = ({ state }: { state: AppState }) => {
       )}
 
       <p className="hint">
-        Connecte-toi avec ton compte Discord pour retrouver ton pseudo, ta photo et les salons de ton serveur. Ton mot de
-        passe reste sur Discord : l'app ne le voit jamais.
+        Connecte-toi avec ton compte Discord pour retrouver ton pseudo, ta photo et tes serveurs. L'app voit la liste de
+        tes serveurs, mais jamais ton mot de passe ni tes messages.
       </p>
 
       {state.loggingIn ? (

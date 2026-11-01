@@ -3,32 +3,20 @@ import type {
   ApiErrorCode,
   FileKind,
   GuildSummary,
-  LobbyCategory,
-  LobbyMember,
   MediaKind,
   Member,
-  PartyChannel,
 } from '@livechatsbcb/protocol';
 
 export type ConnectionStatus = 'connecting' | 'online' | 'reconnecting' | 'replaced' | 'party_full' | 'update_required';
 
 export type PartyView = {
   partyId: string;
-  // Either a private party with its code, or a Discord channel.
+  // Either a private party with its code, or the party of a Discord server.
   code: string | null;
-  channel: PartyChannel | null;
+  guild: GuildSummary | null;
   memberId: string;
   members: Member[];
   connection: ConnectionStatus;
-};
-
-export type LobbyStatus = 'connecting' | 'online' | 'reconnecting' | 'replaced' | 'update_required';
-
-export type LobbyView = {
-  guildId: string;
-  status: LobbyStatus;
-  categories: LobbyCategory[];
-  online: LobbyMember[];
 };
 
 export type UpdateStatus =
@@ -89,15 +77,19 @@ export type AppState = {
   account: Account | null;
   // Waiting for the browser to come back from Discord.
   loggingIn: boolean;
-  // Null until the service has answered.
+  // All the person's Discord servers. Null until the service has answered.
   guilds: GuildSummary[] | null;
-  // Discord didn't answer for some server, so the list may be short.
+  // Discord didn't answer, so the list may be short.
   guildsPartial: boolean;
-  selectedGuildId: string | null;
-  lobby: LobbyView | null;
+  // The ones the person chose to use the app with, shown as round pictures on the side.
+  addedGuilds: GuildSummary[];
+  // A private party can be gone back to without typing its code again.
+  hasPrivateParty: boolean;
   party: PartyView | null;
+  // Why the last attempt at entering a server's party failed.
+  joinError: ActionError | null;
   // Set when the service dropped this member, so the home screen can say why they are back on it.
-  notice: 'session_expired' | 'channel_lost' | 'account_expired' | null;
+  notice: 'session_expired' | 'guild_lost' | 'account_expired' | null;
   settings: Settings;
   displays: DisplayView[];
   overlayTest: boolean;
@@ -126,8 +118,9 @@ export const IpcChannel = {
   CancelLogin: 'account:cancel-login',
   Logout: 'account:logout',
   RefreshGuilds: 'guilds:refresh',
-  SelectGuild: 'guilds:select',
-  JoinChannel: 'guilds:join-channel',
+  SetGuilds: 'guilds:set',
+  JoinGuild: 'guilds:join',
+  ReturnToPrivateParty: 'party:return-private',
   CreateParty: 'party:create',
   JoinParty: 'party:join',
   RotateCode: 'party:rotate-code',
@@ -151,8 +144,9 @@ export type LiveChatApi = {
   cancelLogin(): Promise<void>;
   logout(): Promise<void>;
   refreshGuilds(): Promise<void>;
-  selectGuild(guildId: string): Promise<void>;
-  joinChannel(guildId: string, channelId: string): Promise<ActionResult>;
+  setGuilds(guildIds: string[]): Promise<ActionResult>;
+  joinGuild(guildId: string): Promise<ActionResult>;
+  returnToPrivateParty(): Promise<ActionResult>;
   createParty(): Promise<ActionResult>;
   joinParty(code: string): Promise<ActionResult>;
   rotateCode(): Promise<ActionResult>;

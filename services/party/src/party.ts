@@ -14,7 +14,6 @@ import {
   mediaPartBytes,
   mediaPartCount,
   type Account,
-  type LobbyMember,
   type MediaDraft,
   type Member,
   type QueueItem,
@@ -42,6 +41,8 @@ const START_LEAD_MS = 1_500;
 const MIN_PREPARE_MS = 15_000;
 const MAX_PREPARE_MS = 120_000;
 const PREPARE_BYTES_PER_MS = 2_000;
+
+export const guildPartyId = (guildId: string): string => `g-${guildId}`;
 
 export class Party extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
@@ -90,15 +91,14 @@ export class Party extends DurableObject<Env> {
     this.setMeta('code', code);
   }
 
-  // A party tied to a Discord channel has no code, and is opened by whoever enters it first.
-  async enterChannel(partyId: string, guildId: string, channelId: string, account: Account): Promise<Admission> {
+  // The party of a Discord server has no code, and is opened by whoever enters it first.
+  async enterGuild(partyId: string, guildId: string, account: Account): Promise<Admission> {
     const token = randomToken();
     const tokenHash = await sha256(token);
 
     // No await from here on: someone leaving at this moment could otherwise wipe this between the two steps.
     this.setMeta('partyId', partyId);
     this.setMeta('guildId', guildId);
-    this.setMeta('channelId', channelId);
     return this.admit(account, token, tokenHash);
   }
 
@@ -148,18 +148,6 @@ export class Party extends DurableObject<Env> {
     if (!member) return { ok: false };
 
     return { ok: true, releasedCode: await this.removeMember(member.id) };
-  }
-
-  // Told by the server's side of things, when Discord says this person shouldn't be here any more.
-  async revoke(memberId: string): Promise<void> {
-    const [member] = this.ctx.storage.sql.exec('SELECT 1 FROM members WHERE id = ?', memberId).toArray();
-    if (member) await this.removeMember(memberId);
-  }
-
-  occupants(): LobbyMember[] {
-    return this.members()
-      .filter(({ online }) => online)
-      .map(({ id, name, avatarUrl }) => ({ id, name, avatarUrl }));
   }
 
   async isMember(token: string): Promise<boolean> {
@@ -241,7 +229,8 @@ export class Party extends DurableObject<Env> {
     if (member) this.enqueue(mediaId, member, JSON.parse(row.draft) as MediaDraft);
   }
 
-  override alarm(): void {
+  override async alarm(): Promise<void> {
+    await this.checkGuildMembers();
     if (this.advanceQueue()) this.broadcastQueue();
   }
 
@@ -281,6 +270,7 @@ export class Party extends DurableObject<Env> {
 
     this.ctx.acceptWebSocket(server, [member.id]);
     this.touch(member.id);
+    if (this.getMeta('guildId') && Number(this.getMeta('nextMemberCheck')) <= Date.now()) this.planMemberCheck();
 
     const members = this.members();
     server.send(
@@ -294,7 +284,7 @@ export class Party extends DurableObject<Env> {
       } satisfies ServerMessage),
     );
     this.broadcast({ t: 'members', members }, server);
-    this.reportOccupants();
+    if (this.advanceQueue()) this.broadcastQueue();
     return response;
   }
 
@@ -343,7 +333,6 @@ export class Party extends DurableObject<Env> {
     const [memberId] = this.ctx.getTags(socket);
     if (memberId) this.touch(memberId);
     this.broadcast({ t: 'members', members: this.members(socket) }, socket);
-    this.reportOccupants(socket);
     // The queue may have been waiting for this member only.
     if (this.advanceQueue(socket)) this.broadcastQueue();
   }
@@ -351,7 +340,6 @@ export class Party extends DurableObject<Env> {
   private async removeMember(memberId: string): Promise<string | null> {
     this.ctx.storage.sql.exec('DELETE FROM members WHERE id = ?', memberId);
     for (const socket of this.ctx.getWebSockets(memberId)) this.dismiss(socket, CloseCode.Removed);
-    this.reportOccupants();
 
     const [left] = this.ctx.storage.sql.exec('SELECT 1 FROM members LIMIT 1').toArray();
     if (left) {
@@ -363,7 +351,7 @@ export class Party extends DurableObject<Env> {
     const releasedCode = this.getMeta('code');
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
-    // This takes the tables too, and the next person to enter a channel will land on this same object.
+    // This takes the tables too, and the next person to enter a Discord server's party will land on this same object.
     this.createTables();
     return releasedCode;
   }
@@ -374,24 +362,41 @@ export class Party extends DurableObject<Env> {
     const guildId = this.getMeta('guildId');
     if (!guildId || this.onlineIds().has(member.id)) return true;
 
-    const guild = this.env.GUILD.get(this.env.GUILD.idFromName(guildId));
-    const access = await guild.access(guildId, member.id, this.getMeta('channelId'));
-    if (access.ok || access.error === 'discord_unavailable') return true;
+    if ((await this.directory().isGuildMember(member.id, guildId)) !== 'no') return true;
 
     await this.removeMember(member.id);
     return false;
   }
 
-  private reportOccupants(excluding?: WebSocket): void {
+  // Someone who left the Discord server should stop seeing what is sent there, without having to reconnect first.
+  private async checkGuildMembers(): Promise<void> {
     const guildId = this.getMeta('guildId');
-    if (!guildId) return;
+    if (!guildId || Date.now() < Number(this.getMeta('nextMemberCheck'))) return;
 
-    const occupants = this.members(excluding)
-      .filter(({ online }) => online)
-      .map(({ id, name, avatarUrl }) => ({ id, name, avatarUrl }));
-    const guild = this.env.GUILD.get(this.env.GUILD.idFromName(guildId));
-    // Worth no more than a retry at its next check, if it gets lost.
-    this.ctx.waitUntil(guild.setOccupants(guildId, this.getMeta('channelId'), occupants, Date.now()).catch(() => {}));
+    const directory = this.directory();
+    const online = [...this.onlineIds()];
+    const answers = await Promise.all(online.map((id) => directory.isGuildMember(id, guildId).catch(() => 'unknown')));
+    for (const [index, answer] of answers.entries()) {
+      if (answer === 'no') await this.removeMember(online[index]!);
+    }
+    // The last of them leaving wipes everything, and this party is then back to having nothing to check.
+    if (this.getMeta('guildId')) this.planMemberCheck();
+  }
+
+  private planMemberCheck(): void {
+    this.setMeta('nextMemberCheck', String(Date.now() + Number(this.env.DISCORD_REFRESH_MS)));
+  }
+
+  private directory() {
+    return this.env.DIRECTORY.get(this.env.DIRECTORY.idFromName('global'));
+  }
+
+  // One alarm does both jobs: moving the queue on, and checking people are still on the server while anyone is here.
+  private wakeAt(queueStep: number | null, leaving?: WebSocket): void {
+    const checking = this.getMeta('guildId') && this.openSockets(leaving).length > 0;
+    const steps = [queueStep, checking ? Number(this.getMeta('nextMemberCheck')) : null].filter((step) => step !== null);
+    if (steps.length > 0) void this.ctx.storage.setAlarm(Math.min(...steps));
+    else void this.ctx.storage.deleteAlarm();
   }
 
   private async uploadOf(
@@ -477,14 +482,14 @@ export class Party extends DurableObject<Env> {
     for (;;) {
       const head = this.queueRows()[0];
       if (!head) {
-        void this.ctx.storage.deleteAlarm();
+        this.wakeAt(null, leaving);
         return changed;
       }
 
       const { durationMs } = JSON.parse(head.item) as QueueItem;
       if (head.start_at !== null) {
         if (now < head.start_at + durationMs) {
-          void this.ctx.storage.setAlarm(head.start_at + durationMs);
+          this.wakeAt(head.start_at + durationMs, leaving);
           return changed;
         }
         this.ctx.storage.sql.exec('DELETE FROM queue WHERE id = ?', head.id);
@@ -499,12 +504,12 @@ export class Party extends DurableObject<Env> {
       if (now >= deadline || everyoneReady) {
         const startAt = now + START_LEAD_MS;
         this.ctx.storage.sql.exec('UPDATE queue SET start_at = ? WHERE id = ?', startAt, head.id);
-        void this.ctx.storage.setAlarm(startAt + durationMs);
+        this.wakeAt(startAt + durationMs, leaving);
         return true;
       }
 
       this.ctx.storage.sql.exec('UPDATE queue SET prepare_deadline = ? WHERE id = ?', deadline, head.id);
-      void this.ctx.storage.setAlarm(deadline);
+      this.wakeAt(deadline, leaving);
       return changed;
     }
   }
@@ -523,7 +528,7 @@ export class Party extends DurableObject<Env> {
       .exec<MemberRow>('SELECT id, name, avatar_url FROM members ORDER BY joined_at')
       .toArray()
       .map(({ id, name, avatar_url: avatarUrl }) => ({ id, name, avatarUrl, online: online.has(id) }));
-    // Past visitors of a Discord channel are nobody's business: a private party is the one with a fixed list.
+    // Past visitors of a Discord server's party are nobody's business: a private party is the one with a fixed list.
     return this.getMeta('guildId') ? members.filter((member) => member.online) : members;
   }
 

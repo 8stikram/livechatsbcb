@@ -39,11 +39,11 @@ export const PartyScreen = ({ state, party }: { state: AppState; party: PartyVie
 
   return (
     <main className="screen party">
-      {party.channel ? (
-        <section className="code-card" aria-label="Salon Discord">
-          <span className="eyebrow">{party.channel.guildName}</span>
-          <strong className="channel-title" data-testid="party-channel">
-            #{party.channel.channelName}
+      {party.guild ? (
+        <section className="code-card" aria-label="Serveur Discord">
+          <span className="eyebrow">Party du serveur</span>
+          <strong className="party-title" data-testid="party-guild">
+            {party.guild.name}
           </strong>
         </section>
       ) : (
@@ -98,20 +98,20 @@ export const PartyScreen = ({ state, party }: { state: AppState; party: PartyVie
         </p>
       )}
 
-      <footer className="party-actions">
-        {!party.channel && (
+      {!party.guild && (
+        <footer className="party-actions">
           <ConfirmButton
             label="Changer le code"
             confirmLabel="Confirmer le changement ?"
             onConfirm={() => void run(window.liveChat.rotateCode)}
           />
-        )}
-        <ConfirmButton
-          label={party.channel ? 'Quitter le salon' : 'Quitter la party'}
-          confirmLabel="Confirmer le départ ?"
-          onConfirm={() => void run(window.liveChat.leaveParty)}
-        />
-      </footer>
+          <ConfirmButton
+            label="Quitter la party"
+            confirmLabel="Confirmer le départ ?"
+            onConfirm={() => void run(window.liveChat.leaveParty)}
+          />
+        </footer>
+      )}
       <footer className="version">Version {state.version}</footer>
     </main>
   );

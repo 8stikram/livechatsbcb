@@ -1,6 +1,7 @@
 import {
   CloseCode,
   ServerMessageSchema,
+  WS_PING,
   WS_SUBPROTOCOL,
   WS_TOKEN_PREFIX,
   type ClientMessage,
@@ -10,9 +11,12 @@ import {
   type SessionResponse,
 } from '@livechatsbcb/protocol';
 import type { ConnectionStatus } from '../shared/ipc';
-import { KeepAliveSocket } from './keep-alive-socket';
 import { SERVER_URL } from './party-api';
 
+const RECONNECT_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000];
+const PING_INTERVAL_MS = 3_000;
+// A socket whose peer vanished can stay "open" for minutes, so silence is what counts as a lost connection.
+const SILENCE_LIMIT_MS = 7_000;
 const CLOCK_SAMPLES = 4;
 
 export type ConnectionSnapshot = {
@@ -30,7 +34,12 @@ type Listener = {
 
 // Lives in the main process so the member token never reaches a window, and so both windows share one connection.
 export class PartyConnection {
-  private readonly socket: KeepAliveSocket;
+  private socket: WebSocket | null = null;
+  private attempts = 0;
+  private lastHeardAt = 0;
+  private retryTimer: NodeJS.Timeout | null = null;
+  private pingTimer: NodeJS.Timeout | null = null;
+  private stopped = false;
   private snapshot: ConnectionSnapshot;
   private clockOffsetMs = 0;
   private bestRoundTripMs = Infinity;
@@ -38,38 +47,31 @@ export class PartyConnection {
   private readonly readyIds = new Set<string>();
 
   constructor(
-    session: SessionResponse,
+    private readonly session: SessionResponse,
     private readonly listener: Listener,
   ) {
     this.snapshot = { status: 'connecting', code: session.code, memberId: session.memberId, members: [], queue: [] };
-    this.socket = new KeepAliveSocket(
-      `${SERVER_URL.replace(/^http/, 'ws')}/v1/parties/${session.partyId}/ws`,
-      [WS_SUBPROTOCOL, `${WS_TOKEN_PREFIX}${session.token}`],
-      { pingEveryMs: 3_000, silenceLimitMs: 7_000, retryDelaysMs: [250, 500, 1_000, 2_000, 4_000] },
-      {
-        onMessage: (raw) => this.onMessage(raw),
-        onClosed: (code) => this.onClosed(code),
-        onSilence: () => {
-          this.clockSamplesLeft = 0;
-          this.publish({ status: 'reconnecting' });
-          this.socket.scheduleRetry();
-        },
-      },
-    );
   }
 
   start(): void {
-    this.socket.start();
+    this.open();
+    this.pingTimer = setInterval(() => this.keepAlive(), PING_INTERVAL_MS);
   }
 
   stop(): void {
-    this.socket.stop();
+    this.stopped = true;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    if (this.pingTimer) clearInterval(this.pingTimer);
+    this.dropSocket();
   }
 
   reconnectNow(): void {
-    this.clockSamplesLeft = 0;
+    if (this.stopped) return;
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.attempts = 0;
+    this.dropSocket();
     this.publish({ status: 'connecting' });
-    this.socket.reconnectNow();
+    this.open();
   }
 
   setCode(code: string): void {
@@ -94,10 +96,28 @@ export class PartyConnection {
   }
 
   private send(message: ClientMessage): void {
-    this.socket.send(JSON.stringify(message));
+    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
+  }
+
+  private open(): void {
+    const url = `${SERVER_URL.replace(/^http/, 'ws')}/v1/parties/${this.session.partyId}/ws`;
+    const socket = new WebSocket(url, [WS_SUBPROTOCOL, `${WS_TOKEN_PREFIX}${this.session.token}`]);
+    this.socket = socket;
+    this.lastHeardAt = Date.now();
+
+    socket.addEventListener('message', (event) => {
+      if (socket === this.socket) this.onMessage(String(event.data));
+    });
+    socket.addEventListener('close', (event) => {
+      if (socket === this.socket) this.onClosed(event.code);
+    });
+    // Every failed attempt is followed by a close event, which is where the retry is decided.
+    socket.addEventListener('error', () => {});
   }
 
   private onMessage(raw: string): void {
+    this.lastHeardAt = Date.now();
+
     let message: ServerMessage;
     try {
       message = ServerMessageSchema.parse(JSON.parse(raw));
@@ -107,7 +127,7 @@ export class PartyConnection {
 
     switch (message.t) {
       case 'welcome':
-        this.socket.markWelcomed();
+        this.attempts = 0;
         this.publish({
           status: 'online',
           code: message.code,
@@ -147,8 +167,7 @@ export class PartyConnection {
   }
 
   private onClosed(code: number): void {
-    this.socket.drop();
-    this.clockSamplesLeft = 0;
+    this.dropSocket();
 
     switch (code) {
       case CloseCode.Unauthorized:
@@ -163,11 +182,11 @@ export class PartyConnection {
         return;
       case CloseCode.PartyFull:
         this.publish({ status: 'party_full', members: [] });
-        this.socket.scheduleRetry();
+        this.scheduleRetry();
         return;
       default:
         this.publish({ status: 'reconnecting' });
-        this.socket.scheduleRetry();
+        this.scheduleRetry();
     }
   }
 
@@ -193,6 +212,35 @@ export class PartyConnection {
     } else {
       this.publish({});
     }
+  }
+
+  private scheduleRetry(): void {
+    if (this.stopped || this.retryTimer) return;
+    const delay = RECONNECT_DELAYS_MS[Math.min(this.attempts, RECONNECT_DELAYS_MS.length - 1)]!;
+    this.attempts += 1;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      if (!this.stopped) this.open();
+    }, delay);
+  }
+
+  private keepAlive(): void {
+    const socket = this.socket;
+    if (!socket) return;
+    if (socket.readyState === WebSocket.OPEN) socket.send(WS_PING);
+
+    if (Date.now() - this.lastHeardAt > SILENCE_LIMIT_MS) {
+      this.dropSocket();
+      this.publish({ status: 'reconnecting' });
+      this.scheduleRetry();
+    }
+  }
+
+  private dropSocket(): void {
+    const socket = this.socket;
+    this.socket = null;
+    this.clockSamplesLeft = 0;
+    if (socket && socket.readyState !== WebSocket.CLOSED) socket.close();
   }
 
   private publish(change: Partial<ConnectionSnapshot>): void {

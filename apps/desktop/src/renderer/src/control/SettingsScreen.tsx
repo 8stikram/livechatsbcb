@@ -1,5 +1,7 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { DEFAULT_LAYOUT, type AppState, type OverlayLayout, type Settings, type Zone } from '../../../shared/ipc';
+import { Avatar } from '../Avatar';
+import { ConfirmButton } from './ConfirmButton';
 
 const ZONE_LABELS: Record<keyof OverlayLayout, string> = {
   profile: 'Photo et pseudo',
@@ -92,6 +94,20 @@ export const SettingsScreen = ({ state }: { state: AppState }) => {
 
   return (
     <main className="screen">
+      {state.account && (
+        <section className="account-bar" aria-label="Ton compte">
+          <Avatar className="avatar" name={state.account.name} url={state.account.avatarUrl} testId="account-avatar" />
+          <span className="account-name" data-testid="account-name">
+            {state.account.name}
+          </span>
+          <ConfirmButton
+            label="Se déconnecter"
+            confirmLabel="Confirmer ?"
+            onConfirm={() => void window.liveChat.logout()}
+          />
+        </section>
+      )}
+
       <section className="panel" aria-label="Overlay">
         <h2>Overlay</h2>
         <label className="toggle">

@@ -7,18 +7,14 @@ import {
   mediaPartCount,
   type Account,
   type ApiErrorCode,
-  type GuildSummary,
-  type MeResponse,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { WS_TOKEN_PREFIX } from '@livechatsbcb/protocol';
 import { Directory } from './directory';
-import { AUTHORIZE_URL, exchangeLoginCode } from './discord';
-import { ACCOUNT_HEADER, Guild, channelPartyId } from './guild';
-import { Party } from './party';
+import { AUTHORIZE_URL, LOGIN_SCOPE, exchangeLoginCode } from './discord';
+import { Party, guildPartyId } from './party';
 import { sha256Base64Url } from './tokens';
 
-export { Directory, Guild, Party };
+export { Directory, Party };
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -41,7 +37,6 @@ const STATUS_BY_ERROR: Record<ApiErrorCode, number> = {
 
 const directoryOf = (env: Env) => env.DIRECTORY.get(env.DIRECTORY.idFromName('global'));
 const partyOf = (env: Env, partyId: string) => env.PARTY.get(env.PARTY.idFromName(partyId));
-const guildOf = (env: Env, guildId: string) => env.GUILD.get(env.GUILD.idFromName(guildId));
 const clientIp = (request: Request) => request.headers.get('cf-connecting-ip') ?? 'local';
 const bearerToken = (request: Request) => request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '';
 
@@ -70,8 +65,7 @@ const startLogin = async (request: Request, env: Env): Promise<Response> => {
   url.search = new URLSearchParams({
     response_type: 'code',
     client_id: env.DISCORD_CLIENT_ID,
-    // Who you are and nothing else: not your e-mail, your servers or your messages.
-    scope: 'identify',
+    scope: LOGIN_SCOPE,
     state: login.state,
     redirect_uri: redirectUriOf(request),
   }).toString();
@@ -112,10 +106,10 @@ const finishLogin = async (request: Request, env: Env): Promise<Response> => {
   const code = url.searchParams.get('code');
   if (!code) return backToApp({ error: 'denied' });
 
-  const account = await exchangeLoginCode(env, code, redirectUriOf(request));
-  if (!account) return backToApp({ error: 'discord' });
+  const exchanged = await exchangeLoginCode(env, code, redirectUriOf(request));
+  if (!exchanged) return backToApp({ error: 'discord' });
 
-  return backToApp({ ticket: await directoryOf(env).issueTicket(login.challenge, account) });
+  return backToApp({ ticket: await directoryOf(env).issueTicket(login.challenge, exchanged.account, exchanged.tokens) });
 };
 
 const redeemLogin = async (request: Request, env: Env): Promise<Response> => {
@@ -136,47 +130,24 @@ const me = async (request: Request, env: Env): Promise<Response> => {
   const known = await accountOf(request, env);
   if (!known) return fail('signed_out', 401);
 
-  const directory = directoryOf(env);
-  const [account, bot] = await Promise.all([directory.refreshAccount(known), directory.botGuilds()]);
-
-  // The bot says which servers exist, and each of them says whether this person is on it. Discord itself is never
-  // asked for the list of someone's servers.
-  const answers = await Promise.all(bot.guilds.map(({ id }) => guildOf(env, id).summary(id, known.id)));
-  const guilds: GuildSummary[] = answers.flatMap((answer) =>
-    answer.status === 'ok' ? [{ id: answer.id, name: answer.name, iconUrl: answer.iconUrl, locked: answer.locked }] : [],
-  );
-  const partial = !bot.complete || answers.some(({ status }) => status === 'unavailable');
-  return json({ account, guilds, partial } satisfies MeResponse);
+  const fresh = new URL(request.url).searchParams.has('fresh');
+  const overview = await directoryOf(env).overview(known.id, fresh);
+  return overview ? json(overview) : fail('signed_out', 401);
 };
 
-const openLobby = async (request: Request, env: Env, guildId: string): Promise<Response> => {
-  const offered = (request.headers.get('sec-websocket-protocol') ?? '').split(',').map((part) => part.trim());
-  const token = offered.find((part) => part.startsWith(WS_TOKEN_PREFIX))?.slice(WS_TOKEN_PREFIX.length) ?? '';
-  const account = await directoryOf(env).accountForToken(token);
-
-  const forwarded = new Request(request);
-  forwarded.headers.delete(ACCOUNT_HEADER);
-  if (account) forwarded.headers.set(ACCOUNT_HEADER, JSON.stringify(account));
-  return guildOf(env, guildId).fetch(forwarded);
-};
-
-const joinChannel = async (request: Request, env: Env, guildId: string, channelId: string): Promise<Response> => {
+// Everyone on a Discord server who has the app ends up in the same party.
+const joinGuild = async (request: Request, env: Env, guildId: string): Promise<Response> => {
   const account = await accountOf(request, env);
   if (!account) return fail('signed_out', 401);
 
-  const access = await guildOf(env, guildId).access(guildId, account.id, channelId);
+  const access = await directoryOf(env).guildAccess(account.id, guildId);
   if (!access.ok) return fail(access.error, STATUS_BY_ERROR[access.error]);
 
-  const partyId = channelPartyId(channelId);
-  const added = await partyOf(env, partyId).enterChannel(partyId, guildId, channelId, access.account);
+  const partyId = guildPartyId(guildId);
+  const added = await partyOf(env, partyId).enterGuild(partyId, guildId, account);
   if (!added.ok) return fail(added.error, STATUS_BY_ERROR[added.error]);
 
-  const session: SessionResponse = {
-    partyId,
-    code: null,
-    channel: { guildId, guildName: access.guildName, channelId, channelName: access.channelName },
-    ...added.member,
-  };
+  const session: SessionResponse = { partyId, code: null, guild: access.guild, ...added.member };
   return json(session);
 };
 
@@ -192,7 +163,7 @@ const createParty = async (request: Request, env: Env): Promise<Response> => {
   const added = await party.addMember(account);
   if (!added.ok) return fail(added.error, STATUS_BY_ERROR[added.error]);
 
-  const session: SessionResponse = { partyId: allocated.partyId, code: allocated.code, channel: null, ...added.member };
+  const session: SessionResponse = { partyId: allocated.partyId, code: allocated.code, guild: null, ...added.member };
   return json(session, 201);
 };
 
@@ -209,14 +180,14 @@ const joinParty = async (request: Request, env: Env): Promise<Response> => {
   const added = await partyOf(env, resolved.partyId).addMember(account);
   if (!added.ok) return fail(added.error, STATUS_BY_ERROR[added.error]);
 
-  const session: SessionResponse = { partyId: resolved.partyId, code: body.data.code, channel: null, ...added.member };
+  const session: SessionResponse = { partyId: resolved.partyId, code: body.data.code, guild: null, ...added.member };
   return json(session);
 };
 
 const rotateCode = async (request: Request, env: Env, partyId: string): Promise<Response> => {
   const party = partyOf(env, partyId);
   const currentCode = await party.codeForToken(bearerToken(request));
-  // A party tied to a Discord channel has no code to change.
+  // The party of a Discord server has no code to change.
   if (!currentCode) return fail('unauthorized', 401);
 
   const code = await directoryOf(env).rotate(partyId, currentCode);
@@ -340,11 +311,11 @@ const privacyPage = (): Response =>
     `<p>LiveChatSBCB est une app privée entre amis. Voici ce qu'elle garde quand tu te connectes avec Discord.</p>
 <ul>
 <li><strong>Gardé :</strong> ton identifiant Discord, ton pseudo et ta photo, pour t'afficher aux autres membres.</li>
+<li><strong>Gardé tant que tu es connecté :</strong> la liste de tes serveurs Discord (nom et image) et un jeton Discord chiffré, qui sert seulement à tenir cette liste à jour. Les autres membres ne voient que le serveur de la party où tu es.</li>
 <li><strong>Gardé 1 jour :</strong> les médias envoyés dans une party, puis ils sont effacés.</li>
-<li><strong>Jamais gardé :</strong> ton jeton Discord, ton e-mail, la liste de tes serveurs, tes messages.</li>
+<li><strong>Jamais demandé :</strong> ton e-mail, ton mot de passe, tes messages.</li>
 </ul>
-<p>Le bot lit seulement la liste des salons et les rôles des serveurs où il est installé. Il ne lit aucun message.</p>
-<p>Pour tout effacer, déconnecte-toi de l'app et retire son autorisation dans Discord (Paramètres, Applications autorisées).</p>`,
+<p>Te déconnecter de l'app efface le jeton et la liste. Tu peux aussi retirer son autorisation dans Discord (Paramètres, Applications autorisées).</p>`,
   );
 
 const UPDATE_MANIFEST = 'latest.yml';
@@ -395,15 +366,10 @@ export default {
     if (method === 'POST' && pathname === '/v1/parties') return createParty(request, env);
     if (method === 'POST' && pathname === '/v1/join') return joinParty(request, env);
 
-    const guildRoute = pathname.match(/^\/v1\/guilds\/(\d{17,20})\/(?:ws|channels\/(\d{17,20})\/join)$/);
-    if (guildRoute) {
-      const guildId = guildRoute[1]!;
-      const channelId = guildRoute[2];
-      if (method === 'GET' && !channelId) return openLobby(request, env, guildId);
-      if (method === 'POST' && channelId) return joinChannel(request, env, guildId, channelId);
-    }
+    const guildRoute = pathname.match(/^\/v1\/guilds\/(\d{17,20})\/join$/);
+    if (guildRoute && method === 'POST') return joinGuild(request, env, guildRoute[1]!);
 
-    const route = pathname.match(/^\/v1\/parties\/([0-9a-f-]{36}|c-\d{17,20})\/(ws|rotate-code|leave)$/);
+    const route = pathname.match(/^\/v1\/parties\/([0-9a-f-]{36}|g-\d{17,20})\/(ws|rotate-code|leave)$/);
     if (route) {
       const partyId = route[1]!;
       const action = route[2]!;
@@ -413,7 +379,7 @@ export default {
     }
 
     const media = pathname.match(
-      /^\/v1\/parties\/([0-9a-f-]{36}|c-\d{17,20})\/media(?:\/([0-9a-f-]{36})(?:\/(complete|parts\/(\d{1,4})))?)?$/,
+      /^\/v1\/parties\/([0-9a-f-]{36}|g-\d{17,20})\/media(?:\/([0-9a-f-]{36})(?:\/(complete|parts\/(\d{1,4})))?)?$/,
     );
     if (media) {
       const partyId = media[1]!;

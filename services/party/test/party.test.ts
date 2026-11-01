@@ -4,7 +4,6 @@ import {
   AuthRedeemResponseSchema,
   AuthStartResponseSchema,
   CloseCode,
-  LobbyMessageSchema,
   MeResponseSchema,
   MAX_MEDIA_BYTES,
   MAX_ONLINE_MEMBERS,
@@ -14,12 +13,12 @@ import {
   WS_SUBPROTOCOL,
   WS_TOKEN_PREFIX,
   type Account,
-  type LobbyMessage,
   type QueueItem,
   type ServerMessage,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { FAKE_DISCORD, FakeDiscord, hiddenFromEveryone, openedToRole } from './fake-discord';
+import { seal, sealingKey, unseal } from '../src/tokens';
+import { FakeDiscord } from './fake-discord';
 
 const BASE = 'http://127.0.0.1:8799';
 const QUICK_BASE = 'http://127.0.0.1:8798';
@@ -49,7 +48,7 @@ const authorizeInBrowser = async (userId: string, verifier: string, base = BASE,
   expect(started.status).toBe(200);
   const authorize = new URL(AuthStartResponseSchema.parse(await started.json()).url);
   expect(authorize.origin + authorize.pathname).toBe('https://discord.com/oauth2/authorize');
-  expect(authorize.searchParams.get('scope')).toBe('identify');
+  expect(authorize.searchParams.get('scope')).toBe('identify guilds');
 
   const callback = new URL(authorize.searchParams.get('redirect_uri')!);
   callback.search = new URLSearchParams({ code: discord.codeFor(userId), state: authorize.searchParams.get('state')! }).toString();
@@ -605,53 +604,17 @@ describe('party service', () => {
   });
 });
 
-class LobbySocket {
-  readonly messages: LobbyMessage[] = [];
-  closeCode: number | undefined;
-  private readonly socket: WebSocket;
-
-  constructor(guildId: string, token: string, base = QUICK_BASE, version = WS_SUBPROTOCOL) {
-    this.socket = new WebSocket(`${base.replace('http', 'ws')}/v1/guilds/${guildId}/ws`, [
-      version,
-      `${WS_TOKEN_PREFIX}${token}`,
-    ]);
-    this.socket.addEventListener('message', (event) => {
-      const message = LobbyMessageSchema.parse(JSON.parse(String(event.data)));
-      this.messages.push(message);
-      if (message.t === 'closing') this.closeCode = message.code;
-    });
-    this.socket.addEventListener('close', (event) => {
-      this.closeCode ??= event.code;
-    });
-  }
-
-  latest() {
-    const latest = this.messages.findLast((message) => message.t === 'lobby');
-    return latest?.t === 'lobby' ? latest : undefined;
-  }
-
-  channels() {
-    return this.latest()?.categories.flatMap((category) => category.channels) ?? [];
-  }
-
-  async until<T>(check: () => T | undefined | false, label: string): Promise<T> {
-    const deadline = Date.now() + 10_000;
-    for (;;) {
-      const value = check();
-      if (value) return value;
-      if (Date.now() > deadline) throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(this.messages.at(-1))}`);
-      await new Promise((done) => setTimeout(done, 50));
-    }
-  }
-
-  closed() {
-    return this.until(() => this.closeCode, 'close');
-  }
-
-  close() {
-    this.socket.close();
-  }
-}
+describe('sealing what Discord gives', () => {
+  it('reads back only with the same secret', async () => {
+    const key = await sealingKey('a secret');
+    const sealed = await seal(key, 'refresh-token-1');
+    expect(sealed).not.toContain('refresh-token-1');
+    expect(await seal(key, 'refresh-token-1')).not.toBe(sealed);
+    expect(await unseal(key, sealed)).toBe('refresh-token-1');
+    expect(await unseal(await sealingKey('another secret'), sealed)).toBeNull();
+    expect(await unseal(key, 'not even close')).toBeNull();
+  });
+});
 
 describe('logging in with Discord', () => {
   it('gives the app its own session, with the name and picture from Discord', async () => {
@@ -745,406 +708,294 @@ describe('logging in with Discord', () => {
   });
 });
 
-describe('Discord servers and channels', () => {
-  // Rebuilt for every test: a server, its owner, and a member holding the role that opens the app.
-  let ownerId: string;
+describe('Discord servers', () => {
+  // Rebuilt for every test: a server, with one person on it.
   let guildId: string;
-  let roleId: string;
-  let generalId: string;
   let friendId: string;
 
-  const me = async (token: string) => {
-    const response = await fetch(`${QUICK_BASE}/v1/me`, { headers: bearer(token) });
+  const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+  // What this service remembers from Discord lasts a second here, so this is long enough for it to ask again.
+  const listExpiry = () => pause(1_100);
+
+  const me = async (token: string, base = QUICK_BASE) => {
+    const response = await fetch(`${base}/v1/me`, { headers: bearer(token) });
     expect(response.status).toBe(200);
     return MeResponseSchema.parse(await response.json());
   };
 
-  const joinChannel = (token: string, channelId: string, guild = guildId) =>
-    post(`/v1/guilds/${guild}/channels/${channelId}/join`, {}, bearer(token), QUICK_BASE);
+  const joinGuild = (token: string, guild = guildId) => post(`/v1/guilds/${guild}/join`, {}, bearer(token), QUICK_BASE);
 
-  const enter = async (token: string, channelId: string): Promise<SessionResponse> => {
-    const response = await joinChannel(token, channelId);
+  const enter = async (token: string, guild = guildId): Promise<SessionResponse> => {
+    const response = await joinGuild(token, guild);
     expect(response.status).toBe(200);
     return SessionResponseSchema.parse(await response.json());
   };
 
   const partySocket = (session: SessionResponse) => new TestSocket(session, WS_SUBPROTOCOL, QUICK_BASE);
 
+  const callsTo = (path: string) => discord.calls.filter((call) => call === path).length;
+
   beforeEach(() => {
     discord.down = false;
-    ownerId = discord.addUser('Chef');
-    guildId = discord.addGuild('Notre serveur', ownerId);
-    roleId = discord.addRole(guildId, 'LiveChat');
-    generalId = discord.addChannel(guildId, { name: 'general' });
+    discord.tokenLifetime = 604_800;
+    guildId = discord.addGuild('Notre serveur');
     friendId = discord.addUser('Pote');
-    discord.addMember(guildId, friendId, { roles: [roleId] });
+    discord.addMember(guildId, friendId);
   });
 
-  it('lists a server only for its members, and says when the role is missing', async () => {
-    const stranger = await loginNew('Inconnu', QUICK_BASE);
-    await new Promise((done) => setTimeout(done, 1_100));
-    expect((await me(stranger.token)).guilds.find(({ id }) => id === guildId)).toBeUndefined();
+  it('lists all the servers of the person, and nobody else\'s', async () => {
+    const other = discord.addGuild('Autre serveur');
+    discord.addMember(other, friendId);
 
     const friend = await loginAs(friendId, QUICK_BASE);
-    expect((await me(friend.token)).guilds.find(({ id }) => id === guildId)).toMatchObject({
+    const { guilds, partial } = await me(friend.token);
+    expect(partial).toBe(false);
+    expect(guilds.map(({ id }) => id).sort()).toEqual([guildId, other].sort());
+    expect(guilds.find(({ id }) => id === guildId)).toEqual({
+      id: guildId,
       name: 'Notre serveur',
-      locked: false,
-      iconUrl: `https://cdn.discordapp.com/icons/${guildId}/icon${guildId}.png?size=64`,
+      iconUrl: `https://cdn.discordapp.com/icons/${guildId}/icon${guildId}.png?size=128`,
     });
 
-    const withoutRole = discord.addUser('SansRole');
-    discord.addMember(guildId, withoutRole);
-    const locked = await loginAs(withoutRole, QUICK_BASE);
-    expect((await me(locked.token)).guilds.find(({ id }) => id === guildId)?.locked).toBe(true);
-
-    const owner = await loginAs(ownerId, QUICK_BASE);
-    expect((await me(owner.token)).guilds.find(({ id }) => id === guildId)?.locked).toBe(false);
+    const stranger = await loginNew('Inconnu', QUICK_BASE);
+    expect((await me(stranger.token)).guilds).toEqual([]);
   });
 
-  it('needs no role on a server declared open', async () => {
-    const openGuild = discord.addGuild('Ouvert', ownerId, FAKE_DISCORD.openGuildId);
-    const channel = discord.addChannel(openGuild, { name: 'general' });
-    const memberId = discord.addUser('Membre');
-    discord.addMember(openGuild, memberId);
-    await new Promise((done) => setTimeout(done, 1_100));
-
-    const { token } = await loginAs(memberId, QUICK_BASE);
-    expect((await me(token)).guilds.find(({ id }) => id === openGuild)?.locked).toBe(false);
-    expect((await joinChannel(token, channel, openGuild)).status).toBe(200);
-    discord.removeGuild(openGuild);
-  });
-
-  it('opens the party of a channel, under the name and picture of the server', async () => {
-    discord.addMember(guildId, friendId, { roles: [roleId], nick: 'Le Pote', avatar: 'surnom' });
+  it('never gives the Discord token to the app', async () => {
     const friend = await loginAs(friendId, QUICK_BASE);
-    const session = await enter(friend.token, generalId);
-    expect(session).toMatchObject({
-      partyId: `c-${generalId}`,
-      code: null,
-      memberId: friendId,
-      channel: { guildId, guildName: 'Notre serveur', channelId: generalId, channelName: 'general' },
-    });
-
-    const socket = partySocket(session);
-    const welcome = await socket.welcome();
-    expect(welcome.code).toBeNull();
-    expect(welcome.members).toEqual([
-      {
-        id: friendId,
-        name: 'Le Pote',
-        online: true,
-        avatarUrl: `https://cdn.discordapp.com/guilds/${guildId}/users/${friendId}/avatars/surnom.png?size=128`,
-      },
-    ]);
-    socket.close();
+    expect(JSON.stringify(friend)).not.toMatch(/access-|refresh-/);
+    expect(JSON.stringify(await me(friend.token))).not.toMatch(/access-|refresh-/);
   });
 
-  it('puts two members of a channel in the same party, and media reaches them both', async () => {
-    const owner = await loginAs(ownerId, QUICK_BASE);
+  it('puts everyone from a server in the same party, and media reaches them all', async () => {
     const friend = await loginAs(friendId, QUICK_BASE);
-    const [forOwner, forFriend] = [await enter(owner.token, generalId), await enter(friend.token, generalId)];
-    expect(forFriend.partyId).toBe(forOwner.partyId);
+    const otherId = discord.addUser('Autre');
+    discord.addMember(guildId, otherId);
+    const other = await loginAs(otherId, QUICK_BASE);
 
-    const ownerSocket = partySocket(forOwner);
-    const friendSocket = partySocket(forFriend);
-    await ownerSocket.welcome();
-    await friendSocket.welcome();
-    await ownerSocket.sawOnline(2);
+    const first = await enter(friend.token);
+    const second = await enter(other.token);
+    expect(first.partyId).toBe(`g-${guildId}`);
+    expect(second.partyId).toBe(first.partyId);
+    expect(first.code).toBeNull();
+    expect(first.guild?.name).toBe('Notre serveur');
+
+    const firstSocket = partySocket(first);
+    const secondSocket = partySocket(second);
+    await firstSocket.welcome();
+    await secondSocket.welcome();
+    await firstSocket.sawOnline(2);
 
     const sent = await post(
-      `/v1/parties/${forOwner.partyId}/media`,
+      `/v1/parties/${first.partyId}/media`,
       { caption: 'Salut', clipStartMs: 0, durationMs: 1_000, file: null },
-      authorized(forOwner),
+      authorized(first),
       QUICK_BASE,
     );
     expect(sent.status).toBe(201);
-    const [playing] = await friendSocket.queueWhere((queue) => queue[0]?.startAt != null, 'start');
-    expect(playing).toMatchObject({
-      caption: 'Salut',
-      senderName: 'Chef',
-      senderAvatarUrl: `https://cdn.discordapp.com/avatars/${ownerId}/hash${ownerId}.png?size=128`,
-    });
-    ownerSocket.close();
-    friendSocket.close();
+    await secondSocket.queueWhere(
+      (queue) => queue.some(({ caption, senderName }) => caption === 'Salut' && senderName === 'Pote'),
+      'the text',
+    );
+
+    // The queue keeps moving on the same alarm as the checks on who is still on the server.
+    await firstSocket.queueWhere((queue) => queue.length === 0, 'the end of the text');
+    expect(firstSocket.closeCode).toBeUndefined();
+
+    firstSocket.close();
+    secondSocket.close();
   });
 
-  it('shows only who is connected in a channel, not who came before', async () => {
-    const owner = await loginAs(ownerId, QUICK_BASE);
+  it('shows only who is connected, not who came before', async () => {
     const friend = await loginAs(friendId, QUICK_BASE);
-    const ownerSocket = partySocket(await enter(owner.token, generalId));
-    const friendSocket = partySocket(await enter(friend.token, generalId));
-    await ownerSocket.welcome();
-    await friendSocket.welcome();
-    await ownerSocket.sawOnline(2);
+    const otherId = discord.addUser('Autre');
+    discord.addMember(guildId, otherId);
+    const other = await loginAs(otherId, QUICK_BASE);
 
-    friendSocket.close();
-    await ownerSocket.until(() => (ownerSocket.latestMembers().length === 1 ? true : undefined), 'departure');
-    expect(ownerSocket.latestMembers().map(({ id }) => id)).toEqual([ownerId]);
-    ownerSocket.close();
+    const firstSocket = partySocket(await enter(friend.token));
+    await firstSocket.welcome();
+    const secondSocket = partySocket(await enter(other.token));
+    await secondSocket.welcome();
+    await firstSocket.sawOnline(2);
+
+    secondSocket.close();
+    await firstSocket.sawOnline(1);
+    expect(firstSocket.latestMembers()?.[0]?.id).toBe(friendId);
+    firstSocket.close();
   });
 
   it('opens again after everyone has left', async () => {
-    const owner = await loginAs(ownerId, QUICK_BASE);
-    const first = await enter(owner.token, generalId);
-    const leaving = partySocket(first);
-    await leaving.welcome();
+    const friend = await loginAs(friendId, QUICK_BASE);
+    const first = await enter(friend.token);
     expect((await post(`/v1/parties/${first.partyId}/leave`, {}, authorized(first), QUICK_BASE)).status).toBe(204);
-    expect(await leaving.closed()).toBe(CloseCode.Removed);
 
-    const again = partySocket(await enter(owner.token, generalId));
-    const welcome = await again.welcome();
-    expect(welcome.members.map(({ id }) => id)).toEqual([ownerId]);
-    again.close();
+    const again = await enter(friend.token);
+    const socket = partySocket(again);
+    expect(await socket.welcome()).toMatchObject({ memberId: friendId });
+    socket.close();
   });
 
-  it('has no code to change in a channel', async () => {
-    const owner = await loginAs(ownerId, QUICK_BASE);
-    const session = await enter(owner.token, generalId);
-    const response = await post(`/v1/parties/${session.partyId}/rotate-code`, {}, authorized(session), QUICK_BASE);
-    expect(response.status).toBe(401);
+  it('has no code to change', async () => {
+    const friend = await loginAs(friendId, QUICK_BASE);
+    const session = await enter(friend.token);
+    expect((await post(`/v1/parties/${session.partyId}/rotate-code`, {}, authorized(session), QUICK_BASE)).status).toBe(401);
   });
 
-  it('refuses a channel to anyone without access', async () => {
-    const hidden = discord.addChannel(guildId, { name: 'secret', permission_overwrites: [hiddenFromEveryone(guildId)] });
-    const voiceOnly = discord.addChannel(guildId, { name: 'staff', permission_overwrites: [hiddenFromEveryone(guildId)] });
-    const withoutRole = discord.addUser('SansRole');
-    discord.addMember(guildId, withoutRole);
+  it('refuses a server the person is not on', async () => {
     const stranger = await loginNew('Inconnu', QUICK_BASE);
-    const friend = await loginAs(friendId, QUICK_BASE);
-    const locked = await loginAs(withoutRole, QUICK_BASE);
+    const response = await joinGuild(stranger.token);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: 'forbidden' });
 
-    expect((await joinChannel(stranger.token, generalId)).status).toBe(403);
-    expect((await joinChannel(locked.token, generalId)).status).toBe(403);
-    expect((await joinChannel(friend.token, hidden)).status).toBe(403);
-    expect((await joinChannel(friend.token, voiceOnly)).status).toBe(403);
-    // A channel that doesn't exist looks exactly like a hidden one.
-    expect((await joinChannel(friend.token, discord.newId())).status).toBe(403);
-    expect((await joinChannel('wrong', generalId)).status).toBe(401);
-
-    // A channel of this server can't be reached through another server.
-    const other = discord.addGuild('Autre', friendId);
-    expect((await joinChannel(friend.token, generalId, other)).status).toBe(403);
-    discord.removeGuild(other);
-
-    const owner = await loginAs(ownerId, QUICK_BASE);
-    expect((await joinChannel(owner.token, hidden)).status).toBe(200);
+    expect((await post(`/v1/guilds/${guildId}/join`, {}, {}, QUICK_BASE)).status).toBe(401);
   });
 
-  it('shows channels in order, and who is where to those allowed to know', async () => {
-    const privateRole = discord.addRole(guildId, 'Secret');
-    const category = discord.addChannel(guildId, { name: 'Jeux', type: 4, position: 1 });
-    const voice = discord.addChannel(guildId, { name: 'vocal', type: 2, position: 0, parent_id: category });
-    const text = discord.addChannel(guildId, { name: 'clips', position: 5, parent_id: category });
-    const secret = discord.addChannel(guildId, {
-      name: 'secret',
-      parent_id: category,
-      permission_overwrites: [hiddenFromEveryone(guildId), openedToRole(privateRole)],
-    });
-    const insiderId = discord.addUser('Initie');
-    discord.addMember(guildId, insiderId, { roles: [roleId, privateRole] });
-
-    const [friend, insider] = [await loginAs(friendId, QUICK_BASE), await loginAs(insiderId, QUICK_BASE)];
-    const forFriend = new LobbySocket(guildId, friend.token);
-    const forInsider = new LobbySocket(guildId, insider.token);
-    await forInsider.until(() => forInsider.latest()?.online.length === 2, 'both on the server');
-    await forFriend.until(() => forFriend.latest()?.online.length === 2, 'both on the server');
-
-    expect(forFriend.latest()!.guild.name).toBe('Notre serveur');
-    expect(forFriend.latest()!.categories.map(({ name, channels }) => [name, channels.map((channel) => channel.name)])).toEqual([
-      ['', ['general']],
-      ['Jeux', ['clips', 'vocal']],
-    ]);
-    expect(forInsider.channels().map(({ name }) => name)).toEqual(['general', 'secret', 'clips', 'vocal']);
-    expect(forFriend.latest()!.online.map(({ id }) => id).sort()).toEqual([friendId, insiderId].sort());
-    expect(forFriend.channels().find(({ id }) => id === voice)?.kind).toBe('voice');
-    expect(forFriend.channels().find(({ id }) => id === text)?.kind).toBe('text');
-
-    const inSecret = partySocket(await enter(insider.token, secret));
-    await inSecret.welcome();
-    const inGeneral = partySocket(await enter(friend.token, generalId));
-    await inGeneral.welcome();
-
-    await forInsider.until(
-      () => forInsider.channels().find(({ id }) => id === secret)?.occupants[0]?.id === insiderId,
-      'occupant of the secret channel',
-    );
-    await forInsider.until(
-      () => forInsider.channels().find(({ id }) => id === generalId)?.occupants[0]?.id === friendId,
-      'occupant of the general channel',
-    );
-    // The heart of it: someone outside a private channel must not learn who is inside.
-    await forFriend.until(
-      () => forFriend.channels().find(({ id }) => id === generalId)?.occupants[0]?.id === friendId,
-      'occupant seen by the friend',
-    );
-    const seenByFriend = JSON.stringify(forFriend.messages.filter((message) => message.t === 'lobby'));
-    expect(seenByFriend).not.toContain(secret);
-    expect(seenByFriend).not.toContain('"secret"');
-
-    inGeneral.close();
-    await forInsider.until(
-      () => forInsider.channels().find(({ id }) => id === generalId)?.occupants.length === 0,
-      'departure seen',
-    );
-    inSecret.close();
-    forFriend.close();
-    await forInsider.until(() => forInsider.latest()?.online.length === 1, 'friend gone from the server');
-    forInsider.close();
-  });
-
-  it('refuses the lobby to those without access, and to a client out of date', async () => {
-    const withoutRole = discord.addUser('SansRole');
-    discord.addMember(guildId, withoutRole);
-    const locked = await loginAs(withoutRole, QUICK_BASE);
-    const stranger = await loginNew('Inconnu', QUICK_BASE);
+  it('notices someone leaving the server, and takes them out of its party', async () => {
     const friend = await loginAs(friendId, QUICK_BASE);
+    const stayingId = discord.addUser('Reste');
+    discord.addMember(guildId, stayingId);
+    const staying = await loginAs(stayingId, QUICK_BASE);
 
-    const sockets = [
-      new LobbySocket(guildId, locked.token),
-      new LobbySocket(guildId, stranger.token),
-      new LobbySocket(guildId, 'wrong'),
-      new LobbySocket(guildId, friend.token, QUICK_BASE, 'livechatsbcb.v0'),
-    ];
-    expect(await sockets[0]!.closed()).toBe(CloseCode.Removed);
-    expect(await sockets[1]!.closed()).toBe(CloseCode.Removed);
-    expect(await sockets[2]!.closed()).toBe(CloseCode.SignedOut);
-    expect(await sockets[3]!.closed()).toBe(CloseCode.UpdateRequired);
-  });
-
-  it('notices a kick: out of the lobby and out of the party', async () => {
-    const friend = await loginAs(friendId, QUICK_BASE);
-    const lobby = new LobbySocket(guildId, friend.token);
-    await lobby.until(() => lobby.latest(), 'lobby');
-    const party = partySocket(await enter(friend.token, generalId));
-    await party.welcome();
+    const leavingSocket = partySocket(await enter(friend.token));
+    await leavingSocket.welcome();
+    const stayingSocket = partySocket(await enter(staying.token));
+    await stayingSocket.welcome();
 
     discord.removeMember(guildId, friendId);
-
-    expect(await lobby.closed()).toBe(CloseCode.Removed);
-    expect(await party.closed()).toBe(CloseCode.Removed);
-    expect((await joinChannel(friend.token, generalId)).status).toBe(403);
+    expect(await leavingSocket.closed()).toBe(CloseCode.Removed);
+    await stayingSocket.sawOnline(1);
+    expect(stayingSocket.closeCode).toBeUndefined();
+    stayingSocket.close();
   });
 
-  it('notices a lost role', async () => {
+  it('refuses someone who left the server while away, when they come back', async () => {
     const friend = await loginAs(friendId, QUICK_BASE);
-    const party = partySocket(await enter(friend.token, generalId));
-    await party.welcome();
-    const lobby = new LobbySocket(guildId, friend.token);
-    await lobby.until(() => lobby.latest(), 'lobby');
-
-    discord.setRoles(guildId, friendId, []);
-
-    expect(await party.closed()).toBe(CloseCode.Removed);
-    expect(await lobby.closed()).toBe(CloseCode.Removed);
-  });
-
-  it('takes someone out of a channel closed to them, without closing the server to them', async () => {
-    const friend = await loginAs(friendId, QUICK_BASE);
-    const party = partySocket(await enter(friend.token, generalId));
-    await party.welcome();
-    const lobby = new LobbySocket(guildId, friend.token);
-    await lobby.until(() => lobby.channels().length === 1, 'the channel');
-
-    discord.setOverwrites(guildId, generalId, [hiddenFromEveryone(guildId)]);
-
-    expect(await party.closed()).toBe(CloseCode.Removed);
-    await lobby.until(() => lobby.channels().length === 0, 'the channel gone from the list');
-    expect(lobby.closeCode).toBeUndefined();
-    lobby.close();
-  });
-
-  it('shows a renamed channel without anyone asking', async () => {
-    const friend = await loginAs(friendId, QUICK_BASE);
-    const lobby = new LobbySocket(guildId, friend.token);
-    await lobby.until(() => lobby.channels()[0]?.name === 'general', 'the channel');
-
-    discord.renameChannel(guildId, generalId, 'renomme');
-
-    await lobby.until(() => lobby.channels()[0]?.name === 'renomme', 'the new name');
-    lobby.close();
-  });
-
-  it('refuses someone who lost access while away, when they come back', async () => {
-    const friend = await loginAs(friendId, QUICK_BASE);
-    const session = await enter(friend.token, generalId);
+    const session = await enter(friend.token);
+    const socket = partySocket(session);
+    await socket.welcome();
+    socket.close();
 
     discord.removeMember(guildId, friendId);
-    await new Promise((done) => setTimeout(done, 1_100));
+    await listExpiry();
 
-    const sent = await post(
-      `/v1/parties/${session.partyId}/media`,
-      { caption: 'Toujours la', clipStartMs: 0, durationMs: 1_000, file: null },
-      authorized(session),
-      QUICK_BASE,
-    );
-    expect(sent.status).toBe(401);
     const back = partySocket(session);
-    expect(await back.closed()).toBe(CloseCode.Unauthorized);
+    expect(await back.closed()).toBe(CloseCode.Removed);
   });
 
-  it('keeps everyone in when Discord goes down, and only those it knows may enter', async () => {
+  it('sees a new server soon after the person joins it', async () => {
     const friend = await loginAs(friendId, QUICK_BASE);
-    const lobby = new LobbySocket(guildId, friend.token);
-    await lobby.until(() => lobby.latest(), 'lobby');
-    const party = partySocket(await enter(friend.token, generalId));
-    await party.welcome();
+    await me(friend.token);
 
-    const newcomerId = discord.addUser('Nouveau');
-    discord.addMember(guildId, newcomerId, { roles: [roleId] });
-    const newcomer = await loginAs(newcomerId, QUICK_BASE);
+    const newGuild = discord.addGuild('Tout neuf');
+    discord.addMember(newGuild, friendId);
+    await listExpiry();
+    expect((await me(friend.token)).guilds.map(({ id }) => id)).toContain(newGuild);
+    await enter(friend.token, newGuild);
+  });
+
+  it('keeps people in when Discord goes down, and lets them enter the servers it last confirmed', async () => {
+    const friend = await loginAs(friendId, QUICK_BASE);
+    const session = await enter(friend.token);
+    const socket = partySocket(session);
+    await socket.welcome();
+    const neverAsked = await loginNew('Nouveau', QUICK_BASE);
 
     discord.down = true;
-    await new Promise((done) => setTimeout(done, 2_500));
-    expect(lobby.closeCode).toBeUndefined();
-    expect(party.closeCode).toBeUndefined();
+    await pause(2_500);
+    expect(socket.closeCode).toBeUndefined();
 
-    // Known to the service: still allowed.
-    expect((await joinChannel(friend.token, generalId)).status).toBe(200);
-    const answered = await fetch(`${QUICK_BASE}/v1/me`, { headers: bearer(friend.token) });
-    expect(answered.status).toBe(200);
+    const during = await me(friend.token);
+    expect(during.partial).toBe(true);
+    expect(during.guilds.map(({ id }) => id)).toContain(guildId);
+    expect((await joinGuild(friend.token)).status).toBe(200);
 
-    // Never seen on this server: nothing can be said about them yet.
-    const refused = await joinChannel(newcomer.token, generalId);
-    expect(refused.status).toBe(503);
-    expect(await refused.json()).toEqual({ error: 'discord_unavailable' });
+    // Nobody has ever heard from Discord about this one.
+    const unknown = await joinGuild(neverAsked.token);
+    expect(unknown.status).toBe(503);
+    expect(await unknown.json()).toEqual({ error: 'discord_unavailable' });
+    expect(await me(neverAsked.token)).toMatchObject({ guilds: [], partial: true });
 
     discord.down = false;
-    expect((await joinChannel(newcomer.token, generalId)).status).toBe(200);
-    lobby.close();
+    socket.close();
   });
 
-  it('sees a server go when the bot is removed from it', async () => {
+  it('renews a Discord token that runs out, without anyone noticing', async () => {
     const friend = await loginAs(friendId, QUICK_BASE);
-    const lobby = new LobbySocket(guildId, friend.token);
-    await lobby.until(() => lobby.latest(), 'lobby');
+    await me(friend.token);
 
-    discord.removeGuild(guildId);
-
-    expect(await lobby.closed()).toBe(CloseCode.Removed);
-    await new Promise((done) => setTimeout(done, 1_100));
-    expect((await me(friend.token)).guilds.find(({ id }) => id === guildId)).toBeUndefined();
+    const before = callsTo('POST /api/oauth2/token');
+    discord.expireAccessTokens(friendId);
+    await listExpiry();
+    expect((await me(friend.token)).guilds.map(({ id }) => id)).toContain(guildId);
+    expect(callsTo('POST /api/oauth2/token')).toBe(before + 1);
   });
 
-  it('says who is on a second PC: same account, same member, and the old connection steps aside', async () => {
-    const [first, second] = [await loginAs(friendId, QUICK_BASE), await loginAs(friendId, QUICK_BASE)];
-    const firstSocket = partySocket(await enter(first.token, generalId));
-    await firstSocket.welcome();
-    const secondSocket = partySocket(await enter(second.token, generalId));
-    await secondSocket.welcome();
+  it('renews ahead of time, and only once when many ask together', async () => {
+    discord.tokenLifetime = 60;
+    const friend = await loginAs(friendId, QUICK_BASE);
+    discord.tokenLifetime = 604_800;
 
-    expect(await firstSocket.closed()).toBe(CloseCode.Replaced);
-    await secondSocket.sawOnline(1);
-    expect(secondSocket.latestMembers().map(({ id }) => id)).toEqual([friendId]);
-    secondSocket.close();
+    const before = callsTo('POST /api/oauth2/token');
+    const answers = await Promise.all(Array.from({ length: 5 }, () => me(friend.token)));
+    expect(answers.every(({ guilds }) => guilds.some(({ id }) => id === guildId))).toBe(true);
+    expect(callsTo('POST /api/oauth2/token')).toBe(before + 1);
+  });
+
+  it('logs the person out when they remove the app in Discord, and takes them out of the party', async () => {
+    const friend = await loginAs(friendId, QUICK_BASE);
+    const socket = partySocket(await enter(friend.token));
+    await socket.welcome();
+
+    discord.removeAuthorization(friendId);
+    expect(await socket.closed()).toBe(CloseCode.Removed);
+
+    const response = await fetch(`${QUICK_BASE}/v1/me`, { headers: bearer(friend.token) });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'signed_out' });
+  });
+
+  it('gives back the Discord token when the last session ends, and only then', async () => {
+    const onePc = await loginAs(friendId, QUICK_BASE);
+    const otherPc = await loginAs(friendId, QUICK_BASE);
+
+    const before = callsTo('POST /api/oauth2/token/revoke');
+    expect((await post('/v1/auth/logout', {}, bearer(onePc.token), QUICK_BASE)).status).toBe(204);
+    expect(callsTo('POST /api/oauth2/token/revoke')).toBe(before);
+    expect((await me(otherPc.token)).account.id).toBe(friendId);
+
+    expect((await post('/v1/auth/logout', {}, bearer(otherPc.token), QUICK_BASE)).status).toBe(204);
+    expect(callsTo('POST /api/oauth2/token/revoke')).toBe(before + 1);
+    expect((await fetch(`${QUICK_BASE}/v1/me`, { headers: bearer(otherPc.token) })).status).toBe(401);
+  });
+
+  it('treats a second PC as the same member, and the old connection steps aside', async () => {
+    const onePc = await loginAs(friendId, QUICK_BASE);
+    const otherPc = await loginAs(friendId, QUICK_BASE);
+
+    const oldSocket = partySocket(await enter(onePc.token));
+    await oldSocket.welcome();
+    const newSession = await enter(otherPc.token);
+    expect(newSession.memberId).toBe(friendId);
+
+    const newSocket = partySocket(newSession);
+    await newSocket.welcome();
+    expect(await oldSocket.closed()).toBe(CloseCode.Replaced);
+    expect(newSocket.latestMembers()).toHaveLength(1);
+    newSocket.close();
   });
 
   it('does not ask Discord again and again for the same thing', async () => {
     const friend = await loginAs(friendId);
-    await post(`/v1/guilds/${guildId}/channels/${generalId}/join`, {}, bearer(friend.token));
-    const before = discord.calls.length;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      await post(`/v1/guilds/${guildId}/channels/${generalId}/join`, {}, bearer(friend.token));
-    }
-    expect(discord.calls.length).toBe(before);
+    const before = callsTo('GET /api/users/@me/guilds');
+    await me(friend.token, BASE);
+    await me(friend.token, BASE);
+    await post(`/v1/guilds/${guildId}/join`, {}, bearer(friend.token));
+    expect(callsTo('GET /api/users/@me/guilds')).toBe(before + 1);
+
+    // Asking for the latest list isn't a way around that either, right after getting it.
+    const fresh = await fetch(`${BASE}/v1/me?fresh=1`, { headers: bearer(friend.token) });
+    expect(fresh.status).toBe(200);
+    expect(callsTo('GET /api/users/@me/guilds')).toBe(before + 1);
   });
 });

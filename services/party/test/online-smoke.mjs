@@ -3,8 +3,6 @@
 const base = process.argv[2];
 if (!base) throw new Error('Pass the service URL');
 
-const SUBPROTOCOL = 'livechatsbcb.v3';
-const SIGNED_OUT = 4006;
 
 let failures = 0;
 const check = (label, passed, detail = '') => {
@@ -27,6 +25,7 @@ check('service reachable', health.ok);
 
 check('no party without an account', (await post('/v1/parties', {})).status === 401);
 check('no joining without an account', (await post('/v1/join', { code: 'ZZZZZZ' })).status === 401);
+check('no server party without an account', (await post('/v1/guilds/100000000000000000/join', {})).status === 401);
 check('no servers without an account', (await fetch(`${base}/v1/me`)).status === 401);
 
 const started = await post('/v1/auth/start', { challenge: 'a'.repeat(43), port: 49152 });
@@ -34,22 +33,11 @@ check('login can start', started.status === 200, `status ${started.status}`);
 if (started.status === 200) {
   const url = new URL(started.body.url);
   check('login goes to Discord', url.origin + url.pathname === 'https://discord.com/oauth2/authorize');
-  check('login only asks who you are', url.searchParams.get('scope') === 'identify');
+  check('login asks only who you are and your servers', url.searchParams.get('scope') === 'identify guilds');
   check('login names the app', /^\d{17,20}$/.test(url.searchParams.get('client_id') ?? ''));
   check('login comes back here', url.searchParams.get('redirect_uri') === `${base}/v1/auth/callback`);
 }
 check('login refuses a bad request', (await post('/v1/auth/start', { challenge: 'x', port: 1 })).status === 400);
-
-const closeCode = await new Promise((done) => {
-  const socket = new WebSocket(`${base.replace(/^http/, 'ws')}/v1/guilds/100000000000000000/ws`, [
-    SUBPROTOCOL,
-    'token.nobody',
-  ]);
-  socket.addEventListener('close', (event) => done(event.code));
-  socket.addEventListener('error', () => {});
-  setTimeout(() => done(null), 15_000);
-});
-check('server list refused without an account', closeCode === SIGNED_OUT, `code ${closeCode}`);
 
 const download = await fetch(`${base}/download`, { redirect: 'manual' });
 check('download link answers', download.status < 400, `status ${download.status}`);

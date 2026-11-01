@@ -2,12 +2,21 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node
 import { dirname, join } from 'node:path';
 import { app, safeStorage } from 'electron';
 import { z } from 'zod';
-import { AuthRedeemResponseSchema, SessionResponseSchema, type AuthRedeemResponse, type SessionResponse } from '@livechatsbcb/protocol';
+import {
+  AuthRedeemResponseSchema,
+  GuildSummarySchema,
+  SessionResponseSchema,
+  type AuthRedeemResponse,
+  type GuildSummary,
+  type SessionResponse,
+} from '@livechatsbcb/protocol';
 
 const StoredDataSchema = z.object({
   login: AuthRedeemResponseSchema.nullable().default(null),
-  guildId: z.string().nullable().default(null),
+  addedGuilds: z.array(GuildSummarySchema).default([]),
+  lastGuildId: z.string().nullable().default(null),
   session: SessionResponseSchema.nullable().default(null),
+  privateSession: SessionResponseSchema.nullable().default(null),
 });
 type StoredData = z.infer<typeof StoredDataSchema>;
 
@@ -34,8 +43,16 @@ export class SessionStore {
     return this.data.login;
   }
 
-  get guildId(): string | null {
-    return this.data.guildId;
+  get addedGuilds(): GuildSummary[] {
+    return this.data.addedGuilds;
+  }
+
+  get lastGuildId(): string | null {
+    return this.data.lastGuildId;
+  }
+
+  get privateSession(): SessionResponse | null {
+    return this.data.privateSession;
   }
 
   get session(): SessionResponse | null {
@@ -48,7 +65,7 @@ export class SessionStore {
   }
 
   private load(): StoredData {
-    const nothing = { login: null, guildId: null, session: null };
+    const nothing = { login: null, addedGuilds: [], lastGuildId: null, session: null, privateSession: null };
     try {
       const stored = StoredDataSchema.parse(decode(readFileSync(dataPath())));
       // A party needs an account, so what an older version saved doesn't count.

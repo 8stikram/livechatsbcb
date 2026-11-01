@@ -36,26 +36,21 @@ L'adresse du service est intégrée à l'app au moment de la construction :
 
 ## Connexion Discord
 
-La connexion avec Discord est obligatoire : le pseudo et la photo viennent de là. Elle se fait dans le navigateur, et l'app ne voit jamais le mot de passe. Le service demande seulement `identify` à Discord, utilise le jeton de Discord une fois pour savoir qui se connecte, puis l'oublie.
+La connexion avec Discord est obligatoire : le pseudo et la photo viennent de là. Elle se fait dans le navigateur, et l'app ne voit jamais le mot de passe. Le service demande à Discord `identify` et `guilds`, c'est-à-dire le compte et la liste de ses serveurs, et rien d'autre : ni les messages, ni les salons, ni les membres. Il n'y a pas de bot, et rien à installer sur les serveurs.
 
-Sur l'accueil, l'app montre les salons du serveur dans l'ordre de Discord, avec les personnes présentes dans chacun. Cliquer sur un salon entre dans sa party, et on n'y voit que les salons qu'on peut voir sur Discord. Quelqu'un qui perd l'accès à un salon, ou qui quitte le serveur, en sort sous 5 minutes.
+Pour savoir qui est encore sur quel serveur, le service garde le jeton Discord de chaque compte, chiffré. Il le rend à Discord à la dernière déconnexion du compte.
 
-Un bot sans présence en ligne lit les salons, les rôles et les membres du serveur. Il n'a besoin que de la permission « Voir les salons » :
+À la première connexion, l'app demande avec quels serveurs l'utiliser : on clique sur leurs photos, avec une barre de recherche. Ces serveurs restent en ronds sur le côté, avec un rond « + » pour en ajouter ou en retirer. Chaque serveur a une seule party, ouverte à tous ses membres qui ont l'app, et cliquer sur un rond y entre en quittant la précédente. Quelqu'un qui quitte le serveur en sort sous 5 minutes.
 
-- il faut qu'il voie un salon pour que ce salon apparaisse dans l'app ;
-- sur Discord il paraît hors ligne, c'est normal ;
-- sur un serveur, il faut le rôle `LiveChat` pour accéder à l'app, sauf pour le propriétaire et les admins, ou si le serveur est listé dans `DISCORD_OPEN_GUILDS`.
+Une party privée avec un code à 6 caractères reste possible, depuis le coin « Party privée » de l'écran des serveurs. Elle garde son rond sur le côté tant qu'on ne la quitte pas.
 
-Une party privée avec un code à 6 caractères reste possible, séparée des salons.
+Si Discord ne répond plus, ceux qui sont déjà dans une party continuent, et les serveurs déjà connus restent accessibles 24 h.
 
-Si Discord ne répond plus, ceux qui sont déjà dans un salon continuent, et les serveurs déjà vérifiés restent accessibles 24 h.
+Pour mettre en service (le Client ID n'est pas secret, le Client Secret l'est et ne se colle nulle part ailleurs) :
 
-Pour mettre en service (le Client ID n'est pas secret, les deux autres valeurs le sont et ne se collent nulle part ailleurs) :
-
-1. mettre le Client ID dans `DISCORD_CLIENT_ID` de `services/party/wrangler.jsonc`, puis lancer `npx wrangler types` ;
-2. depuis `services/party`, lancer `npx wrangler secret put DISCORD_CLIENT_SECRET` puis `npx wrangler secret put DISCORD_BOT_TOKEN` ;
-3. dans le portail Discord, déclarer l'adresse de retour `https://livechatsbcb-party.livechatsbcb-party.workers.dev/v1/auth/callback` ;
-4. inviter le bot avec `https://discord.com/oauth2/authorize?client_id=<CLIENT_ID>&scope=bot&permissions=1024`.
+1. dans le portail Discord, déclarer l'adresse de retour `https://livechatsbcb-party.livechatsbcb-party.workers.dev/v1/auth/callback` ;
+2. mettre le Client ID dans `DISCORD_CLIENT_ID` de `services/party/wrangler.jsonc`, puis lancer `npx wrangler types` ;
+3. depuis `services/party`, lancer `npx wrangler secret put DISCORD_CLIENT_SECRET`.
 
 Les tests utilisent un faux Discord (`services/party/test/fake-discord.ts`), et rien de réel n'est contacté, à part les photos par défaut de Discord.
 

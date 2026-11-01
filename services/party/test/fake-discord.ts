@@ -6,50 +6,23 @@ export const FAKE_DISCORD = {
   url: 'http://127.0.0.1:8797/api',
   clientId: '100000000000000001',
   clientSecret: 'test-secret',
-  botToken: 'test-bot-token',
-  // A server whose members need no role, in the service started by the tests.
-  openGuildId: '100000000000000999',
 } as const;
 
-const PERMISSION = { none: '0', view: '1024', admin: '8' } as const;
-
-export type FakeOverwrite = { id: string; type: 0 | 1; allow: string; deny: string };
-export type FakeChannel = {
-  id: string;
-  type: number;
-  name: string;
-  position: number;
-  parent_id: string | null;
-  permission_overwrites: FakeOverwrite[];
-};
 type FakeUser = { id: string; username: string; global_name: string | null; avatar: string | null };
-type FakeMember = { roles: string[]; nick: string | null; avatar: string | null; pending: boolean };
-type FakeGuild = {
-  id: string;
-  name: string;
-  icon: string | null;
-  owner_id: string;
-  roles: Array<{ id: string; name: string; permissions: string }>;
-  channels: FakeChannel[];
-  members: Map<string, FakeMember>;
-};
-
-export const hiddenFromEveryone = (guildId: string): FakeOverwrite => ({
-  id: guildId,
-  type: 0,
-  allow: '0',
-  deny: PERMISSION.view,
-});
-
-export const openedToRole = (roleId: string): FakeOverwrite => ({ id: roleId, type: 0, allow: PERMISSION.view, deny: '0' });
+type FakeGuild = { id: string; name: string; icon: string | null; members: Set<string> };
+type FakeGrant = { userId: string; access: string; refresh: string };
 
 export class FakeDiscord {
   // When true, Discord answers nothing but errors, as during an outage.
   down = false;
+  // In seconds, as Discord says it.
+  tokenLifetime = 604_800;
   readonly calls: string[] = [];
   private readonly users = new Map<string, FakeUser>();
   private readonly guilds = new Map<string, FakeGuild>();
+  private grants: FakeGrant[] = [];
   private nextId = 200000000000000000n;
+  private nextToken = 0;
   private server: Server | null = null;
 
   newId(): string {
@@ -77,120 +50,92 @@ export class FakeDiscord {
     return `code-${userId}`;
   }
 
-  addGuild(name: string, ownerId: string, id = this.newId()): string {
-    this.guilds.set(id, {
-      id,
-      name,
-      icon: `icon${id}`,
-      owner_id: ownerId,
-      roles: [{ id, name: '@everyone', permissions: PERMISSION.view }],
-      channels: [],
-      members: new Map(),
-    });
-    this.addMember(id, ownerId);
+  addGuild(name: string, id = this.newId()): string {
+    this.guilds.set(id, { id, name, icon: `icon${id}`, members: new Set() });
     return id;
   }
 
-  // The bot gets kicked from the server.
-  removeGuild(guildId: string): void {
-    this.guilds.delete(guildId);
+  renameGuild(guildId: string, name: string): void {
+    this.guilds.get(guildId)!.name = name;
   }
 
-  addRole(guildId: string, name: string, permissions: string = PERMISSION.none): string {
-    const id = this.newId();
-    this.guilds.get(guildId)!.roles.push({ id, name, permissions });
-    return id;
-  }
-
-  addAdminRole(guildId: string): string {
-    return this.addRole(guildId, 'Admin', PERMISSION.admin);
-  }
-
-  addChannel(guildId: string, channel: Partial<FakeChannel> & { name: string }): string {
-    const id = channel.id ?? this.newId();
-    this.guilds.get(guildId)!.channels.push({
-      id,
-      type: 0,
-      position: 0,
-      parent_id: null,
-      permission_overwrites: [],
-      ...channel,
-    });
-    return id;
-  }
-
-  setOverwrites(guildId: string, channelId: string, overwrites: FakeOverwrite[]): void {
-    this.guilds.get(guildId)!.channels.find(({ id }) => id === channelId)!.permission_overwrites = overwrites;
-  }
-
-  renameChannel(guildId: string, channelId: string, name: string): void {
-    this.guilds.get(guildId)!.channels.find(({ id }) => id === channelId)!.name = name;
-  }
-
-  addMember(guildId: string, userId: string, change: Partial<FakeMember> = {}): void {
-    this.guilds.get(guildId)!.members.set(userId, { roles: [], nick: null, avatar: null, pending: false, ...change });
-  }
-
-  setRoles(guildId: string, userId: string, roles: string[]): void {
-    this.guilds.get(guildId)!.members.get(userId)!.roles = roles;
+  addMember(guildId: string, userId: string): void {
+    this.guilds.get(guildId)!.members.add(userId);
   }
 
   removeMember(guildId: string, userId: string): void {
     this.guilds.get(guildId)!.members.delete(userId);
   }
 
-  private route(method: string, path: string, authorization: string, body: string): { status: number; json?: unknown } {
-    const isBot = authorization === `Bot ${FAKE_DISCORD.botToken}`;
+  // Discord stops accepting the current access tokens, but they can still be renewed.
+  expireAccessTokens(userId: string): void {
+    for (const grant of this.grants) if (grant.userId === userId) grant.access = '';
+  }
 
-    if (method === 'POST' && path === '/api/oauth2/token') {
+  // The person removes the app from their authorized apps, in Discord's settings.
+  removeAuthorization(userId: string): void {
+    this.grants = this.grants.filter((grant) => grant.userId !== userId);
+  }
+
+  private grantFor(userId: string): { status: number; json: unknown } {
+    this.nextToken += 1;
+    const grant = { userId, access: `access-${this.nextToken}`, refresh: `refresh-${this.nextToken}` };
+    this.grants.push(grant);
+    return {
+      status: 200,
+      json: {
+        access_token: grant.access,
+        refresh_token: grant.refresh,
+        token_type: 'Bearer',
+        expires_in: this.tokenLifetime,
+        scope: 'identify guilds',
+      },
+    };
+  }
+
+  private route(method: string, path: string, authorization: string, body: string): { status: number; json?: unknown } {
+    if (method === 'POST' && path.startsWith('/api/oauth2/token')) {
       const expected = `Basic ${Buffer.from(`${FAKE_DISCORD.clientId}:${FAKE_DISCORD.clientSecret}`).toString('base64')}`;
+      if (authorization !== expected) return { status: 401 };
       const form = new URLSearchParams(body);
-      const userId = form.get('code')?.replace(/^code-/, '') ?? '';
-      if (authorization !== expected || form.get('grant_type') !== 'authorization_code' || !form.get('redirect_uri')) {
-        return { status: 401 };
+
+      if (path === '/api/oauth2/token/revoke') {
+        this.grants = this.grants.filter((grant) => grant.refresh !== form.get('token'));
+        return { status: 200 };
       }
-      if (!this.users.has(userId)) return { status: 400 };
-      return { status: 200, json: { access_token: `user-${userId}`, token_type: 'Bearer', scope: 'identify' } };
+
+      if (form.get('grant_type') === 'authorization_code') {
+        const userId = form.get('code')?.replace(/^code-/, '') ?? '';
+        if (!this.users.has(userId) || !form.get('redirect_uri')) return { status: 400, json: { error: 'invalid_grant' } };
+        return this.grantFor(userId);
+      }
+
+      if (form.get('grant_type') === 'refresh_token') {
+        // Works once: the new one replaces it.
+        const grant = this.grants.find(({ refresh }) => refresh === form.get('refresh_token'));
+        if (!grant) return { status: 400, json: { error: 'invalid_grant' } };
+        this.grants = this.grants.filter((other) => other !== grant);
+        return this.grantFor(grant.userId);
+      }
+      return { status: 400 };
     }
 
     if (method !== 'GET') return { status: 405 };
 
-    if (path === '/api/users/@me') {
-      const user = this.users.get(authorization.replace(/^Bearer user-/, ''));
-      return user ? { status: 200, json: user } : { status: 401 };
-    }
+    const token = authorization.replace(/^Bearer /, '');
+    const grant = token ? this.grants.find(({ access }) => access === token) : undefined;
+    if (!grant) return { status: 401 };
 
-    if (!isBot) return { status: 401 };
-
-    if (path.startsWith('/api/users/@me/guilds')) {
+    if (path === '/api/users/@me') return { status: 200, json: this.users.get(grant.userId) };
+    if (path === '/api/users/@me/guilds') {
       return {
         status: 200,
-        json: [...this.guilds.values()].map(({ id, name, icon }) => ({ id, name, icon })),
+        json: [...this.guilds.values()]
+          .filter(({ members }) => members.has(grant.userId))
+          .map(({ id, name, icon }) => ({ id, name, icon, owner: false, permissions: '0' })),
       };
     }
-
-    const user = path.match(/^\/api\/users\/(\d+)$/);
-    if (user) {
-      const found = this.users.get(user[1]!);
-      return found ? { status: 200, json: found } : { status: 404 };
-    }
-
-    const route = path.match(/^\/api\/guilds\/(\d+)(?:\/(channels|members\/(\d+)))?$/);
-    if (!route) return { status: 404 };
-
-    const guild = this.guilds.get(route[1]!);
-    // What Discord answers on a server the bot isn't on.
-    if (!guild) return { status: 403 };
-
-    if (!route[2]) {
-      const { id, name, icon, owner_id: ownerId, roles } = guild;
-      return { status: 200, json: { id, name, icon, owner_id: ownerId, roles } };
-    }
-    if (route[2] === 'channels') return { status: 200, json: guild.channels };
-
-    const member = guild.members.get(route[3]!);
-    const memberUser = this.users.get(route[3]!);
-    return member && memberUser ? { status: 200, json: { ...member, user: memberUser } } : { status: 404 };
+    return { status: 404 };
   }
 
   start(): Promise<void> {

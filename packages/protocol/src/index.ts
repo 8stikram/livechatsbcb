@@ -35,8 +35,6 @@ export const CloseCode = {
   PartyFull: 4003,
   UpdateRequired: 4004,
   Removed: 4005,
-  // The account behind a lobby connection is no longer valid.
-  SignedOut: 4006,
 } as const;
 
 export const normalizeCode = (input: string): string => input.toUpperCase().replace(/[^0-9A-Z]/g, '');
@@ -76,32 +74,22 @@ export const GuildSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
   iconUrl: ImageUrlSchema.nullable(),
-  // A member of the server, who still lacks what it takes to use the app there.
-  locked: z.boolean(),
 });
 export type GuildSummary = z.infer<typeof GuildSummarySchema>;
 
 export const MeResponseSchema = z.object({
   account: AccountSchema,
   guilds: z.array(GuildSummarySchema),
-  // Discord didn't answer for at least one server, so the list may be short.
+  // Discord didn't answer, so this is the list from earlier, if there is one.
   partial: z.boolean(),
 });
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 
-export const PartyChannelSchema = z.object({
-  guildId: z.string(),
-  guildName: z.string(),
-  channelId: z.string(),
-  channelName: z.string(),
-});
-export type PartyChannel = z.infer<typeof PartyChannelSchema>;
-
 export const SessionResponseSchema = z.object({
   partyId: z.string(),
-  // A party is either private, entered with a code, or tied to a Discord channel.
+  // A party is either private, entered with a code, or that of a Discord server.
   code: z.string().nullable(),
-  channel: PartyChannelSchema.nullable(),
+  guild: GuildSummarySchema.nullable(),
   memberId: z.string(),
   token: z.string(),
 });
@@ -134,38 +122,6 @@ export const MemberSchema = z.object({
 });
 export type Member = z.infer<typeof MemberSchema>;
 
-export const LobbyMemberSchema = MemberSchema.omit({ online: true });
-export type LobbyMember = z.infer<typeof LobbyMemberSchema>;
-
-export const LobbyChannelSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  kind: z.enum(['text', 'voice']),
-  occupants: z.array(LobbyMemberSchema),
-});
-export type LobbyChannel = z.infer<typeof LobbyChannelSchema>;
-
-export const LobbyCategorySchema = z.object({
-  // Null for the channels that sit above every category.
-  id: z.string().nullable(),
-  name: z.string(),
-  channels: z.array(LobbyChannelSchema),
-});
-export type LobbyCategory = z.infer<typeof LobbyCategorySchema>;
-
-export const LobbyMessageSchema = z.discriminatedUnion('t', [
-  z.object({
-    t: z.literal('lobby'),
-    guild: GuildSummarySchema.omit({ locked: true }),
-    // In the order Discord shows them, and only what this member may see.
-    categories: z.array(LobbyCategorySchema),
-    // Everyone with the app open on this server.
-    online: z.array(LobbyMemberSchema),
-  }),
-  z.object({ t: z.literal('pong') }),
-  z.object({ t: z.literal('closing'), code: z.number() }),
-]);
-export type LobbyMessage = z.infer<typeof LobbyMessageSchema>;
 
 export const MediaContentTypeSchema = z.enum([
   'image/png',

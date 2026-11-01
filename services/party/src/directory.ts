@@ -1,7 +1,14 @@
 import { DurableObject } from 'cloudflare:workers';
-import { CODE_ALPHABET, CODE_LENGTH, type Account, type AuthRedeemResponse } from '@livechatsbcb/protocol';
-import { fetchBotGuilds, fetchUser, type BotGuild } from './discord';
-import { randomToken, sha256 } from './tokens';
+import {
+  CODE_ALPHABET,
+  CODE_LENGTH,
+  type Account,
+  type AuthRedeemResponse,
+  type GuildSummary,
+  type MeResponse,
+} from '@livechatsbcb/protocol';
+import { fetchGuilds, fetchUser, renewTokens, revokeTokens, type DiscordTokens } from './discord';
+import { randomToken, seal, sealingKey, sha256, unseal } from './tokens';
 
 const MINUTE = 60_000;
 const FAILED_JOIN_LIMIT = { max: 10, windowMs: 10 * MINUTE };
@@ -14,7 +21,12 @@ const LOGIN_WINDOW_MS = 10 * MINUTE;
 const TICKET_WINDOW_MS = MINUTE;
 const SESSION_MS = 90 * DAY;
 const ACCOUNT_REFRESH_MS = DAY;
-const STALE_BOT_GUILDS_LIMIT_MS = DAY;
+// If Discord goes quiet, the servers it last confirmed stay accessible for this long.
+const STALE_GUILDS_LIMIT_MS = DAY;
+// Someone asking for the latest list right after joining a server, but not for a call to Discord on every click.
+const FRESH_GUILDS_MIN_AGE_MS = 30_000;
+// Renewed this long before it runs out, rather than finding out from a refusal.
+const RENEW_TOKENS_MARGIN_MS = 60 * MINUTE;
 
 // The project must stay free. R2 has no spending limit of its own, so these are what keeps it inside its free tier:
 // 10 GB stored, of which updates may use 600 MB, and 1 million paid-class operations a month.
@@ -26,7 +38,17 @@ type Limit = { max: number; windowMs: number };
 type RateLimited = { ok: false; error: 'rate_limited' };
 type StoredMedia = { key: string; upload_id: string; size: number; expires_at: number };
 type SessionRow = { user_id: string; expires_at: number; last_used: number };
-type AccountRow = { user_id: string; data: string; refreshed_at: number };
+type AccountRow = {
+  user_id: string;
+  data: string;
+  refreshed_at: number;
+  discord_tokens: string;
+  guilds: string | null;
+  guilds_at: number;
+};
+type GuildList = { guilds: GuildSummary[]; complete: boolean };
+
+export type GuildAccess = { ok: true; guild: GuildSummary } | { ok: false; error: 'signed_out' | 'forbidden' | 'discord_unavailable' };
 
 const randomCode = (): string => {
   // Bytes at or above this multiple of the alphabet size are redrawn, so every character is equally likely.
@@ -41,6 +63,9 @@ const randomCode = (): string => {
 
 // Single global object: owns the code-to-party table, so codes are unique and can change without moving a party.
 export class Directory extends DurableObject<Env> {
+  private sealing: Promise<CryptoKey> | null = null;
+  private readonly fetchingGuilds = new Map<string, Promise<GuildList | null>>();
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.storage.sql.exec(`
@@ -65,14 +90,20 @@ export class Directory extends DurableObject<Env> {
         user_id TEXT NOT NULL,
         expires_at INTEGER NOT NULL
       );
-      CREATE TABLE IF NOT EXISTS accounts (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, refreshed_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS accounts (
+        user_id TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        refreshed_at INTEGER NOT NULL,
+        discord_tokens TEXT NOT NULL,
+        guilds TEXT,
+        guilds_at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS sessions (
         token_hash TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         expires_at INTEGER NOT NULL,
         last_used INTEGER NOT NULL
       );
-      CREATE TABLE IF NOT EXISTS bot_guilds (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL, fetched_at INTEGER NOT NULL);
     `);
   }
 
@@ -85,6 +116,11 @@ export class Directory extends DurableObject<Env> {
     this.ctx.storage.sql.exec('DELETE FROM logins WHERE expires_at < ?', now);
     this.ctx.storage.sql.exec('DELETE FROM tickets WHERE expires_at < ?', now);
     this.ctx.storage.sql.exec('DELETE FROM sessions WHERE expires_at < ?', now);
+    // Nobody logged in any more: what Discord gave for them has no reason to stay. The delay leaves time to finish a login.
+    this.ctx.storage.sql.exec(
+      'DELETE FROM accounts WHERE refreshed_at < ? AND user_id NOT IN (SELECT user_id FROM sessions)',
+      now - LOGIN_WINDOW_MS,
+    );
 
     const state = randomToken();
     this.ctx.storage.sql.exec(
@@ -106,11 +142,19 @@ export class Directory extends DurableObject<Env> {
     return row && row.expires_at > Date.now() ? { challenge: row.challenge, port: row.port } : null;
   }
 
-  async issueTicket(challenge: string, account: Account): Promise<string> {
+  async issueTicket(challenge: string, account: Account, tokens: DiscordTokens): Promise<string> {
     const ticket = randomToken();
     const ticketHash = await sha256(ticket);
+    const sealedTokens = await seal(await this.sealingKey(), JSON.stringify(tokens));
     const now = Date.now();
-    this.storeAccount(account, now);
+    // The list starts empty, so that a new login always shows the servers of right now.
+    this.ctx.storage.sql.exec(
+      'INSERT OR REPLACE INTO accounts (user_id, data, refreshed_at, discord_tokens, guilds, guilds_at) VALUES (?, ?, ?, ?, NULL, 0)',
+      account.id,
+      JSON.stringify(account),
+      now,
+      sealedTokens,
+    );
     this.ctx.storage.sql.exec(
       'INSERT INTO tickets (ticket_hash, challenge, user_id, expires_at) VALUES (?, ?, ?, ?)',
       ticketHash,
@@ -169,45 +213,137 @@ export class Directory extends DurableObject<Env> {
     return this.storedAccount(row.user_id);
   }
 
+  // Logged out everywhere means the Discord token has no more use, here or at Discord.
   async endSession(token: string): Promise<void> {
-    this.ctx.storage.sql.exec('DELETE FROM sessions WHERE token_hash = ?', await sha256(token));
+    const tokenHash = await sha256(token);
+    const [session] = this.ctx.storage.sql
+      .exec<{ user_id: string }>('SELECT user_id FROM sessions WHERE token_hash = ?', tokenHash)
+      .toArray();
+    this.ctx.storage.sql.exec('DELETE FROM sessions WHERE token_hash = ?', tokenHash);
+    if (!session) return;
+
+    const [other] = this.ctx.storage.sql.exec('SELECT 1 FROM sessions WHERE user_id = ? LIMIT 1', session.user_id).toArray();
+    if (other) return;
+
+    const row = this.accountRow(session.user_id);
+    this.ctx.storage.sql.exec('DELETE FROM accounts WHERE user_id = ?', session.user_id);
+    const tokens = row && (await this.tokensOf(row));
+    if (tokens) await revokeTokens(this.env, tokens);
   }
 
-  // A new pseudo or picture on Discord shows up here without having to log in again.
-  async refreshAccount(account: Account): Promise<Account> {
-    const [row] = this.ctx.storage.sql
-      .exec<AccountRow>('SELECT * FROM accounts WHERE user_id = ?', account.id)
-      .toArray();
-    if (row && Date.now() - row.refreshed_at < ACCOUNT_REFRESH_MS) return account;
-
-    const fresh = await fetchUser(this.env, account.id);
-    if (!fresh) return account;
-    this.storeAccount(fresh, Date.now());
-    return fresh;
+  // Null when the person is no longer logged in, which also covers having removed the app in Discord's settings.
+  async overview(userId: string, fresh: boolean): Promise<MeResponse | null> {
+    const usualAgeMs = Number(this.env.DISCORD_REFRESH_MS);
+    const list = await this.guildList(userId, fresh ? Math.min(FRESH_GUILDS_MIN_AGE_MS, usualAgeMs) : usualAgeMs);
+    const account = this.storedAccount(userId);
+    return list && account ? { account, guilds: list.guilds, partial: !list.complete } : null;
   }
 
-  async botGuilds(): Promise<{ guilds: BotGuild[]; complete: boolean }> {
-    const [row] = this.ctx.storage.sql
-      .exec<{ data: string; fetched_at: number }>('SELECT data, fetched_at FROM bot_guilds')
-      .toArray();
+  async guildAccess(userId: string, guildId: string): Promise<GuildAccess> {
+    const list = await this.guildList(userId, Number(this.env.DISCORD_REFRESH_MS));
+    if (!list) return { ok: false, error: 'signed_out' };
+
+    const guild = list.guilds.find(({ id }) => id === guildId);
+    if (guild) return { ok: true, guild };
+    return { ok: false, error: list.complete ? 'forbidden' : 'discord_unavailable' };
+  }
+
+  // "unknown" is for when Discord isn't answering, and never costs anyone their place.
+  async isGuildMember(userId: string, guildId: string): Promise<'yes' | 'no' | 'unknown'> {
+    const list = await this.guildList(userId, Number(this.env.DISCORD_REFRESH_MS));
+    if (!list) return 'no';
+    if (list.guilds.some(({ id }) => id === guildId)) return 'yes';
+    return list.complete ? 'no' : 'unknown';
+  }
+
+  private async guildList(userId: string, maxAgeMs: number): Promise<GuildList | null> {
+    const row = this.accountRow(userId);
+    if (!row) return null;
+    if (row.guilds && Date.now() - row.guilds_at < maxAgeMs) {
+      return { guilds: JSON.parse(row.guilds) as GuildSummary[], complete: true };
+    }
+
+    // Several checks can arrive together, and a refresh token only works once: they all wait for the same answer.
+    const running = this.fetchingGuilds.get(userId);
+    if (running) return running;
+    const fetching = this.fetchGuildList(row).finally(() => this.fetchingGuilds.delete(userId));
+    this.fetchingGuilds.set(userId, fetching);
+    return fetching;
+  }
+
+  private async fetchGuildList(row: AccountRow): Promise<GuildList | null> {
+    const earlier = (): GuildList => ({
+      guilds: row.guilds && Date.now() - row.guilds_at < STALE_GUILDS_LIMIT_MS ? (JSON.parse(row.guilds) as GuildSummary[]) : [],
+      complete: false,
+    });
+
+    let tokens = await this.tokensOf(row);
+    if (!tokens) return this.forgetAccount(row.user_id);
+
+    if (tokens.expiresAt - Date.now() < RENEW_TOKENS_MARGIN_MS) {
+      const renewed = await this.renew(row.user_id, tokens);
+      if (renewed === 'revoked') return null;
+      if (renewed === 'unavailable') return earlier();
+      tokens = renewed;
+    }
+
+    let guilds = await fetchGuilds(this.env, tokens.access);
+    if (guilds.status === 'refused') {
+      const renewed = await this.renew(row.user_id, tokens);
+      if (renewed === 'revoked') return null;
+      if (renewed === 'unavailable') return earlier();
+      tokens = renewed;
+      guilds = await fetchGuilds(this.env, tokens.access);
+    }
+    if (guilds.status === 'refused') return this.forgetAccount(row.user_id);
+    if (guilds.status !== 'ok') return earlier();
+
+    // A new pseudo or picture on Discord shows up here without having to log in again.
     const now = Date.now();
-    const known = row ? (JSON.parse(row.data) as BotGuild[]) : null;
-    if (known && now - row!.fetched_at < Number(this.env.DISCORD_REFRESH_MS)) return { guilds: known, complete: true };
+    const user = now - row.refreshed_at > ACCOUNT_REFRESH_MS ? await fetchUser(this.env, tokens.access) : null;
+    this.ctx.storage.sql.exec(
+      'UPDATE accounts SET guilds = ?, guilds_at = ?, data = ?, refreshed_at = ? WHERE user_id = ?',
+      JSON.stringify(guilds.value),
+      now,
+      user?.status === 'ok' ? JSON.stringify(user.value) : row.data,
+      user?.status === 'ok' ? now : row.refreshed_at,
+      row.user_id,
+    );
+    return { guilds: guilds.value, complete: true };
+  }
 
-    const answer = await fetchBotGuilds(this.env);
-    if (answer.status !== 'ok') {
-      const usable = known && now - row!.fetched_at < STALE_BOT_GUILDS_LIMIT_MS;
-      return { guilds: usable ? known : [], complete: false };
+  private async renew(userId: string, tokens: DiscordTokens): Promise<DiscordTokens | 'revoked' | 'unavailable'> {
+    const renewed = await renewTokens(this.env, tokens.refresh);
+    if (renewed.status === 'unavailable') return 'unavailable';
+    if (renewed.status === 'refused') {
+      this.forgetAccount(userId);
+      return 'revoked';
     }
     this.ctx.storage.sql.exec(
-      'INSERT OR REPLACE INTO bot_guilds (id, data, fetched_at) VALUES (1, ?, ?)',
-      JSON.stringify(answer.value),
-      now,
+      'UPDATE accounts SET discord_tokens = ? WHERE user_id = ?',
+      await seal(await this.sealingKey(), JSON.stringify(renewed.value)),
+      userId,
     );
-    return { guilds: answer.value, complete: true };
+    return renewed.value;
   }
 
-  allocate(ip: string): { ok: true; partyId: string; code: string } | RateLimited {
+  private forgetAccount(userId: string): null {
+    this.ctx.storage.sql.exec('DELETE FROM sessions WHERE user_id = ?', userId);
+    this.ctx.storage.sql.exec('DELETE FROM accounts WHERE user_id = ?', userId);
+    return null;
+  }
+
+  private async tokensOf(row: AccountRow): Promise<DiscordTokens | null> {
+    const text = await unseal(await this.sealingKey(), row.discord_tokens);
+    return text ? (JSON.parse(text) as DiscordTokens) : null;
+  }
+
+  private sealingKey(): Promise<CryptoKey> {
+    this.sealing ??= sealingKey(this.env.DISCORD_CLIENT_SECRET);
+    return this.sealing;
+  }
+
+    allocate(ip: string): { ok: true; partyId: string; code: string } | RateLimited {
     const key = `create:${ip}`;
     if (this.isLimited(key, CREATE_LIMIT)) return { ok: false, error: 'rate_limited' };
     this.recordAttempt(key, CREATE_LIMIT);
@@ -316,19 +452,13 @@ export class Directory extends DurableObject<Env> {
     else void this.ctx.storage.deleteAlarm();
   }
 
-  private storeAccount(account: Account, at: number): void {
-    this.ctx.storage.sql.exec(
-      'INSERT OR REPLACE INTO accounts (user_id, data, refreshed_at) VALUES (?, ?, ?)',
-      account.id,
-      JSON.stringify(account),
-      at,
-    );
+  private accountRow(userId: string): AccountRow | undefined {
+    const [row] = this.ctx.storage.sql.exec<AccountRow>('SELECT * FROM accounts WHERE user_id = ?', userId).toArray();
+    return row;
   }
 
   private storedAccount(userId: string): Account | null {
-    const [row] = this.ctx.storage.sql
-      .exec<AccountRow>('SELECT * FROM accounts WHERE user_id = ?', userId)
-      .toArray();
+    const row = this.accountRow(userId);
     return row ? (JSON.parse(row.data) as Account) : null;
   }
 

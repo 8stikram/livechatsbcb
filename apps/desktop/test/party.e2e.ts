@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { FAKE_DISCORD, FakeDiscord, hiddenFromEveryone } from '../../../services/party/test/fake-discord';
+import { FAKE_DISCORD, FakeDiscord } from '../../../services/party/test/fake-discord';
 
 const SERVER_PORT = 8787;
 const repoRoot = resolve(__dirname, '..', '..', '..');
@@ -25,24 +25,12 @@ const pote = discord.addUser('Pote');
 // This one has Discord's default picture, which is really there to load, unlike the made-up pictures of the others.
 discord.removeAvatar(nono);
 
-// Added out of order, since the order on screen has to come from Discord's own positions.
-const serverId = discord.addGuild('Les potes', nono);
-const liveChatRole = discord.addRole(serverId, 'LiveChat');
-discord.addMember(serverId, pote, { roles: [liveChatRole] });
-const gamesCategory = discord.addChannel(serverId, { name: 'Jeux', type: 4, position: 1 });
-discord.addChannel(serverId, { name: 'vocal', type: 2, position: 0, parent_id: gamesCategory });
-discord.addChannel(serverId, {
-  name: 'staff',
-  position: 2,
-  parent_id: gamesCategory,
-  permission_overwrites: [hiddenFromEveryone(serverId)],
-});
-const generalChannel = discord.addChannel(serverId, { name: 'general', position: 1, parent_id: gamesCategory });
-discord.addChannel(serverId, { name: 'annonces', position: 0 });
-
-// A server where Pote is a member, but lacks the role.
-discord.addGuild('Autre serveur', discord.addUser('Patron'), '100000000000000555');
-discord.addMember('100000000000000555', pote);
+const serverId = discord.addGuild('Les potes');
+discord.addMember(serverId, nono);
+discord.addMember(serverId, pote);
+// Pote is on this one, Nono isn't.
+const otherServer = discord.addGuild('Autre serveur');
+discord.addMember(otherServer, pote);
 
 const startServer = async (): Promise<void> => {
   const wrangler = join(repoRoot, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
@@ -63,8 +51,6 @@ const startServer = async (): Promise<void> => {
       `DISCORD_CLIENT_ID:${FAKE_DISCORD.clientId}`,
       '--var',
       `DISCORD_CLIENT_SECRET:${FAKE_DISCORD.clientSecret}`,
-      '--var',
-      `DISCORD_BOT_TOKEN:${FAKE_DISCORD.botToken}`,
       // Notices what Discord says within a second, instead of within 5 minutes.
       '--var',
       'DISCORD_REFRESH_MS:1000',
@@ -214,19 +200,28 @@ const backFromDiscord = async (member: Member, answer: Record<string, string>): 
 const logIn = async (member: Member, userId: string): Promise<void> => {
   await loginButton(member).click();
   await backFromDiscord(member, { code: discord.codeFor(userId) });
-  await member.control.getByTestId('account-name').waitFor();
+  await member.control.getByTestId('account-name').waitFor({ state: 'attached' });
 };
 
-const channelButton = (member: Member, name: string) => member.control.getByRole('button', { name, exact: false });
+// What the service got from Discord is kept for a second in these tests, and may be from just before the change.
+const discordListOutdated = () => new Promise((done) => setTimeout(done, 1_100));
 
-const channelNames = (member: Member) =>
-  member.control.getByTestId('channel').locator('.channel-name').allTextContents();
+const guildCards = (member: Member) =>
+  member.control.getByTestId('guild-card').locator('.guild-card-name').allTextContents();
+
+const pickServers = async (member: Member, names: string[]): Promise<void> => {
+  for (const name of names) await member.control.getByTestId('guild-card').filter({ hasText: name }).click();
+  await member.control.getByRole('button', { name: 'Valider' }).click();
+};
+
+const serverPicture = (member: Member, name: string) =>
+  member.control.getByRole('navigation', { name: 'Tes serveurs' }).getByRole('button', { name });
 
 const partyMember = (member: Member, name: string) =>
   member.control.getByRole('region', { name: 'Membres' }).getByText(name);
 
-const inChannel = (member: Member, name: string) =>
-  member.control.getByTestId('party-channel').filter({ hasText: `#${name}` }).waitFor({ state: 'attached' });
+const inServer = (member: Member, name: string) =>
+  member.control.getByTestId('party-guild').filter({ hasText: name }).waitFor({ state: 'attached', timeout: 15_000 });
 
 const pictureLoaded = (page: Page, testId: string) =>
   expect
@@ -452,7 +447,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     const page = await backFromDiscord(host, { code: discord.codeFor(nono) });
     expect(page).toContain('C’est bon');
 
-    await host.control.getByTestId('account-name').filter({ hasText: 'Nono' }).waitFor();
+    await host.control.getByTestId('account-name').filter({ hasText: 'Nono' }).waitFor({ state: 'attached' });
     // The real picture, from the real address, allowed through by the app's own rules.
     await pictureLoaded(host.control, 'account-avatar');
 
@@ -461,88 +456,115 @@ describe.skipIf(online)('party flow in the real app', () => {
     expect(state.party).toBeNull();
   });
 
-  it('shows the channels in the order of Discord, with only what each person can see', async () => {
+  it('asks which servers to use, among the real ones of each person, with a search bar', async () => {
+    await host.control.getByRole('heading', { name: 'Avec quel serveur' }).waitFor();
+    await expect.poll(() => guildCards(host)).toEqual(['Les potes']);
+    await host.control.screenshot({ path: join(artifacts, '2-picker.png') });
+
     guest = await launch('guest');
     await logIn(guest, pote);
+    await expect.poll(() => guildCards(guest)).toEqual(['Les potes', 'Autre serveur']);
 
-    await expect.poll(() => channelNames(host)).toEqual(['annonces', 'general', 'staff', 'vocal']);
-    await expect.poll(() => channelNames(guest)).toEqual(['annonces', 'general', 'vocal']);
-    await host.control.getByRole('heading', { name: 'Jeux' }).waitFor();
-    await host.control.screenshot({ path: join(artifacts, '2-home.png') });
+    await guest.control.getByLabel('Rechercher un serveur').fill('autre');
+    await expect.poll(() => guildCards(guest)).toEqual(['Autre serveur']);
+    await guest.control.getByLabel('Rechercher un serveur').fill('');
+    expect(await guest.control.getByRole('button', { name: 'Valider' }).isDisabled()).toBe(true);
   });
 
-  it('says what is missing on a server that asks for the role', async () => {
-    await guest.control.getByRole('button', { name: 'Autre serveur' }).click();
-    await guest.control.getByTestId('guild-locked').filter({ hasText: 'rôle LiveChat' }).waitFor();
-    await expect.poll(() => channelNames(guest)).toEqual([]);
-
-    await guest.control.getByRole('button', { name: 'Les potes' }).click();
-    await expect.poll(() => channelNames(guest)).toEqual(['annonces', 'general', 'vocal']);
-  });
-
-  it('shows who is connected on the server', async () => {
-    for (const member of [host, guest]) {
-      await member.control.getByTestId('guild-online-count').filter({ hasText: '2' }).waitFor({ timeout: 15_000 });
+  it('keeps the button to validate in reach with a lot of servers', async () => {
+    const collector = discord.addUser('Collectionneur');
+    for (let number = 1; number <= 60; number += 1) {
+      discord.addMember(discord.addGuild(`Serveur numéro ${number}`), collector);
     }
-    await host.control.getByTestId('guild-online-member').filter({ hasText: 'Pote' }).waitFor();
-    await guest.control.getByTestId('guild-online-member').filter({ hasText: 'Nono' }).waitFor();
+
+    const crowded = await launch('crowded');
+    await logIn(crowded, collector);
+    await crowded.control.getByTestId('guild-card').first().waitFor();
+    await crowded.control.getByTestId('guild-card').nth(2).click();
+
+    const validate = crowded.control.getByRole('button', { name: 'Valider' });
+    const box = await validate.boundingBox();
+    const windowHeight = await crowded.control.evaluate(() => window.innerHeight);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(windowHeight);
+    await crowded.control.screenshot({ path: join(artifacts, '2-picker-crowded.png') });
+    await crowded.app.close();
   });
 
-  it('enters the party of a channel with one click, and both see each other', async () => {
-    await channelButton(host, 'general').click();
+  it('enters the party of the server once validated, and both see each other', async () => {
+    await pickServers(host, ['Les potes']);
     await connected(host);
     await onlineCount(host, 1);
-    await inChannel(host, 'general');
+    await inServer(host, 'Les potes');
     // Nothing to show yet, so the overlay stays out of the way.
     expect(await stageVisible(host)).toBe(false);
     await overlayState(host, 'idle');
 
-    // Seen from outside the channel.
-    const occupants = channelButton(guest, 'general').getByTestId('channel-occupants').locator('.avatar');
-    await expect.poll(() => occupants.count(), { timeout: 15_000 }).toBe(1);
-
-    await channelButton(guest, 'general').click();
+    await pickServers(guest, ['Les potes', 'Autre serveur']);
     await connected(guest);
+    await inServer(guest, 'Les potes');
     await onlineCount(guest, 2);
     await onlineCount(host, 2);
 
     await partyMember(host, 'Pote').waitFor();
     await partyMember(guest, 'Nono').waitFor();
     await pictureLoaded(guest.control, 'member-avatar');
-    await host.control.screenshot({ path: join(artifacts, '3-party-host.png') });
+    await guest.control.screenshot({ path: join(artifacts, '3-party-guest.png') });
   });
 
-  it('moves to another channel in one click, leaving the previous one', async () => {
-    await openTab(guest, 'Accueil');
-    await channelButton(guest, 'vocal').click();
-    await inChannel(guest, 'vocal');
+  it('switches party with one click on the picture of a server', async () => {
+    await serverPicture(guest, 'Autre serveur').click();
+    await inServer(guest, 'Autre serveur');
+    await connected(guest);
+    await onlineCount(guest, 1);
     await onlineCount(host, 1);
 
-    await openTab(guest, 'Accueil');
-    await channelButton(guest, 'general').click();
-    await inChannel(guest, 'general');
+    await serverPicture(guest, 'Les potes').click();
+    await inServer(guest, 'Les potes');
     await onlineCount(host, 2);
   });
 
-  it('goes to the party when clicking the channel already joined', async () => {
-    await openTab(guest, 'Accueil');
-    await channelButton(guest, 'general').click();
-    await guest.control.getByTestId('party-channel').waitFor();
+  it('goes to the party when clicking the server already joined', async () => {
+    await openTab(guest, 'Réglages');
+    await serverPicture(guest, 'Les potes').click();
+    await guest.control.getByTestId('party-guild').waitFor();
     await connected(guest);
   });
 
-  it('removes someone from a channel they can no longer see', async () => {
-    discord.setOverwrites(serverId, generalChannel, [hiddenFromEveryone(serverId)]);
-    await guest.control.getByTestId('channel-lost').waitFor({ timeout: 20_000 });
-    await onlineCount(host, 1);
-    await expect.poll(() => channelNames(guest), { timeout: 15_000 }).toEqual(['annonces', 'vocal']);
+  it('adds and removes servers with the round plus', async () => {
+    const newServer = discord.addGuild('Tout neuf');
+    discord.addMember(newServer, pote);
+    await discordListOutdated();
 
-    discord.setOverwrites(serverId, generalChannel, []);
-    await expect.poll(() => channelNames(guest), { timeout: 15_000 }).toEqual(['annonces', 'general', 'vocal']);
-    await channelButton(guest, 'general').click();
-    await connected(guest);
+    await serverPicture(guest, 'Ajouter un serveur').click();
+    await guest.control.getByTestId('guild-card').filter({ hasText: 'Tout neuf' }).waitFor({ timeout: 15_000 });
+    await pickServers(guest, ['Tout neuf']);
+    await inServer(guest, 'Tout neuf');
+    await onlineCount(host, 1);
+
+    await serverPicture(guest, 'Ajouter un serveur').click();
+    await pickServers(guest, ['Tout neuf']);
+    await serverPicture(guest, 'Tout neuf').waitFor({ state: 'detached' });
+    await serverPicture(guest, 'Les potes').click();
+    await inServer(guest, 'Les potes');
     await onlineCount(host, 2);
-    await expect(guest.control.getByTestId('channel-lost').count()).resolves.toBe(0);
+  });
+
+  it('takes someone out of the party when they leave the Discord server, and moves them along', async () => {
+    discord.removeMember(serverId, pote);
+    await guest.control.getByTestId('notice').filter({ hasText: 'plus sur ce serveur' }).waitFor({ timeout: 20_000 });
+    await onlineCount(host, 1);
+    await serverPicture(guest, 'Les potes').waitFor({ state: 'detached', timeout: 15_000 });
+    await inServer(guest, 'Autre serveur');
+    await connected(guest);
+
+    discord.addMember(serverId, pote);
+    await discordListOutdated();
+    await serverPicture(guest, 'Ajouter un serveur').click();
+    await guest.control.getByTestId('guild-card').filter({ hasText: 'Les potes' }).waitFor({ timeout: 15_000 });
+    await pickServers(guest, ['Les potes']);
+    await inServer(guest, 'Les potes');
+    await onlineCount(host, 2);
+    await expect(guest.control.getByTestId('notice').count()).resolves.toBe(0);
   });
 
   it('comes back alone after the app restarts, still logged in', async () => {
@@ -552,16 +574,15 @@ describe.skipIf(online)('party flow in the real app', () => {
     guest = await launch('guest');
     await connected(guest);
     await onlineCount(host, 2);
-    await inChannel(guest, 'general');
+    await inServer(guest, 'Les potes');
     await guest.control.getByTestId('account-name').filter({ hasText: 'Pote' }).waitFor({ state: 'attached' });
   });
 
   it('hands over to a second PC, and lets the first take it back', async () => {
     const secondPc = await launch('second-pc');
     await logIn(secondPc, pote);
-    await guest.control.getByTestId('lobby-status').filter({ hasText: 'autre PC' }).waitFor({ state: 'attached', timeout: 15_000 });
-
-    await channelButton(secondPc, 'general').click();
+    await secondPc.control.getByTestId('guild-card').filter({ hasText: 'Les potes' }).waitFor();
+    await pickServers(secondPc, ['Les potes']);
     await connected(secondPc);
     await guest.control.getByTestId('connection').filter({ hasText: 'autre PC' }).waitFor({ state: 'attached', timeout: 15_000 });
     await onlineCount(host, 2);
@@ -570,11 +591,6 @@ describe.skipIf(online)('party flow in the real app', () => {
     await connected(guest);
     await secondPc.control.getByTestId('connection').filter({ hasText: 'autre PC' }).waitFor({ state: 'attached', timeout: 15_000 });
     await secondPc.app.close();
-
-    await openTab(guest, 'Accueil');
-    await guest.control.getByRole('button', { name: 'Reprendre ici' }).click();
-    await guest.control.getByTestId('guild-online-count').filter({ hasText: '2' }).waitFor({ timeout: 15_000 });
-    await openTab(guest, 'Party');
     await onlineCount(host, 2);
   });
 
@@ -591,12 +607,6 @@ describe.skipIf(online)('party flow in the real app', () => {
     await Promise.all([connected(host, 10_000), connected(guest, 10_000)]);
     console.log(`Both members back online ${Date.now() - backAt} ms after the service returned`);
     await onlineCount(host, 2);
-
-    // The list of channels has less of a hurry.
-    await host.control
-      .getByTestId('guild-online-count')
-      .filter({ hasText: '2' })
-      .waitFor({ state: 'attached', timeout: 45_000 });
   });
 
   it('opens the media tabs', async () => {
@@ -843,17 +853,14 @@ describe.skipIf(online)('party flow in the real app', () => {
       .toBe(78);
   });
 
-  it('lets someone leave a channel, and go back to the list', async () => {
-    await openTab(guest, 'Party');
-    await guest.control.getByRole('button', { name: 'Quitter le salon' }).click();
-    await guest.control.getByRole('button', { name: 'Confirmer le départ ?' }).click();
-    await guest.control.getByRole('button', { name: 'Rejoindre' }).waitFor();
-    await onlineCount(host, 1);
-    await partyMember(host, 'Pote').waitFor({ state: 'detached', timeout: 10_000 });
-  });
+  const openPrivateParty = async (member: Member) => {
+    await serverPicture(member, 'Ajouter un serveur').click();
+    await member.control.getByText('Party privée', { exact: true }).click();
+  };
 
-  it('creates a private party and shows its code, with no channel in sight', async () => {
-    await openTab(host, 'Accueil');
+  it('creates a private party from its discreet corner, and shows its code', async () => {
+    await openPrivateParty(host);
+    await host.control.screenshot({ path: join(artifacts, '9-private-corner.png') });
     await host.control.getByRole('button', { name: 'Créer une party privée' }).click();
     await host.control.getByTestId('party-code').waitFor();
     await connected(host);
@@ -864,6 +871,7 @@ describe.skipIf(online)('party flow in the real app', () => {
   });
 
   it('refuses a wrong code with a clear message', async () => {
+    await openPrivateParty(guest);
     await guest.control.getByLabel('Code de la party').fill('ZZZZZZ');
     await guest.control.getByRole('button', { name: 'Rejoindre' }).click();
     await guest.control.getByRole('alert').filter({ hasText: 'aucune party' }).waitFor();
@@ -893,6 +901,15 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByTestId('party-code').filter({ hasText: newCode }).waitFor({ timeout: 10_000 });
   });
 
+  it('goes back to a private party in one click, without typing the code again', async () => {
+    await serverPicture(guest, 'Les potes').click();
+    await inServer(guest, 'Les potes');
+    await serverPicture(guest, 'Party privée').click();
+    await guest.control.getByTestId('party-code').waitFor();
+    await connected(guest);
+    expect(await partyCode(guest)).toBe(await partyCode(host));
+  });
+
   it('comes back to a private party after a restart, even with a changed code', async () => {
     await guest.app.close();
     await onlineCount(host, 1);
@@ -902,10 +919,11 @@ describe.skipIf(online)('party flow in the real app', () => {
     expect(await partyCode(guest)).toBe(await partyCode(host));
   });
 
-  it('lets a member leave, and return to the home screen', async () => {
+  it('goes back to the server after leaving a private party', async () => {
     await guest.control.getByRole('button', { name: 'Quitter la party' }).click();
     await guest.control.getByRole('button', { name: 'Confirmer le départ ?' }).click();
-    await guest.control.getByRole('button', { name: 'Rejoindre' }).waitFor();
+    await inServer(guest, 'Les potes');
+    await serverPicture(guest, 'Party privée').waitFor({ state: 'detached' });
 
     await partyMember(host, 'Pote').waitFor({ state: 'detached', timeout: 10_000 });
     await onlineCount(host, 1);
@@ -914,17 +932,16 @@ describe.skipIf(online)('party flow in the real app', () => {
   it('removes the party when its last member leaves', async () => {
     await host.control.getByRole('button', { name: 'Quitter la party' }).click();
     await host.control.getByRole('button', { name: 'Confirmer le départ ?' }).click();
-    await host.control.getByRole('button', { name: 'Rejoindre' }).waitFor();
+    await inServer(host, 'Les potes');
+    await onlineCount(host, 2);
   });
 
   it('logs out, and stays logged out after a restart', async () => {
+    await openTab(guest, 'Réglages');
     await guest.control.getByRole('button', { name: 'Se déconnecter' }).click();
     await guest.control.getByRole('button', { name: 'Confirmer ?' }).click();
     await loginButton(guest).waitFor();
-    await host.control
-      .getByTestId('guild-online-count')
-      .filter({ hasText: '1' })
-      .waitFor({ state: 'attached', timeout: 15_000 });
+    await onlineCount(host, 1);
 
     await guest.app.close();
     guest = await launch('guest');

@@ -75,10 +75,6 @@ export default async function setup() {
     `DISCORD_CLIENT_ID:${FAKE_DISCORD.clientId}`,
     '--var',
     `DISCORD_CLIENT_SECRET:${FAKE_DISCORD.clientSecret}`,
-    '--var',
-    `DISCORD_BOT_TOKEN:${FAKE_DISCORD.botToken}`,
-    '--var',
-    `DISCORD_OPEN_GUILDS:${FAKE_DISCORD.openGuildId}`,
   ];
   const children = [
     await start(TEST_PORT, 9239, stateDir, discord),

@@ -15,7 +15,7 @@ export const errorMessage = (error: ActionError): string => {
     case 'signed_out':
       return 'Ta connexion a expiré. Reconnecte-toi avec Discord.';
     case 'forbidden':
-      return "Tu n'as pas accès à ce salon.";
+      return "Tu n'es pas sur ce serveur Discord.";
     case 'discord_unavailable':
       return 'Discord ne répond pas pour le moment. Réessaie dans un instant.';
     case 'login_denied':

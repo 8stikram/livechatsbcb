@@ -1,52 +1,76 @@
-import { DISCORD_IMAGE_ORIGIN, type Account } from '@livechatsbcb/protocol';
-import type { Channel, GuildMember, GuildStructure, Role } from './permissions';
+import { DISCORD_IMAGE_ORIGIN, type Account, type GuildSummary } from '@livechatsbcb/protocol';
 
 export const AUTHORIZE_URL = 'https://discord.com/oauth2/authorize';
+// Who you are and which servers you are on: not your e-mail, and none of your messages.
+export const LOGIN_SCOPE = 'identify guilds';
 
 // Discord refuses API calls from a client that doesn't say who it is, in this format.
 const USER_AGENT = 'DiscordBot (https://github.com/8stikram/livechatsbcb, 1)';
 const REQUEST_TIMEOUT_MS = 8_000;
-// A free Worker may make 50 outside calls per request, and the service makes one call per server for each member.
-const MAX_BOT_GUILDS = 20;
 
-export type DiscordUser = { id: string; username: string; global_name?: string | null; avatar?: string | null };
-export type DiscordMember = GuildMember & {
-  user: DiscordUser;
-  nick?: string | null;
-  avatar?: string | null;
-  // Still has to accept the rules of the server, which means Discord isn't showing them its channels yet.
-  pending?: boolean;
-};
-export type BotGuild = { id: string; name: string; icon: string | null };
+type DiscordUser = { id: string; username: string; global_name?: string | null; avatar?: string | null };
+type DiscordGuild = { id: string; name: string; icon: string | null };
+type TokenAnswer = { access_token: string; refresh_token?: string; expires_in: number };
 
-// "missing" is an answer: no such member, or the bot isn't on that server. "unavailable" means nothing can be
+export type DiscordTokens = { access: string; refresh: string; expiresAt: number };
+
+// "refused" is an answer: Discord no longer honours this person's authorization. "unavailable" means nothing can be
 // concluded, and must never cost anyone their access.
-export type DiscordResult<T> = { status: 'ok'; value: T } | { status: 'missing' } | { status: 'unavailable' };
+export type DiscordResult<T> = { status: 'ok'; value: T } | { status: 'refused' } | { status: 'unavailable' };
 
-const call = async <T>(env: Env, path: string, authorization: string): Promise<DiscordResult<T>> => {
+const clientAuthorization = (env: Env): string => `Basic ${btoa(`${env.DISCORD_CLIENT_ID}:${env.DISCORD_CLIENT_SECRET}`)}`;
+
+const postForm = (env: Env, path: string, form: Record<string, string>): Promise<Response> =>
+  fetch(`${env.DISCORD_API_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      authorization: clientAuthorization(env),
+      'content-type': 'application/x-www-form-urlencoded',
+      'user-agent': USER_AGENT,
+    },
+    body: new URLSearchParams(form),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+
+const requestTokens = async (env: Env, form: Record<string, string>): Promise<DiscordResult<DiscordTokens>> => {
   try {
-    const response = await fetch(`${env.DISCORD_API_URL}${path}`, {
-      headers: { authorization, 'user-agent': USER_AGENT },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (response.ok) return { status: 'ok', value: (await response.json()) as T };
-    if (response.status === 404 || response.status === 403) return { status: 'missing' };
-    return { status: 'unavailable' };
+    const response = await postForm(env, '/oauth2/token', form);
+    // A 401 here would be about the app's own secret, which is no reason to sign anyone out.
+    if (response.status === 400) return { status: 'refused' };
+    if (!response.ok) return { status: 'unavailable' };
+
+    const answer = (await response.json()) as TokenAnswer;
+    return {
+      status: 'ok',
+      value: {
+        access: answer.access_token,
+        refresh: answer.refresh_token ?? form['refresh_token'] ?? '',
+        expiresAt: Date.now() + answer.expires_in * 1_000,
+      },
+    };
   } catch {
     return { status: 'unavailable' };
   }
 };
 
-const asBot = <T>(env: Env, path: string): Promise<DiscordResult<T>> => call<T>(env, path, `Bot ${env.DISCORD_BOT_TOKEN}`);
+const call = async <T>(env: Env, path: string, accessToken: string): Promise<DiscordResult<T>> => {
+  try {
+    const response = await fetch(`${env.DISCORD_API_URL}${path}`, {
+      headers: { authorization: `Bearer ${accessToken}`, 'user-agent': USER_AGENT },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (response.ok) return { status: 'ok', value: (await response.json()) as T };
+    return { status: response.status === 401 ? 'refused' : 'unavailable' };
+  } catch {
+    return { status: 'unavailable' };
+  }
+};
 
 const defaultAvatarUrl = (userId: string): string =>
   `${DISCORD_IMAGE_ORIGIN}/embed/avatars/${(BigInt(userId) >> 22n) % 6n}.png`;
 
-export const avatarUrlOf = (user: DiscordUser): string =>
+const avatarUrlOf = (user: DiscordUser): string =>
   user.avatar ? `${DISCORD_IMAGE_ORIGIN}/avatars/${user.id}/${user.avatar}.png?size=128` : defaultAvatarUrl(user.id);
-
-export const guildIconUrl = (guildId: string, icon: string | null): string | null =>
-  icon ? `${DISCORD_IMAGE_ORIGIN}/icons/${guildId}/${icon}.png?size=64` : null;
 
 const toAccount = (user: DiscordUser): Account => ({
   id: user.id,
@@ -54,61 +78,38 @@ const toAccount = (user: DiscordUser): Account => ({
   avatarUrl: avatarUrlOf(user),
 });
 
-// On a server, people go by the nickname and the picture they have there.
-export const accountOnServer = (guildId: string, member: DiscordMember): Account => ({
-  id: member.user.id,
-  name: member.nick ?? member.user.global_name ?? member.user.username,
-  avatarUrl: member.avatar
-    ? `${DISCORD_IMAGE_ORIGIN}/guilds/${guildId}/users/${member.user.id}/avatars/${member.avatar}.png?size=128`
-    : avatarUrlOf(member.user),
+const toGuildSummary = ({ id, name, icon }: DiscordGuild): GuildSummary => ({
+  id,
+  name,
+  iconUrl: icon ? `${DISCORD_IMAGE_ORIGIN}/icons/${id}/${icon}.png?size=128` : null,
 });
 
-// The access token is used once, to learn who just logged in, and is not kept anywhere.
-export const exchangeLoginCode = async (env: Env, code: string, redirectUri: string): Promise<Account | null> => {
-  try {
-    const response = await fetch(`${env.DISCORD_API_URL}/oauth2/token`, {
-      method: 'POST',
-      headers: {
-        authorization: `Basic ${btoa(`${env.DISCORD_CLIENT_ID}:${env.DISCORD_CLIENT_SECRET}`)}`,
-        'content-type': 'application/x-www-form-urlencoded',
-        'user-agent': USER_AGENT,
-      },
-      body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (!response.ok) return null;
-
-    const { access_token: accessToken } = (await response.json()) as { access_token: string };
-    const user = await call<DiscordUser>(env, '/users/@me', `Bearer ${accessToken}`);
-    return user.status === 'ok' ? toAccount(user.value) : null;
-  } catch {
-    return null;
-  }
+export const fetchUser = async (env: Env, accessToken: string): Promise<DiscordResult<Account>> => {
+  const user = await call<DiscordUser>(env, '/users/@me', accessToken);
+  return user.status === 'ok' ? { status: 'ok', value: toAccount(user.value) } : user;
 };
 
-export const fetchUser = async (env: Env, userId: string): Promise<Account | null> => {
-  const user = await asBot<DiscordUser>(env, `/users/${userId}`);
-  return user.status === 'ok' ? toAccount(user.value) : null;
+export const fetchGuilds = async (env: Env, accessToken: string): Promise<DiscordResult<GuildSummary[]>> => {
+  const guilds = await call<DiscordGuild[]>(env, '/users/@me/guilds', accessToken);
+  return guilds.status === 'ok' ? { status: 'ok', value: guilds.value.map(toGuildSummary) } : guilds;
 };
 
-export const fetchBotGuilds = async (env: Env): Promise<DiscordResult<BotGuild[]>> => {
-  const guilds = await asBot<BotGuild[]>(env, `/users/@me/guilds?limit=${MAX_BOT_GUILDS}`);
-  return guilds.status === 'ok' ? { status: 'ok', value: guilds.value.slice(0, MAX_BOT_GUILDS) } : guilds;
+export const exchangeLoginCode = async (
+  env: Env,
+  code: string,
+  redirectUri: string,
+): Promise<{ account: Account; tokens: DiscordTokens } | null> => {
+  const tokens = await requestTokens(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri });
+  if (tokens.status !== 'ok') return null;
+
+  const user = await fetchUser(env, tokens.value.access);
+  return user.status === 'ok' ? { account: user.value, tokens: tokens.value } : null;
 };
 
-export const fetchGuildStructure = async (env: Env, guildId: string): Promise<DiscordResult<GuildStructure>> => {
-  const [guild, channels] = await Promise.all([
-    asBot<{ id: string; name: string; icon: string | null; owner_id: string; roles: Role[] }>(env, `/guilds/${guildId}`),
-    asBot<Channel[]>(env, `/guilds/${guildId}/channels`),
-  ]);
-  if (guild.status === 'unavailable' || channels.status === 'unavailable') return { status: 'unavailable' };
-  if (guild.status === 'missing' || channels.status === 'missing') return { status: 'missing' };
+export const renewTokens = (env: Env, refreshToken: string): Promise<DiscordResult<DiscordTokens>> =>
+  requestTokens(env, { grant_type: 'refresh_token', refresh_token: refreshToken });
 
-  const { id, name, icon, owner_id: ownerId, roles } = guild.value;
-  return { status: 'ok', value: { id, name, icon, owner_id: ownerId, roles, channels: channels.value } };
-};
-
-export const fetchMember = async (env: Env, guildId: string, userId: string): Promise<DiscordResult<DiscordMember>> => {
-  const member = await asBot<DiscordMember>(env, `/guilds/${guildId}/members/${userId}`);
-  return member.status === 'ok' && member.value.pending ? { status: 'missing' } : member;
+// Worth trying when someone logs out, but they are logged out whatever Discord answers.
+export const revokeTokens = async (env: Env, { refresh }: DiscordTokens): Promise<void> => {
+  await postForm(env, '/oauth2/token/revoke', { token: refresh, token_type_hint: 'refresh_token' }).catch(() => {});
 };

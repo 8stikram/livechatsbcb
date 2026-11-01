@@ -70,10 +70,10 @@ export const logout = async (accountToken: string): Promise<void> => {
   await request('/v1/auth/logout', {}, accountToken);
 };
 
-export const fetchMe = async (accountToken: string): Promise<ApiResult<MeResponse>> => {
+export const fetchMe = async (accountToken: string, fresh: boolean): Promise<ApiResult<MeResponse>> => {
   let response: Response | null = null;
   try {
-    response = await fetch(`${SERVER_URL}/v1/me`, {
+    response = await fetch(`${SERVER_URL}/v1/me${fresh ? '?fresh=1' : ''}`, {
       headers: { authorization: `Bearer ${accountToken}` },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -91,8 +91,8 @@ export const createParty = async (accountToken: string) =>
 export const joinParty = async (accountToken: string, code: string) =>
   sessionFrom(await request('/v1/join', { code }, accountToken));
 
-export const joinChannel = async (accountToken: string, guildId: string, channelId: string) =>
-  sessionFrom(await request(`/v1/guilds/${guildId}/channels/${channelId}/join`, {}, accountToken));
+export const joinGuild = async (accountToken: string, guildId: string) =>
+  sessionFrom(await request(`/v1/guilds/${guildId}/join`, {}, accountToken));
 
 export const rotateCode = async (session: SessionResponse): Promise<ApiResult<string>> => {
   const response = await request(`/v1/parties/${session.partyId}/rotate-code`, {}, session.token);

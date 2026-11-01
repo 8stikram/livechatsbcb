@@ -1,5 +1,4 @@
-// Set online with `wrangler secret put`, so they appear in no file. The tests pass stand-ins for them.
+// Set online with `wrangler secret put`, so it appears in no file. The tests pass a stand-in for it.
 interface Env {
   DISCORD_CLIENT_SECRET: string;
-  DISCORD_BOT_TOKEN: string;
 }
