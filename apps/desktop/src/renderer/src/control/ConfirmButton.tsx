@@ -6,10 +6,14 @@ export const ConfirmButton = ({
   label,
   confirmLabel,
   onConfirm,
+  className = 'quiet',
+  title,
 }: {
   label: string;
   confirmLabel: string;
   onConfirm: () => void;
+  className?: string;
+  title?: string;
 }) => {
   const [armed, setArmed] = useState(false);
   const timer = useRef<number | undefined>(undefined);
@@ -19,7 +23,9 @@ export const ConfirmButton = ({
   return (
     <button
       type="button"
-      className={armed ? 'quiet danger' : 'quiet'}
+      className={armed ? `${className} danger` : className}
+      title={title}
+      aria-label={title}
       onClick={() => {
         window.clearTimeout(timer.current);
         if (armed) {

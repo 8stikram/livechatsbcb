@@ -79,7 +79,13 @@ export const App = () => {
             </p>
           )}
 
-          {showPicker && <GuildPicker state={state} onClose={() => setPicking(false)} />}
+          {showPicker && (
+            <GuildPicker
+              key={addedGuilds.map(({ id }) => id).join()}
+              state={state}
+              onClose={() => setPicking(false)}
+            />
+          )}
 
           {/* Kept mounted but hidden, so that going elsewhere doesn't lose a media being prepared. */}
           <div className="tabbed" hidden={showPicker}>

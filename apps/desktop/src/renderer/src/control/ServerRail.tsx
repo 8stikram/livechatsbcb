@@ -1,5 +1,6 @@
 import type { AppState } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
+import { ConfirmButton } from './ConfirmButton';
 
 // The round pictures on the side, like in Discord: one click and you are in the party of that server.
 export const ServerRail = ({
@@ -13,47 +14,67 @@ export const ServerRail = ({
   onShowParty: () => void;
   onAdd: () => void;
 }) => {
-  const { party } = state;
+  const { party, addedGuilds } = state;
   const inPrivateParty = party !== null && party.guild === null;
 
   return (
     <nav className="rail" aria-label="Tes serveurs">
-      {state.addedGuilds.map(({ id, name, iconUrl }) => {
+      {addedGuilds.map(({ id, name, iconUrl }) => {
         const active = party?.guild?.id === id;
         return (
-          <button
-            key={id}
-            type="button"
-            className={active ? 'rail-item is-active' : 'rail-item'}
-            title={name}
-            aria-label={name}
-            aria-pressed={active}
-            onClick={() => {
-              onShowParty();
-              if (!active) void window.liveChat.joinGuild(id);
-            }}
-          >
-            <Avatar className="rail-icon" name={name} url={iconUrl} />
-          </button>
+          <div key={id} className="rail-slot">
+            <button
+              type="button"
+              className={active ? 'rail-item is-active' : 'rail-item'}
+              title={name}
+              aria-label={name}
+              aria-pressed={active}
+              onClick={() => {
+                onShowParty();
+                if (!active) void window.liveChat.joinGuild(id);
+              }}
+            >
+              <Avatar className="rail-icon" name={name} url={iconUrl} />
+            </button>
+            {/* No need to confirm: the round plus brings it back. */}
+            <button
+              type="button"
+              className="rail-remove"
+              title={`Retirer ${name}`}
+              aria-label={`Retirer ${name}`}
+              onClick={() => void window.liveChat.setGuilds(addedGuilds.filter((guild) => guild.id !== id).map((guild) => guild.id))}
+            >
+              ×
+            </button>
+          </div>
         );
       })}
 
       {state.hasPrivateParty && (
-        <button
-          type="button"
-          className={inPrivateParty ? 'rail-item is-active' : 'rail-item'}
-          title="Party privée"
-          aria-label="Party privée"
-          aria-pressed={inPrivateParty}
-          onClick={() => {
-            onShowParty();
-            if (!inPrivateParty) void window.liveChat.returnToPrivateParty();
-          }}
-        >
-          <span className="rail-icon" aria-hidden="true">
-            🔒
-          </span>
-        </button>
+        <div className="rail-slot">
+          <button
+            type="button"
+            className={inPrivateParty ? 'rail-item is-active' : 'rail-item'}
+            title="Party privée"
+            aria-label="Party privée"
+            aria-pressed={inPrivateParty}
+            onClick={() => {
+              onShowParty();
+              if (!inPrivateParty) void window.liveChat.returnToPrivateParty();
+            }}
+          >
+            <span className="rail-icon" aria-hidden="true">
+              🔒
+            </span>
+          </button>
+          <ConfirmButton
+            className="rail-remove"
+            title="Quitter la party privée"
+            label="×"
+            confirmLabel="?"
+            onConfirm={() => void window.liveChat.leaveParty()}
+          />
+        </div>
       )}
 
       <button

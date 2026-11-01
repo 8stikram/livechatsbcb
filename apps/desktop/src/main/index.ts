@@ -315,6 +315,16 @@ function start(): void {
 
   const enterGuild = async (guildId: string): Promise<ActionResult> => {
     const result = await enterWith((token) => partyApi.joinGuild(token, guildId));
+    // Removed from the side while the answer was on its way.
+    const session = store.session;
+    if (result.ok && session?.guild?.id === guildId && !store.addedGuilds.some(({ id }) => id === guildId)) {
+      leaveConnection();
+      void partyApi.leaveParty(session);
+      store.update({ session: null });
+      publishState();
+      await enterLastGuild();
+      return result;
+    }
     joinError = result.ok || result.error === 'signed_out' ? null : result.error;
     if (result.ok && store.session?.guild?.id === guildId) store.update({ lastGuildId: guildId });
     if (!result.ok && result.error === 'forbidden') {
@@ -328,7 +338,10 @@ function start(): void {
   const enterLastGuild = async (): Promise<void> => {
     if (store.session) return;
     const guild = store.addedGuilds.find(({ id }) => id === store.lastGuildId) ?? store.addedGuilds[0];
-    if (!guild) return;
+    if (!guild) {
+      if (store.privateSession) enterParty(store.privateSession);
+      return;
+    }
     if (refusedGuild?.id === guild.id && Date.now() - refusedGuild.at < RETRY_REFUSED_GUILD_AFTER_MS) return;
     await enterGuild(guild.id);
   };
@@ -419,7 +432,10 @@ function start(): void {
 
     // Whoever just added a server wants to be there.
     const next = added[0] ?? (store.session ? null : kept[0]);
-    if (!next) return { ok: true };
+    if (!next) {
+      await enterLastGuild();
+      return { ok: true };
+    }
     notice = null;
     return enterGuild(next.id);
   });
@@ -464,15 +480,17 @@ function start(): void {
     return { ok: true };
   });
 
+  // A server is left by removing its picture, so this is always about the private party, whether someone is in it or not.
   handle(IpcChannel.LeaveParty, async (): Promise<ActionResult> => {
-    const session = store.session;
+    const session = store.privateSession;
     if (!session) return { ok: true };
 
     const result = await partyApi.leaveParty(session);
     if (!result.ok && result.error !== 'unauthorized') return result;
 
-    leaveConnection();
-    store.update(session.guild ? { session: null } : { session: null, privateSession: null });
+    const wasInIt = store.session?.partyId === session.partyId;
+    if (wasInIt) leaveConnection();
+    store.update(wasInIt ? { session: null, privateSession: null } : { privateSession: null });
     publishState();
     void enterLastGuild();
     return { ok: true };

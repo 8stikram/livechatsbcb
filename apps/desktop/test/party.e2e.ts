@@ -215,7 +215,13 @@ const pickServers = async (member: Member, names: string[]): Promise<void> => {
 };
 
 const serverPicture = (member: Member, name: string) =>
-  member.control.getByRole('navigation', { name: 'Tes serveurs' }).getByRole('button', { name });
+  member.control.getByRole('navigation', { name: 'Tes serveurs' }).getByRole('button', { name, exact: true });
+
+// The cross only shows on the picture under the mouse.
+const crossOn = async (member: Member, picture: string, cross: string) => {
+  await serverPicture(member, picture).hover();
+  return member.control.getByRole('navigation', { name: 'Tes serveurs' }).getByRole('button', { name: cross, exact: true });
+};
 
 const partyMember = (member: Member, name: string) =>
   member.control.getByRole('region', { name: 'Membres' }).getByText(name);
@@ -547,6 +553,29 @@ describe.skipIf(online)('party flow in the real app', () => {
     await serverPicture(guest, 'Les potes').click();
     await inServer(guest, 'Les potes');
     await onlineCount(host, 2);
+  });
+
+  it('removes a server with the cross on its picture, and moves on to another', async () => {
+    await serverPicture(guest, 'Ajouter un serveur').click();
+    await pickServers(guest, ['Tout neuf']);
+    await inServer(guest, 'Tout neuf');
+    await onlineCount(host, 1);
+
+    await (await crossOn(guest, 'Tout neuf', 'Retirer Tout neuf')).click();
+    await serverPicture(guest, 'Tout neuf').waitFor({ state: 'detached' });
+    await inServer(guest, 'Les potes');
+    await onlineCount(host, 2);
+
+    // Not the one someone is in: nothing else moves.
+    await serverPicture(guest, 'Ajouter un serveur').click();
+    await pickServers(guest, ['Tout neuf']);
+    await inServer(guest, 'Tout neuf');
+    await serverPicture(guest, 'Les potes').click();
+    await inServer(guest, 'Les potes');
+    await (await crossOn(guest, 'Tout neuf', 'Retirer Tout neuf')).click();
+    await serverPicture(guest, 'Tout neuf').waitFor({ state: 'detached' });
+    await inServer(guest, 'Les potes');
+    await connected(guest);
   });
 
   it('takes someone out of the party when they leave the Discord server, and moves them along', async () => {
@@ -920,7 +949,7 @@ describe.skipIf(online)('party flow in the real app', () => {
   });
 
   it('goes back to the server after leaving a private party', async () => {
-    await guest.control.getByRole('button', { name: 'Quitter la party' }).click();
+    await guest.control.getByRole('button', { name: 'Quitter la party', exact: true }).click();
     await guest.control.getByRole('button', { name: 'Confirmer le départ ?' }).click();
     await inServer(guest, 'Les potes');
     await serverPicture(guest, 'Party privée').waitFor({ state: 'detached' });
@@ -929,8 +958,28 @@ describe.skipIf(online)('party flow in the real app', () => {
     await onlineCount(host, 1);
   });
 
+  it('leaves a private party from its cross, only after confirming', async () => {
+    await openPrivateParty(guest);
+    await guest.control.getByLabel('Code de la party').fill(await partyCode(host));
+    await guest.control.getByRole('button', { name: 'Rejoindre' }).click();
+    await connected(guest);
+    await onlineCount(host, 2);
+    await serverPicture(guest, 'Les potes').click();
+    await inServer(guest, 'Les potes');
+
+    const cross = await crossOn(guest, 'Party privée', 'Quitter la party privée');
+    await cross.click();
+    await expect(serverPicture(guest, 'Party privée').count()).resolves.toBe(1);
+    await cross.click();
+    await serverPicture(guest, 'Party privée').waitFor({ state: 'detached' });
+
+    await partyMember(host, 'Pote').waitFor({ state: 'detached', timeout: 10_000 });
+    await inServer(guest, 'Les potes');
+    await connected(guest);
+  });
+
   it('removes the party when its last member leaves', async () => {
-    await host.control.getByRole('button', { name: 'Quitter la party' }).click();
+    await host.control.getByRole('button', { name: 'Quitter la party', exact: true }).click();
     await host.control.getByRole('button', { name: 'Confirmer le départ ?' }).click();
     await inServer(host, 'Les potes');
     await onlineCount(host, 2);
