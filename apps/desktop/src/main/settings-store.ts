@@ -17,6 +17,10 @@ export const SettingsSchema = z.object({
   layout: z.object({ profile: ZoneSchema, media: ZoneSchema, text: ZoneSchema }),
   launchAtStartup: z.boolean(),
   backgroundHintShown: z.boolean(),
+  clean: z.boolean(),
+  cleanKey: z.string(),
+  maxDurationSec: z.number().positive().nullable(),
+  ignored: z.record(z.string(), z.number().nullable()),
   seenVersion: z.string().nullable(),
 });
 

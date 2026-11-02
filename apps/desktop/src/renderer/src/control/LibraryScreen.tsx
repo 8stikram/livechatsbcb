@@ -86,6 +86,13 @@ export const Star = ({ on, onChange }: { on: boolean; onChange: (on: boolean) =>
   </button>
 );
 
+const ShortcutBadge = ({ shortcut }: { shortcut: string | null }) =>
+  shortcut && (
+    <span className="shortcut-badge mono" title={`Raccourci : ${shortcut}`} data-testid="shortcut-badge">
+      {shortcut}
+    </span>
+  );
+
 const FileCard = ({
   file,
   onUse,
@@ -109,6 +116,7 @@ const FileCard = ({
       <span className="row-title" title={file.name}>
         {file.name}
       </span>
+      <ShortcutBadge shortcut={file.shortcut} />
       <Star on={file.favorite} onChange={onFavorite} />
     </span>
   </li>
@@ -145,6 +153,7 @@ const SoundRow = ({
       </span>
     </span>
     <span className="history-actions">
+      <ShortcutBadge shortcut={file.shortcut} />
       <Star on={file.favorite} onChange={onFavorite} />
       <button type="button" className="pill secondary small" onClick={onUse}>
         Utiliser
@@ -201,6 +210,7 @@ const SavedRow = ({
         )}
       </span>
       <span className="history-actions">
+        <ShortcutBadge shortcut={saved.shortcut} />
         <Star on={saved.favorite} onChange={onFavorite} />
         <ConfirmButton label="Supprimer" confirmLabel="Vraiment ?" onConfirm={onDelete} />
         {missing > 0 ? (
@@ -268,6 +278,14 @@ export const LibraryScreen = ({
   const [renaming, setRenaming] = useState<{ file: LibraryFileView; name: string } | null>(null);
   const player = useRef<HTMLAudioElement>(null);
 
+  // A file being listened to can't be renamed or thrown away on Windows.
+  const stopListening = () => {
+    player.current?.pause();
+    player.current?.removeAttribute('src');
+    player.current?.load();
+    setListening(null);
+  };
+
   // Files may have changed on the disk since the last visit.
   useEffect(() => {
     if (active) void window.liveChat.scanLibrary().then(setLibrary);
@@ -278,6 +296,10 @@ export const LibraryScreen = ({
   }, [active]);
 
   useEffect(() => setShown(PAGE_SIZE), [category, search, sort]);
+
+  useEffect(() => {
+    if (state.settings.clean) stopListening();
+  }, [state.settings.clean]);
 
   if (!library) return <section className="glass panel library" aria-label="Bibliothèque" />;
 
@@ -359,14 +381,6 @@ export const LibraryScreen = ({
     if (!result.ok && result.error !== 'cancelled') setError(mediaErrorMessage(result.error));
   };
 
-  // A file being listened to can't be renamed or thrown away on Windows.
-  const stopListening = () => {
-    player.current?.pause();
-    player.current?.removeAttribute('src');
-    player.current?.load();
-    setListening(null);
-  };
-
   const rename = async (event: FormEvent) => {
     event.preventDefault();
     if (!renaming) return;
@@ -389,8 +403,14 @@ export const LibraryScreen = ({
 
   const showFileMenu = async (file: LibraryFileView) => {
     setError(null);
-    const { action, missing } = await window.liveChat.showLibraryFileMenu(file.id, canSend);
+    const { action, missing, library: changed } = await window.liveChat.showLibraryFileMenu(file.id, canSend);
+    if (changed) setLibrary(changed);
     if (missing) setError('Ce fichier n’est plus là.');
+    if (action?.startsWith('assign:')) {
+      const length = await playLengthMs(file);
+      if (length === null) setError('Ce fichier ne peut pas être lu. Essaie un autre format.');
+      else setLibrary(await window.liveChat.assignFileShortcut(file.id, action.slice('assign:'.length), length));
+    }
     if (action === 'use') void use(file);
     if (action === 'send') void sendNow(file);
     if (action === 'listen') listen(file);

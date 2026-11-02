@@ -55,6 +55,18 @@ const api: LiveChatApi = {
   stopLocalReplay: () => ipcRenderer.invoke(IpcChannel.StopLocalReplay),
   setSettings: (change) => ipcRenderer.invoke(IpcChannel.SetSettings, change),
   testOverlay: () => ipcRenderer.invoke(IpcChannel.TestOverlay),
+  onShortcutFeedback: (listener) => {
+    const handler = (_event: unknown, sent: boolean) => listener(sent);
+    ipcRenderer.on(IpcChannel.ShortcutFeedback, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.ShortcutFeedback, handler);
+  },
+  setClean: (clean) => ipcRenderer.invoke(IpcChannel.SetClean, clean),
+  setCleanKey: (key) => ipcRenderer.invoke(IpcChannel.SetCleanKey, key),
+  showMemberMenu: (memberId) => ipcRenderer.invoke(IpcChannel.ShowMemberMenu, memberId),
+  ignoreMember: (memberId, choice) => ipcRenderer.invoke(IpcChannel.IgnoreMember, memberId, choice),
+  assignFileShortcut: (fileId, key, durationMs) => ipcRenderer.invoke(IpcChannel.AssignFileShortcut, fileId, key, durationMs),
+  assignSavedShortcut: (savedId, key) => ipcRenderer.invoke(IpcChannel.AssignSavedShortcut, savedId, key),
+  clearShortcut: (key) => ipcRenderer.invoke(IpcChannel.ClearShortcut, key),
   checkForUpdates: () => ipcRenderer.invoke(IpcChannel.CheckForUpdates),
   markNotesSeen: () => ipcRenderer.invoke(IpcChannel.MarkNotesSeen),
   stashView: (view) => ipcRenderer.invoke(IpcChannel.StashView, view),

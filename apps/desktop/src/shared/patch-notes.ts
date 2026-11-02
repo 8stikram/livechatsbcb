@@ -3,6 +3,20 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.9.0',
+    date: '2 novembre 2026',
+    items: [
+      'Mode clean : Shift+F12 coupe tout chez toi, son et image, jusqu’à ce que tu réappuies',
+      'Raccourcis en jeu : Shift+F1 à Shift+F10 envoient un fichier ou un LiveChat sauvegardé, avec un petit son de confirmation',
+      'Shift+F11 passe le LiveChat en cours sans quitter ton jeu',
+      'Anti-spam : le même LiveChat 5 fois en 1 minute, et plus aucun envoi pendant 30 minutes',
+      'Clic droit sur un pote dans Party pour l’ignorer 10 minutes, 1 heure ou jusqu’à la fermeture de l’app. Il n’en sait rien',
+      'Durée max : coupé chez toi après 20 secondes, à changer dans les réglages. Quand tout le monde a été coupé, on passe au suivant',
+      'Les réglages sont rangés en sections',
+      'L’interface est un peu plus transparente',
+    ],
+  },
+  {
     version: '0.8.0',
     date: '2 novembre 2026',
     items: [

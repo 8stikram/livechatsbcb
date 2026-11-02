@@ -6,6 +6,9 @@ import {
   MAX_ONLINE_MEMBERS,
   MAX_QUEUE_LENGTH,
   MAX_REGISTERED_MEMBERS,
+  SPAM_BAN_MS,
+  SPAM_SENDS,
+  SPAM_WINDOW_MS,
   WS_PING,
   WS_PONG,
   WS_SUBPROTOCOL,
@@ -35,6 +38,7 @@ type QueueRow = {
   prepare_ms: number;
   prepare_deadline: number | null;
   ready: string;
+  cut: string;
 };
 type StoredItem = Omit<QueueItem, 'startAt'>;
 type HistoryRow = { item: string; played_at: number };
@@ -93,6 +97,8 @@ export class Party extends DurableObject<Env> {
         prepare_deadline INTEGER,
         ready TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS send_log (member_id TEXT NOT NULL, fingerprint TEXT NOT NULL, sent_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS bans (member_id TEXT PRIMARY KEY, until INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS history (
         id TEXT PRIMARY KEY,
         item TEXT NOT NULL,
@@ -104,6 +110,11 @@ export class Party extends DurableObject<Env> {
     const columns = this.ctx.storage.sql.exec<{ name: string }>('PRAGMA table_info(members)').toArray();
     if (!columns.some(({ name }) => name === 'avatar_url')) {
       this.ctx.storage.sql.exec('ALTER TABLE members ADD COLUMN avatar_url TEXT');
+    }
+    // Parties created before a queue item could be cut short.
+    const queueColumns = this.ctx.storage.sql.exec<{ name: string }>('PRAGMA table_info(queue)').toArray();
+    if (!queueColumns.some(({ name }) => name === 'cut')) {
+      this.ctx.storage.sql.exec("ALTER TABLE queue ADD COLUMN cut TEXT NOT NULL DEFAULT '[]'");
     }
     // What played before this format is at most a day old: it isn't worth converting.
     if (this.getMeta('itemFormat') !== ITEM_FORMAT) {
@@ -185,16 +196,17 @@ export class Party extends DurableObject<Env> {
     token: string,
     mediaId: string,
     draft: MediaDraft,
-  ): Promise<{ ok: true } | Refusal<'unauthorized' | 'queue_full'>> {
+  ): Promise<{ ok: true } | Refusal<'unauthorized' | 'queue_full' | 'banned'>> {
     const member = await this.memberForToken(token);
     if (!member || !(await this.mayStay(member))) return { ok: false, error: 'unauthorized' };
+    if (!this.mayNotSpam(member.id, draft)) return { ok: false, error: 'banned' };
     if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
     this.enqueue(mediaId, member, draft, []);
     return { ok: true };
   }
 
   // The file is already there, so this costs no upload: only a new place in the queue, under the name of whoever asked.
-  async replay(token: string, historyId: string): Promise<{ ok: true } | Refusal<'unauthorized' | 'not_found' | 'queue_full'>> {
+  async replay(token: string, historyId: string): Promise<{ ok: true } | Refusal<'unauthorized' | 'not_found' | 'queue_full' | 'banned'>> {
     const member = await this.memberForToken(token);
     if (!member || !(await this.mayStay(member))) return { ok: false, error: 'unauthorized' };
 
@@ -202,9 +214,11 @@ export class Party extends DurableObject<Env> {
       .exec<HistoryRow>('SELECT item, played_at FROM history WHERE id = ? AND expires_at > ?', historyId, Date.now())
       .toArray();
     if (!row) return { ok: false, error: 'not_found' };
-    if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
 
     const { playedAt: _, ...original } = this.toHistoryItem(row);
+    if (!this.mayNotSpam(member.id, original)) return { ok: false, error: 'banned' };
+    if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
+
     this.enqueueItem({
       ...original,
       id: crypto.randomUUID(),
@@ -216,9 +230,13 @@ export class Party extends DurableObject<Env> {
     return { ok: true };
   }
 
-  async canUpload(token: string): Promise<{ ok: true; memberId: string } | Refusal<'unauthorized' | 'queue_full'>> {
+  async canUpload(
+    token: string,
+    draft: MediaDraft,
+  ): Promise<{ ok: true; memberId: string } | Refusal<'unauthorized' | 'queue_full' | 'banned'>> {
     const member = await this.memberForToken(token);
     if (!member || !(await this.mayStay(member))) return { ok: false, error: 'unauthorized' };
+    if (!this.mayNotSpam(member.id, draft)) return { ok: false, error: 'banned' };
     if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
     return { ok: true, memberId: member.id };
   }
@@ -398,6 +416,9 @@ export class Party extends DurableObject<Env> {
       case 'skip':
         this.skip(message.data.mediaId);
         break;
+      case 'cut':
+        this.markCut(memberId, message.data.mediaId);
+        break;
     }
   }
 
@@ -497,6 +518,28 @@ export class Party extends DurableObject<Env> {
     return row ? { ok: true, row } : { ok: false, error: 'not_found' };
   }
 
+  // Counts every try, sent or not. What makes it "the same" is what the others would see: its text and its files.
+  private mayNotSpam(memberId: string, { caption, files }: Pick<MediaDraft, 'caption' | 'files'>): boolean {
+    const now = Date.now();
+    this.ctx.storage.sql.exec('DELETE FROM bans WHERE until <= ?', now);
+    const [banned] = this.ctx.storage.sql.exec('SELECT 1 FROM bans WHERE member_id = ?', memberId).toArray();
+    if (banned) return false;
+
+    const fingerprint = JSON.stringify([caption, files.map(({ name, size }) => [name, size])]);
+    this.ctx.storage.sql.exec('DELETE FROM send_log WHERE sent_at <= ?', now - SPAM_WINDOW_MS);
+    const [row] = this.ctx.storage.sql
+      .exec<{ total: number }>('SELECT COUNT(*) AS total FROM send_log WHERE member_id = ? AND fingerprint = ?', memberId, fingerprint)
+      .toArray();
+    if ((row?.total ?? 0) + 1 >= SPAM_SENDS) {
+      this.ctx.storage.sql.exec('INSERT INTO bans (member_id, until) VALUES (?, ?)', memberId, now + SPAM_BAN_MS);
+      this.ctx.storage.sql.exec('DELETE FROM send_log WHERE member_id = ?', memberId);
+      this.broadcast({ t: 'members', members: this.members() });
+      return false;
+    }
+    this.ctx.storage.sql.exec('INSERT INTO send_log (member_id, fingerprint, sent_at) VALUES (?, ?, ?)', memberId, fingerprint, now);
+    return true;
+  }
+
   private queueIsFull(): boolean {
     const [row] = this.ctx.storage.sql.exec<{ total: number }>('SELECT COUNT(*) AS total FROM queue').toArray();
     return (row?.total ?? 0) >= MAX_QUEUE_LENGTH;
@@ -590,6 +633,14 @@ export class Party extends DurableObject<Env> {
     if (this.advanceQueue()) this.broadcastQueue();
   }
 
+  private markCut(memberId: string, mediaId: string): void {
+    const [row] = this.ctx.storage.sql.exec<QueueRow>('SELECT * FROM queue WHERE id = ?', mediaId).toArray();
+    if (!row) return;
+    const cut = new Set(JSON.parse(row.cut) as string[]).add(memberId);
+    this.ctx.storage.sql.exec('UPDATE queue SET cut = ? WHERE id = ?', JSON.stringify([...cut]), mediaId);
+    if (this.advanceQueue()) this.broadcastQueue();
+  }
+
   // Names the media so that two people pressing at once can't skip the one after it too.
   private skip(mediaId: string): void {
     if (this.queueRows()[0]?.id !== mediaId) return;
@@ -612,7 +663,11 @@ export class Party extends DurableObject<Env> {
 
       const { durationMs } = JSON.parse(head.item) as QueueItem;
       if (head.start_at !== null) {
-        if (now < head.start_at + durationMs) {
+        // Nobody is watching any more: there is no point keeping the next one waiting.
+        const cut = new Set(JSON.parse(head.cut) as string[]);
+        const online = [...this.onlineIds(leaving)];
+        const nobodyWatching = online.length > 0 && online.every((id) => cut.has(id));
+        if (now < head.start_at + durationMs && !nobodyWatching) {
           this.wakeAt(head.start_at + durationMs, leaving);
           return changed;
         }
@@ -649,10 +704,22 @@ export class Party extends DurableObject<Env> {
 
   private members(excluding?: WebSocket): Member[] {
     const online = this.onlineIds(excluding);
+    const bans = new Map(
+      this.ctx.storage.sql
+        .exec<{ member_id: string; until: number }>('SELECT member_id, until FROM bans WHERE until > ?', Date.now())
+        .toArray()
+        .map(({ member_id: id, until }) => [id, until]),
+    );
     const members = this.ctx.storage.sql
       .exec<MemberRow>('SELECT id, name, avatar_url FROM members ORDER BY joined_at')
       .toArray()
-      .map(({ id, name, avatar_url: avatarUrl }) => ({ id, name, avatarUrl, online: online.has(id) }));
+      .map(({ id, name, avatar_url: avatarUrl }) => ({
+        id,
+        name,
+        avatarUrl,
+        online: online.has(id),
+        bannedUntil: bans.get(id) ?? null,
+      }));
     // Past visitors of a Discord server's party are nobody's business: a private party is the one with a fixed list.
     return this.getMeta('guildId') ? members.filter((member) => member.online) : members;
   }

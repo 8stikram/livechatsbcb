@@ -278,6 +278,15 @@ const openTab = (member: Member, name: string) =>
     ? member.control.getByRole('button', { name, exact: true }).click()
     : member.control.getByRole('tab', { name }).click();
 
+const openSettings = async (member: Member, section: string): Promise<void> => {
+  await openTab(member, 'Réglages');
+  await member.control.getByRole('navigation', { name: 'Sections des réglages' }).getByRole('button', { name: section }).click();
+};
+
+const pressKeys = (keys: string): void => {
+  spawnSync('powershell', ['-NoProfile', '-Command', `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('${keys}')`]);
+};
+
 const mainWindowVisible = (member: Member) =>
   member.app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows().some((window) => !window.getTitle().includes('Scène') && window.isVisible()),
@@ -290,7 +299,7 @@ const overlayState = async (member: Member, state: string, timeout = 30_000): Pr
     const seen = await member.control.evaluate(() => window.liveChat.getState());
     const mounted = await member.stage.getByTestId('stage').count();
     const shown = await member.control.getByRole('alert').allTextContents();
-    const details = { connection: seen.party?.connection, queue: seen.queue, mounted, shown };
+    const details = { connection: seen.party?.connection, queue: seen.queue, upload: seen.upload, mounted, shown, text: await member.control.evaluate(() => document.body.innerText.slice(0, 900)) };
     throw new Error(`The overlay never reached "${state}": ${JSON.stringify(details)}`, { cause: error });
   }
 };
@@ -752,7 +761,7 @@ describe.skipIf(online)('party flow in the real app', () => {
       return bounds;
     });
 
-    await openTab(host, 'Réglages');
+    await openSettings(host, 'Affichage en jeu');
     await host.control.getByRole('button', { name: 'Test d’affichage' }).click();
     await overlayState(host, 'test');
     await new Promise((done) => setTimeout(done, 700));
@@ -774,7 +783,7 @@ describe.skipIf(online)('party flow in the real app', () => {
       host.app.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.getTitle() ?? null);
     const before = await focused();
 
-    await openTab(host, 'Réglages');
+    await openSettings(host, 'Affichage en jeu');
     await host.control.getByRole('button', { name: 'Test d’affichage' }).click();
     await overlayState(host, 'test');
     expect(await stageVisible(host)).toBe(true);
@@ -1040,7 +1049,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await picture(host.control, 'patch-notes.png');
     await host.control.getByTestId('whats-new').waitFor({ state: 'detached' });
 
-    await openTab(host, 'Réglages');
+    await openSettings(host, 'Mises à jour');
     await host.control.getByRole('button', { name: 'Vérifier les mises à jour' }).click();
     await host.control.getByTestId('update-check').filter({ hasText: 'app installée' }).waitFor();
     await openTab(host, 'LiveChat');
@@ -1079,6 +1088,118 @@ describe.skipIf(online)('party flow in the real app', () => {
     await overlayState(host, 'idle');
   });
 
+  it('cuts a long LiveChat on this PC, and moves on once nobody is watching', async () => {
+    await host.control.evaluate(() => window.liveChat.setSettings({ maxDurationSec: 2 }));
+    await guest.control.evaluate(() => window.liveChat.setSettings({ maxDurationSec: 2 }));
+    await openTab(host, 'LiveChat');
+    await setRange(host, /Durée d’affichage/, 30_000);
+    await host.control.getByTestId('too-long').waitFor();
+    await sendText(host, 'Trop long');
+    await overlayState(guest, 'playing');
+    const started = Date.now();
+    await overlayState(guest, 'idle', 8_000);
+    await expect.poll(async () => (await guest.control.evaluate(() => window.liveChat.getState())).queue.current).toBeNull();
+    expect(Date.now() - started).toBeLessThan(15_000);
+
+    await setRange(host, /Durée d’affichage/, 5_000);
+    await host.control.evaluate(() => window.liveChat.setSettings({ maxDurationSec: 20 }));
+    await guest.control.evaluate(() => window.liveChat.setSettings({ maxDurationSec: 20 }));
+  });
+
+  it('shows nothing from someone ignored, without them knowing', async () => {
+    const hostId = (await host.control.evaluate(() => window.liveChat.getState())).party!.memberId;
+    await guest.control.evaluate((id) => window.liveChat.ignoreMember(id, '10min'), hostId);
+    await openTab(guest, 'Party');
+    await guest.control.getByTestId('member-ignored').filter({ hasText: 'encore' }).waitFor();
+    await picture(guest.control, 'member-ignored.png');
+
+    await sendText(host, 'Tu ne me vois pas');
+    await overlayState(host, 'playing');
+    await guest.control.getByTestId('now-hidden').waitFor();
+    expect(await guest.stage.locator('[data-testid="stage"]').getAttribute('data-state')).toBe('idle');
+    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(host, 'idle');
+
+    await guest.control.evaluate((id) => window.liveChat.ignoreMember(id, 'stop'), hostId);
+    await guest.control.getByTestId('member-ignored').waitFor({ state: 'detached' });
+  });
+
+  it('cuts everything with the clean key, and sends with a shortcut key from anywhere', async () => {
+    // Both test apps run on one PC, and a key can only belong to one of them.
+    await guest.app.evaluate(({ globalShortcut }) => globalShortcut.unregisterAll());
+    // Not the default key: another app can hold it on the PC running this.
+    expect(await host.control.evaluate(() => window.liveChat.setCleanKey('Shift+F3'))).toBe('reserved');
+    expect(await host.control.evaluate(() => window.liveChat.setCleanKey('Ctrl+Shift+F12'))).toBe('ok');
+    await expect.poll(() => host.app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Ctrl+Shift+F12'))).toBe(true);
+    await host.control.getByTestId('clean-key-taken').waitFor({ state: 'detached' });
+
+    pressKeys('^+{F12}');
+    await host.control.getByTestId('clean-banner').waitFor({ timeout: 10_000 });
+    await picture(host.control, 'clean-mode.png');
+    await sendText(guest, 'Pendant le clean');
+    await overlayState(guest, 'playing');
+    await new Promise((done) => setTimeout(done, 500));
+    expect(await host.stage.locator('[data-testid="stage"]').getAttribute('data-state')).toBe('idle');
+    expect(await stageVisible(host)).toBe(false);
+    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+
+    await host.control.getByTestId('clean-banner').getByRole('button', { name: 'Désactiver' }).click();
+    await host.control.getByTestId('clean-banner').waitFor({ state: 'detached' });
+
+    await openTab(host, 'LiveChat');
+    await host.control.getByLabel('Texte à afficher').fill('Par la touche');
+    await host.control.getByRole('button', { name: 'Sauvegarder dans la bibliothèque' }).click();
+    await host.control.getByLabel('Nom de ce LiveChat').fill('Mon raccourci');
+    await host.control.getByLabel('Nom de ce LiveChat').press('Enter');
+    await expect.poll(async () => (await host.control.evaluate(() => window.liveChat.scanLibrary())).saved.some(({ name }) => name === 'Mon raccourci')).toBe(true);
+    await host.control.getByLabel('Texte à afficher').fill('');
+
+    const library = await host.control.evaluate(() => window.liveChat.scanLibrary());
+    const saved = library.saved.find(({ name }) => name === 'Mon raccourci')!;
+    await host.control.evaluate((id) => window.liveChat.assignSavedShortcut(id, 'Shift+F3'), saved.id);
+    await expect.poll(() => host.app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Shift+F3'))).toBe(true);
+
+    await openSettings(host, 'Raccourcis');
+    await host.control.getByTestId('shortcut-list').filter({ hasText: 'Mon raccourci' }).waitFor();
+    await picture(host.control, 'settings-shortcuts.png');
+
+    pressKeys('+{F3}');
+    await overlayState(guest, 'playing', 15_000);
+    await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Par la touche' }).waitFor();
+
+    pressKeys('+{F11}');
+    await overlayState(guest, 'idle', 10_000);
+
+    await host.control.evaluate(() => window.liveChat.clearShortcut('Shift+F3'));
+    await expect.poll(() => host.app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Shift+F3'))).toBe(false);
+  });
+
+  it('shows who is banned for spamming, to everyone', async () => {
+    const state = await host.control.evaluate(() => window.liveChat.getState());
+    const until = Date.now() + 12 * 60_000;
+    const banned = {
+      ...state,
+      party: { ...state.party!, members: state.party!.members.map((member) => ({ ...member, bannedUntil: until })) },
+    };
+    await host.app.evaluate(({ BrowserWindow }, shown) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('state:changed', shown);
+    }, banned);
+    await host.control.getByTestId('own-ban').filter({ hasText: '12 min' }).waitFor();
+    await openTab(host, 'Party');
+    await host.control.getByTestId('member-banned').first().waitFor();
+    await picture(host.control, 'member-banned.png');
+    await openTab(host, 'LiveChat');
+    await host.control.getByLabel('Texte à afficher').fill('Non');
+    expect(await sendButton(host).isDisabled()).toBe(true);
+    await host.control.getByLabel('Texte à afficher').fill('');
+
+    await host.app.evaluate(({ BrowserWindow }, shown) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('state:changed', shown);
+    }, state);
+    await host.control.getByTestId('own-ban').waitFor({ state: 'detached' });
+  });
+
   it('sends from LiveChat and shows it in the party, which only says who is there', async () => {
     await openTab(guest, 'Party');
     await sendText(host, 'Vite fait');
@@ -1101,7 +1222,7 @@ describe.skipIf(online)('party flow in the real app', () => {
   });
 
   it('applies the local volume, plays sounds, and keeps settings after a restart', async () => {
-    await openTab(guest, 'Réglages');
+    await openSettings(guest, 'Son');
     await setRange(guest, /Volume/, 30);
     await guest.control.getByTestId('volume-value').filter({ hasText: '30 %' }).waitFor();
 
@@ -1125,7 +1246,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await onlineCount(host, 1);
     guest = await launch('guest');
     await connected(guest);
-    await openTab(guest, 'Réglages');
+    await openSettings(guest, 'Son');
     await guest.control.getByTestId('volume-value').filter({ hasText: '30 %' }).waitFor();
   });
 
@@ -1579,7 +1700,7 @@ describe.skipIf(online)('party flow in the real app', () => {
   });
 
   it('moves a zone of the overlay, and shows the result on the real screen', async () => {
-    await openTab(guest, 'Réglages');
+    await openSettings(guest, 'Affichage en jeu');
     await guest.control.getByTestId('layout-box').scrollIntoViewIfNeeded();
     await picture(guest.control, '8-settings-tab.png');
     const zone = await guest.control.getByTestId('layout-text').boundingBox();
@@ -1710,7 +1831,7 @@ describe.skipIf(online)('party flow in the real app', () => {
   });
 
   it('logs out, and stays logged out after a restart', async () => {
-    await openTab(guest, 'Réglages');
+    await openSettings(guest, 'Général');
     await guest.control.getByRole('button', { name: 'Se déconnecter' }).click();
     await guest.control.getByRole('button', { name: 'Confirmer ?' }).click();
     await loginButton(guest).waitFor();
@@ -1726,7 +1847,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     const launchAtStartup = async () =>
       (await host.control.evaluate(() => window.liveChat.getState())).settings.launchAtStartup;
 
-    await openTab(host, 'Réglages');
+    await openSettings(host, 'Général');
     expect(await launchAtStartup()).toBe(true);
     const box = host.control.getByRole('checkbox', { name: 'Lancer LiveChatSBCB au démarrage de Windows' });
     expect(await box.isChecked()).toBe(true);

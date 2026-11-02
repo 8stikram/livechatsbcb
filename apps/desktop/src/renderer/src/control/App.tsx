@@ -4,6 +4,7 @@ import { GuildPicker } from './GuildPicker';
 import { Header, type View } from './Header';
 import { HistoryScreen } from './HistoryScreen';
 import { LibraryScreen, type Category } from './LibraryScreen';
+import { bannedUntilOf, minutesLeft } from './messages';
 import { loadInEditor } from './load-editor';
 import { NotesScreen } from './NotesScreen';
 import { LoginScreen } from './LoginScreen';
@@ -21,6 +22,20 @@ const NOTICES = {
   session_expired: 'Tu ne fais plus partie de ta party privée.',
   guild_lost: "Tu n'es plus sur ce serveur Discord.",
 } as const;
+
+// You can't see the app while playing, so a small sound says what the key did. Only on this PC.
+const playShortcutSound = (sent: boolean): void => {
+  const audio = new AudioContext();
+  const tone = audio.createOscillator();
+  const volume = audio.createGain();
+  tone.frequency.value = sent ? 880 : 220;
+  volume.gain.setValueAtTime(0.08, audio.currentTime);
+  volume.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.12);
+  tone.connect(volume).connect(audio.destination);
+  tone.start();
+  tone.stop(audio.currentTime + 0.12);
+  tone.onended = () => void audio.close();
+};
 
 export const App = () => {
   const state = useAppState();
@@ -46,6 +61,23 @@ export const App = () => {
   useEffect(() => {
     if (restartIn !== null) void window.liveChat.stashView(chosenView);
   }, [restartIn, chosenView]);
+
+  // Bans and ignored people run out on their own: what they say has to follow.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((tick) => tick + 1), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const mutedRef = useRef(false);
+  mutedRef.current = state?.settings.muted ?? false;
+  useEffect(
+    () =>
+      window.liveChat.onShortcutFeedback((sent) => {
+        if (!mutedRef.current) playShortcutSound(sent);
+      }),
+    [],
+  );
 
   // Whoever just entered a party is there to send something.
   useEffect(() => {
@@ -84,6 +116,7 @@ export const App = () => {
   const showPicker = picking || (!hasPlaces && !standalone);
   const shownNotice = notice === 'session_expired' || notice === 'guild_lost' ? NOTICES[notice] : null;
   const { current } = state.queue;
+  const ownBan = party ? bannedUntilOf(party) : null;
 
   return (
     <div className="app">
@@ -107,6 +140,26 @@ export const App = () => {
         {!showPicker && <Header party={party} view={view} joinError={joinError} onView={setChosenView} />}
 
         <UpdateBanner update={state.update} restartIn={restartIn} />
+        {state.settings.clean && (
+          <div className="banner is-clean" role="status" data-testid="clean-banner">
+            <span>
+              Mode clean actif : rien ne s’affiche ni ne s’entend chez toi. <span className="mono">{state.settings.cleanKey}</span> pour revenir.
+            </span>
+            <button type="button" className="pill primary small" onClick={() => void window.liveChat.setClean(false)}>
+              Désactiver
+            </button>
+          </div>
+        )}
+        {state.unavailableKeys.includes(state.settings.cleanKey) && (
+          <p className="banner is-error" role="status" data-testid="clean-key-taken">
+            Une autre app utilise déjà <span className="mono">{state.settings.cleanKey}</span>. Choisis une autre touche pour le mode clean dans Réglages, Raccourcis.
+          </p>
+        )}
+        {ownBan !== null && ownBan > Date.now() && (
+          <p className="banner is-error" role="status" data-testid="own-ban">
+            Tu as spammé : plus aucun envoi pendant encore {minutesLeft(ownBan)} min.
+          </p>
+        )}
         {state.whatsNew && view !== 'notes' && (
           <div className="banner" role="status" data-testid="whats-new">
             <span>Mise à jour installée : version {state.version}</span>

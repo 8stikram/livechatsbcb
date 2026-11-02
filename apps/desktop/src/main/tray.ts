@@ -4,6 +4,7 @@ import iconPath from '../renderer/src/assets/logo.png?asset';
 type TrayActions = {
   open: () => void;
   setMuted: (muted: boolean) => void;
+  setClean: (clean: boolean) => void;
   quit: () => void;
 };
 
@@ -11,22 +12,34 @@ type TrayActions = {
 export class AppTray {
   private readonly tray: Tray;
   private muted: boolean | null = null;
+  private clean: boolean | null = null;
+  private readonly normalIcon = nativeImage.createFromPath(iconPath).resize({ width: 32, height: 32, quality: 'best' });
 
   constructor(private readonly actions: TrayActions) {
-    this.tray = new Tray(nativeImage.createFromPath(iconPath).resize({ width: 32, height: 32, quality: 'best' }));
+    this.tray = new Tray(this.normalIcon);
     this.tray.setToolTip('LiveChatSBCB');
     this.tray.on('click', () => actions.open());
   }
 
-  showMuted(muted: boolean): void {
-    if (muted === this.muted) return;
+  show(muted: boolean, clean: boolean): void {
+    if (muted === this.muted && clean === this.clean) return;
+    if (clean !== this.clean) {
+      // Dimmed, so that it can't be left on without noticing.
+      const bitmap = Buffer.from(this.normalIcon.toBitmap());
+      if (clean) for (let index = 0; index < bitmap.length; index += 4) for (let color = 0; color < 3; color++) bitmap[index + color] = bitmap[index + color]! >> 2;
+      const { width, height } = this.normalIcon.getSize();
+      this.tray.setImage(clean ? nativeImage.createFromBitmap(bitmap, { width, height }) : this.normalIcon);
+      this.tray.setToolTip(clean ? 'LiveChatSBCB : mode clean actif' : 'LiveChatSBCB');
+    }
     this.muted = muted;
+    this.clean = clean;
 
-    const { open, setMuted, quit } = this.actions;
+    const { open, setMuted, setClean, quit } = this.actions;
     this.tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: 'Ouvrir LiveChatSBCB', click: () => open() },
         { label: 'Couper le son', type: 'checkbox', checked: muted, click: (item) => setMuted(item.checked) },
+        { label: 'Mode clean', type: 'checkbox', checked: clean, click: (item) => setClean(item.checked) },
         { type: 'separator' },
         { label: 'Quitter', click: () => quit() },
       ]),

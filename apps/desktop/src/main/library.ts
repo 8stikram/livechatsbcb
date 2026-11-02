@@ -46,10 +46,18 @@ const SavedSchema = z.object({
 export type SavedLiveChat = z.infer<typeof SavedSchema>;
 type NewSaved = Omit<SavedLiveChat, 'id' | 'favorite' | 'savedAt' | 'kept'>;
 
+const ShortcutTargetSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('saved'), id: z.string() }),
+  // A file sent alone needs its length, which only a page can measure, so it is kept from when the key was chosen.
+  z.object({ kind: z.literal('file'), path: z.string(), durationMs: z.number() }),
+]);
+type ShortcutTarget = z.infer<typeof ShortcutTargetSchema>;
+
 const StoredSchema = z.object({
   folders: z.array(z.string()),
   favorites: z.array(z.string()),
   saved: z.array(SavedSchema),
+  shortcuts: z.record(z.string(), ShortcutTargetSchema).default({}),
 });
 type Stored = z.infer<typeof StoredSchema>;
 
@@ -85,7 +93,7 @@ export class Library {
     try {
       return StoredSchema.parse(JSON.parse(readFileSync(this.storePath, 'utf8')));
     } catch {
-      return { folders: [], favorites: [], saved: [] };
+      return { folders: [], favorites: [], saved: [], shortcuts: {} };
     }
   }
 
@@ -149,6 +157,7 @@ export class Library {
     );
     const favorites = new Set(this.data.favorites);
     const files: LibraryFileView[] = [...this.found.values()].map(({ id, url, path, name, size, contentType, modifiedAt }) => ({
+      shortcut: this.shortcutWhere((target) => target.kind === 'file' && target.path === path),
       id,
       url,
       name,
@@ -178,6 +187,7 @@ export class Library {
       })),
     );
     return {
+      shortcut: this.shortcutWhere((target) => target.kind === 'saved' && target.id === saved.id),
       id: saved.id,
       name: saved.name,
       caption: saved.caption,
@@ -187,6 +197,45 @@ export class Library {
       files,
       thumbnailUrl: this.thumbnailUrl(saved.id),
     };
+  }
+
+  private shortcutWhere(matches: (target: ShortcutTarget) => boolean): string | null {
+    return Object.entries(this.data.shortcuts).find(([, target]) => matches(target))?.[0] ?? null;
+  }
+
+  shortcutTarget(key: string): ShortcutTarget | null {
+    return this.data.shortcuts[key] ?? null;
+  }
+
+  shortcutKeys(): string[] {
+    return Object.keys(this.data.shortcuts);
+  }
+
+  shortcutOfSaved(id: string): string | null {
+    return this.shortcutWhere((target) => target.kind === 'saved' && target.id === id);
+  }
+
+  shortcutOfFile(path: string): string | null {
+    return this.shortcutWhere((target) => target.kind === 'file' && target.path === path);
+  }
+
+  shortcutName(key: string): string {
+    const target = this.data.shortcuts[key];
+    if (!target) return '';
+    return target.kind === 'saved' ? (this.savedById(target.id)?.name ?? '') : basename(target.path);
+  }
+
+  // One key for one thing, and one thing for one key.
+  setShortcut(key: string, target: ShortcutTarget): void {
+    const same = target.kind === 'saved' ? this.shortcutOfSaved(target.id) : this.shortcutOfFile(target.path);
+    if (same) delete this.data.shortcuts[same];
+    this.data.shortcuts[key] = target;
+    this.save();
+  }
+
+  clearShortcut(key: string): void {
+    delete this.data.shortcuts[key];
+    this.save();
   }
 
   private thumbnailPath(id: string): string {
@@ -258,6 +307,9 @@ export class Library {
       return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'not_found' : 'busy';
     }
     this.data.favorites = this.data.favorites.map((favorite) => (favorite === file.path ? path : favorite));
+    for (const target of Object.values(this.data.shortcuts)) {
+      if (target.kind === 'file' && target.path === file.path) target.path = path;
+    }
     for (const saved of this.data.saved) {
       for (const used of saved.files) {
         if (used.path !== file.path) continue;
@@ -271,6 +323,8 @@ export class Library {
 
   forgetFavorite(path: string): void {
     this.data.favorites = this.data.favorites.filter((favorite) => favorite !== path);
+    const key = this.shortcutOfFile(path);
+    if (key) delete this.data.shortcuts[key];
     this.save();
   }
 
@@ -344,6 +398,8 @@ export class Library {
   deleteSaved(id: string): void {
     const kept = this.savedById(id)?.kept;
     this.data.saved = this.data.saved.filter((saved) => saved.id !== id);
+    const key = this.shortcutOfSaved(id);
+    if (key) delete this.data.shortcuts[key];
     this.save();
     this.thumbnailUrls.delete(id);
     rmSync(this.thumbnailPath(id), { force: true });

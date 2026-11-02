@@ -25,12 +25,16 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
-### 2. En jeu
+### 2. En jeu (en cours)
 
 - Bouton panique
 - Raccourcis pour envoyer un meme sans quitter le jeu
+- Ban anti-spam
 - Blocage temporaire d'un pote
 - Durée max automatique
+- Réglages refaits en sections
+- Interface légèrement plus transparente
+- Si une autre app a déjà la touche du mode clean, l'app le dit et on en choisit une autre
 
 ### 3. Envoi ultra rapide
 
@@ -56,19 +60,43 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 - Historique par personne
 - Sondages éclair
 
-### 7. Finitions
+### 7. Motion design
+
+- Des animations soignées partout dans l'app
+
+### 8. Finitions
 
 - Tags personnels dans la bibliothèque
 - Tuto au premier lancement, à passer et à rejouer depuis les réglages
 
-### 8. Plus tard
+### 9. Plus tard
 
 - Thèmes (Wii, Persona…)
-- Modes de jeu inspirés de MakeItMeme
+
+## Jeux (place à choisir)
+
+Un onglet Jeux dans l'app.
+
+**Premier jeu jouable : la meilleure blague**
+- Chacun envoie 5 images de son PC
+- Chacun reçoit 1 image au hasard et fait la meilleure blague dessus
+- Tout le monde vote, puis on recommence jusqu'à ce qu'il n'y ait plus d'images
+- Classement à la fin
+
+**Deuxième jeu : 1 contre 1, façon Quiplash**
+- Une question débile, on répond avec un LiveChat
+- Des duels : les deux réponses avec un grand « VS » au milieu
+- Vote avec une animation
+
+**Idées à creuser**
+- **Qui l'a envoyé ?** Un meme arrive anonymement, la party devine qui l'a envoyé d'après son humour. Des points si on ne te devine pas.
+- **Undercover :** tout le monde a la même image sauf l'imposteur. Chacun donne un mot en lien, puis on vote pour le démasquer.
 
 ## Déjà décidé
 
-- **Raccourcis :** Shift + une touche, par exemple Shift+F3, pour que le jeu garde F3.
+- **Raccourcis :** Shift+F1 à Shift+F10 pour les memes, Shift+F11 pour passer, Shift+F12 pour la panique (modifiable).
+- **Ban anti-spam :** le même LiveChat 5 fois en 1 minute, et plus aucun envoi pendant 30 minutes. Toute la party le voit.
+- **Durée max :** activée d'office à 20 secondes, chacun la change. Quand tout le monde a été coupé, la file passe au suivant.
 - **Bouton panique :** coupe le son et l'image chez toi seulement, et plus rien ne s'affiche jusqu'à ce que tu réappuies. Les autres ne voient rien.
 - **GIF :** partir de Klipy, à vérifier au moment de cette mise à jour : si c'est bien ce que Discord utilise, et si c'est gratuit.
 - **Liens vidéo :** YouTube d'abord, dans son lecteur officiel. TikTok ensuite, si son lecteur officiel convient.

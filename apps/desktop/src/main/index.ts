@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir, rm, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, screen, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
 import { z } from 'zod';
 import {
   CloseCode,
@@ -19,12 +19,13 @@ import {
   soundOf,
   type GuildSummary,
   type HistoryItem,
+  type Member,
   type MediaContentType,
   type QueueItem,
   type SceneLayer,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, type ActionResult, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
+import { IpcChannel, MEME_KEYS, SKIP_KEY, type ActionResult, type HiddenReason, type CleanKeyOutcome, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
@@ -88,6 +89,7 @@ const REJOIN_AT_MOST_EVERY_MS = 30_000;
 const RETRY_REFUSED_GUILD_AFTER_MS = 60_000;
 // Long enough for the overlay to load a file this PC already has.
 const LOCAL_REPLAY_LEAD_MS = 400;
+const SHORTCUT_COOLDOWN_MS = 3_000;
 
 // How Windows starts the app at login: no window, only the icon near the clock.
 const START_HIDDEN_ARG = '--hidden';
@@ -132,9 +134,19 @@ function start(): void {
   let localReplay: { key: string; historyId: string; item: HistoryItem; startAt: number | null } | null = null;
   let localReplayTimer: NodeJS.Timeout | undefined;
   const keeping = new Set<string>();
+  let unavailableKeys: string[] = [];
+  let cutTimer: NodeJS.Timeout | undefined;
+  let lastShortcutAt = 0;
 
+  const restartMode = takeRestartMode();
+  // Someone ignored "until the app closes" stays so through an update, which nobody chose.
+  settings.update({
+    ignored: Object.fromEntries(
+      Object.entries(settings.current.ignored).filter(([, until]) => (until === null ? restartMode !== null : until > Date.now())),
+    ),
+  });
   const stageWindow = createStageWindow(settings.current.displayId);
-  const controlWindow = createControlWindow(takeRestartMode() ?? (process.argv.includes(START_HIDDEN_ARG) ? 'hidden' : 'shown'));
+  const controlWindow = createControlWindow(restartMode ?? (process.argv.includes(START_HIDDEN_ARG) ? 'hidden' : 'shown'));
   const restartStash = takeRestartStash();
   const stashed: RestartStash = { view: null, recipe: null };
   // Someone new starts on this version. Someone already logged in came from an older one, and gets told what changed.
@@ -166,7 +178,31 @@ function start(): void {
     };
   };
 
+  const maxDurationMs = (): number | null =>
+    settings.current.maxDurationSec === null ? null : settings.current.maxDurationSec * 1_000;
+
+  const isIgnored = (memberId: string): boolean => {
+    const until = settings.current.ignored[memberId];
+    return until === null || (until !== undefined && until > Date.now());
+  };
+
+  const hiddenReason = (item: Pick<QueueItem, 'senderId' | 'durationMs' | 'startAt'>): HiddenReason | null => {
+    if (settings.current.clean) return 'clean';
+    if (isIgnored(item.senderId)) return 'ignored';
+    const limit = maxDurationMs();
+    const startedAt = item.startAt !== null && connection ? connection.toLocalTime(item.startAt) : null;
+    if (limit !== null && startedAt !== null && item.durationMs > limit && Date.now() >= startedAt + limit) return 'cut';
+    return null;
+  };
+
+  const toMemberView = (member: Member, party: PartyConnection): MemberView => ({
+    ...member,
+    bannedUntil: member.bannedUntil === null ? null : party.toLocalTime(member.bannedUntil),
+    ignored: isIgnored(member.id) ? { until: settings.current.ignored[member.id] ?? null } : null,
+  });
+
   const toPlayback = (item: QueueItem): PlaybackView => ({
+    hiddenForMe: hiddenReason(item),
     id: item.id,
     senderName: item.senderName,
     senderAvatarUrl: item.senderAvatarUrl,
@@ -199,6 +235,7 @@ function start(): void {
     return {
       historyId,
       playback: {
+        hiddenForMe: null,
         id: key,
         senderName: item.senderName,
         senderAvatarUrl: item.senderAvatarUrl,
@@ -222,6 +259,8 @@ function start(): void {
     return {
       version: app.getVersion(),
       update: updater.current(),
+      shortcuts: library.shortcutKeys().map((key) => ({ key, name: library.shortcutName(key) })),
+      unavailableKeys,
       restartIn: restartCountdown.seconds,
       whatsNew: settings.current.seenVersion !== app.getVersion(),
       account: store.login?.account ?? null,
@@ -239,7 +278,7 @@ function start(): void {
               code: snapshot.code,
               guild: session.guild,
               memberId: snapshot.memberId,
-              members: snapshot.members,
+              members: snapshot.members.map((member) => toMemberView(member, connection!)),
               connection: snapshot.status,
             }
           : null,
@@ -278,7 +317,8 @@ function start(): void {
   const syncOverlay = (): void => {
     if (stageWindow.isDestroyed()) return;
 
-    const playing = connection?.current().queue[0]?.startAt != null;
+    const head = connection?.current().queue[0];
+    const playing = head?.startAt != null && hiddenReason(head) === null;
     // Asked for on this PC, like the test: it shows even for someone who keeps the overlay off.
     const wanted = overlayTest || localReplay?.startAt != null || (playing && settings.current.overlayEnabled);
 
@@ -313,14 +353,30 @@ function start(): void {
     restartCountdown.sync(!quitting && updater.current().state === 'ready' && !busy);
   };
 
+  // Tells the service once this PC has stopped showing something, and comes back at the moment the limit says it stops.
+  const syncCut = (): void => {
+    clearTimeout(cutTimer);
+    const head = connection?.current().queue[0];
+    if (!connection || head?.startAt == null) return;
+    if (hiddenReason(head)) {
+      connection.reportCut(head.id);
+      return;
+    }
+    const limit = maxDurationMs();
+    if (limit !== null && head.durationMs > limit) {
+      cutTimer = setTimeout(publishState, connection.toLocalTime(head.startAt) + limit - Date.now() + 20);
+    }
+  };
+
   const publishState = (): void => {
     syncRestart();
+    syncCut();
     const state = getState();
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(IpcChannel.StateChanged, state);
     }
     syncOverlay();
-    tray.showMuted(settings.current.muted);
+    tray.show(settings.current.muted, settings.current.clean);
   };
 
   const updater = new Updater(publishState);
@@ -333,6 +389,7 @@ function start(): void {
 
   const tray = new AppTray({
     open: showControlWindow,
+    setClean: (clean) => setClean(clean),
     setMuted: (muted) => {
       settings.update({ muted });
       publishState();
@@ -884,26 +941,118 @@ function start(): void {
     return { ok: true, draft: putInDraft({ ...file, size: info.size }) };
   });
 
-  type MenuLine<Action> = { label: string; enabled?: boolean } & ({ action: Action } | { run: () => void });
+  type MenuLine<Action> = { label: string; enabled?: boolean } & ({ action: Action } | { run: () => void } | { submenu: Array<MenuLine<Action>> });
 
   // Answers with the line chosen. The menu can say it closed just before the click arrives, so closing decides nothing at once.
   const chooseFromMenu = <Action>(groups: Array<Array<MenuLine<Action>>>) =>
     new Promise<Action | null>((resolve) => {
+      const toItem = (line: MenuLine<Action>): MenuItemConstructorOptions =>
+        'submenu' in line
+          ? { label: line.label, enabled: line.enabled ?? true, submenu: line.submenu.map(toItem) }
+          : {
+              label: line.label,
+              enabled: line.enabled ?? true,
+              click: () => {
+                if ('run' in line) line.run();
+                resolve('action' in line ? line.action : null);
+              },
+            };
       const lines = groups
         .filter((group) => group.length > 0)
-        .flatMap((group, index) => [
-          ...(index > 0 ? [{ type: 'separator' as const }] : []),
-          ...group.map((line) => ({
-            label: line.label,
-            enabled: line.enabled ?? true,
-            click: () => {
-              if ('run' in line) line.run();
-              resolve('action' in line ? line.action : null);
-            },
-          })),
-        ]);
+        .flatMap((group, index) => [...(index > 0 ? [{ type: 'separator' as const }] : []), ...group.map(toItem)]);
       Menu.buildFromTemplate(lines).popup({ window: controlWindow, callback: () => setTimeout(() => resolve(null), 1_000) });
     });
+
+  const shortcutLines = <Action>(current: string | null, assign: (key: string) => MenuLine<Action>): MenuLine<Action> => ({
+    label: current ? `Raccourci : ${current}` : 'Assigner un raccourci',
+    submenu: [
+      ...MEME_KEYS.map((key) => {
+        const used = key !== current ? library.shortcutName(key) : '';
+        return { ...assign(key), label: used ? `${key} (remplace ${used})` : key };
+      }),
+      ...(current
+        ? [
+            {
+              label: 'Retirer le raccourci',
+              run: () => {
+                library.clearShortcut(current);
+                syncShortcuts();
+                publishState();
+              },
+            },
+          ]
+        : []),
+    ],
+  });
+
+  const shortcutFeedback = (sent: boolean): void => {
+    if (!settings.current.clean && !controlWindow.isDestroyed()) controlWindow.webContents.send(IpcChannel.ShortcutFeedback, sent);
+  };
+
+  const pressShortcut = async (key: string): Promise<void> => {
+    // A key held down, or pressed twice by accident, sends once.
+    if (Date.now() - lastShortcutAt < SHORTCUT_COOLDOWN_MS) return;
+    lastShortcutAt = Date.now();
+
+    const session = store.session;
+    const target = library.shortcutTarget(key);
+    if (!session || !target || upload) {
+      shortcutFeedback(false);
+      return;
+    }
+
+    let result: ActionResult = { ok: false, error: 'not_found' };
+    if (target.kind === 'saved') {
+      const saved = library.savedById(target.id);
+      if (saved && (await library.allThere(saved))) result = await sendFiles(session, saved.files, saved);
+    } else {
+      const info = await stat(target.path).catch(() => null);
+      const contentType = contentTypeOf(target.path);
+      if (info && contentType) {
+        const file = { path: target.path, name: basename(target.path), size: info.size, contentType };
+        const { durationMs } = target;
+        result = await sendFiles(session, [file], { caption: '', clipStartMs: 0, durationMs, videoMuted: false, soundMuted: false });
+      }
+    }
+    shortcutFeedback(result.ok);
+  };
+
+  const setClean = (clean: boolean): void => {
+    settings.update({ clean });
+    if (clean) {
+      stopLocalReplay();
+      clearTimeout(overlayTestTimer);
+      overlayTest = false;
+    }
+    publishState();
+  };
+
+  // A key is only taken from games while it does something here.
+  const syncShortcuts = (): void => {
+    globalShortcut.unregisterAll();
+    const wanted: Array<[string, () => void]> = [
+      [settings.current.cleanKey, () => setClean(!settings.current.clean)],
+      [
+        SKIP_KEY,
+        () => {
+          const head = connection?.current().queue[0];
+          if (head) connection?.skip(head.id);
+          shortcutFeedback(head !== undefined);
+        },
+      ],
+      ...library.shortcutKeys().map((key): [string, () => void] => [key, () => void pressShortcut(key)]),
+    ];
+    unavailableKeys = wanted
+      .filter(([key, run]) => {
+        try {
+          return !globalShortcut.register(key, run);
+        } catch {
+          return true;
+        }
+      })
+      .map(([key]) => key);
+  };
+  syncShortcuts();
 
   const confirmed = async (message: string, detail: string, button: string): Promise<boolean> => {
     const { response } = await dialog.showMessageBox(controlWindow, {
@@ -936,7 +1085,10 @@ function start(): void {
         { label: 'Envoyer tout de suite', action: 'send', enabled: canSend === true },
         ...(fileKindOf(file.contentType) === 'audio' ? [{ label: 'Écouter ou arrêter', action: 'listen' as const }] : []),
       ],
-      [{ label: library.isFileFavorite(id) ? 'Retirer des favoris' : 'Épingler en favori', action: 'favorite' }],
+      [
+        { label: library.isFileFavorite(id) ? 'Retirer des favoris' : 'Épingler en favori', action: 'favorite' },
+        shortcutLines<FileMenuAction>(library.shortcutOfFile(file.path), (key) => ({ label: key, action: `assign:${key}` })),
+      ],
       [
         { label: 'Afficher dans l’Explorateur', run: () => shell.showItemInFolder(file.path) },
         { label: 'Ouvrir avec l’app par défaut', run: () => void shell.openPath(file.path) },
@@ -947,7 +1099,7 @@ function start(): void {
         { label: 'Mettre à la corbeille', action: 'trash', enabled: !locked },
       ],
     ]);
-    return { action };
+    return { action, library: await library.view() };
   });
 
   handle(IpcChannel.ShowSavedMenu, async (savedId: unknown, canSend: unknown) => {
@@ -961,16 +1113,27 @@ function start(): void {
         { label: 'Envoyer', action: 'send', enabled: canSend === true && complete },
         complete ? { label: 'Modifier', action: 'edit' } : { label: 'Retrouver', action: 'relocate' },
       ],
-      [{ label: saved.favorite ? 'Retirer des favoris' : 'Épingler en favori', action: 'favorite' }],
+      [
+        { label: saved.favorite ? 'Retirer des favoris' : 'Épingler en favori', action: 'favorite' },
+        shortcutLines<SavedMenuAction | 'delete'>(library.shortcutOfSaved(saved.id), (key) => ({
+          label: key,
+          run: () => {
+            library.setShortcut(key, { kind: 'saved', id: saved.id });
+            syncShortcuts();
+            publishState();
+          },
+        })),
+      ],
       saved.files.flatMap((file, index) =>
         there[index] ? [{ label: `Afficher ${file.name} dans l’Explorateur`, run: () => shell.showItemInFolder(file.path) }] : [],
       ),
       [{ label: 'Supprimer', action: 'delete' }],
     ]);
-    if (action !== 'delete') return { action };
+    if (action !== 'delete') return { action, library: await library.view() };
 
     const detail = saved.kept ? 'La copie gardée sur ce PC sera effacée.' : 'Tes fichiers ne bougent pas.';
     if (await confirmed(`Supprimer « ${saved.name} » ?`, detail, 'Supprimer')) library.deleteSaved(saved.id);
+    syncShortcuts();
     publishState();
     return { action: null, library: await library.view() };
   });
@@ -1174,6 +1337,68 @@ function start(): void {
     return { view: restartStash?.view ?? null, loaded };
   });
 
+  handle(IpcChannel.SetClean, (clean: unknown) => setClean(clean === true));
+
+  handle(IpcChannel.SetCleanKey, (key: unknown): CleanKeyOutcome => {
+    if (typeof key !== 'string' || key === SKIP_KEY || MEME_KEYS.includes(key)) return 'reserved';
+    const before = settings.current.cleanKey;
+    settings.update({ cleanKey: key });
+    syncShortcuts();
+    const free = !unavailableKeys.includes(key);
+    if (!free) {
+      settings.update({ cleanKey: before });
+      syncShortcuts();
+    }
+    publishState();
+    return free ? 'ok' : 'taken';
+  });
+
+  handle(IpcChannel.ShowMemberMenu, (memberId: unknown) => {
+    const member = connection?.current().members.find(({ id }) => id === memberId);
+    if (!member || member.id === connection?.current().memberId) return null;
+    return chooseFromMenu<IgnoreChoice>([
+      [
+        { label: `Ignorer ${member.name} 10 minutes`, action: '10min' },
+        { label: `Ignorer ${member.name} 1 heure`, action: '1h' },
+        { label: `Ignorer ${member.name} jusqu’à la fermeture de l’app`, action: 'close' },
+      ],
+      [{ label: 'Ne plus ignorer', action: 'stop', enabled: isIgnored(member.id) }],
+    ]);
+  });
+
+  handle(IpcChannel.IgnoreMember, (memberId: unknown, choice: unknown) => {
+    if (typeof memberId !== 'string' || memberId === connection?.current().memberId) return;
+    const { [memberId]: _before, ...others } = settings.current.ignored;
+    const until = choice === '10min' ? Date.now() + 10 * 60_000 : choice === '1h' ? Date.now() + 60 * 60_000 : null;
+    settings.update({ ignored: choice === 'stop' ? others : { ...others, [memberId]: until } });
+    publishState();
+  });
+
+  handle(IpcChannel.AssignFileShortcut, async (fileId: unknown, key: unknown, durationMs: unknown) => {
+    const file = typeof fileId === 'string' ? library.fileById(fileId) : null;
+    if (file && typeof key === 'string' && MEME_KEYS.includes(key) && typeof durationMs === 'number') {
+      library.setShortcut(key, { kind: 'file', path: file.path, durationMs });
+      syncShortcuts();
+      publishState();
+    }
+    return library.view();
+  });
+
+  handle(IpcChannel.AssignSavedShortcut, async (savedId: unknown, key: unknown) => {
+    if (typeof savedId === 'string' && library.savedById(savedId) && typeof key === 'string' && MEME_KEYS.includes(key)) {
+      library.setShortcut(key, { kind: 'saved', id: savedId });
+      syncShortcuts();
+      publishState();
+    }
+    return library.view();
+  });
+
+  handle(IpcChannel.ClearShortcut, (key: unknown) => {
+    if (typeof key === 'string') library.clearShortcut(key);
+    syncShortcuts();
+    publishState();
+  });
+
   handle(IpcChannel.CheckForUpdates, () => updater.checkNow());
 
   handle(IpcChannel.MarkNotesSeen, () => {
@@ -1201,6 +1426,7 @@ function start(): void {
 
   handle(IpcChannel.DeleteSaved, (savedId: unknown) => {
     if (typeof savedId === 'string') library.deleteSaved(savedId);
+    syncShortcuts();
     publishState();
     return library.view();
   });
@@ -1222,7 +1448,7 @@ function start(): void {
     localReplayTimer = setTimeout(() => {
       stopLocalReplay();
       publishState();
-    }, LOCAL_REPLAY_LEAD_MS + replay.item.durationMs);
+    }, LOCAL_REPLAY_LEAD_MS + Math.min(replay.item.durationMs, maxDurationMs() ?? Infinity));
     publishState();
   };
 
@@ -1276,7 +1502,7 @@ function start(): void {
   handle(IpcChannel.ReplayFavoriteForMe, async (savedId: unknown): Promise<ActionResult> => {
     const saved = typeof savedId === 'string' ? library.savedById(savedId) : null;
     if (!saved?.kept || !(await library.allThere(saved))) return { ok: false, error: 'not_found' };
-    if (connection?.current().queue[0]?.startAt != null) return { ok: true };
+    if (settings.current.clean || connection?.current().queue[0]?.startAt != null) return { ok: true };
 
     stopLocalReplay();
     const key = randomUUID();
@@ -1311,7 +1537,7 @@ function start(): void {
     const item = connection?.current().history.find(({ id }) => id === rawId);
     if (!session || !item) return { ok: false, error: 'not_found' };
     // Nothing for everyone is ever interrupted, and the button says so too.
-    if (connection?.current().queue[0]?.startAt != null) return { ok: true };
+    if (settings.current.clean || connection?.current().queue[0]?.startAt != null) return { ok: true };
 
     stopLocalReplay();
     const replay = { key: randomUUID(), historyId: item.id, item, startAt: null as number | null };
@@ -1388,6 +1614,7 @@ function start(): void {
   });
   app.on('before-quit', () => {
     quitting = true;
+    globalShortcut.unregisterAll();
     login?.abort();
     connection?.stop();
     settings.flush();

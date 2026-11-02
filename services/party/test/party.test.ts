@@ -8,12 +8,14 @@ import {
   MAX_MEDIA_BYTES,
   MAX_ONLINE_MEMBERS,
   MEDIA_PART_BYTES,
+  SPAM_BAN_MS,
   ServerMessageSchema,
   SessionResponseSchema,
   WS_SUBPROTOCOL,
   WS_TOKEN_PREFIX,
   type Account,
   type HistoryItem,
+  type Member,
   type QueueItem,
   type ServerMessage,
   type SessionResponse,
@@ -144,6 +146,14 @@ class TestSocket {
     return this.until(() => (check(this.latestQueue()) ? this.latestQueue() : undefined), label);
   }
 
+  membersWhere(check: (members: Member[]) => boolean, label: string) {
+    return this.until(() => {
+      const latest = this.messages.findLast((message) => message.t === 'members' || message.t === 'welcome');
+      const members = latest && 'members' in latest ? latest.members : [];
+      return check(members) ? members : undefined;
+    }, label);
+  }
+
   latestHistory(): HistoryItem[] {
     const latest = this.messages.findLast((message) => message.t === 'history' || message.t === 'welcome');
     return latest && 'history' in latest ? latest.history : [];
@@ -195,11 +205,11 @@ const sendQuickText = async (session: SessionResponse) => {
   return ((await response.json()) as { mediaId: string }).mediaId;
 };
 
-const openUpload = (session: SessionResponse, size: number, contentType = 'video/mp4', base = BASE) =>
+const openUpload = (session: SessionResponse, size: number, contentType = 'video/mp4', base = BASE, name = 'clip.mp4') =>
   fetch(`${base}/v1/parties/${session.partyId}/media`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...authorized(session) },
-    body: JSON.stringify({ caption: '', clipStartMs: 0, durationMs: 2_000, files: [{ contentType, size, name: 'clip.mp4' }] }),
+    body: JSON.stringify({ caption: '', clipStartMs: 0, durationMs: 2_000, files: [{ contentType, size, name }] }),
   });
 
 const uploadFile = async (session: SessionResponse, bytes: Uint8Array, base = BASE): Promise<string> => {
@@ -289,6 +299,58 @@ describe('party service', () => {
     socket.send(JSON.stringify({ t: 'skip', mediaId: second }));
     await socket.queueWhere((items) => items.length === 0, 'empty');
     socket.close();
+  });
+
+  it('bans whoever sends the same thing 5 times in a minute, and only them, and only from sending', async () => {
+    const host = await createParty();
+    const guest = await joinParty(host.code, 'Invite');
+    const socket = new TestSocket(guest);
+    await socket.welcome();
+
+    const text = (session: SessionResponse, caption: string) =>
+      post(`/v1/parties/${session.partyId}/media`, { caption, clipStartMs: 0, durationMs: 1_000, files: [] }, authorized(session));
+
+    for (let send = 0; send < 4; send++) expect((await text(host, 'Encore')).status).toBe(201);
+    // Something else isn't spam.
+    expect((await text(host, 'Autre chose')).status).toBe(201);
+
+    const refused = await text(host, 'Encore');
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toEqual({ error: 'banned' });
+
+    const members = await socket.membersWhere((list) => list.some(({ bannedUntil }) => bannedUntil !== null), 'the ban');
+    const banned = members.find(({ id }) => id === host.memberId)!;
+    expect(banned.bannedUntil! - Date.now()).toBeGreaterThan(SPAM_BAN_MS - 60_000);
+    expect(banned.bannedUntil! - Date.now()).toBeLessThanOrEqual(SPAM_BAN_MS);
+    expect(members.find(({ id }) => id === guest.memberId)!.bannedUntil).toBeNull();
+
+    expect((await text(host, 'Plus rien')).status).toBe(403);
+    expect((await openUpload(host, 1_000)).status).toBe(403);
+    expect((await text(guest, 'Encore')).status).toBe(201);
+    socket.close();
+  });
+
+  it('moves on once everyone online has cut it, and not before', async () => {
+    const host = await createParty();
+    const guest = await joinParty(host.code, 'Invite');
+    const hostSocket = new TestSocket(host);
+    const guestSocket = new TestSocket(guest);
+    await hostSocket.welcome();
+    await guestSocket.welcome();
+
+    const first = await sendText(host, 'Trop long', 60_000);
+    const second = await sendText(host, 'La suite', 1_000);
+    await hostSocket.queueWhere((queue) => queue[0]?.startAt != null && queue.length === 2, 'the first playing');
+
+    hostSocket.send(JSON.stringify({ t: 'cut', mediaId: first }));
+    await new Promise((done) => setTimeout(done, 200));
+    expect(hostSocket.latestQueue()[0]).toMatchObject({ id: first });
+
+    guestSocket.send(JSON.stringify({ t: 'cut', mediaId: first }));
+    const after = await hostSocket.queueWhere((queue) => queue[0]?.id === second, 'the next one');
+    expect(after.some(({ id }) => id === first)).toBe(false);
+    hostSocket.close();
+    guestSocket.close();
   });
 
   it('gives the queue to someone arriving late', async () => {
@@ -547,7 +609,7 @@ describe('party service', () => {
     let refused: Response | null = null;
 
     for (let attempt = 0; attempt < 20 && !refused; attempt++) {
-      const response = await openUpload(host, MAX_MEDIA_BYTES);
+      const response = await openUpload(host, MAX_MEDIA_BYTES, 'video/mp4', BASE, `clip-${attempt}.mp4`);
       if (response.status === 201) opened.push(((await response.json()) as { mediaId: string }).mediaId);
       else refused = response;
     }

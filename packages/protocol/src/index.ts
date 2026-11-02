@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 export const WS_SUBPROTOCOL = `livechatsbcb.v${PROTOCOL_VERSION}`;
 export const WS_SUBPROTOCOL_PREFIX = 'livechatsbcb.v';
 export const WS_TOKEN_PREFIX = 'token.';
@@ -17,6 +17,10 @@ export const MEDIA_PART_BYTES = 8 * 1024 * 1024;
 export const MAX_CAPTION_LENGTH = 300;
 export const MAX_FILE_NAME_LENGTH = 200;
 export const MAX_QUEUE_LENGTH = 50;
+// The same LiveChat this many times in the window, and that person sends nothing for a while.
+export const SPAM_SENDS = 5;
+export const SPAM_WINDOW_MS = 60_000;
+export const SPAM_BAN_MS = 30 * 60_000;
 export const MAX_HISTORY_LENGTH = 50;
 export const MIN_DISPLAY_MS = 1_000;
 export const DEFAULT_DISPLAY_MS = 5_000;
@@ -115,6 +119,7 @@ export const ApiErrorCodeSchema = z.enum([
   'not_found',
   'storage_full',
   'queue_full',
+  'banned',
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 export const ApiErrorSchema = z.object({ error: ApiErrorCodeSchema });
@@ -124,6 +129,8 @@ export const MemberSchema = z.object({
   name: z.string(),
   avatarUrl: ImageUrlSchema.nullable(),
   online: z.boolean(),
+  // On the service's clock. Null for someone free to send.
+  bannedUntil: z.number().nullable(),
 });
 export type Member = z.infer<typeof MemberSchema>;
 
@@ -284,6 +291,8 @@ export type HistoryItem = z.infer<typeof HistoryItemSchema>;
 export const ClientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('ready'), mediaId: z.string() }),
   z.object({ t: z.literal('skip'), mediaId: z.string() }),
+  // This PC has stopped showing it. Once nobody is watching any more, the queue moves on.
+  z.object({ t: z.literal('cut'), mediaId: z.string() }),
   z.object({ t: z.literal('time'), c: z.number() }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;

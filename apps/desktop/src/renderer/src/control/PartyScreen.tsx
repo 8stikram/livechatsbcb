@@ -4,7 +4,7 @@ import type { ActionResult, AppState, PartyView, UpcomingView } from '../../../s
 import { Avatar } from '../Avatar';
 import { ConfirmButton } from './ConfirmButton';
 import { KindIcon } from './icons';
-import { errorMessage } from './messages';
+import { errorMessage, minutesLeft } from './messages';
 import { mediaTitle, NowCard } from './NowPlaying';
 
 const Upcoming = ({ upcoming, active }: { upcoming: UpcomingView[]; active: boolean }) => (
@@ -62,13 +62,33 @@ const Members = ({ party }: { party: PartyView }) => {
       </h2>
       <ul className="rows scroll">
         {party.members.map((member) => (
-          <li key={member.id} className={member.online ? 'row' : 'row is-offline'}>
+          <li
+            key={member.id}
+            className={member.online ? 'row' : 'row is-offline'}
+            data-testid="member"
+            onContextMenu={() => {
+              if (member.id === party.memberId) return;
+              void window.liveChat.showMemberMenu(member.id).then((choice) => {
+                if (choice) void window.liveChat.ignoreMember(member.id, choice);
+              });
+            }}
+          >
             <Avatar className="avatar" name={member.name} url={member.avatarUrl} testId="member-avatar" />
             <span className="row-text">
               <span className="row-title">
                 {member.name}
                 {member.id === party.memberId && <span className="row-you"> (toi)</span>}
               </span>
+              {member.bannedUntil !== null && member.bannedUntil > Date.now() && (
+                <span className="row-sub is-banned" data-testid="member-banned">
+                  Banni encore {minutesLeft(member.bannedUntil)} min
+                </span>
+              )}
+              {member.ignored && (
+                <span className="row-sub" data-testid="member-ignored">
+                  Ignoré{member.ignored.until ? ` encore ${minutesLeft(member.ignored.until)} min` : ''}, clic droit pour changer
+                </span>
+              )}
             </span>
             {member.online && <span className="dot is-online" title="En ligne" />}
           </li>

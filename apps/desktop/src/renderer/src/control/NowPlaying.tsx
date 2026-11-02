@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { HistoryView, PlaybackView, Settings, UpcomingView } from '../../../shared/ipc';
+import type { HiddenReason, HistoryView, PlaybackView, Settings, UpcomingView } from '../../../shared/ipc';
 import { Progress } from '../Progress';
 import { useSyncedMedia } from '../use-synced-media';
 import { IconMuted, IconSkip, IconSound, KindIcon } from './icons';
@@ -116,6 +116,12 @@ const usePageVisible = (): boolean => {
   return visible;
 };
 
+const HIDDEN_TEXT: Record<HiddenReason, string> = {
+  clean: 'Mode clean : rien ne s’affiche chez toi.',
+  ignored: 'Tu ignores cette personne pour le moment.',
+  cut: 'Coupé chez toi : durée max atteinte.',
+};
+
 export const NowCard = ({
   current,
   settings,
@@ -131,7 +137,11 @@ export const NowCard = ({
   return (
     <section className="glass now" aria-label="En ce moment">
       <div className="now-stage">
-        {current ? (
+        {current?.hiddenForMe ? (
+          <div className="now-empty" data-testid="now-hidden">
+            <p>{HIDDEN_TEXT[current.hiddenForMe]}</p>
+          </div>
+        ) : current ? (
           active && visible && <Preview key={`${current.id}-${startAt !== null}`} item={current} />
         ) : (
           <div className="now-empty">
@@ -139,7 +149,7 @@ export const NowCard = ({
             <p>Ce que quelqu'un envoie s'affiche ici, et chez tout le monde au même moment.</p>
           </div>
         )}
-        {startAt !== null && (
+        {startAt !== null && !current?.hiddenForMe && (
           <span className="now-pill">
             <span className="dot" aria-hidden="true" />
             En ce moment sur tous les écrans

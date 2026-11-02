@@ -23,7 +23,7 @@ const Stage = () => {
 
   const { settings, overlayTest } = state;
   const { current } = state.queue;
-  const shared = settings.overlayEnabled && current?.startAt != null ? current : null;
+  const shared = settings.overlayEnabled && current?.startAt != null && !current.hiddenForMe ? current : null;
   const replay = state.localReplay?.playback ?? null;
   const playing = shared ?? replay;
   const volume = settings.muted ? 0 : settings.volume / 100;

@@ -16,14 +16,19 @@ export type PartyView = {
   code: string | null;
   guild: GuildSummary | null;
   memberId: string;
-  members: Member[];
+  members: MemberView[];
   connection: ConnectionStatus;
 };
+
+// bannedUntil on this PC's clock. Ignored: this PC doesn't show what they send. No end means until the app closes.
+export type MemberView = Omit<Member, 'bannedUntil'> & { bannedUntil: number | null; ignored: { until: number | null } | null };
 
 export type UpdateStatus =
   | { state: 'idle' }
   | { state: 'downloading'; version: string; percent: number }
   | { state: 'ready'; version: string };
+
+export type IgnoreChoice = '10min' | '1h' | 'close' | 'stop';
 
 export type UpdateCheckOutcome = 'latest' | 'found' | 'failed' | 'unavailable';
 
@@ -40,6 +45,13 @@ export type Settings = {
   launchAtStartup: boolean;
   // Closing the window keeps the app running, which is worth explaining the first time and only then.
   backgroundHintShown: boolean;
+  // Nothing shows and nothing is heard on this PC until it is turned off again.
+  clean: boolean;
+  cleanKey: string;
+  // Cut on this PC after this long, for everyone who keeps the limit. Null: no limit.
+  maxDurationSec: number | null;
+  // By member. A time on this PC's clock, or null for until the app closes.
+  ignored: Record<string, number | null>;
   // The notes were offered for this version. Null for someone who never had the choice yet.
   seenVersion: string | null;
 };
@@ -58,12 +70,24 @@ export const DEFAULT_SETTINGS: Settings = {
   layout: DEFAULT_LAYOUT,
   launchAtStartup: true,
   backgroundHintShown: false,
+  clean: false,
+  cleanKey: 'Shift+F12',
+  maxDurationSec: 20,
+  ignored: {},
   seenVersion: null,
 };
+
+export const SKIP_KEY = 'Shift+F11';
+export const MEME_KEYS = Array.from({ length: 10 }, (_, index) => `Shift+F${index + 1}`);
+export type ShortcutView = { key: string; name: string };
+export type CleanKeyOutcome = 'ok' | 'reserved' | 'taken';
+// Why this PC isn't showing what is playing for the others.
+export type HiddenReason = 'clean' | 'ignored' | 'cut';
 
 export type DisplayView = { id: number; label: string };
 
 export type PlaybackView = {
+  hiddenForMe: HiddenReason | null;
   id: string;
   senderName: string;
   senderAvatarUrl: string | null;
@@ -145,6 +169,7 @@ export type LoadedScene = SceneInput & { files: SceneFile[] };
 export type DraftSlot = 'picture' | 'sound';
 
 export type LibraryFileView = {
+  shortcut: string | null;
   id: string;
   url: string;
   name: string;
@@ -155,6 +180,7 @@ export type LibraryFileView = {
 };
 
 export type SavedView = {
+  shortcut: string | null;
   id: string;
   name: string;
   caption: string;
@@ -174,7 +200,7 @@ export type LibraryView = {
 };
 
 // What a line of a right-click menu leaves to the window. The other lines are done by the app itself.
-export type FileMenuAction = 'use' | 'send' | 'listen' | 'favorite' | 'rename' | 'trash';
+export type FileMenuAction = 'use' | 'send' | 'listen' | 'favorite' | 'rename' | 'trash' | `assign:${string}`;
 export type SavedMenuAction = 'send' | 'edit' | 'relocate' | 'favorite';
 export type RenameOutcome = 'renamed' | 'invalid' | 'exists' | 'not_found' | 'busy';
 
@@ -194,6 +220,9 @@ export type UploadView = { name: string; percent: number; paused: boolean };
 export type AppState = {
   version: string;
   update: UpdateStatus;
+  shortcuts: ShortcutView[];
+  // Another app has these keys.
+  unavailableKeys: string[];
   // Seconds before the app restarts to install an update. Null when it isn't about to.
   restartIn: number | null;
   whatsNew: boolean;
@@ -262,6 +291,14 @@ export const IpcChannel = {
   ClearDraft: 'media:clear-draft',
   SendMedia: 'media:send',
   CancelUpload: 'media:cancel-upload',
+  ShortcutFeedback: 'shortcut:feedback',
+  SetClean: 'clean:set',
+  SetCleanKey: 'clean:set-key',
+  ShowMemberMenu: 'member:menu',
+  IgnoreMember: 'member:ignore',
+  AssignFileShortcut: 'shortcut:assign-file',
+  AssignSavedShortcut: 'shortcut:assign-saved',
+  ClearShortcut: 'shortcut:clear',
   SkipMedia: 'media:skip',
   ScanLibrary: 'library:scan',
   AddLibraryFolder: 'library:add-folder',
@@ -332,7 +369,7 @@ export type LiveChatApi = {
   forgetSceneFile(id: string): Promise<void>;
   sendScene(input: SceneInput): Promise<ActionResult>;
   saveScene(input: SceneInput & { name: string }): Promise<ActionResult>;
-  showLibraryFileMenu(fileId: string, canSend: boolean): Promise<{ action: FileMenuAction | null; missing?: true }>;
+  showLibraryFileMenu(fileId: string, canSend: boolean): Promise<{ action: FileMenuAction | null; library?: LibraryView; missing?: true }>;
   showSavedMenu(savedId: string, canSend: boolean): Promise<{ action: SavedMenuAction | null; library?: LibraryView }>;
   sendLibraryFile(fileId: string, durationMs: number): Promise<ActionResult>;
   renameLibraryFile(fileId: string, name: string): Promise<{ outcome: RenameOutcome; library: LibraryView }>;
@@ -350,6 +387,14 @@ export type LiveChatApi = {
   stopLocalReplay(): Promise<void>;
   setSettings(change: Partial<Settings>): Promise<void>;
   testOverlay(): Promise<void>;
+  onShortcutFeedback(listener: (sent: boolean) => void): () => void;
+  setClean(clean: boolean): Promise<void>;
+  setCleanKey(key: string): Promise<CleanKeyOutcome>;
+  showMemberMenu(memberId: string): Promise<IgnoreChoice | null>;
+  ignoreMember(memberId: string, choice: IgnoreChoice): Promise<void>;
+  assignFileShortcut(fileId: string, key: string, durationMs: number): Promise<LibraryView>;
+  assignSavedShortcut(savedId: string, key: string): Promise<LibraryView>;
+  clearShortcut(key: string): Promise<void>;
   checkForUpdates(): Promise<UpdateCheckOutcome>;
   markNotesSeen(): Promise<void>;
   stashView(view: string): Promise<void>;

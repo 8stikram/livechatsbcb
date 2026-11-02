@@ -47,6 +47,7 @@ export class PartyConnection {
   private bestRoundTripMs = Infinity;
   private clockSamplesLeft = 0;
   private readonly readyIds = new Set<string>();
+  private readonly cutIds = new Set<string>();
 
   constructor(
     private readonly session: SessionResponse,
@@ -91,6 +92,12 @@ export class PartyConnection {
   reportReady(mediaId: string): void {
     this.readyIds.add(mediaId);
     this.send({ t: 'ready', mediaId });
+  }
+
+  reportCut(mediaId: string): void {
+    if (this.cutIds.has(mediaId)) return;
+    this.cutIds.add(mediaId);
+    this.send({ t: 'cut', mediaId });
   }
 
   skip(mediaId: string): void {
@@ -140,6 +147,7 @@ export class PartyConnection {
         });
         // The service forgets nothing, but anything reported while disconnected never reached it.
         for (const mediaId of this.readyIds) this.send({ t: 'ready', mediaId });
+        for (const mediaId of this.cutIds) this.send({ t: 'cut', mediaId });
         this.syncClock();
         break;
       case 'members':

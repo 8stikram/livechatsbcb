@@ -1,5 +1,5 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { DEFAULT_LAYOUT, type AppState, type OverlayLayout, type Settings, type UpdateCheckOutcome, type Zone } from '../../../shared/ipc';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { DEFAULT_LAYOUT, SKIP_KEY, type AppState, type CleanKeyOutcome, type OverlayLayout, type Settings, type UpdateCheckOutcome, type Zone } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { ConfirmButton } from './ConfirmButton';
 import { Slider } from './NowPlaying';
@@ -112,8 +112,69 @@ const LayoutEditor = ({ layout }: { layout: OverlayLayout }) => {
   );
 };
 
+const MAX_DURATION_CHOICES = [10, 15, 20, 30, 45, 60];
+
+const CLEAN_KEY_ERRORS: Record<Exclude<CleanKeyOutcome, 'ok'>, string> = {
+  reserved: 'Cette touche sert déjà à autre chose dans l’app.',
+  taken: 'Une autre app utilise déjà cette touche.',
+};
+
+const acceleratorOf = (event: KeyboardEvent): string | null => {
+  const key = /^F\d{1,2}$/.test(event.key) || event.key === 'Pause' ? event.key : /^[a-z0-9]$/i.test(event.key) ? event.key.toUpperCase() : null;
+  if (!key) return null;
+  const mods = [event.ctrlKey && 'Ctrl', event.altKey && 'Alt', event.shiftKey && 'Shift'].filter(Boolean);
+  // A letter alone would be taken from everything you type, everywhere.
+  if (mods.length === 0 && !/^F\d|^Pause$/.test(key)) return null;
+  return [...mods, key].join('+');
+};
+
+const CleanKeyButton = ({ current }: { current: string }) => {
+  const [recording, setRecording] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!recording) return;
+    const onKey = (event: KeyboardEvent) => {
+      event.preventDefault();
+      if (event.key === 'Escape') {
+        setRecording(false);
+        return;
+      }
+      const accelerator = acceleratorOf(event);
+      if (!accelerator) return;
+      setRecording(false);
+      void window.liveChat.setCleanKey(accelerator).then((outcome) => setError(outcome === 'ok' ? null : CLEAN_KEY_ERRORS[outcome]));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [recording]);
+
+  return (
+    <>
+      <button type="button" className="pill secondary small mono" data-testid="clean-key" onClick={() => setRecording(true)}>
+        {recording ? 'Appuie sur une touche…' : current}
+      </button>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </>
+  );
+};
+
+const SECTIONS = [
+  ['general', 'Général'],
+  ['display', 'Affichage en jeu'],
+  ['sound', 'Son'],
+  ['shortcuts', 'Raccourcis'],
+  ['updates', 'Mises à jour'],
+] as const;
+type Section = (typeof SECTIONS)[number][0];
+
 export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpenNotes: () => void }) => {
   const { settings, displays } = state;
+  const [section, setSection] = useState<Section>('general');
   const [checking, setChecking] = useState(false);
   const [checked, setChecked] = useState<UpdateCheckOutcome | null>(null);
   const set = (change: Partial<Settings>) => void window.liveChat.setSettings(change);
@@ -124,110 +185,196 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
     setChecking(false);
   };
 
+  const unavailable = (key: string) =>
+    state.unavailableKeys.includes(key) && <span className="row-sub is-banned"> Prise par une autre app</span>;
+
   return (
-    <div className="settings-grid scroll">
-      <div className="settings-column">
-        {state.account && (
-          <section className="glass panel" aria-labelledby="account-title">
-            <h2 id="account-title">Ton compte</h2>
-            <div className="account">
-              <Avatar className="avatar is-large" name={state.account.name} url={state.account.avatarUrl} testId="account-avatar" />
-              <span className="row-text">
-                <span className="row-title" data-testid="account-name">
-                  {state.account.name}
-                </span>
-                <span className="row-sub">Reste connecté sur ce PC.</span>
-              </span>
-              <ConfirmButton
-                label="Se déconnecter"
-                confirmLabel="Confirmer ?"
-                onConfirm={() => void window.liveChat.logout()}
-              />
-            </div>
-          </section>
-        )}
-
-        <section className="glass panel" aria-labelledby="startup-title">
-          <h2 id="startup-title">Démarrage</h2>
-          <Switch checked={settings.launchAtStartup} onChange={(launchAtStartup) => set({ launchAtStartup })}>
-            Lancer LiveChatSBCB au démarrage de Windows
-          </Switch>
-          <p className="hint">
-            Il démarre discrètement près de l'horloge. Fermer la fenêtre le laisse ouvert : pour quitter, fais un clic
-            droit sur son icône.
-          </p>
-        </section>
-
-        <section className="glass panel" aria-labelledby="sound-title">
-          <h2 id="sound-title">Son</h2>
-          <label className="field">
-            <span className="field-line">
-              Volume <strong className="mono" data-testid="volume-value">{settings.volume} %</strong>
-            </span>
-            <Slider value={settings.volume} min={0} max={100} onChange={(volume) => set({ volume })} />
-          </label>
-          <Switch checked={settings.muted} onChange={(muted) => set({ muted })}>
-            Couper le son
-          </Switch>
-        </section>
-
-        <section className="glass panel" aria-labelledby="updates-title">
-          <h2 id="updates-title" className="panel-title">
-            Mises à jour
-            <span className="count mono">Version {state.version}</span>
-          </h2>
-          <div className="panel-actions">
-            <button type="button" className="pill secondary small" disabled={checking} onClick={() => void check()}>
-              {checking ? 'Vérification…' : 'Vérifier les mises à jour'}
-            </button>
-            <button type="button" className="pill quiet small" onClick={onOpenNotes}>
-              Voir les nouveautés
-            </button>
-          </div>
-          {checked && (
-            <p className="hint" role="status" data-testid="update-check">
-              {CHECK_MESSAGES[checked]}
-            </p>
-          )}
-        </section>
-      </div>
-
-      <div className="settings-column">
-        <section className="glass panel" aria-labelledby="overlay-title">
-          <h2 id="overlay-title">Affichage en jeu</h2>
-          <Switch checked={settings.overlayEnabled} onChange={(overlayEnabled) => set({ overlayEnabled })}>
-            Afficher les médias sur mon écran
-          </Switch>
-          <label className="field">
-            <span>Écran</span>
-            <select
-              className="input"
-              value={settings.displayId ?? displays[0]?.id ?? ''}
-              onChange={(event) => set({ displayId: Number(event.target.value) })}
-            >
-              {displays.map((display) => (
-                <option key={display.id} value={display.id}>
-                  {display.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className="pill primary" onClick={() => void window.liveChat.testOverlay()}>
-            Test d’affichage
+    <div className="settings-layout">
+      <nav className="glass settings-nav" aria-label="Sections des réglages">
+        {SECTIONS.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={id === section ? 'tab is-active' : 'tab'}
+            aria-current={id === section ? 'page' : undefined}
+            onClick={() => setSection(id)}
+          >
+            {label}
           </button>
-          <p className="hint">Affiche une image et un texte de test sur ton écran. Les autres ne voient rien.</p>
-        </section>
+        ))}
+      </nav>
 
-        <section className="glass panel" aria-labelledby="layout-title">
-          <h2 id="layout-title" className="panel-title">
-            Recadrer
-            <button type="button" className="pill quiet small" onClick={() => set({ layout: DEFAULT_LAYOUT })}>
-              Remettre par défaut
+      <div className="settings-grid scroll">
+        <div className="settings-column" hidden={section !== 'general'}>
+          {state.account && (
+            <section className="glass panel" aria-labelledby="account-title">
+              <h2 id="account-title">Ton compte</h2>
+              <div className="account">
+                <Avatar className="avatar is-large" name={state.account.name} url={state.account.avatarUrl} testId="account-avatar" />
+                <span className="row-text">
+                  <span className="row-title" data-testid="account-name">
+                    {state.account.name}
+                  </span>
+                  <span className="row-sub">Reste connecté sur ce PC.</span>
+                </span>
+                <ConfirmButton
+                  label="Se déconnecter"
+                  confirmLabel="Confirmer ?"
+                  onConfirm={() => void window.liveChat.logout()}
+                />
+              </div>
+            </section>
+          )}
+
+          <section className="glass panel" aria-labelledby="startup-title">
+            <h2 id="startup-title">Démarrage</h2>
+            <Switch checked={settings.launchAtStartup} onChange={(launchAtStartup) => set({ launchAtStartup })}>
+              Lancer LiveChatSBCB au démarrage de Windows
+            </Switch>
+            <p className="hint">
+              Il démarre discrètement près de l'horloge. Fermer la fenêtre le laisse ouvert : pour quitter, fais un clic
+              droit sur son icône.
+            </p>
+          </section>
+        </div>
+
+        <div className="settings-column" hidden={section !== 'display'}>
+          <section className="glass panel" aria-labelledby="overlay-title">
+            <h2 id="overlay-title">Affichage en jeu</h2>
+            <Switch checked={settings.overlayEnabled} onChange={(overlayEnabled) => set({ overlayEnabled })}>
+              Afficher les médias sur mon écran
+            </Switch>
+            <label className="field">
+              <span>Écran</span>
+              <select
+                className="input"
+                value={settings.displayId ?? displays[0]?.id ?? ''}
+                onChange={(event) => set({ displayId: Number(event.target.value) })}
+              >
+                {displays.map((display) => (
+                  <option key={display.id} value={display.id}>
+                    {display.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className="pill primary" onClick={() => void window.liveChat.testOverlay()}>
+              Test d’affichage
             </button>
-          </h2>
-          <p className="hint">Déplace les zones, ou tire leur coin pour les redimensionner. Ton écran montre le résultat.</p>
-          <LayoutEditor layout={settings.layout} />
-        </section>
+            <p className="hint">Affiche une image et un texte de test sur ton écran. Les autres ne voient rien.</p>
+          </section>
+
+          <section className="glass panel" aria-labelledby="limit-title">
+            <h2 id="limit-title">Durée max</h2>
+            <label className="field">
+              <span>Couper chez moi après</span>
+              <select
+                className="input"
+                value={settings.maxDurationSec ?? ''}
+                onChange={(event) => set({ maxDurationSec: event.target.value ? Number(event.target.value) : null })}
+              >
+                {MAX_DURATION_CHOICES.map((seconds) => (
+                  <option key={seconds} value={seconds}>
+                    {seconds} secondes
+                  </option>
+                ))}
+                <option value="">Jamais</option>
+              </select>
+            </label>
+            <p className="hint">Les autres voient la suite selon leur propre réglage. Quand tout le monde a été coupé, on passe au suivant.</p>
+          </section>
+
+          <section className="glass panel" aria-labelledby="layout-title">
+            <h2 id="layout-title" className="panel-title">
+              Recadrer
+              <button type="button" className="pill quiet small" onClick={() => set({ layout: DEFAULT_LAYOUT })}>
+                Remettre par défaut
+              </button>
+            </h2>
+            <p className="hint">Déplace les zones, ou tire leur coin pour les redimensionner. Ton écran montre le résultat.</p>
+            <LayoutEditor layout={settings.layout} />
+          </section>
+        </div>
+
+        <div className="settings-column" hidden={section !== 'sound'}>
+          <section className="glass panel" aria-labelledby="sound-title">
+            <h2 id="sound-title">Son</h2>
+            <label className="field">
+              <span className="field-line">
+                Volume <strong className="mono" data-testid="volume-value">{settings.volume} %</strong>
+              </span>
+              <Slider value={settings.volume} min={0} max={100} onChange={(volume) => set({ volume })} />
+            </label>
+            <Switch checked={settings.muted} onChange={(muted) => set({ muted })}>
+              Couper le son
+            </Switch>
+          </section>
+        </div>
+
+        <div className="settings-column" hidden={section !== 'shortcuts'}>
+          <section className="glass panel" aria-labelledby="clean-title">
+            <h2 id="clean-title">Mode clean</h2>
+            <Switch checked={settings.clean} onChange={(clean) => void window.liveChat.setClean(clean)}>
+              Tout couper chez moi : son, image, affichage en jeu
+            </Switch>
+            <div className="field-line">
+              <span>Touche {unavailable(settings.cleanKey)}</span>
+              <CleanKeyButton current={settings.cleanKey} />
+            </div>
+            <p className="hint">Une touche marche même en plein jeu. Les autres ne voient rien.</p>
+          </section>
+
+          <section className="glass panel" aria-labelledby="keys-title">
+            <h2 id="keys-title">Raccourcis en jeu</h2>
+            <div className="field-line">
+              <span>Passer le LiveChat en cours {unavailable(SKIP_KEY)}</span>
+              <span className="shortcut-badge mono">{SKIP_KEY}</span>
+            </div>
+            {state.shortcuts.length === 0 ? (
+              <p className="hint">Dans la bibliothèque, fais un clic droit sur un fichier ou un LiveChat sauvegardé pour lui donner une touche, de Shift+F1 à Shift+F10.</p>
+            ) : (
+              <ul className="rows" data-testid="shortcut-list">
+                {state.shortcuts.map(({ key, name }) => (
+                  <li key={key} className="row">
+                    <span className="shortcut-badge mono">{key}</span>
+                    <span className="row-text">
+                      <span className="row-title" title={name}>
+                        {name}
+                      </span>
+                      {unavailable(key)}
+                    </span>
+                    <button type="button" className="pill quiet small" onClick={() => void window.liveChat.clearShortcut(key)}>
+                      Retirer
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="hint">Un petit son confirme l’envoi. Il faut attendre 3 secondes entre deux envois par touche.</p>
+          </section>
+        </div>
+
+        <div className="settings-column" hidden={section !== 'updates'}>
+          <section className="glass panel" aria-labelledby="updates-title">
+            <h2 id="updates-title" className="panel-title">
+              Mises à jour
+              <span className="count mono">Version {state.version}</span>
+            </h2>
+            <div className="panel-actions">
+              <button type="button" className="pill secondary small" disabled={checking} onClick={() => void check()}>
+                {checking ? 'Vérification…' : 'Vérifier les mises à jour'}
+              </button>
+              <button type="button" className="pill quiet small" onClick={onOpenNotes}>
+                Voir les nouveautés
+              </button>
+            </div>
+            {checked && (
+              <p className="hint" role="status" data-testid="update-check">
+                {CHECK_MESSAGES[checked]}
+              </p>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   );

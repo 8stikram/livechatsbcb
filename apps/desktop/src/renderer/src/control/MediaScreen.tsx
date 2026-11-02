@@ -5,7 +5,7 @@ import {
   MAX_DISPLAY_MS,
   MIN_DISPLAY_MS,
 } from '@livechatsbcb/protocol';
-import type { AppState, DraftMedia, DraftSlot, PlaybackView, SceneInput } from '../../../shared/ipc';
+import { DEFAULT_SETTINGS, type AppState, type DraftMedia, type DraftSlot, type PlaybackView, type SceneInput } from '../../../shared/ipc';
 import { Caption, Profile, ScreenPreview, zoneStyle } from '../scene';
 import { LayerPanel, SceneBoard } from './AdvancedEditor';
 import { IconPlay, KindIcon } from './icons';
@@ -294,6 +294,7 @@ export const MediaScreen = ({
     setPreview({
       startAt,
       item: {
+        hiddenForMe: null,
         id: 'preview',
         senderName: state.account?.name ?? '',
         senderAvatarUrl: state.account?.avatarUrl ?? null,
@@ -363,6 +364,10 @@ export const MediaScreen = ({
       setError(mediaErrorMessage(result.error));
     }
   };
+
+  useEffect(() => {
+    if (state.settings.clean) stopPreview();
+  }, [state.settings.clean]);
 
   // Each second of the countdown, so that what was just typed comes back too.
   useEffect(() => {
@@ -578,6 +583,12 @@ export const MediaScreen = ({
               onChange={files.setDisplayMs}
             />
           </label>
+        )}
+
+        {(advanced ? sceneInput() : recipe()).durationMs > (DEFAULT_SETTINGS.maxDurationSec ?? Infinity) * 1_000 && (
+          <p className="hint" data-testid="too-long">
+            Coupé après {DEFAULT_SETTINGS.maxDurationSec} s chez ceux qui gardent la limite. Rogne l’extrait à {DEFAULT_SETTINGS.maxDurationSec} s pour que tout soit vu.
+          </p>
         )}
 
         {state.upload ? (

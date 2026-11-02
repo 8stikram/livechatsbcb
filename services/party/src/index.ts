@@ -31,6 +31,7 @@ const STATUS_BY_ERROR: Record<ApiErrorCode, number> = {
   not_found: 404,
   party_full: 409,
   queue_full: 409,
+  banned: 403,
   rate_limited: 429,
   storage_full: 507,
 };
@@ -225,7 +226,7 @@ const createMedia = async (request: Request, env: Env, partyId: string): Promise
     return sent.ok ? json({ mediaId, fileIds: [] }, 201) : fail(sent.error, STATUS_BY_ERROR[sent.error]);
   }
 
-  const allowed = await party.canUpload(token);
+  const allowed = await party.canUpload(token, draft);
   if (!allowed.ok) return fail(allowed.error, STATUS_BY_ERROR[allowed.error]);
 
   const uploads: PendingUpload[] = [];

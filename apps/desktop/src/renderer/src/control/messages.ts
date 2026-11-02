@@ -28,6 +28,8 @@ export const errorMessage = (error: ActionError): string => {
       return 'Trop de médias sont déjà en attente. Réessaie dans un instant.';
     case 'cancelled':
       return 'Envoi annulé.';
+    case 'banned':
+      return 'Tu as spammé le même LiveChat : plus aucun envoi pendant 30 minutes.';
     case 'gave_up':
       return 'Toujours pas de connexion après 10 minutes : l’envoi est arrêté. Réessaie quand le réseau est revenu.';
     case 'network':
@@ -36,9 +38,18 @@ export const errorMessage = (error: ActionError): string => {
   }
 };
 
+export const bannedUntilOf = (party: PartyView): number | null =>
+  party.members.find(({ id }) => id === party.memberId)?.bannedUntil ?? null;
+
+export const minutesLeft = (until: number): number => Math.max(1, Math.ceil((until - Date.now()) / 60_000));
+
 // A send also waits for a connection that is only gone for now. These three need someone to do something first.
 export const canSendIn = (party: PartyView | null): boolean =>
-  party !== null && party.connection !== 'replaced' && party.connection !== 'party_full' && party.connection !== 'update_required';
+  party !== null &&
+  party.connection !== 'replaced' &&
+  party.connection !== 'party_full' &&
+  party.connection !== 'update_required' &&
+  (bannedUntilOf(party) ?? 0) <= Date.now();
 
 export const mediaErrorMessage = (error: ActionError): string =>
   error === 'invalid_request' ? 'Ce média n’a pas pu être envoyé. Vérifie le fichier et réessaie.' : errorMessage(error);
