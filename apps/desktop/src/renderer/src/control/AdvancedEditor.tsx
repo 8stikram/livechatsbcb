@@ -37,6 +37,23 @@ const EditingStage = ({ scene, state, caption }: { scene: Scene; state: AppState
   const [error, setError] = useState<string | null>(null);
   const { layout } = state.settings;
 
+  // A click next to it lets go of it, anywhere in the window. Controls keep it: they may well be acting on it.
+  useEffect(() => {
+    if (scene.selected === null) return;
+    const onDown = (event: globalThis.PointerEvent) => {
+      if (!(event.target as Element).closest?.('.scene-layer, .layer-panel, button, input, select, textarea, label, a')) scene.setSelected(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') scene.setSelected(null);
+    };
+    window.addEventListener('pointerdown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [scene.selected]);
+
   const startGrip = (layer: Layer, grip: Grip, event: PointerEvent) => {
     event.stopPropagation();
     event.preventDefault();
@@ -100,7 +117,6 @@ const EditingStage = ({ scene, state, caption }: { scene: Scene; state: AppState
         ref={box}
         className="scene is-editing"
         data-testid="scene-stage"
-        onPointerDown={() => scene.setSelected(null)}
         onDragOver={(event) => {
           if (event.dataTransfer.types.includes(DROP_TYPE)) event.preventDefault();
         }}

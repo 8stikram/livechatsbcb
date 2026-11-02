@@ -11,6 +11,7 @@ import {
   SPAM_WINDOW_MS,
   WS_PING,
   WS_PONG,
+  WS_APP_PREFIX,
   WS_SUBPROTOCOL,
   WS_SUBPROTOCOL_PREFIX,
   WS_TOKEN_PREFIX,
@@ -344,6 +345,7 @@ export class Party extends DurableObject<Env> {
 
     const offered = (request.headers.get('sec-websocket-protocol') ?? '').split(',').map((part) => part.trim());
     const version = offered.find((part) => part.startsWith(WS_SUBPROTOCOL_PREFIX)) ?? WS_SUBPROTOCOL;
+    const app = offered.find((part) => part.startsWith(WS_APP_PREFIX))?.slice(WS_APP_PREFIX.length) ?? '';
     const token = offered.find((part) => part.startsWith(WS_TOKEN_PREFIX))?.slice(WS_TOKEN_PREFIX.length) ?? '';
 
     const { 0: client, 1: server } = new WebSocketPair();
@@ -371,7 +373,7 @@ export class Party extends DurableObject<Env> {
 
     for (const socket of this.ctx.getWebSockets(member.id)) this.dismiss(socket, CloseCode.Replaced);
 
-    this.ctx.acceptWebSocket(server, [member.id]);
+    this.ctx.acceptWebSocket(server, /^\d+\.\d+\.\d+$/.test(app) ? [member.id, app] : [member.id]);
     this.touch(member.id);
     if (this.getMeta('guildId') && Number(this.getMeta('nextMemberCheck')) <= Date.now()) this.planMemberCheck();
 
@@ -700,11 +702,17 @@ export class Party extends DurableObject<Env> {
   }
 
   private onlineIds(excluding?: WebSocket): Set<string> {
-    return new Set(this.openSockets(excluding).flatMap((socket) => this.ctx.getTags(socket)));
+    return new Set(this.openSockets(excluding).map((socket) => this.ctx.getTags(socket)[0]!));
   }
 
   private members(excluding?: WebSocket): Member[] {
     const online = this.onlineIds(excluding);
+    const versions = new Map(
+      this.openSockets(excluding).map((socket) => {
+        const [id, version] = this.ctx.getTags(socket);
+        return [id!, version ?? null];
+      }),
+    );
     const bans = new Map(
       this.ctx.storage.sql
         .exec<{ member_id: string; until: number }>('SELECT member_id, until FROM bans WHERE until > ?', Date.now())
@@ -720,6 +728,7 @@ export class Party extends DurableObject<Env> {
         avatarUrl,
         online: online.has(id),
         bannedUntil: bans.get(id) ?? null,
+        version: versions.get(id) ?? null,
       }));
     // Past visitors of a Discord server's party are nobody's business: a private party is the one with a fixed list.
     return this.getMeta('guildId') ? members.filter((member) => member.online) : members;

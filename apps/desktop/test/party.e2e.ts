@@ -1847,6 +1847,71 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByRole('button', { name: 'Musique de mon PC' }).waitFor();
   });
 
+  it('takes files dropped anywhere in the window, from any tab', async () => {
+    const logo = join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png');
+    const sound = join(sandbox, 'glisse.wav');
+    writeFileSync(sound, silentWav(2_000));
+
+    await host.control.evaluate(() => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.id = 'to-drop';
+      input.hidden = true;
+      document.body.append(input);
+    });
+    await host.control.locator('#to-drop').setInputFiles([logo, sound]);
+    const drag = (type: string) =>
+      host.control.evaluate((name) => {
+        const held = new DataTransfer();
+        for (const file of (document.getElementById('to-drop') as HTMLInputElement).files!) held.items.add(file);
+        document.body.dispatchEvent(new DragEvent(name, { bubbles: true, cancelable: true, dataTransfer: held }));
+      }, type);
+
+    await openTab(host, 'Party');
+    await expect(host.control.getByTestId('member-version').count()).resolves.toBe(0);
+
+    // Changing your mind leaves everything as it was.
+    await drag('dragenter');
+    await host.control.getByTestId('drop-veil').waitFor();
+    await picture(host.control, 'drop-veil.png');
+    await drag('dragleave');
+    await host.control.getByTestId('drop-veil').waitFor({ state: 'detached' });
+
+    // A picture and a sound make one LiveChat.
+    await drag('dragenter');
+    await drag('drop');
+    await host.control.getByTestId('drop-veil').waitFor({ state: 'detached' });
+    await host.control.getByRole('tab', { name: 'LiveChat', selected: true }).waitFor();
+    await host.control.getByTestId('draft-name').filter({ hasText: 'logo.png' }).waitFor();
+    await host.control.getByTestId('draft-name').filter({ hasText: 'glisse.wav' }).waitFor();
+    await emptyDraft(host);
+    await host.control.locator('#to-drop').evaluate((input) => input.remove());
+  });
+
+  it('makes a long name smaller until it fits', async () => {
+    await openTab(host, 'Party');
+    const name = host.control.getByRole('region', { name: 'Membres' }).locator('.row-title').first();
+    const fitted = await name.evaluate(async (element) => {
+      const before = parseFloat(getComputedStyle(element).fontSize);
+      const content = [...element.childNodes];
+      const box = element as HTMLElement;
+      box.textContent = 'Un pseudo Discord de 32 signes !!';
+      box.style.width = '170px';
+      await new Promise((done) => setTimeout(done, 200));
+      const result = {
+        before,
+        after: parseFloat(getComputedStyle(element).fontSize),
+        fits: element.scrollWidth <= element.clientWidth,
+      };
+      box.replaceChildren(...content);
+      box.style.width = '';
+      return result;
+    });
+    expect(fitted.after).toBeLessThan(fitted.before);
+    expect(fitted.fits).toBe(true);
+  });
+
   it('shows in small what the others will see, and places things freely in the advanced mode', async () => {
     const logo = join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png');
     const control = host.control;
@@ -1865,6 +1930,20 @@ describe.skipIf(online)('party flow in the real app', () => {
     await layers.first().waitFor();
     expect(await layers.count()).toBe(1);
     await control.getByTestId('layer-panel').waitFor();
+
+    // A click next to it lets go of it wherever it lands, Escape too, and controls keep it.
+    const panel = control.getByTestId('layer-panel');
+    await panel.getByRole('button').first().hover();
+    await control.locator('.head').click({ position: { x: 300, y: 10 } });
+    await panel.waitFor({ state: 'detached' });
+    await layers.first().click();
+    await panel.waitFor();
+    await control.keyboard.press('Escape');
+    await panel.waitFor({ state: 'detached' });
+    await layers.first().click();
+    await panel.waitFor();
+    await control.getByRole('button', { name: 'Annuler' }).hover();
+    await control.getByTestId('scene-stage').waitFor();
 
     const placed = () => layers.first().evaluate((element) => (element as HTMLElement).style.left);
     const before = await placed();

@@ -11,6 +11,14 @@ import type {
 // The pages have no process: they read it from the browser.
 export const ON_MAC = typeof process !== 'undefined' && process.platform ? process.platform === 'darwin' : navigator.userAgent.includes('Macintosh');
 
+export const isNewerVersion = (candidate: string, current: string): boolean => {
+  const [a, b] = [candidate, current].map((version) => version.split('.').map(Number));
+  for (let index = 0; index < 3; index++) {
+    if (a![index] !== b![index]) return a![index]! > b![index]!;
+  }
+  return false;
+};
+
 export type ConnectionStatus = 'connecting' | 'online' | 'reconnecting' | 'replaced' | 'party_full' | 'update_required';
 
 export type PartyView = {

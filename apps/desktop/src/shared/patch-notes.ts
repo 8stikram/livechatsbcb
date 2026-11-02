@@ -3,9 +3,14 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: '0.12.1',
+    version: '0.13.0',
     date: '2 novembre 2026',
     items: [
+      'Glisse une image, une vidéo ou un son n’importe où dans l’app, un grand cadre te montre où lâcher. Une image et un son ensemble font un seul LiveChat',
+      'Les pseudos longs s’affichent en entier : le texte devient plus petit, dans l’app et en jeu',
+      'Mode avancé : cliquer à côté ou appuyer sur Échap retire la sélection, partout dans la fenêtre',
+      'L’app cherche les mises à jour plus souvent, et dès qu’un pote a une version plus récente. Dans la Party, tu vois la version d’un pote qui n’a pas la même',
+      'Reconnexion plus rapide, surtout quand le PC sort de veille',
       'La version Mac marche aussi sur les Mac Intel, plus besoin de savoir lequel tu as (macOS 13 ou plus récent)',
       'Windows et Mac ont chacun leur téléchargement, avec de gros boutons sur GitHub',
     ],

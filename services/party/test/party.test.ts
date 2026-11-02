@@ -12,6 +12,7 @@ import {
   ServerMessageSchema,
   SessionResponseSchema,
   WS_SUBPROTOCOL,
+  WS_APP_PREFIX,
   WS_TOKEN_PREFIX,
   type Account,
   type HistoryItem,
@@ -95,9 +96,10 @@ class TestSocket {
   private readonly socket: WebSocket;
   private waiters: Array<() => void> = [];
 
-  constructor(session: Pick<SessionResponse, 'partyId' | 'token'>, version = WS_SUBPROTOCOL, base = BASE) {
+  constructor(session: Pick<SessionResponse, 'partyId' | 'token'>, version = WS_SUBPROTOCOL, base = BASE, app: string | null = null) {
     this.socket = new WebSocket(`${base.replace('http', 'ws')}/v1/parties/${session.partyId}/ws`, [
       version,
+      ...(app ? [`${WS_APP_PREFIX}${app}`] : []),
       `${WS_TOKEN_PREFIX}${session.token}`,
     ]);
     this.socket.addEventListener('message', (event) => {
@@ -829,6 +831,28 @@ describe('party service', () => {
 
     const outdated = new TestSocket(host, 'livechatsbcb.v0');
     expect(await outdated.closed()).toBe(CloseCode.UpdateRequired);
+  });
+
+  it('tells which version of the app each member runs, and only what looks like a version', async () => {
+    const host = await createParty();
+    const guest = await joinParty(host.code, 'Invite');
+    const third = await joinParty(host.code, 'Vieux');
+    const fourth = await joinParty(host.code, 'Malin');
+    const hostSocket = new TestSocket(host, WS_SUBPROTOCOL, BASE, '1.2.3');
+    await hostSocket.welcome();
+    const guestSocket = new TestSocket(guest, WS_SUBPROTOCOL, BASE, '1.2.4');
+    await guestSocket.welcome();
+    const oldSocket = new TestSocket(third);
+    await oldSocket.welcome();
+    const oddSocket = new TestSocket(fourth, WS_SUBPROTOCOL, BASE, 'pas-une-version');
+    await oddSocket.welcome();
+
+    const members = await hostSocket.membersWhere((list) => list.filter(({ online }) => online).length === 4, 'all four online');
+    const versionOf = (memberId: string) => members.find(({ id }) => id === memberId)?.version;
+    expect(versionOf(host.memberId)).toBe('1.2.3');
+    expect(versionOf(guest.memberId)).toBe('1.2.4');
+    expect(versionOf(third.memberId)).toBeNull();
+    expect(versionOf(fourth.memberId)).toBeNull();
   });
 
   it('replaces an older connection of the same member', async () => {

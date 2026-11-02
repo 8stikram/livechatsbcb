@@ -1,6 +1,7 @@
 import {
   CloseCode,
   ServerMessageSchema,
+  WS_APP_PREFIX,
   WS_PING,
   WS_SUBPROTOCOL,
   WS_TOKEN_PREFIX,
@@ -18,6 +19,8 @@ const RECONNECT_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000];
 const PING_INTERVAL_MS = 3_000;
 // A socket whose peer vanished can stay "open" for minutes, so silence is what counts as a lost connection.
 const SILENCE_LIMIT_MS = 7_000;
+// A connection that never answers is given up on sooner than one that stopped talking.
+const CONNECT_LIMIT_MS = 5_000;
 const CLOCK_SAMPLES = 4;
 
 export type ConnectionSnapshot = {
@@ -32,6 +35,7 @@ export type ConnectionSnapshot = {
 type Listener = {
   onChange(snapshot: ConnectionSnapshot): void;
   onSessionRevoked(closeCode: number): void;
+  onUnreadable(): void;
 };
 
 // Lives in the main process so the member token never reaches a window, and so both windows share one connection.
@@ -52,6 +56,7 @@ export class PartyConnection {
   constructor(
     private readonly session: SessionResponse,
     private readonly listener: Listener,
+    private readonly appVersion: string,
   ) {
     this.snapshot = { status: 'connecting', code: session.code, memberId: session.memberId, members: [], queue: [], history: [] };
   }
@@ -110,7 +115,7 @@ export class PartyConnection {
 
   private open(): void {
     const url = `${SERVER_URL.replace(/^http/, 'ws')}/v1/parties/${this.session.partyId}/ws`;
-    const socket = new WebSocket(url, [WS_SUBPROTOCOL, `${WS_TOKEN_PREFIX}${this.session.token}`]);
+    const socket = new WebSocket(url, [WS_SUBPROTOCOL, `${WS_APP_PREFIX}${this.appVersion}`, `${WS_TOKEN_PREFIX}${this.session.token}`]);
     this.socket = socket;
     this.lastHeardAt = Date.now();
 
@@ -130,7 +135,10 @@ export class PartyConnection {
     let message: ServerMessage;
     try {
       message = ServerMessageSchema.parse(JSON.parse(raw));
-    } catch {
+    } catch (error) {
+      // What gets lost here never shows up on screen, and a newer version on the other side is the likely reason.
+      console.error('Unreadable message:', (error as Error).message);
+      this.listener.onUnreadable();
       return;
     }
 
@@ -243,7 +251,8 @@ export class PartyConnection {
     if (!socket) return;
     if (socket.readyState === WebSocket.OPEN) socket.send(WS_PING);
 
-    if (Date.now() - this.lastHeardAt > SILENCE_LIMIT_MS) {
+    const limit = socket.readyState === WebSocket.CONNECTING ? CONNECT_LIMIT_MS : SILENCE_LIMIT_MS;
+    if (Date.now() - this.lastHeardAt > limit) {
       this.dropSocket();
       this.publish({ status: 'reconnecting' });
       this.scheduleRetry();

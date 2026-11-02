@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { SceneLayer } from '@livechatsbcb/protocol';
 import type { OverlayLayout, PlaybackView, SceneLayerView, Zone } from '../../shared/ipc';
 import { Avatar } from './Avatar';
@@ -21,10 +21,41 @@ const captionSize = (text: string): string => {
   return text.length > 50 ? 'is-medium' : '';
 };
 
+const FIT_MIN_SCALE = 0.5;
+const FIT_MIN_PX = 10;
+
+// Whole names rather than cut ones: the text gets smaller until it fits, and only an impossible length is cut.
+export const FitText = ({ text, className, children }: { text: string; className: string; children?: ReactNode }) => {
+  const box = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (!element) return;
+    const fit = () => {
+      element.style.fontSize = '';
+      if (element.clientWidth === 0 || element.scrollWidth <= element.clientWidth) return;
+      const size = parseFloat(getComputedStyle(element).fontSize);
+      const smallest = Math.max(size * FIT_MIN_SCALE, Math.min(size, FIT_MIN_PX));
+      element.style.fontSize = `${Math.max(smallest, (size * element.clientWidth) / element.scrollWidth)}px`;
+    };
+    fit();
+    const watcher = new ResizeObserver(fit);
+    watcher.observe(element);
+    void document.fonts.ready.then(fit);
+    return () => watcher.disconnect();
+  }, [text]);
+
+  return (
+    <span ref={box} className={className} title={text}>
+      {children ?? text}
+    </span>
+  );
+};
+
 export const Profile = ({ name, avatarUrl, zone }: { name: string; avatarUrl: string | null; zone: Zone }) => (
   <div className="zone zone-profile" style={zoneStyle(zone)} data-testid="overlay-profile">
     <Avatar className="profile-avatar" name={name} url={avatarUrl} testId="overlay-avatar" />
-    <span className="profile-name outlined">{name}</span>
+    <FitText className="profile-name outlined" text={name} />
   </div>
 );
 

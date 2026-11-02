@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir, rm, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, screen, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, powerMonitor, screen, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
 import { z } from 'zod';
 import {
   CloseCode,
@@ -25,7 +25,7 @@ import {
   type SceneLayer,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, keyLabel, MEME_KEYS, type ExternalFiles, type IncomingError, type IncomingResult, SKIP_KEY, type ActionResult, type HiddenReason, type CleanKeyOutcome, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
+import { IpcChannel, isNewerVersion, keyLabel, MEME_KEYS, type ExternalFiles, type IncomingError, type IncomingResult, SKIP_KEY, type ActionResult, type HiddenReason, type CleanKeyOutcome, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
@@ -496,11 +496,24 @@ function start(): void {
     publishState();
   };
 
+  // A version already seen in the party, so that it only sends this app looking for it once.
+  let aheadVersion: string | null = null;
+
   const connectTo = (session: SessionResponse): void => {
     connection?.stop();
+    let wasOnline = false;
     connection = new PartyConnection(session, {
+      onUnreadable: () => updater.check(),
       onChange: (snapshot) => {
         if (snapshot.status === 'update_required') updater.check();
+        // Joining is when being behind starts to matter, and a friend on a newer version proves there is one.
+        if (snapshot.status === 'online' && !wasOnline) updater.check();
+        wasOnline = snapshot.status === 'online';
+        const ahead = snapshot.members.find(({ version }) => version && isNewerVersion(version, app.getVersion()))?.version ?? null;
+        if (ahead && ahead !== aheadVersion) {
+          aheadVersion = ahead;
+          updater.check();
+        }
         // Someone may have changed the code, and it is what gets this member back in later.
         const saved = store.session;
         if (saved?.partyId === session.partyId && saved.code !== snapshot.code) {
@@ -522,7 +535,7 @@ function start(): void {
         }
         loseParty(session);
       },
-    });
+    }, app.getVersion());
     connection.start();
     publishState();
   };
@@ -1759,6 +1772,12 @@ function start(): void {
     connection?.stop();
     settings.flush();
     tray.destroy();
+  });
+  // Timers stood still and the network is back from nothing: no need to wait for the silence to be noticed.
+  powerMonitor.on('resume', () => {
+    const status = connection?.current().status;
+    if (status === 'online' || status === 'reconnecting') connection?.reconnectNow();
+    updater.check();
   });
   // On a Mac, clicking the Dock is how the closed window comes back.
   app.on('activate', () => showControlWindow());

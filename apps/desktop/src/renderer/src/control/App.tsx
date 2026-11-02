@@ -143,6 +143,56 @@ export const App = () => {
     }
   };
 
+  const canTakeFiles = Boolean(state?.party && !state.upload && !incomingBusy);
+
+  const takeFiles = (taken: File[]) => {
+    const paths = taken.map((file) => window.liveChat.pathForFile(file)).filter((path) => path !== '');
+    if (paths.length > 0) {
+      void waitFor(window.liveChat.pasteFiles(paths, scene.active));
+      return;
+    }
+    const image = taken[0];
+    if (!image) return;
+    void waitFor(
+      image.arrayBuffer().then((bytes) => window.liveChat.pasteImage(new Uint8Array(bytes), image.type, image.name, scene.active)),
+    );
+  };
+
+  const [dropping, setDropping] = useState(false);
+  useEffect(() => {
+    document.documentElement.classList.toggle('is-dropping', dropping);
+  }, [dropping]);
+
+  // Follows every render, as pasting does. What is dragged inside the app isn't a file, and stays with its own target.
+  useEffect(() => {
+    const hasFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false;
+    const onOver = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = canTakeFiles ? 'copy' : 'none';
+      setDropping(canTakeFiles);
+    };
+    const onLeave = (event: DragEvent) => {
+      if (event.relatedTarget === null) setDropping(false);
+    };
+    const onDrop = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      setDropping(false);
+      if (canTakeFiles) takeFiles([...(event.dataTransfer?.files ?? [])]);
+    };
+    window.addEventListener('dragenter', onOver);
+    window.addEventListener('dragover', onOver);
+    window.addEventListener('dragleave', onLeave);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragenter', onOver);
+      window.removeEventListener('dragover', onOver);
+      window.removeEventListener('dragleave', onLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  });
+
   // Follows every render: what it does depends on the tab and on what is being prepared.
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -151,17 +201,11 @@ export const App = () => {
       const inField = (event.target as Element | null)?.closest?.('input, textarea') != null;
       const text = data.getData('text/plain').trim();
       const pasted = [...data.files];
-      const paths = pasted.map((file) => window.liveChat.pathForFile(file)).filter((path) => path !== '');
+      const hasPaths = pasted.some((file) => window.liveChat.pathForFile(file) !== '');
 
-      if (paths.length > 0) {
+      if (pasted[0] && (hasPaths || !(inField && text))) {
         event.preventDefault();
-        void waitFor(window.liveChat.pasteFiles(paths, scene.active));
-      } else if (pasted[0] && !(inField && text)) {
-        event.preventDefault();
-        const image = pasted[0];
-        void waitFor(
-          image.arrayBuffer().then((bytes) => window.liveChat.pasteImage(new Uint8Array(bytes), image.type, image.name, scene.active)),
-        );
+        takeFiles(pasted);
       } else if (LINK.test(text) && (!inField || looksLikeMedia(text))) {
         event.preventDefault();
         void waitFor(window.liveChat.pasteLink(text, scene.active));
@@ -407,6 +451,11 @@ export const App = () => {
     <>
       {launchLogo}
       {page}
+      {dropping && (
+        <div className="drop-veil" data-testid="drop-veil">
+          Lâche ici
+        </div>
+      )}
     </>
   );
 };

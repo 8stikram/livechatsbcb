@@ -4,6 +4,8 @@ export const PROTOCOL_VERSION = 7;
 export const WS_SUBPROTOCOL = `livechatsbcb.v${PROTOCOL_VERSION}`;
 export const WS_SUBPROTOCOL_PREFIX = 'livechatsbcb.v';
 export const WS_TOKEN_PREFIX = 'token.';
+// Which version of the app is connecting, so that the others can tell when theirs is behind.
+export const WS_APP_PREFIX = 'app.';
 
 export const MAX_ONLINE_MEMBERS = 10;
 export const MAX_REGISTERED_MEMBERS = 30;
@@ -131,6 +133,8 @@ export const MemberSchema = z.object({
   online: z.boolean(),
   // On the service's clock. Null for someone free to send.
   bannedUntil: z.number().nullable(),
+  // Null when offline, or for an app too old to say.
+  version: z.string().nullable().default(null),
 });
 export type Member = z.infer<typeof MemberSchema>;
 

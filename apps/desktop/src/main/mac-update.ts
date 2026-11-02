@@ -4,19 +4,10 @@ import { constants, createWriteStream } from 'node:fs';
 import { access, mkdir, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { app } from 'electron';
-import type { UpdateStatus } from '../shared/ipc';
+import { isNewerVersion, type UpdateStatus } from '../shared/ipc';
 
 const FEED = 'https://livechatsbcb-party.livechatsbcb-party.workers.dev/updates';
 const APP_NAME = 'LiveChatSBCB.app';
-
-const toParts = (version: string) => version.split('.').map(Number);
-const isNewer = (candidate: string, current: string): boolean => {
-  const [a, b] = [toParts(candidate), toParts(current)];
-  for (let index = 0; index < 3; index++) {
-    if (a[index] !== b[index]) return a[index]! > b[index]!;
-  }
-  return false;
-};
 
 type Release = { version: string; zip: string; sha512: string };
 
@@ -55,7 +46,7 @@ export class MacUpdate {
     if (!answer.ok) throw new Error(`The manifest answered ${answer.status}`);
     const release = readMacManifest(await answer.text());
     if (!release) throw new Error('The manifest cannot be read');
-    if (!isNewer(release.version, app.getVersion())) return;
+    if (!isNewerVersion(release.version, app.getVersion())) return;
 
     // Started from the disk image or from Downloads under Apple's protection: this copy cannot be replaced.
     if (!(await this.canReplaceItself())) {

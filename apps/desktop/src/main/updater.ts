@@ -3,11 +3,12 @@ import { autoUpdater } from 'electron-updater';
 import type { UpdateCheckOutcome, UpdateStatus } from '../shared/ipc';
 import { MacUpdate } from './mac-update';
 
-const CHECK_INTERVAL_MS = 60 * 60 * 1_000;
+const CHECK_INTERVAL_MS = 15 * 60 * 1_000;
 
 export class Updater {
   private status: UpdateStatus = { state: 'idle' };
   private mac: MacUpdate | null = null;
+  private started = false;
 
   constructor(private readonly onChange: () => void) {}
 
@@ -18,6 +19,7 @@ export class Updater {
   start(): void {
     // Dev and test builds have no published version to compare with.
     if (!app.isPackaged) return;
+    this.started = true;
 
     if (process.platform === 'darwin') {
       this.mac = new MacUpdate((status) => this.publish(status));
@@ -49,7 +51,7 @@ export class Updater {
   }
 
   check(): void {
-    if (!app.isPackaged || this.status.state !== 'idle') return;
+    if (!this.started || this.status.state !== 'idle') return;
     if (this.mac) {
       // A failed check or download only costs a delay: the next check tries again.
       this.mac.check().catch((error: Error) => {

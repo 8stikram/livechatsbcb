@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { MAX_ONLINE_MEMBERS } from '@livechatsbcb/protocol';
 import type { ActionResult, AppState, PartyView, UpcomingView } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
+import { FitText } from '../scene';
 import { ConfirmButton } from './ConfirmButton';
 import { GlideList } from './glide';
 import { KindIcon } from './icons';
@@ -31,7 +32,7 @@ const Upcoming = ({ upcoming, active }: { upcoming: UpcomingView[]; active: bool
               <span className="row-title" title={mediaTitle(item)}>
                 {mediaTitle(item)}
               </span>
-              <span className="row-sub">{item.replay ? `Relancé par ${item.senderName}` : item.senderName}</span>
+              <FitText className="row-sub" text={item.replay ? `Relancé par ${item.senderName}` : item.senderName} />
             </span>
           </li>
         ))}
@@ -40,7 +41,7 @@ const Upcoming = ({ upcoming, active }: { upcoming: UpcomingView[]; active: bool
   </section>
 );
 
-const Members = ({ party }: { party: PartyView }) => {
+const Members = ({ party, version }: { party: PartyView; version: string }) => {
   const [error, setError] = useState<string | null>(null);
   const online = party.members.filter((member) => member.online).length;
 
@@ -76,10 +77,15 @@ const Members = ({ party }: { party: PartyView }) => {
           >
             <Avatar className="avatar" name={member.name} url={member.avatarUrl} testId="member-avatar" />
             <span className="row-text">
-              <span className="row-title">
+              <FitText className="row-title" text={member.name}>
                 {member.name}
                 {member.id === party.memberId && <span className="row-you"> (toi)</span>}
-              </span>
+              </FitText>
+              {member.online && member.id !== party.memberId && member.version !== version && (
+                <span className="row-sub" data-testid="member-version">
+                  {member.version ? `Version ${member.version}` : 'Ancienne version'}
+                </span>
+              )}
               {member.bannedUntil !== null && member.bannedUntil > Date.now() && (
                 <span className="row-sub is-banned" data-testid="member-banned">
                   Banni encore {minutesLeft(member.bannedUntil)} min
@@ -125,7 +131,7 @@ export const PartyScreen = ({ state, party, active }: { state: AppState; party: 
     <NowCard current={state.queue.current} settings={state.settings} active={active} />
     <aside className="party-side">
       <Upcoming upcoming={state.queue.upcoming} active={active} />
-      <Members party={party} />
+      <Members party={party} version={state.version} />
     </aside>
   </div>
 );

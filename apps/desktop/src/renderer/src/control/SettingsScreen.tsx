@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, ty
 import { useTabMarker } from './glide';
 import { DEFAULT_LAYOUT, keyLabel, ON_MAC, SKIP_KEY, type AppState, type CleanKeyOutcome, type OverlayLayout, type Settings, type UpdateCheckOutcome, type Zone } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
+import { FitText } from '../scene';
 import { say } from '../speech';
 import { ConfirmButton } from './ConfirmButton';
 import { Slider } from './NowPlaying';
@@ -230,8 +231,8 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
               <div className="account">
                 <Avatar className="avatar is-large" name={state.account.name} url={state.account.avatarUrl} testId="account-avatar" />
                 <span className="row-text">
-                  <span className="row-title" data-testid="account-name">
-                    {state.account.name}
+                  <span data-testid="account-name">
+                    <FitText className="row-title" text={state.account.name} />
                   </span>
                   <span className="row-sub">Reste connecté sur ce PC.</span>
                 </span>

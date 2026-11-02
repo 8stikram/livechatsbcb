@@ -374,7 +374,7 @@ const MAC_PAGE = `<!doctype html>
 <body>
 <main>
   <h1>LiveChatSBCB pour Mac</h1>
-  <p>Pour les Mac avec une puce Apple (M1 ou plus récent).</p>
+  <p>Pour tous les Mac, puce Apple ou Intel, avec macOS 13 ou plus récent. Pour voir le tien : menu Pomme, puis À propos de ce Mac.</p>
   <a class="get" href="/download/mac">Télécharger pour Mac</a>
   <h2>Installer</h2>
   <ol>
@@ -385,7 +385,7 @@ const MAC_PAGE = `<!doctype html>
   </ol>
   <p>Le Mac bloque l'app parce que la signature d'Apple est payante et que ce projet reste gratuit. Tu ne le fais qu'une fois, et les mises à jour se font ensuite toutes seules.</p>
   <h2>Le Mac dit que l'app est endommagée ?</h2>
-  <p>Vérifie que ton Mac a bien une puce Apple. Sinon, ouvre Terminal et colle cette ligne, puis réessaie :</p>
+  <p>Ouvre Terminal, colle cette ligne, puis réessaie :</p>
   <pre>xattr -cr /Applications/LiveChatSBCB.app</pre>
 </main>
 </body>

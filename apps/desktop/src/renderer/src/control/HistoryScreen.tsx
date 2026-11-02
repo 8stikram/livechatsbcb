@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ActionResult, AppState, FavoriteView, HistoryView } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
+import { FitText } from '../scene';
 import { ConfirmButton } from './ConfirmButton';
 import { GlideList } from './glide';
 import { IconPlay, KindIcon } from './icons';
@@ -92,10 +93,10 @@ const FavoriteRow = ({
       <span className="row-title" title={favorite.name}>
         {favorite.name}
       </span>
-      <span className="row-sub">
+      <FitText className="row-sub" text={`${favorite.senderName} · gardé le ${savedDay.format(favorite.savedAt)}`}>
         <Avatar className="avatar is-tiny" name={favorite.senderName} url={favorite.senderAvatarUrl} />
         {favorite.senderName} · gardé le {savedDay.format(favorite.savedAt)}
-      </span>
+      </FitText>
     </span>
     <span className="history-actions">
       <ConfirmButton
@@ -142,10 +143,10 @@ const HistoryRow = ({
       <span className="row-title" title={mediaTitle(item)}>
         {mediaTitle(item)}
       </span>
-      <span className="row-sub">
+      <FitText className="row-sub" text={`${item.senderName} · ${whenPlayed(item.playedAt, now)}`}>
         <Avatar className="avatar is-tiny" name={item.senderName} url={item.senderAvatarUrl} />
         {item.senderName} · {whenPlayed(item.playedAt, now)}
-      </span>
+      </FitText>
     </span>
     <span className="history-actions">
       <KeepStar item={item} onResult={onResult} />
