@@ -6,7 +6,13 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.15.0** (dernière version) : montage
+**0.16.0** (dernière version) : raccourcis
+
+- La roue : 8 LiveChats, une touche l'ouvre, la souris vise, le clic envoie
+- Menu des raccourcis rangé par groupes, avec test d'une touche et remise par défaut
+- Plus de touches imposées pour les LiveChats, et une touche déjà prise change de place
+
+**0.15.0** : montage
 
 - Barre du passage avec les images de la vidéo, ou la forme du son
 - Le passage se rejoue quand tu lâches un bord, se déplace d'un bloc, et se règle plus précisément avec le zoom
@@ -92,18 +98,13 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 - Parfois un LiveChat n'apparaît plus. Pas reproduit : regarder si une version s'affiche à côté du pote concerné dans la Party
 
-### 7. Raccourcis
-
-- Roue de LiveChats, comme la roue des armes dans GTA
-- Menu des raccourcis refait pour être facile à comprendre, comme celui de CS2
-
-### 8. Liens vidéo et sons
+### 7. Liens vidéo et sons
 
 - YouTube
 - TikTok
 - Un service comme SoundCloud pour ajouter des extraits sonores, à vérifier : il doit rester gratuit
 
-### 9. Vie de la party
+### 8. Vie de la party
 
 - Pendant un LiveChat, un contour vert autour de la photo de profil : il s'anime avec le son, et reste vert fixe s'il n'y a pas de son
 - Party jusqu'à 15 personnes au lieu de 10, à vérifier : ça doit rester gratuit
@@ -112,14 +113,14 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 - Historique par personne
 - Sondages éclair
 
-### 10. Finitions
+### 9. Finitions
 
 - Bandeau « Une autre app utilise déjà » : le texte est trop espacé
 - Clic droit de Windows : les entrées n'apparaissent pas encore dans le vrai menu, à reprendre
 - Tags personnels dans la bibliothèque
 - Tuto au premier lancement, à passer et à rejouer depuis les réglages
 
-### 11. Plus tard
+### 10. Plus tard
 
 - Thèmes (Wii, Persona…)
 - GIF : bouton avec recherche via Klipy (compte et clé à créer), favoris et récents
@@ -146,7 +147,7 @@ Un onglet Jeux dans l'app.
 
 ## Déjà décidé
 
-- **Raccourcis :** Shift+F1 à Shift+F10 pour les memes, Shift+F11 pour passer, Shift+F12 pour la panique (modifiable).
+- **Raccourcis :** les touches des LiveChats sont libres, Shift+F11 pour passer, Shift+F12 pour la panique (modifiable).
 - **Ban anti-spam :** le même LiveChat 5 fois en 1 minute, et plus aucun envoi pendant 30 minutes. Toute la party le voit.
 - **Durée max :** activée d'office à 20 secondes, chacun la change. Quand tout le monde a été coupé, la file passe au suivant.
 - **Bouton panique :** coupe le son et l'image chez toi seulement, et plus rien ne s'affiche jusqu'à ce que tu réappuies. Les autres ne voient rien.
