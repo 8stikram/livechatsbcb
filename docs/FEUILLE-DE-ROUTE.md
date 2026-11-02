@@ -6,7 +6,18 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.8.0** (dernière version) : solide d'abord
+**0.9.0** (dernière version) : en jeu
+
+- Bouton panique
+- Raccourcis pour envoyer un meme sans quitter le jeu
+- Ban anti-spam
+- Blocage temporaire d'un pote
+- Durée max automatique
+- Réglages refaits en sections
+- Interface légèrement plus transparente
+- Si une autre app a déjà la touche du mode clean, l'app le dit et on en choisit une autre
+
+**0.8.0** : solide d'abord
 
 - Notes de mise à jour, proposées après chaque mise à jour
 - Bouton « Vérifier les mises à jour »
@@ -24,17 +35,6 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 - Favoris dans l'historique, gardés sur le PC
 
 ## À venir
-
-### 2. En jeu (en cours)
-
-- Bouton panique
-- Raccourcis pour envoyer un meme sans quitter le jeu
-- Ban anti-spam
-- Blocage temporaire d'un pote
-- Durée max automatique
-- Réglages refaits en sections
-- Interface légèrement plus transparente
-- Si une autre app a déjà la touche du mode clean, l'app le dit et on en choisit une autre
 
 ### 3. Envoi ultra rapide
 
