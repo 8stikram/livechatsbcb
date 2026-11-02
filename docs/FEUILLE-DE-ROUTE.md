@@ -6,7 +6,15 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.9.0** (dernière version) : en jeu
+**0.10.0** (dernière version) : envoi rapide et texte vivant
+
+- Ctrl+V depuis n'importe quel onglet : image, vidéo ou son copié, et ça prépare le LiveChat
+- Lien direct vers une image, un GIF ou une vidéo
+- Clic droit de Windows : « préparer » ou « envoyer direct », et plusieurs fichiers donnent un seul LiveChat
+- Emojis avec le look de Discord, dans un bouton
+- Voix robot : case décochée de base, avec une confirmation, 200 caractères lus au maximum
+
+**0.9.0** : en jeu
 
 - Bouton panique
 - Raccourcis pour envoyer un meme sans quitter le jeu
@@ -35,16 +43,6 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 - Favoris dans l'historique, gardés sur le PC
 
 ## À venir
-
-### 0.10.0 : envoi rapide et texte vivant (en cours)
-
-Les deux mises à jour sortent ensemble.
-
-- Ctrl+V depuis n'importe quel onglet : image, vidéo ou son copié, et ça prépare le LiveChat
-- Lien direct vers une image, un GIF ou une vidéo
-- Clic droit de Windows : « préparer » ou « envoyer direct », et plusieurs fichiers donnent un seul LiveChat
-- Emojis avec le look de Discord, dans un bouton
-- Voix robot : case décochée de base, avec une confirmation, 200 caractères lus au maximum
 
 ### 5. Liens vidéo
 
