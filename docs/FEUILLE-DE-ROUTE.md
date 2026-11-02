@@ -44,21 +44,21 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
-### 5. Liens vidéo
+### 5. Motion design (la prochaine)
+
+- Des animations soignées partout dans l'app
+
+### 6. Liens vidéo
 
 - YouTube
 - TikTok
 
-### 6. Vie de la party
+### 7. Vie de la party
 
 - Statut des membres
 - Mode privé (whisper)
 - Historique par personne
 - Sondages éclair
-
-### 7. Motion design
-
-- Des animations soignées partout dans l'app
 
 ### 8. Finitions
 
