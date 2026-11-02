@@ -368,7 +368,7 @@ const MAC_PAGE = `<!doctype html>
   h2 { font-size: 18px; font-weight: 500; margin: 32px 0 8px; }
   li { margin-bottom: 8px; }
   p { color: #d9d9df; }
-  a.get { display: inline-block; margin: 12px 0; padding: 12px 22px; border-radius: 999px; background: #f4f4f5; color: #0a0a0d; font-weight: 500; text-decoration: none; }
+  a.get { display: inline-block; margin: 12px 0; padding: 18px 36px; border-radius: 999px; background: #f4f4f5; color: #0a0a0d; font-size: 20px; font-weight: 600; text-decoration: none; }
 </style>
 </head>
 <body>
@@ -400,14 +400,19 @@ const redirectToMacInstaller = async (request: Request, env: Env): Promise<Respo
   return Response.redirect(new URL(`/updates/${installer}`, request.url).toString(), 302);
 };
 
-// A stable link to share with friends: always the installer of the latest version, for the machine asking.
-const redirectToLatestInstaller = async (request: Request, env: Env): Promise<Response> => {
-  if (request.headers.get('user-agent')?.includes('Macintosh')) return Response.redirect(new URL('/mac', request.url).toString(), 302);
+// A stable link to share with friends: always the installer of the latest version.
+const redirectToWindowsInstaller = async (request: Request, env: Env): Promise<Response> => {
   const manifest = await env.UPDATES.get(UPDATE_MANIFEST);
   const installer = (await manifest?.text())?.match(/^path:\s*(\S+)\s*$/m)?.[1];
   if (!installer || !UPDATE_FILE.test(installer)) return fail('not_found', 404);
   return Response.redirect(new URL(`/updates/${installer}`, request.url).toString(), 302);
 };
+
+// The link shared before there were two: it still has to give the right one.
+const redirectToLatestInstaller = (request: Request, env: Env): Promise<Response> | Response =>
+  request.headers.get('user-agent')?.includes('Macintosh')
+    ? Response.redirect(new URL('/mac', request.url).toString(), 302)
+    : redirectToWindowsInstaller(request, env);
 
 export default {
   async fetch(request, env): Promise<Response> {
@@ -416,6 +421,7 @@ export default {
 
     if (method === 'GET' && pathname === '/v1/health') return json({ ok: true });
     if (method === 'GET' && pathname === '/download') return redirectToLatestInstaller(request, env);
+    if (method === 'GET' && pathname === '/download/windows') return redirectToWindowsInstaller(request, env);
     if (method === 'GET' && pathname === '/download/mac') return redirectToMacInstaller(request, env);
     if (method === 'GET' && pathname === '/mac') return macPage();
     if (method === 'GET' && pathname.startsWith('/updates/')) {

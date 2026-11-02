@@ -942,6 +942,10 @@ describe('party service', () => {
     expect(page.status).toBe(200);
     expect(await page.text()).toContain('Ouvrir quand même');
 
+    const windows = await fetch(`${BASE}/download/windows`, { redirect: 'manual', headers: macBrowser });
+    expect(windows.status).toBe(302);
+    expect(windows.headers.get('location')).toBe(`${BASE}/updates/LiveChatSBCB-Setup-9.9.9.exe`);
+
     const installer = await fetch(`${BASE}/download/mac`, { redirect: 'manual' });
     expect(installer.status).toBe(302);
     expect(installer.headers.get('location')).toBe(`${BASE}/updates/LiveChatSBCB-Mac-9.9.9.dmg`);

@@ -118,8 +118,8 @@ for (const file of previousFiles) {
 }
 
 // The same files on the GitHub page, for whoever comes from there.
-const releaseNotes = `Télécharger : ${SERVICE_URL}/download\n\nSur Mac, suis ces étapes : ${SERVICE_URL}/mac`;
+const releaseNotes = `## Windows\n\n**[Télécharger pour Windows](${SERVICE_URL}/download/windows)**\n\n## Mac (puce Apple)\n\n**[Télécharger pour Mac](${SERVICE_URL}/mac)**, avec les étapes pour l'ouvrir la première fois.`;
 run('gh', 'release', 'create', `v${version}`, '--repo', REPOSITORY, '--target', commit, '--title', `LiveChatSBCB ${version}`, '--notes', releaseNotes,
   join(desktop, 'release', installer), ...macFiles.map((name) => join(macFolder, name)));
 
-console.log(`\nVersion ${version} published. Download link: ${SERVICE_URL}/download`);
+console.log(`\nVersion ${version} published. Windows: ${SERVICE_URL}/download/windows Mac: ${SERVICE_URL}/mac`);

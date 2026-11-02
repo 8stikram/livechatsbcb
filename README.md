@@ -10,7 +10,9 @@ Une image, une vidéo, un son ou un texte : tu l'envoies, et il s'affiche chez t
 
 <br />
 
-<a href="https://livechatsbcb-party.livechatsbcb-party.workers.dev/download"><img src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger_pour_Windows-ffffff?style=for-the-badge" alt="Télécharger pour Windows" /></a>
+<a href="https://livechatsbcb-party.livechatsbcb-party.workers.dev/download/windows"><img src="docs/readme/download-windows.svg" alt="Télécharger pour Windows" width="400" /></a>
+&nbsp;&nbsp;
+<a href="https://livechatsbcb-party.livechatsbcb-party.workers.dev/mac"><img src="docs/readme/download-mac.svg" alt="Télécharger pour Mac" width="400" /></a>
 
 <br /><br />
 
@@ -115,10 +117,16 @@ Donne un nom à un LiveChat réussi, et renvoie-le plus tard en un clic. Si un f
 
 ## Installer
 
-1. [Télécharge l'app](https://livechatsbcb-party.livechatsbcb-party.workers.dev/download) et lance-la. Le même lien marche sur Windows et sur Mac.
+**Sur Windows**
+
+1. [Télécharge la version Windows](https://livechatsbcb-party.livechatsbcb-party.workers.dev/download/windows) et lance-la.
 2. Windows peut afficher un avertissement, car l'app n'est pas signée : clique sur « Informations complémentaires », puis « Exécuter quand même ».
-3. Sur Mac (puce Apple), [cette page](https://livechatsbcb-party.livechatsbcb-party.workers.dev/mac) explique comment l'ouvrir la première fois.
-4. Connecte-toi avec Discord et choisis ton serveur. C'est tout.
+3. Connecte-toi avec Discord et choisis ton serveur. C'est tout.
+
+**Sur Mac (puce Apple)**
+
+1. [Télécharge la version Mac](https://livechatsbcb-party.livechatsbcb-party.workers.dev/mac) : la page explique comment l'ouvrir la première fois.
+2. Connecte-toi avec Discord et choisis ton serveur. C'est tout.
 
 <br />
 

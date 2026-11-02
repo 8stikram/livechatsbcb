@@ -42,6 +42,11 @@ check('login refuses a bad request', (await post('/v1/auth/start', { challenge: 
 const download = await fetch(`${base}/download`, { redirect: 'manual' });
 check('download link answers', download.status < 400, `status ${download.status}`);
 await download.body?.cancel();
+for (const system of ['windows', 'mac']) {
+  const link = await fetch(`${base}/download/${system}`, { redirect: 'manual' });
+  check(`${system} link answers`, link.status === 302, `status ${link.status}`);
+  await link.body?.cancel();
+}
 check('privacy page answers', (await fetch(`${base}/privacy`)).ok);
 check('Mac explanations answer', (await fetch(`${base}/mac`)).ok);
 
