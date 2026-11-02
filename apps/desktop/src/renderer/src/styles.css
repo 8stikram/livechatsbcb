@@ -1189,24 +1189,271 @@ select.input {
   font-weight: 500;
 }
 
-.draft-picture {
-  position: relative;
+.media-mode {
+  flex: none;
+  align-self: flex-start;
+}
+
+/* The real screen's proportions, as big as the room allows. */
+.screen-preview-frame {
+  align-self: stretch;
   flex: 1;
   min-height: 0;
   display: grid;
   place-items: center;
+  container-type: size;
+}
+
+.screen-preview {
+  position: relative;
+  width: min(100cqw, calc(100cqh * var(--screen-ratio)));
+  aspect-ratio: var(--screen-ratio);
   overflow: hidden;
-  border-radius: var(--radius-inner);
-  background: rgb(0 0 0 / 32%);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: linear-gradient(160deg, #1b2230, #101319 60%, #171c16);
   animation: appear var(--enter) var(--ease);
 }
 
-.draft-media {
+.scene-canvas {
   position: absolute;
   inset: 0;
+  overflow: hidden;
+  container-type: size;
+}
+
+.scene-layer {
+  position: absolute;
+}
+
+.scene-motion {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+}
+
+.scene.is-editing {
+  touch-action: none;
+}
+
+.scene.is-editing .scene-layer {
+  cursor: move;
+  user-select: none;
+}
+
+.scene-layer.is-selected {
+  outline: 1.5px solid #fff;
+  outline-offset: 1px;
+}
+
+.scene-info {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.scene-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid #000;
+  border-radius: 50%;
+  background: #fff;
+  translate: -50% -50%;
+}
+
+.scene-handle.is-nw {
+  left: 0;
+  top: 0;
+  cursor: nwse-resize;
+}
+
+.scene-handle.is-ne {
+  left: 100%;
+  top: 0;
+  cursor: nesw-resize;
+}
+
+.scene-handle.is-sw {
+  left: 0;
+  top: 100%;
+  cursor: nesw-resize;
+}
+
+.scene-handle.is-se {
+  left: 100%;
+  top: 100%;
+  cursor: nwse-resize;
+}
+
+.scene-handle.is-rotate {
+  left: 50%;
+  top: -22px;
+  cursor: grab;
+}
+
+.scene-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  pointer-events: none;
+}
+
+.scene-stage-error {
+  position: absolute;
+  left: 10px;
+  bottom: 6px;
+  margin: 0;
+}
+
+.scene-stop {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+}
+
+.scene-tools {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.scene-strip {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-inner);
+  background: var(--well);
+}
+
+.scene-strip-list {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 4px;
+  overflow-x: auto;
+  list-style: none;
+}
+
+.scene-strip-file {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 92px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.scene-strip-file img,
+.scene-strip-file video,
+.scene-strip-file svg {
+  width: 92px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.scene-strip-file svg {
+  padding: 16px 0;
+  background: rgb(255 255 255 / 6%);
+}
+
+.scene-strip-name {
+  width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layer-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.layer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.layer-actions [aria-pressed='true'] {
+  background: rgb(255 255 255 / 14%);
+}
+
+.layer-effects summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.layer-effects .stack {
+  margin-top: 10px;
+}
+
+@keyframes scene-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes scene-enter-pop {
+  from {
+    scale: 0;
+  }
+
+  70% {
+    scale: 1.12;
+  }
+}
+
+@keyframes scene-enter-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes scene-enter-slide {
+  from {
+    opacity: 0;
+    translate: 0 60%;
+  }
+}
+
+@keyframes scene-exit-pop {
+  to {
+    scale: 0;
+  }
+}
+
+@keyframes scene-exit-fade {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes scene-exit-slide {
+  to {
+    opacity: 0;
+    translate: 0 60%;
+  }
 }
 
 .draft-empty {

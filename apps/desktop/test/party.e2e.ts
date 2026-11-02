@@ -1244,6 +1244,155 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByRole('button', { name: 'Depuis mon PC' }).waitFor();
   });
 
+  it('shows in small what the others will see, and places things freely in the advanced mode', async () => {
+    const logo = join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png');
+    const control = host.control;
+
+    // The simple mode: the text is on the small screen as it is typed.
+    await openTab(host, 'LiveChat');
+    await control.getByLabel('Texte à afficher').fill('Un texte');
+    await control.getByTestId('live-preview').getByTestId('overlay-text').filter({ hasText: 'Un texte' }).waitFor();
+    await pickFile(host, logo);
+    await control.getByTestId('live-preview').locator('img.overlay-media').waitFor();
+    await picture(control, '18-simple-preview.png');
+
+    // What was there comes along in the advanced mode.
+    await control.getByRole('button', { name: 'Avancé' }).click();
+    const layers = control.getByTestId('scene-layer');
+    await layers.first().waitFor();
+    expect(await layers.count()).toBe(1);
+    await control.getByTestId('layer-panel').waitFor();
+
+    const placed = () => layers.first().evaluate((element) => (element as HTMLElement).style.left);
+    const before = await placed();
+    const box = (await layers.first().boundingBox())!;
+    await control.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await control.mouse.down();
+    await control.mouse.move(box.x + box.width / 2 - 30, box.y + box.height / 2 + 10, { steps: 5 });
+    await control.mouse.move(box.x + box.width / 2 - 60, box.y + box.height / 2 + 20, { steps: 5 });
+    await control.mouse.up();
+    const moved = await placed();
+    expect(moved).not.toBe(before);
+
+    // A whole move is one step back, by button or by keyboard.
+    await control.getByRole('button', { name: 'Annuler' }).click();
+    await expect.poll(placed).toBe(before);
+    await control.getByRole('button', { name: 'Rétablir' }).click();
+    await expect.poll(placed).toBe(moved);
+    await control.getByTestId('scene-stage').click({ position: { x: 3, y: 3 } });
+    await control.keyboard.press('Control+z');
+    await expect.poll(placed).toBe(before);
+    await control.keyboard.press('Control+y');
+    await expect.poll(placed).toBe(moved);
+
+    await layers.first().click();
+    const widthOf = () => layers.first().evaluate((element) => parseFloat((element as HTMLElement).style.width));
+    const startWidth = await widthOf();
+    const corner = (await control.getByTestId('scene-resize-se').boundingBox())!;
+    await control.mouse.move(corner.x + 6, corner.y + 6);
+    await control.mouse.down();
+    await control.mouse.move(corner.x + 46, corner.y + 46, { steps: 5 });
+    await control.mouse.up();
+    expect(await widthOf()).toBeGreaterThan(startWidth);
+
+    const grip = (await control.getByTestId('scene-rotate').boundingBox())!;
+    await control.mouse.move(grip.x + 6, grip.y + 6);
+    await control.mouse.down();
+    await control.mouse.move(grip.x + 60, grip.y + 40, { steps: 5 });
+    await control.mouse.up();
+    expect(await layers.first().evaluate((element) => (element as HTMLElement).style.transform)).not.toContain('rotate(0deg)');
+
+    await control.getByText('Effets').click();
+    await control.getByText('Noir et blanc').click();
+    await control.getByLabel('Apparition').selectOption('pop');
+    await control.getByLabel('Sortie').selectOption('fade');
+    await control.getByLabel('Rotation animée').selectOption('10');
+    await control.getByRole('button', { name: 'Dupliquer en miroir' }).click();
+    await expect.poll(() => layers.count()).toBe(2);
+    await picture(control, '19-advanced-selected.png');
+    await control.getByRole('button', { name: 'Terminé' }).click();
+
+    const sound = join(sandbox, 'son-avance.wav');
+    writeFileSync(sound, silentWav(3));
+    await answerDialogWith(host, sound);
+    await control.getByRole('group', { name: 'Ajouter un son' }).getByRole('button', { name: 'Depuis mon PC' }).click();
+    await control.getByTestId('clip-start').waitFor({ timeout: 15_000 });
+    await picture(control, '20-advanced.png');
+
+    // The preview plays it here alone.
+    await control.getByRole('button', { name: 'Aperçu', exact: true }).click();
+    await control.getByTestId('scene-preview').getByTestId('overlay-layer').first().waitFor();
+    await expect.poll(() => control.getByTestId('scene-preview').getByTestId('overlay-layer').count()).toBe(2);
+    expect(await guest.stage.getByTestId('overlay-layer').count()).toBe(0);
+    await control.getByRole('button', { name: 'Arrêter l’aperçu' }).first().click();
+    await layers.first().waitFor();
+
+    await control.getByRole('button', { name: 'Sauvegarder dans la bibliothèque' }).click();
+    await control.getByLabel('Nom de ce LiveChat').fill('Face à face');
+    await control.getByRole('button', { name: 'Sauvegarder', exact: true }).click();
+    await control.getByText('Sauvegardé sur ce PC.').waitFor();
+
+    // The others get the same thing, drawn by their own app from the recipe.
+    await sendButton(host).click();
+    await overlayState(guest, 'playing');
+    const shown = guest.stage.getByTestId('overlay-layer');
+    await expect.poll(() => shown.count()).toBe(2);
+    await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Un texte' }).waitFor();
+    await guest.stage.getByTestId('overlay-audio').waitFor({ state: 'attached' });
+    const looks = await shown.evaluateAll((elements) =>
+      elements.map((element) => {
+        const media = element.querySelector('img') as HTMLImageElement;
+        return { place: (element as HTMLElement).style.left, flip: media.style.transform, filter: media.style.filter, ready: media.complete && media.naturalWidth > 0 };
+      }),
+    );
+    expect(looks.every(({ filter, ready }) => filter.includes('grayscale') && ready)).toBe(true);
+    expect(looks.filter(({ flip }) => flip.includes('scaleX')).length).toBe(1);
+    expect(looks[0]!.place).not.toBe(looks[1]!.place);
+    await picture(guest.stage, '21-overlay-advanced.png');
+    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+
+    // After sending, the stage is free again. A saved one comes back whole, and leaves in one click.
+    await control.getByTestId('scene-stage').waitFor();
+    await expect.poll(() => layers.count()).toBe(0);
+    await openTab(host, 'Bibliothèque');
+    await control.getByRole('button', { name: /^Sauvegardés/ }).click();
+    const saved = control.getByTestId('saved-livechat').filter({ hasText: 'Face à face' });
+    await saved.getByRole('button', { name: 'Envoyer' }).click();
+    await overlayState(guest, 'playing');
+    await expect.poll(() => shown.count()).toBe(2);
+    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+
+    await saved.getByRole('button', { name: 'Modifier' }).click();
+    await expect.poll(() => layers.count()).toBe(2);
+    await expect(control.getByLabel('Texte à afficher').inputValue()).resolves.toBe('Un texte');
+
+    // A video among the pictures, heard or not as chosen, and on time like any other.
+    await answerDialogWith(host, join(sandbox, 'clip.webm'));
+    await control.getByRole('button', { name: 'Depuis mon PC' }).first().click();
+    await expect.poll(() => layers.count()).toBe(3);
+    await control.getByText('Son de la vidéo').waitFor({ state: 'hidden' });
+    await control.getByRole('button', { name: 'Terminé' }).click();
+    await control.getByText('Son de la vidéo').click();
+    await sendButton(host).click();
+    await overlayState(guest, 'playing');
+    const video = guest.stage.getByTestId('overlay-layer').getByTestId('overlay-video');
+    await video.waitFor();
+    await expect.poll(() => video.evaluate((element) => (element as HTMLVideoElement).volume)).toBe(0);
+    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+
+    // The simple mode kept its own file, and is what the next tests expect.
+    await control.getByRole('button', { name: 'Simple' }).click();
+    await control.getByRole('button', { name: 'Retirer', exact: true }).click();
+    await control.getByLabel('Texte à afficher').fill('');
+    await openTab(host, 'Bibliothèque');
+    await saved.getByRole('button', { name: 'Supprimer' }).click();
+    await saved.getByRole('button', { name: 'Vraiment ?' }).click();
+    await expect.poll(() => saved.count()).toBe(0);
+  });
+
   it('moves a zone of the overlay, and shows the result on the real screen', async () => {
     await openTab(guest, 'Réglages');
     await guest.control.getByTestId('layout-box').scrollIntoViewIfNeeded();

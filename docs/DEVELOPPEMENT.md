@@ -72,6 +72,12 @@ L'overlay ne s'affiche pas par-dessus un jeu en plein écran exclusif : il faut 
 
 L'onglet Historique garde ce qui est passé dans la party, 50 envois au maximum et jamais plus d'1 jour. « Rejouer pour tous » remet l'envoi dans la file de la party, sans rien renvoyer au stockage. « Revoir pour moi » ne l'affiche que sur son propre écran.
 
+## Mode avancé
+
+Le mode avancé ajoute une « scène » à l'envoi : une liste d'images posées sur tout l'écran, en pourcentage de sa taille, avec leurs effets. Chaque PC la redessine avec le même code que l'aperçu de l'onglet LiveChat (`renderer/src/scene.tsx`), donc rien n'est filmé ni recalculé. Le même fichier utilisé deux fois n'est envoyé qu'une fois.
+
+Le service refuse ce qui dépasse les limites : 5 images, 1 vidéo, 1 son, 1 seul élément flou, et 500 Mo au total. Ces limites n'ont pas encore été mesurées sur un vrai jeu.
+
 ## Bibliothèque
 
 La bibliothèque vit dans `library.json`, dans le dossier de données de l'app, et le service n'en sait rien. Elle parcourt les dossiers choisis (5 000 fichiers et 8 niveaux au maximum) à chaque ouverture de l'onglet.

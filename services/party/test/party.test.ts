@@ -352,6 +352,71 @@ describe('party service', () => {
     guestSocket.close();
   });
 
+  it('carries a scene of the advanced mode, and refuses one that breaks its limits', async () => {
+    const host = await createParty();
+    const layer = {
+      file: 0,
+      x: 30,
+      y: 40,
+      width: 25,
+      aspect: 1.5,
+      rotation: 15,
+      flip: false,
+      grayscale: true,
+      blur: 0,
+      spinRpm: 10,
+      enter: 'pop',
+      exit: 'fade',
+    };
+    const image = (name: string) => ({ contentType: 'image/png', size: 10, name });
+    const sound = { contentType: 'audio/mpeg', size: 20, name: 'son.mp3' };
+    const video = { contentType: 'video/mp4', size: 30, name: 'clip.mp4' };
+    const send = (files: unknown[], scene: unknown) =>
+      post(`/v1/parties/${host.partyId}/media`, { caption: '', clipStartMs: 0, durationMs: 2_000, files, scene }, authorized(host));
+
+    // Without a scene, it stays one to look at and one to listen to.
+    expect((await send([image('a.png'), image('b.png')], null)).status).toBe(400);
+    // A layer points at a file that isn't there, at a sound, or a picture is sent for nothing.
+    expect((await send([image('a.png')], [{ ...layer, file: 1 }])).status).toBe(400);
+    expect((await send([sound], [layer])).status).toBe(400);
+    expect((await send([image('a.png'), image('b.png')], [layer])).status).toBe(400);
+    // Beyond what was promised to hold up on a PC that is playing.
+    const six = ['a', 'b', 'c', 'd', 'e', 'f'].map((name) => image(`${name}.png`));
+    expect((await send(six, six.map((_, file) => ({ ...layer, file })))).status).toBe(400);
+    expect((await send([video, video], [layer, { ...layer, file: 1 }])).status).toBe(400);
+    expect((await send([image('a.png')], [{ ...layer, blur: 1 }, { ...layer, blur: 1 }])).status).toBe(400);
+    expect((await send([image('a.png')], [{ ...layer, width: 1_000 }])).status).toBe(400);
+
+    // The same file twice is one file, and all of it fits.
+    const files = [image('a.png'), image('b.png'), image('c.png'), image('d.png'), image('e.png'), video, sound];
+    const scene = [
+      ...[0, 1, 2, 3, 4, 5].map((file) => ({ ...layer, file })),
+    ];
+    const accepted = await send(files, scene);
+    expect(accepted.status).toBe(201);
+    const { fileIds } = (await accepted.json()) as { fileIds: string[] };
+    expect(fileIds).toHaveLength(7);
+
+    const twice = await send([image('a.png')], [layer, { ...layer, flip: true, x: 70 }]);
+    expect(twice.status).toBe(201);
+    const { mediaId } = (await twice.json()) as { mediaId: string };
+    const socket = new TestSocket(host);
+    await socket.welcome();
+    const part = await fetch(`${BASE}/v1/parties/${host.partyId}/media/${mediaId}/parts/1`, {
+      method: 'PUT',
+      headers: authorized(host),
+      body: testBytes(10),
+    });
+    await fetch(`${BASE}/v1/parties/${host.partyId}/media/${mediaId}/complete`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...authorized(host) },
+      body: JSON.stringify({ parts: [await part.json()] }),
+    });
+    const [item] = await socket.queueWhere((queue) => queue.length === 1, 'the scene');
+    expect(item!.scene).toEqual([layer, { ...layer, flip: true, x: 70 }]);
+    socket.close();
+  });
+
   it('gives up on the whole media when asked to, whichever files were already sent', async () => {
     const host = await createParty();
     const media = `${BASE}/v1/parties/${host.partyId}/media`;

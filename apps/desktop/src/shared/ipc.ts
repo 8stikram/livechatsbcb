@@ -5,6 +5,7 @@ import type {
   GuildSummary,
   MediaKind,
   Member,
+  SceneLayer,
 } from '@livechatsbcb/protocol';
 
 export type ConnectionStatus = 'connecting' | 'online' | 'reconnecting' | 'replaced' | 'party_full' | 'update_required';
@@ -75,7 +76,11 @@ export type PlaybackView = {
   soundUrl: string | null;
   videoMuted: boolean;
   soundMuted: boolean;
+  // The advanced mode: what replaces the picture, each with its file. Null url until it has reached this PC.
+  scene: SceneLayerView[] | null;
 };
+
+export type SceneLayerView = Omit<SceneLayer, 'file'> & { kind: 'image' | 'video'; url: string | null };
 
 export type UpcomingView = {
   id: string;
@@ -103,6 +108,20 @@ export type HistoryView = {
 export type LocalReplayView = { historyId: string; playback: PlaybackView | null };
 
 export type DraftMedia = { name: string; size: number; kind: FileKind; previewUrl: string };
+// A file of the advanced mode, which the window then points at.
+export type SceneFile = DraftMedia & { id: string };
+export type SceneResult = { ok: true; file: SceneFile } | { ok: false; error: 'cancelled' | 'unsupported' | 'empty' | 'not_found' };
+export type EditedLayer = Omit<SceneLayer, 'file'> & { fileId: string };
+export type SceneInput = {
+  caption: string;
+  clipStartMs: number;
+  durationMs: number;
+  videoMuted: boolean;
+  soundMuted: boolean;
+  layers: EditedLayer[];
+  soundId: string | null;
+};
+export type LoadedScene = SceneInput & { files: SceneFile[] };
 // What is being asked for: anything at first, then whichever of the two is still missing.
 export type DraftSlot = 'picture' | 'sound';
 
@@ -226,6 +245,12 @@ export const IpcChannel = {
   SetLibraryFavorite: 'library:set-favorite',
   UseLibraryFile: 'library:use-file',
   ShowLibraryFileMenu: 'library:file-menu',
+  StartScene: 'scene:start',
+  PickSceneFile: 'scene:pick-file',
+  UseLibraryFileInScene: 'scene:use-library-file',
+  ForgetSceneFile: 'scene:forget-file',
+  SendScene: 'scene:send',
+  SaveScene: 'scene:save',
   ShowSavedMenu: 'library:saved-menu',
   SendLibraryFile: 'library:send-file',
   RenameLibraryFile: 'library:rename-file',
@@ -271,6 +296,12 @@ export type LiveChatApi = {
   removeLibraryFolder(path: string): Promise<LibraryView>;
   setLibraryFavorite(fileId: string, favorite: boolean): Promise<LibraryView>;
   useLibraryFile(fileId: string): Promise<{ ok: true; draft: DraftMedia } | { ok: false }>;
+  startScene(): Promise<SceneFile[]>;
+  pickSceneFile(wanted: 'picture' | 'sound'): Promise<SceneResult>;
+  useLibraryFileInScene(fileId: string): Promise<SceneResult>;
+  forgetSceneFile(id: string): Promise<void>;
+  sendScene(input: SceneInput): Promise<ActionResult>;
+  saveScene(input: SceneInput & { name: string }): Promise<ActionResult>;
   showLibraryFileMenu(fileId: string, canSend: boolean): Promise<{ action: FileMenuAction | null; missing?: true }>;
   showSavedMenu(savedId: string, canSend: boolean): Promise<{ action: SavedMenuAction | null; library?: LibraryView }>;
   sendLibraryFile(fileId: string, durationMs: number): Promise<ActionResult>;
@@ -278,7 +309,7 @@ export type LiveChatApi = {
   trashLibraryFile(fileId: string): Promise<{ outcome: 'trashed' | 'cancelled' | 'busy'; library: LibraryView }>;
   saveLiveChat(input: SaveLiveChatInput): Promise<ActionResult>;
   sendSaved(savedId: string): Promise<ActionResult>;
-  editSaved(savedId: string): Promise<{ ok: true; draft: LoadedDraft } | { ok: false }>;
+  editSaved(savedId: string): Promise<{ ok: true; draft: LoadedDraft } | { ok: true; scene: LoadedScene } | { ok: false }>;
   relocateSaved(savedId: string): Promise<{ outcome: 'found' | 'cancelled' | 'wrong_file'; library: LibraryView }>;
   setSavedFavorite(savedId: string, favorite: boolean): Promise<LibraryView>;
   deleteSaved(savedId: string): Promise<LibraryView>;

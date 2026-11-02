@@ -7,6 +7,7 @@ import { z } from 'zod';
 import {
   MAX_MEDIA_BYTES,
   MediaContentTypeSchema,
+  SceneLayerSchema,
   fileKindOf,
   mediaKindOf,
   type FileKind,
@@ -37,6 +38,8 @@ const SavedSchema = z.object({
   favorite: z.boolean(),
   savedAt: z.number(),
   files: z.array(SavedFileSchema),
+  // Saved before the advanced mode existed: no scene.
+  scene: z.array(SceneLayerSchema).nullable().default(null),
 });
 export type SavedLiveChat = z.infer<typeof SavedSchema>;
 

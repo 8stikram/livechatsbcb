@@ -57,12 +57,22 @@ L'affichage se pose par-dessus le jeu, sans prendre le clavier ni la souris. Tes
 
 ### Préparer un LiveChat
 
-Une image ou une vidéo, un son, un texte sur plusieurs lignes, et ça part. Tu choisis le passage à jouer.
+Une image ou une vidéo, un son, un texte sur plusieurs lignes, et ça part. Tu choisis le passage à jouer, et un petit écran te montre le rendu avec ton texte avant d'envoyer.
 
 Avec une vidéo et un son, c'est toi qui décides ce qu'on entend : l'un, l'autre, ou les deux.
 
 </td>
 <td width="50%"><img src="docs/readme/livechat.webp" alt="L'onglet LiveChat, avec une image, un son et un texte" /></td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### Tout placer en mode avancé
+
+Jusqu'à 5 images et une vidéo, posées où tu veux sur l'écran. Déplace, agrandis, tourne, mets en miroir à la souris, ajoute des effets et des animations, et regarde l'aperçu avec le son avant d'envoyer.
+
+</td>
+<td width="50%"><img src="docs/readme/advanced.webp" alt="Le mode avancé, avec deux images face à face sur un petit écran" /></td>
 </tr>
 <tr>
 <td width="50%" valign="top">
@@ -147,7 +157,6 @@ L'effet de verre flouté, qui laisse voir ton bureau derrière la fenêtre, dema
 
 ## Bientôt
 
-- [ ] **Mode avancé :** plusieurs images à placer librement, à tourner et à animer, avec des effets
 - [ ] **Liens :** YouTube et compagnie
 - [ ] **OBS et synthèse vocale**
 

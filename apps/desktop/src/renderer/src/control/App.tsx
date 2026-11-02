@@ -13,6 +13,7 @@ import { ServerRail } from './ServerRail';
 import { SettingsScreen } from './SettingsScreen';
 import { UpdateBanner } from './UpdateBanner';
 import { useDraft } from './use-draft';
+import { useScene } from './use-scene';
 
 const NOTICES = {
   session_expired: 'Tu ne fais plus partie de ta party privée.',
@@ -22,6 +23,7 @@ const NOTICES = {
 export const App = () => {
   const state = useAppState();
   const files = useDraft();
+  const scene = useScene();
   const [chosenView, setChosenView] = useState<View>('party');
   const [picking, setPicking] = useState(false);
   const [libraryCategory, setLibraryCategory] = useState<Category>('image');
@@ -41,6 +43,7 @@ export const App = () => {
     setChosenView('party');
     setPicking(false);
     files.reset();
+    scene.forgetAll();
   }, [loggedOut]);
 
   if (!state) return null;
@@ -126,6 +129,8 @@ export const App = () => {
                 <MediaScreen
                   state={state}
                   files={files}
+                  scene={scene}
+                  active={view === 'media' && !showPicker}
                   onOpenLibrary={(category) => {
                     setLibraryCategory(category);
                     setChosenView('library');
@@ -136,6 +141,7 @@ export const App = () => {
                 <LibraryScreen
                   state={state}
                   files={files}
+                  scene={scene}
                   active={view === 'library' && !showPicker}
                   category={libraryCategory}
                   onCategory={setLibraryCategory}

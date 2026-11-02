@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 export const WS_SUBPROTOCOL = `livechatsbcb.v${PROTOCOL_VERSION}`;
 export const WS_SUBPROTOCOL_PREFIX = 'livechatsbcb.v';
 export const WS_TOKEN_PREFIX = 'token.';
@@ -9,8 +9,9 @@ export const MAX_ONLINE_MEMBERS = 10;
 export const MAX_REGISTERED_MEMBERS = 30;
 
 export const MAX_MEDIA_BYTES = 500 * 1024 * 1024;
-// A picture or a video, and a sound.
-export const MAX_MEDIA_FILES = 2;
+// In the advanced mode: 5 pictures, a video and a sound. Otherwise, a picture or a video, and a sound.
+export const MAX_SCENE_PICTURES = 5;
+export const MAX_MEDIA_FILES = MAX_SCENE_PICTURES + 2;
 // R2 needs every part of an upload but the last to be the same size, and at least 5 MiB.
 export const MEDIA_PART_BYTES = 8 * 1024 * 1024;
 export const MAX_CAPTION_LENGTH = 300;
@@ -149,8 +150,11 @@ export const fileKindOf = (contentType: MediaContentType): FileKind => contentTy
 type WithType = { contentType: MediaContentType };
 
 // Whatever is on screen. A video sets the passage and the duration. Otherwise, a sound beside the picture does.
+// In the advanced mode there can be several pictures, and a video among them is what plays.
 export const pictureOf = <File extends WithType>(files: File[]): File | null =>
-  files.find(({ contentType }) => fileKindOf(contentType) !== 'audio') ?? null;
+  files.find(({ contentType }) => fileKindOf(contentType) === 'video') ??
+  files.find(({ contentType }) => fileKindOf(contentType) === 'image') ??
+  null;
 export const soundOf = <File extends WithType>(files: File[]): File | null =>
   files.find(({ contentType }) => fileKindOf(contentType) === 'audio') ?? null;
 
@@ -162,6 +166,51 @@ export const mediaKindOf = (files: WithType[]): MediaKind => {
 export const fileNamesOf = (files: { name: string }[]): string | null =>
   files.length > 0 ? files.map(({ name }) => name).join(' + ') : null;
 
+const SceneMotionSchema = z.enum(['none', 'pop', 'fade', 'slide']);
+export type SceneMotion = z.infer<typeof SceneMotionSchema>;
+
+// One picture placed on the whole screen, in percent of it. Its height follows from its proportions, so no screen stretches it.
+export const SceneLayerSchema = z.object({
+  file: z.number().int().min(0).max(MAX_MEDIA_FILES - 1),
+  x: z.number().min(-50).max(150),
+  y: z.number().min(-50).max(150),
+  width: z.number().min(2).max(300),
+  aspect: z.number().min(0.05).max(20),
+  rotation: z.number().min(-360).max(360),
+  flip: z.boolean(),
+  grayscale: z.boolean(),
+  // In percent of the width of the screen.
+  blur: z.number().min(0).max(3),
+  // Turns per minute, negative the other way.
+  spinRpm: z.number().int().min(-120).max(120),
+  enter: SceneMotionSchema,
+  exit: SceneMotionSchema,
+});
+export type SceneLayer = z.infer<typeof SceneLayerSchema>;
+
+// From the back to the front. The same file can be there twice, and is only sent once.
+const SceneSchema = z.array(SceneLayerSchema).min(1).max(MAX_SCENE_PICTURES + 1).nullable();
+
+const isValidScene = (scene: SceneLayer[], files: WithType[]): boolean => {
+  const kindOfLayer = (layer: SceneLayer) => {
+    const file = files[layer.file];
+    return file ? fileKindOf(file.contentType) : null;
+  };
+  const kinds = scene.map(kindOfLayer);
+  const used = new Set(scene.map((layer) => layer.file));
+  const unused = files.filter((file, index) => !used.has(index) && fileKindOf(file.contentType) !== 'audio');
+  return (
+    !kinds.includes(null) &&
+    !kinds.includes('audio') &&
+    unused.length === 0 &&
+    kinds.filter((kind) => kind === 'image').length <= MAX_SCENE_PICTURES &&
+    kinds.filter((kind) => kind === 'video').length <= 1 &&
+    files.filter(({ contentType }) => fileKindOf(contentType) === 'audio').length <= 1 &&
+    // Blur is what costs the most on a PC that is playing.
+    scene.filter(({ blur }) => blur > 0).length <= 1
+  );
+};
+
 export const MediaDraftSchema = z
   .object({
     caption: z.string().trim().max(MAX_CAPTION_LENGTH),
@@ -170,6 +219,7 @@ export const MediaDraftSchema = z
     // With a video and a sound together, whoever sends chooses which of the two is heard: one, both or neither.
     videoMuted: z.boolean().default(false),
     soundMuted: z.boolean().default(false),
+    scene: SceneSchema.default(null),
     files: z
       .array(
         z.object({
@@ -182,8 +232,11 @@ export const MediaDraftSchema = z
   })
   .refine((draft) => draft.files.length > 0 || draft.caption.length > 0)
   .refine((draft) => draft.files.reduce((total, { size }) => total + size, 0) <= MAX_MEDIA_BYTES)
-  // Two files are one to look at and one to listen to, never two of the same.
-  .refine(({ files }) => files.length < 2 || (pictureOf(files) !== null && soundOf(files) !== null))
+  .refine(({ scene, files }) => {
+    if (scene) return isValidScene(scene, files);
+    // Two files are one to look at and one to listen to, never two of the same.
+    return files.length <= 2 && (files.length < 2 || (pictureOf(files) !== null && soundOf(files) !== null));
+  })
   .refine((draft) => {
     const plays = draft.files.some(({ contentType }) => fileKindOf(contentType) !== 'image');
     return plays || (draft.clipStartMs === 0 && draft.durationMs <= MAX_DISPLAY_MS);
@@ -217,6 +270,7 @@ export const QueueItemSchema = z.object({
   durationMs: z.number(),
   videoMuted: z.boolean(),
   soundMuted: z.boolean(),
+  scene: SceneSchema,
   // When the service forgets it, and deletes its file. Playing it again doesn't push this back.
   expiresAt: z.number(),
   // On the service's clock. Null until the item may start: only the first item of the queue ever has one.

@@ -5,6 +5,7 @@ import { ConfirmButton } from './ConfirmButton';
 import { IconPlay, IconStar, KindIcon } from './icons';
 import { mediaErrorMessage } from './messages';
 import type { DraftFiles } from './use-draft';
+import type { Scene } from './use-scene';
 
 export type Category = 'image' | 'video' | 'audio' | 'saved';
 type Sort = 'date' | 'name' | 'type';
@@ -242,6 +243,7 @@ const Folders = ({ library, onChange }: { library: LibraryView; onChange: (view:
 export const LibraryScreen = ({
   state,
   files,
+  scene,
   active,
   category,
   onCategory,
@@ -249,6 +251,7 @@ export const LibraryScreen = ({
 }: {
   state: AppState;
   files: DraftFiles;
+  scene: Scene;
   active: boolean;
   category: Category;
   onCategory: (category: Category) => void;
@@ -290,6 +293,12 @@ export const LibraryScreen = ({
 
   const use = async (file: LibraryFileView) => {
     setError(null);
+    if (scene.active) {
+      const problem = await scene.addFromLibrary(file.id);
+      if (problem) setError(problem);
+      else onOpenEditor();
+      return;
+    }
     const result = await window.liveChat.useLibraryFile(file.id);
     if (!result.ok) {
       setError('Ce fichier n’est plus là.');
@@ -328,7 +337,18 @@ export const LibraryScreen = ({
       setError('Un fichier de ce LiveChat n’est plus là.');
       return;
     }
-    files.load(result.draft);
+    if ('scene' in result) {
+      scene.load(result.scene);
+      files.setCaption(result.scene.caption);
+      files.setVideoMuted(result.scene.videoMuted);
+      files.setSoundMuted(result.scene.soundMuted);
+      if (!result.scene.soundId && !result.scene.layers.some(({ fileId }) => result.scene.files.find(({ id }) => id === fileId)?.kind === 'video')) {
+        files.setDisplayMs(result.scene.durationMs);
+      }
+    } else {
+      scene.leave();
+      files.load(result.draft);
+    }
     onOpenEditor();
   };
 

@@ -48,7 +48,7 @@ const MIN_PREPARE_MS = 15_000;
 const MAX_PREPARE_MS = 120_000;
 const PREPARE_BYTES_PER_MS = 2_000;
 // Changes when what is stored in the queue and the history stops being readable by the current apps.
-const ITEM_FORMAT = '5';
+const ITEM_FORMAT = '6';
 
 export const guildPartyId = (guildId: string): string => `g-${guildId}`;
 
@@ -531,6 +531,7 @@ export class Party extends DurableObject<Env> {
       durationMs: draft.durationMs,
       videoMuted: draft.videoMuted,
       soundMuted: draft.soundMuted,
+      scene: draft.scene,
       expiresAt: Date.now() + Number(this.env.MEDIA_RETENTION_MS),
     });
   }

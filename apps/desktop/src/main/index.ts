@@ -10,6 +10,8 @@ import {
   DEFAULT_DISPLAY_MS,
   MAX_FILE_NAME_LENGTH,
   MAX_MEDIA_BYTES,
+  MediaDraftSchema,
+  SceneLayerSchema,
   fileKindOf,
   fileNamesOf,
   pictureOf,
@@ -18,9 +20,10 @@ import {
   type HistoryItem,
   type MediaContentType,
   type QueueItem,
+  type SceneLayer,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, type ActionResult, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction } from '../shared/ipc';
+import { IpcChannel, type ActionResult, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
@@ -57,7 +60,19 @@ const SendMediaInputSchema = z.object({
   withSound: z.boolean(),
 });
 
-const SaveLiveChatInputSchema = SendMediaInputSchema.extend({ name: z.string().trim().min(1).max(80) });
+const SAVE_NAME = z.string().trim().min(1).max(80);
+const SaveLiveChatInputSchema = SendMediaInputSchema.extend({ name: SAVE_NAME });
+
+const SceneInputSchema = z.object({
+  caption: z.string(),
+  clipStartMs: z.number(),
+  durationMs: z.number(),
+  videoMuted: z.boolean(),
+  soundMuted: z.boolean(),
+  layers: z.array(SceneLayerSchema.omit({ file: true }).extend({ fileId: z.string() })),
+  soundId: z.string().nullable(),
+});
+const SaveSceneInputSchema = SceneInputSchema.extend({ name: SAVE_NAME });
 
 const DISCORD_ID = z.string().regex(/^\d{17,20}$/);
 
@@ -121,7 +136,10 @@ function start(): void {
   });
 
   // Files stay under the media they came with, which is the replay's own key when played on this PC alone.
-  const playbackFiles = (key: string, files: QueueItem['files']): Pick<PlaybackView, 'fileName' | 'mediaUrl' | 'hasSound' | 'soundUrl'> => {
+  const playbackFiles = (
+    key: string,
+    { files, scene }: Pick<QueueItem, 'files' | 'scene'>,
+  ): Pick<PlaybackView, 'fileName' | 'mediaUrl' | 'hasSound' | 'soundUrl' | 'scene'> => {
     const picture = pictureOf(files);
     const sound = soundOf(files);
     const urlOf = (file: QueueItem['files'][number] | null) => (file ? cache.urlOf(key, file.id) : null);
@@ -130,6 +148,11 @@ function start(): void {
       mediaUrl: urlOf(picture ?? sound),
       hasSound: picture !== null && sound !== null,
       soundUrl: picture ? urlOf(sound) : null,
+      scene:
+        scene?.map(({ file: index, ...layer }) => {
+          const file = files[index]!;
+          return { ...layer, kind: fileKindOf(file.contentType) === 'video' ? ('video' as const) : ('image' as const), url: urlOf(file) };
+        }) ?? null,
     };
   };
 
@@ -144,7 +167,7 @@ function start(): void {
     videoMuted: item.videoMuted,
     soundMuted: item.soundMuted,
     startAt: item.startAt === null || !connection ? null : connection.toLocalTime(item.startAt),
-    ...playbackFiles(item.id, item.files),
+    ...playbackFiles(item.id, item),
   });
 
   const toHistoryView = (item: HistoryItem, party: PartyConnection): HistoryView => ({
@@ -174,7 +197,7 @@ function start(): void {
         videoMuted: item.videoMuted,
         soundMuted: item.soundMuted,
         startAt,
-        ...playbackFiles(key, item.files),
+        ...playbackFiles(key, item),
       },
     };
   };
@@ -506,11 +529,39 @@ function start(): void {
     return { name: file.name, size: file.size, kind: fileKindOf(file.contentType), previewUrl: preview.url };
   };
 
-  type Timing = Pick<z.infer<typeof SendMediaInputSchema>, 'caption' | 'clipStartMs' | 'durationMs' | 'videoMuted' | 'soundMuted'>;
+  type Timing = Pick<z.infer<typeof SendMediaInputSchema>, 'caption' | 'clipStartMs' | 'durationMs' | 'videoMuted' | 'soundMuted'> & {
+    scene?: SceneLayer[] | null;
+  };
+
+  // What is on the stage of the advanced mode. Kept apart, so that going back to the simple mode finds its own files.
+  const sceneFiles = new Map<string, SavedFile & { preview: SceneFile }>();
+
+  const putInScene = (file: SavedFile): SceneFile => {
+    const preview = registerMediaFile(file.path, file.contentType);
+    const view = { id: preview.id, name: file.name, size: file.size, kind: fileKindOf(file.contentType), previewUrl: preview.url };
+    sceneFiles.set(preview.id, { ...file, preview: view });
+    return view;
+  };
+
+  const forgetSceneFile = (id: string): void => {
+    if (sceneFiles.delete(id)) forgetMediaFile(id);
+  };
+
+  // The same file used twice is only sent once, and what is on the stage points at its place in the list.
+  const sceneRecipe = (input: z.infer<typeof SceneInputSchema>): { files: SavedFile[]; scene: SceneLayer[] } | null => {
+    const ids = [...new Set(input.layers.map(({ fileId }) => fileId)), ...(input.soundId ? [input.soundId] : [])];
+    const files = ids.map((id) => sceneFiles.get(id));
+    if (files.includes(undefined)) return null;
+    return {
+      files: (files as SavedFile[]).map(({ path, name, size, contentType }) => ({ path, name, size, contentType })),
+      scene: input.layers.map(({ fileId, ...layer }) => ({ ...layer, file: ids.indexOf(fileId) })),
+    };
+  };
 
   const sendFiles = async (session: SessionResponse, files: SavedFile[], timing: Timing): Promise<ActionResult> => {
     const created = await partyApi.createMedia(session, {
       ...timing,
+      scene: timing.scene ?? null,
       files: files.map(({ contentType, size, name }) => ({ contentType, size, name: name.slice(0, MAX_FILE_NAME_LENGTH) })),
     });
     if (!created.ok) return created;
@@ -834,6 +885,7 @@ function start(): void {
     const locked =
       upload !== null ||
       Boolean(connection?.current().queue.length) ||
+      [...sceneFiles.values()].some(({ path }) => path === file.path) ||
       draft.picture?.path === file.path ||
       draft.sound?.path === file.path;
     const action = await chooseFromMenu<FileMenuAction>([
@@ -913,6 +965,70 @@ function start(): void {
     return { outcome, library: await library.view() };
   });
 
+  handle(IpcChannel.StartScene, () => [draft.picture, draft.sound].filter((file) => file !== null).map((file) => putInScene(file)));
+
+  handle(IpcChannel.PickSceneFile, async (wanted: unknown): Promise<SceneResult> => {
+    const slot: DraftSlot = wanted === 'sound' ? 'sound' : 'picture';
+    const picked = await dialog.showOpenDialog(controlWindow, {
+      title: 'Choisir un média',
+      properties: ['openFile'],
+      filters: [
+        {
+          name: slot === 'sound' ? 'Sons' : 'Images et vidéos',
+          extensions: Object.entries(CONTENT_TYPE_BY_EXTENSION)
+            .filter(([, contentType]) => slotOf(contentType) === slot)
+            .map(([extension]) => extension),
+        },
+      ],
+    });
+    const path = picked.filePaths[0];
+    if (picked.canceled || !path) return { ok: false, error: 'cancelled' };
+    const contentType = contentTypeOf(path);
+    if (!contentType || slotOf(contentType) !== slot) return { ok: false, error: 'unsupported' };
+    const { size } = await stat(path);
+    if (size === 0) return { ok: false, error: 'empty' };
+    return { ok: true, file: putInScene({ path, name: basename(path), size, contentType }) };
+  });
+
+  handle(IpcChannel.UseLibraryFileInScene, async (fileId: unknown): Promise<SceneResult> => {
+    const file = typeof fileId === 'string' ? library.fileById(fileId) : null;
+    const info = file && (await stat(file.path).catch(() => null));
+    if (!file || !info) return { ok: false, error: 'not_found' };
+    return { ok: true, file: putInScene({ ...file, size: info.size }) };
+  });
+
+  handle(IpcChannel.ForgetSceneFile, (id: unknown) => {
+    if (typeof id === 'string') forgetSceneFile(id);
+  });
+
+  handle(IpcChannel.SendScene, async (raw: unknown): Promise<ActionResult> => {
+    const session = store.session;
+    if (!session) return { ok: false, error: 'unauthorized' };
+    const input = SceneInputSchema.safeParse(raw);
+    const recipe = input.success ? sceneRecipe(input.data) : null;
+    if (!input.success || !recipe || upload) return { ok: false, error: 'invalid_request' };
+    const { soundId: _soundId, layers: _layers, ...timing } = input.data;
+
+    // Said here rather than by the service, which would have started on the upload.
+    if (!MediaDraftSchema.safeParse({ ...timing, ...recipe }).success) return { ok: false, error: 'invalid_request' };
+
+    const result = await sendFiles(session, recipe.files, { ...timing, scene: recipe.scene });
+    if (result.ok) {
+      for (const id of [...sceneFiles.keys()]) forgetSceneFile(id);
+      publishState();
+    }
+    return result;
+  });
+
+  handle(IpcChannel.SaveScene, async (raw: unknown): Promise<ActionResult> => {
+    const input = SaveSceneInputSchema.safeParse(raw);
+    const recipe = input.success ? sceneRecipe(input.data) : null;
+    if (!input.success || !recipe) return { ok: false, error: 'invalid_request' };
+    const { name, caption, clipStartMs, durationMs, videoMuted, soundMuted } = input.data;
+    await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, ...recipe });
+    return { ok: true };
+  });
+
   handle(IpcChannel.SaveLiveChat, async (raw: unknown): Promise<ActionResult> => {
     const input = SaveLiveChatInputSchema.safeParse(raw);
     if (!input.success) return { ok: false, error: 'invalid_request' };
@@ -922,7 +1038,7 @@ function start(): void {
     const files = chosen.map(({ path, name: fileName, size, contentType }) => ({ path, name: fileName, size, contentType }));
     if (files.length === 0 && !caption.trim()) return { ok: false, error: 'invalid_request' };
 
-    await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, files });
+    await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, files, scene: null });
     return { ok: true };
   });
 
@@ -939,6 +1055,25 @@ function start(): void {
   handle(IpcChannel.EditSaved, async (savedId: unknown) => {
     const saved = typeof savedId === 'string' ? library.savedById(savedId) : null;
     if (!saved || !(await library.allThere(saved))) return { ok: false };
+
+    if (saved.scene) {
+      const { caption, clipStartMs, durationMs, videoMuted, soundMuted } = saved;
+      for (const id of [...sceneFiles.keys()]) forgetSceneFile(id);
+      const files = saved.files.map((file) => putInScene(file));
+      return {
+        ok: true,
+        scene: {
+          caption,
+          clipStartMs,
+          durationMs,
+          videoMuted,
+          soundMuted,
+          files,
+          layers: saved.scene.map(({ file, ...layer }) => ({ ...layer, fileId: files[file]!.id })),
+          soundId: files.find(({ kind }) => kind === 'audio')?.id ?? null,
+        },
+      };
+    }
 
     clearDraft('picture');
     clearDraft('sound');

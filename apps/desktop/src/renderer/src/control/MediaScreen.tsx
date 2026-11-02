@@ -1,16 +1,19 @@
-import { useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import {
   MAX_CAPTION_LENGTH,
   MAX_CLIP_MS,
   MAX_DISPLAY_MS,
   MIN_DISPLAY_MS,
 } from '@livechatsbcb/protocol';
-import type { AppState, DraftMedia, DraftSlot } from '../../../shared/ipc';
+import type { AppState, DraftMedia, DraftSlot, PlaybackView, SceneInput } from '../../../shared/ipc';
+import { Caption, Profile, ScreenPreview, zoneStyle } from '../scene';
+import { LayerPanel, SceneBoard } from './AdvancedEditor';
 import { IconPlay, KindIcon } from './icons';
 import { mediaErrorMessage } from './messages';
 import { Slider } from './NowPlaying';
 import { Switch } from './SettingsScreen';
 import type { Clip, DraftFiles } from './use-draft';
+import type { Scene } from './use-scene';
 
 const formatTime = (ms: number): string => {
   const tenths = Math.floor(ms / 100);
@@ -24,16 +27,41 @@ const formatSize = (bytes: number): string =>
     ? `${Math.ceil(bytes / 1024)} Ko`
     : `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} Mo`;
 
+// The screen in small, with what the others will see: the same zones, the same text.
+const LivePreview = ({ state, caption, children }: { state: AppState; caption: string; children?: ReactNode }) => {
+  const { layout } = state.settings;
+  return (
+    <ScreenPreview testId="live-preview">
+      <div className="scene">
+        <Profile name={state.account?.name ?? ''} avatarUrl={state.account?.avatarUrl ?? null} zone={layout.profile} />
+        {children && (
+          <div className="zone zone-media" style={zoneStyle(layout.media)}>
+            {children}
+          </div>
+        )}
+        {caption.trim() && <Caption text={caption} zone={layout.text} />}
+      </div>
+    </ScreenPreview>
+  );
+};
+
 const ClipEditor = ({
   draft,
   besidePicture,
+  noPreview = false,
+  state,
+  caption,
   clip,
   onClip,
   onUnreadable,
 }: {
-  draft: DraftMedia;
+  draft: Pick<DraftMedia, 'kind' | 'previewUrl'>;
   // The picture is shown above it, so a sound doesn't need its own place.
   besidePicture: boolean;
+  // The advanced mode has its own preview, of everything at once.
+  noPreview?: boolean;
+  state: AppState;
+  caption: string;
   clip: Clip | null;
   onClip: (clip: Clip) => void;
   onUnreadable: () => void;
@@ -113,19 +141,15 @@ const ClipEditor = ({
     <>
       {besidePicture ? (
         <audio {...handlers} />
+      ) : draft.kind === 'video' ? (
+        <LivePreview state={state} caption={caption}>
+          <video className="overlay-media" playsInline {...handlers} />
+        </LivePreview>
       ) : (
-        <div className="draft-picture">
-          {draft.kind === 'video' ? (
-            <video className="draft-media" playsInline {...handlers} />
-          ) : (
-            <>
-              <span className="kind-tile is-large">
-                <KindIcon kind="audio" size={28} />
-              </span>
-              <audio {...handlers} />
-            </>
-          )}
-        </div>
+        <>
+          <LivePreview state={state} caption={caption} />
+          <audio {...handlers} />
+        </>
       )}
 
       {clip && lengthMs !== null && lengthMs > MIN_DISPLAY_MS && (
@@ -162,10 +186,14 @@ const ClipEditor = ({
               Fin <strong className="mono" data-testid="clip-end">{formatTime(clip.endMs)}</strong>
             </span>
             <span className="spacer" />
-            <button type="button" className="pill secondary small" onClick={preview}>
-              <IconPlay size={16} />
-              Prévisualiser <span className="mono">{formatTime(clip.endMs - clip.startMs)}</span>
-            </button>
+            {noPreview ? (
+              <span className="mono hint">{formatTime(clip.endMs - clip.startMs)}</span>
+            ) : (
+              <button type="button" className="pill secondary small" onClick={preview}>
+                <IconPlay size={16} />
+                Prévisualiser <span className="mono">{formatTime(clip.endMs - clip.startMs)}</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -203,20 +231,31 @@ const DraftRow = ({
 export const MediaScreen = ({
   state,
   files,
+  scene,
+  active,
   onOpenLibrary,
 }: {
   state: AppState;
   files: DraftFiles;
+  scene: Scene;
+  active: boolean;
   onOpenLibrary: (category: 'image' | 'audio') => void;
 }) => {
   const { picture, sound, leader, hasFiles, clip, unreadable, caption, displayMs, videoMuted, soundMuted } = files;
+  const [preview, setPreview] = useState<{ item: PlaybackView; startAt: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveName, setSaveName] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   const isUploading = state.upload !== null;
-  const plays = leader !== null;
-  const hasContent = hasFiles ? !unreadable && (!plays || clip !== null) : caption.trim().length > 0;
+  const advanced = scene.active;
+  const plays = advanced ? scene.leader !== null : leader !== null;
+  const hasContent = advanced
+    ? scene.layers.length > 0 && (!plays || scene.clip !== null)
+    : hasFiles
+      ? !unreadable && (!plays || clip !== null)
+      : caption.trim().length > 0;
+  const selectedLayer = advanced ? (scene.layers.find(({ key }) => key === scene.selected) ?? null) : null;
   const isOnline = state.party?.connection === 'online';
 
   const pick = async (slot?: DraftSlot) => {
@@ -235,11 +274,73 @@ export const MediaScreen = ({
       : { clipStartMs: 0, durationMs: displayMs }),
   });
 
+  const sceneInput = (): SceneInput => ({
+    caption,
+    videoMuted,
+    soundMuted,
+    layers: scene.layers.map(({ key: _key, ...layer }) => layer),
+    soundId: scene.soundId,
+    ...(scene.clip
+      ? { clipStartMs: scene.clip.startMs, durationMs: Math.max(MIN_DISPLAY_MS, scene.clip.endMs - scene.clip.startMs) }
+      : { clipStartMs: 0, durationMs: displayMs }),
+  });
+
+  const stopPreview = () => setPreview(null);
+
+  // Played right here with its sound and its effects: nothing leaves this PC.
+  const startPreview = () => {
+    const input = sceneInput();
+    const startAt = Date.now() + 300;
+    setPreview({
+      startAt,
+      item: {
+        id: 'preview',
+        senderName: state.account?.name ?? '',
+        senderAvatarUrl: state.account?.avatarUrl ?? null,
+        kind: scene.hasVideo ? 'video' : 'image',
+        caption: input.caption.trim(),
+        fileName: null,
+        clipStartMs: input.clipStartMs,
+        durationMs: input.durationMs,
+        startAt,
+        mediaUrl: null,
+        hasSound: scene.sound !== null,
+        soundUrl: scene.sound?.previewUrl ?? null,
+        videoMuted,
+        soundMuted,
+        scene: input.layers.map(({ fileId, ...layer }) => {
+          const file = scene.fileOf(fileId);
+          return { ...layer, kind: file?.kind === 'video' ? 'video' : 'image', url: file?.previewUrl ?? null };
+        }),
+      },
+    });
+  };
+
+  useEffect(() => {
+    if (!preview) return;
+    const timer = setTimeout(stopPreview, preview.startAt + preview.item.durationMs - Date.now() + 200);
+    return () => clearTimeout(timer);
+  }, [preview]);
+
+  useEffect(() => {
+    if (!active) stopPreview();
+  }, [active]);
+
+  const switchMode = async (toAdvanced: boolean) => {
+    setError(null);
+    setSaved(false);
+    stopPreview();
+    if (!toAdvanced) scene.leave();
+    else setError(await scene.enter());
+  };
+
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!saveName?.trim()) return;
     setError(null);
-    const result = await window.liveChat.saveLiveChat({ ...recipe(), name: saveName });
+    const result = advanced
+      ? await window.liveChat.saveScene({ ...sceneInput(), name: saveName })
+      : await window.liveChat.saveLiveChat({ ...recipe(), name: saveName });
     if (result.ok) {
       setSaveName(null);
       setSaved(true);
@@ -251,9 +352,11 @@ export const MediaScreen = ({
   const send = async () => {
     setError(null);
     setSaved(false);
-    const result = await window.liveChat.sendMedia(recipe());
+    stopPreview();
+    const result = advanced ? await window.liveChat.sendScene(sceneInput()) : await window.liveChat.sendMedia(recipe());
     if (result.ok) {
-      files.reset();
+      if (advanced) scene.clearStage();
+      else files.reset();
       // Keeps whatever was typed while this one was on its way.
       files.setCaption((typed) => (typed === caption ? '' : typed));
     } else if (result.error !== 'cancelled') {
@@ -261,10 +364,66 @@ export const MediaScreen = ({
     }
   };
 
+  // Only while this screen is the one in use, and never while someone types.
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.key === 'Enter' && hasContent && isOnline && !isUploading) {
+        event.preventDefault();
+        void send();
+        return;
+      }
+      const target = event.target as HTMLElement;
+      if (!advanced || target.closest('input, textarea, select')) return;
+      const key = event.key.toLowerCase();
+      if (event.ctrlKey && key === 'z') {
+        event.preventDefault();
+        scene.undo();
+      } else if (event.ctrlKey && key === 'y') {
+        event.preventDefault();
+        scene.redo();
+      } else if (event.key === 'Delete' && scene.selected) {
+        scene.removeLayer(scene.selected);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  const modeSwitch = (
+    <div className="tabs media-mode" role="group" aria-label="Mode">
+      <button type="button" className={advanced ? 'tab' : 'tab is-active'} aria-pressed={!advanced} onClick={() => void switchMode(false)}>
+        Simple
+      </button>
+      <button type="button" className={advanced ? 'tab is-active' : 'tab'} aria-pressed={advanced} onClick={() => void switchMode(true)}>
+        Avancé
+      </button>
+    </div>
+  );
+
   return (
     <div className="media-grid">
       <section className="glass media-main" aria-label="Ton LiveChat">
-        {hasFiles ? (
+        {modeSwitch}
+        {advanced ? (
+          <>
+            <SceneBoard scene={scene} state={state} caption={caption} preview={preview} onError={setError} onStopPreview={stopPreview} />
+            {scene.sound && <DraftRow file={scene.sound} slot="sound" locked={isUploading} onRemove={scene.removeSound} />}
+            {scene.leader && (
+              <ClipEditor
+                key={scene.leader.previewUrl}
+                draft={scene.leader}
+                besidePicture
+                noPreview
+                state={state}
+                caption={caption}
+                clip={scene.clip}
+                onClip={scene.setClip}
+                onUnreadable={() => setError('Ce fichier ne peut pas être lu. Essaie un autre format.')}
+              />
+            )}
+          </>
+        ) : hasFiles ? (
           <>
             {picture && <DraftRow file={picture} slot="picture" locked={isUploading} onRemove={files.remove} />}
             {sound && <DraftRow file={sound} slot="sound" locked={isUploading} onRemove={files.remove} />}
@@ -280,20 +439,17 @@ export const MediaScreen = ({
               </div>
             )}
             {picture?.kind === 'image' && (
-              <div className="draft-picture">
-                <img
-                  className="draft-media"
-                  src={picture.previewUrl}
-                  alt=""
-                  onError={() => files.setUnreadable(true)}
-                />
-              </div>
+              <LivePreview state={state} caption={caption}>
+                <img className="overlay-media" src={picture.previewUrl} alt="" onError={() => files.setUnreadable(true)} />
+              </LivePreview>
             )}
             {leader && (
               <ClipEditor
                 key={leader.previewUrl}
                 draft={leader}
                 besidePicture={leader === sound && picture !== null}
+                state={state}
+                caption={caption}
                 clip={clip}
                 onClip={files.setClip}
                 onUnreadable={() => files.setUnreadable(true)}
@@ -307,6 +463,7 @@ export const MediaScreen = ({
           </>
         ) : (
           <div className="draft-empty">
+            {caption.trim() && <LivePreview state={state} caption={caption} />}
             <p className="draft-empty-title">Une image ou une vidéo, avec un son si tu veux</p>
             <p className="hint">500 Mo maximum. Effacé du serveur après 1 jour.</p>
             <div className="draft-choice">
@@ -322,10 +479,12 @@ export const MediaScreen = ({
       </section>
 
       <section className="glass panel media-side" aria-label="Envoyer ton LiveChat">
-        <h2>Envoyer à la party</h2>
+        <h2>{selectedLayer ? 'Cet élément' : 'Envoyer à la party'}</h2>
 
-        <label className="field">
-          <span>{hasFiles ? 'Texte à afficher (facultatif)' : 'Texte à afficher'}</span>
+        {selectedLayer && <LayerPanel scene={scene} layer={selectedLayer} />}
+
+        <label className="field" hidden={selectedLayer !== null}>
+          <span>{hasFiles || advanced ? 'Texte à afficher (facultatif)' : 'Texte à afficher'}</span>
           <textarea
             className="input is-area"
             value={caption}
@@ -335,7 +494,7 @@ export const MediaScreen = ({
           />
         </label>
 
-        {picture?.kind === 'video' && sound && (
+        {!selectedLayer && (advanced ? scene.hasVideo && scene.sound : picture?.kind === 'video' && sound) && (
           <div className="stack">
             <Switch checked={!videoMuted} onChange={(on) => files.setVideoMuted(!on)}>
               Son de la vidéo
@@ -346,9 +505,22 @@ export const MediaScreen = ({
           </div>
         )}
 
-        <span className="spacer" />
+        {!selectedLayer && <span className="spacer" />}
 
-        {saveName !== null ? (
+        {advanced && !selectedLayer && (
+          preview ? (
+            <button type="button" className="pill quiet small" onClick={stopPreview}>
+              Arrêter l’aperçu
+            </button>
+          ) : (
+            <button type="button" className="pill secondary small" disabled={!hasContent} onClick={startPreview}>
+              <IconPlay size={16} />
+              Aperçu
+            </button>
+          )
+        )}
+
+        {selectedLayer ? null : saveName !== null ? (
           <form className="save-form" onSubmit={(event) => void save(event)}>
             <label className="field">
               <span>Nom de ce LiveChat</span>
@@ -382,13 +554,13 @@ export const MediaScreen = ({
             Sauvegarder dans la bibliothèque
           </button>
         )}
-        {saved && (
+        {saved && !selectedLayer && (
           <p className="hint" role="status">
             Sauvegardé sur ce PC.
           </p>
         )}
 
-        {!plays && (
+        {!plays && !selectedLayer && (
           <label className="field">
             <span className="field-line">
               Durée d’affichage <strong className="mono" data-testid="display-seconds">{displayMs / 1000} s</strong>
