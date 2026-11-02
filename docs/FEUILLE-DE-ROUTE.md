@@ -66,25 +66,49 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
-### 6. Liens vidéo
+### 6. Réparations
+
+- Les pseudos longs ne s'affichent pas en entier
+- Glisser une image dans l'app ne marche pas
+- Mode avancé : cliquer à côté doit retirer la sélection partout, pas seulement sur le rendu
+- Parfois un LiveChat n'apparaît plus. Peut-être quand tout le monde n'a pas la même version : vérifier aussi que la mise à jour s'installe toute seule chez tout le monde
+- « Connexion perdue, nouvelle tentative » : ça reste bloqué
+
+### 7. LiveChat plus clair
+
+- Mode avancé : la bibliothèque passe en barre latérale, pour bien voir le rendu
+- Durée : affichée au moment de valider le LiveChat, avec le temps et s'il y a une musique
+- Quel média décide de la durée : d'abord la vidéo, puis le son, puis le GIF ou l'image
+- Historique : un choix « Modifier » qui rouvre le LiveChat en mode avancé
+- Passer : pour soi seulement ou pour tout le monde
+
+### 8. Raccourcis
+
+- Roue de LiveChats, comme la roue des armes dans GTA
+- Menu des raccourcis refait pour être facile à comprendre, comme celui de CS2
+
+### 9. Liens vidéo et sons
 
 - YouTube
 - TikTok
+- Un service comme SoundCloud pour ajouter des extraits sonores, à vérifier : il doit rester gratuit
 
-### 7. Vie de la party
+### 10. Vie de la party
 
+- Pendant un LiveChat, un contour vert autour de la photo de profil : il s'anime avec le son, et reste vert fixe s'il n'y a pas de son
+- Party jusqu'à 15 personnes au lieu de 10, à vérifier : ça doit rester gratuit
 - Statut des membres
 - Mode privé (whisper)
 - Historique par personne
 - Sondages éclair
 
-### 8. Finitions
+### 11. Finitions
 
 - Clic droit de Windows : les entrées n'apparaissent pas encore dans le vrai menu, à reprendre
 - Tags personnels dans la bibliothèque
 - Tuto au premier lancement, à passer et à rejouer depuis les réglages
 
-### 9. Plus tard
+### 12. Plus tard
 
 - Thèmes (Wii, Persona…)
 - GIF : bouton avec recherche via Klipy (compte et clé à créer), favoris et récents
