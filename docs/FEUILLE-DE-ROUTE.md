@@ -4,9 +4,9 @@ L'ordre des prochaines mises à jour. Il peut changer à tout moment.
 
 On avance une mise à jour à la fois : les questions de chacune sont posées juste avant de la commencer.
 
-## Prête à publier
+## Publiée
 
-**0.7.0**
+**0.7.0** (dernière version)
 
 - Barre de téléchargement des mises à jour
 - LiveChat en premier, Party réduite aux membres, au média en cours et à la suite
