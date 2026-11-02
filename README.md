@@ -123,7 +123,7 @@ Donne un nom à un LiveChat réussi, et renvoie-le plus tard en un clic. Si un f
 2. Windows peut afficher un avertissement, car l'app n'est pas signée : clique sur « Informations complémentaires », puis « Exécuter quand même ».
 3. Connecte-toi avec Discord et choisis ton serveur. C'est tout.
 
-**Sur Mac (puce Apple)**
+**Sur Mac, puce Apple ou Intel (macOS 13 ou plus récent)**
 
 1. [Télécharge la version Mac](https://livechatsbcb-party.livechatsbcb-party.workers.dev/mac) : la page explique comment l'ouvrir la première fois.
 2. Connecte-toi avec Discord et choisis ton serveur. C'est tout.

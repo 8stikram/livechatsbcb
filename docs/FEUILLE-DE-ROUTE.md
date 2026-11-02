@@ -6,7 +6,16 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.12.0** (dernière version) : version Mac
+**0.13.0** (dernière version) : réparations et tous les Mac
+
+- Glisser une image, une vidéo ou un son n'importe où dans l'app, avec un grand cadre « Lâche ici »
+- Pseudos longs en entier : le texte devient plus petit, dans l'app et en jeu
+- Mode avancé : cliquer à côté ou Échap retire la sélection, partout dans la fenêtre
+- Mises à jour cherchées plus souvent, et dès qu'un pote a une version plus récente, avec sa version affichée dans la Party
+- Reconnexion plus rapide, surtout à la sortie de veille
+- Version Mac pour puces Apple et Intel, macOS 13 ou plus récent
+
+**0.12.0** : version Mac
 
 - L'app sur Mac récents (puces Apple), sans abonnement Apple
 - Mise à jour automatique sur Mac aussi
@@ -66,13 +75,9 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
-### 6. Réparations
+### 6. À surveiller
 
-- Les pseudos longs ne s'affichent pas en entier
-- Glisser une image dans l'app ne marche pas
-- Mode avancé : cliquer à côté doit retirer la sélection partout, pas seulement sur le rendu
-- Parfois un LiveChat n'apparaît plus. Peut-être quand tout le monde n'a pas la même version : vérifier aussi que la mise à jour s'installe toute seule chez tout le monde
-- « Connexion perdue, nouvelle tentative » : ça reste bloqué
+- Parfois un LiveChat n'apparaît plus. Pas reproduit : regarder si une version s'affiche à côté du pote concerné dans la Party
 
 ### 7. LiveChat plus clair
 
@@ -104,6 +109,7 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ### 11. Finitions
 
+- Bandeau « Une autre app utilise déjà » : le texte est trop espacé
 - Clic droit de Windows : les entrées n'apparaissent pas encore dans le vrai menu, à reprendre
 - Tags personnels dans la bibliothèque
 - Tuto au premier lancement, à passer et à rejouer depuis les réglages
