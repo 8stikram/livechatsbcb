@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
   MAX_CAPTION_LENGTH,
   MAX_CLIP_MS,
@@ -8,6 +8,7 @@ import {
 import { DEFAULT_SETTINGS, type AppState, type DraftMedia, type DraftSlot, type PlaybackView, type SceneInput } from '../../../shared/ipc';
 import { Caption, Profile, ScreenPreview, zoneStyle } from '../scene';
 import { LayerPanel, SceneBoard } from './AdvancedEditor';
+import { ClipBar, type ClipEdge } from './ClipBar';
 import { IconCheck, IconPlay, KindIcon } from './icons';
 import { isLongerThanSpoken, readingMs } from '../speech';
 import { EmojiButton } from './EmojiPicker';
@@ -18,6 +19,8 @@ import type { Clip, DraftFiles } from './use-draft';
 import type { Scene } from './use-scene';
 
 const SENT_SHOWN_MS = 1_400;
+// Letting go of the end plays what leads to it, as that is what is being judged.
+const REPLAY_BEFORE_END_MS = 2_000;
 
 const formatTime = (ms: number): string => {
   const tenths = Math.floor(ms / 100);
@@ -58,8 +61,10 @@ const ClipEditor = ({
   clip,
   onClip,
   onUnreadable,
+  shownIn,
+  silent = false,
 }: {
-  draft: Pick<DraftMedia, 'kind' | 'previewUrl'>;
+  draft: Pick<DraftMedia, 'kind' | 'previewUrl' | 'size'>;
   // The picture is shown above it, so a sound doesn't need its own place.
   besidePicture: boolean;
   // The advanced mode has its own preview, of everything at once.
@@ -69,10 +74,40 @@ const ClipEditor = ({
   clip: Clip | null;
   onClip: (clip: Clip) => void;
   onUnreadable: () => void;
+  // Where the video can be seen, when that is somewhere else than here.
+  shownIn?: () => HTMLVideoElement | null;
+  silent?: boolean;
 }) => {
   const media = useRef<HTMLVideoElement & HTMLAudioElement>(null);
-  const previewEndMs = useRef<number | null>(null);
+  const playing = useRef<HTMLMediaElement | null>(null);
   const [lengthMs, setLengthMs] = useState<number | null>(null);
+
+  const player = (): HTMLMediaElement | null => shownIn?.() ?? media.current;
+
+  const stopPlaying = () => {
+    const element = playing.current;
+    if (!element) return;
+    playing.current = null;
+    element.ontimeupdate = null;
+    element.pause();
+    if (element !== media.current) element.muted = true;
+  };
+
+  const play = (fromMs: number, toMs: number) => {
+    stopPlaying();
+    const element = player();
+    if (!element) return;
+    element.currentTime = fromMs / 1000;
+    element.volume = state.settings.muted ? 0 : state.settings.volume / 100;
+    if (element !== media.current) element.muted = silent;
+    playing.current = element;
+    element.ontimeupdate = () => {
+      if (element.currentTime * 1000 >= toMs) stopPlaying();
+    };
+    void element.play().catch(() => {});
+  };
+
+  useEffect(() => stopPlaying, []);
 
   const onDuration = () => {
     const element = media.current;
@@ -93,10 +128,11 @@ const ClipEditor = ({
   };
 
   const seek = (ms: number) => {
-    previewEndMs.current = null;
-    if (media.current) {
-      media.current.pause();
-      media.current.currentTime = ms / 1000;
+    stopPlaying();
+    const element = player();
+    if (element) {
+      element.pause();
+      element.currentTime = ms / 1000;
     }
   };
 
@@ -114,19 +150,15 @@ const ClipEditor = ({
     seek(end);
   };
 
-  const preview = () => {
-    if (!clip || !media.current) return;
-    media.current.currentTime = clip.startMs / 1000;
-    previewEndMs.current = clip.endMs;
-    void media.current.play().catch(() => {});
+  const moveTo = (startMs: number) => {
+    if (!clip) return;
+    onClip({ startMs, endMs: startMs + clip.endMs - clip.startMs });
+    seek(startMs);
   };
 
-  const onTime = () => {
-    const element = media.current;
-    if (element && previewEndMs.current !== null && element.currentTime * 1000 >= previewEndMs.current) {
-      element.pause();
-      previewEndMs.current = null;
-    }
+  const onRelease = (edge: ClipEdge) => {
+    if (!clip) return;
+    play(edge === 'end' ? Math.max(clip.startMs, clip.endMs - REPLAY_BEFORE_END_MS) : clip.startMs, clip.endMs);
   };
 
   const handlers = {
@@ -135,11 +167,8 @@ const ClipEditor = ({
     preload: 'metadata',
     onLoadedMetadata: onMetadata,
     onDurationChange: onDuration,
-    onTimeUpdate: onTime,
     onError: onUnreadable,
   };
-
-  const edge = (ms: number) => (lengthMs ? ms / lengthMs : 0);
 
   return (
     <>
@@ -157,49 +186,30 @@ const ClipEditor = ({
       )}
 
       {clip && lengthMs !== null && lengthMs > MIN_DISPLAY_MS && (
-        <div className="clip">
-          <div
-            className="clip-range"
-            style={{ '--start': edge(clip.startMs), '--end': edge(clip.endMs) } as CSSProperties}
-          >
-            <i className="clip-chosen" aria-hidden="true" />
-            <input
-              type="range"
-              aria-label="Début du passage"
-              min={0}
-              max={lengthMs}
-              step={100}
-              value={clip.startMs}
-              onChange={(event) => setStart(Number(event.target.value))}
-            />
-            <input
-              type="range"
-              aria-label="Fin du passage"
-              min={0}
-              max={lengthMs}
-              step={100}
-              value={clip.endMs}
-              onChange={(event) => setEnd(Number(event.target.value))}
-            />
-          </div>
-          <div className="clip-foot">
-            <span className="clip-time">
-              Début <strong className="mono" data-testid="clip-start">{formatTime(clip.startMs)}</strong>
-            </span>
-            <span className="clip-time">
-              Fin <strong className="mono" data-testid="clip-end">{formatTime(clip.endMs)}</strong>
-            </span>
-            <span className="spacer" />
-            {noPreview ? (
-              <span className="mono hint">{formatTime(clip.endMs - clip.startMs)}</span>
-            ) : (
-              <button type="button" className="pill secondary small" onClick={preview}>
-                <IconPlay size={16} />
-                Prévisualiser <span className="mono">{formatTime(clip.endMs - clip.startMs)}</span>
-              </button>
-            )}
-          </div>
-        </div>
+        <ClipBar
+          draft={draft}
+          totalMs={lengthMs}
+          clip={clip}
+          lengthLabel={formatTime(clip.endMs - clip.startMs)}
+          onStart={setStart}
+          onEnd={setEnd}
+          onMove={moveTo}
+          onRelease={onRelease}
+        >
+          <span className="clip-time">
+            Début <strong className="mono" data-testid="clip-start">{formatTime(clip.startMs)}</strong>
+          </span>
+          <span className="clip-time">
+            Fin <strong className="mono" data-testid="clip-end">{formatTime(clip.endMs)}</strong>
+          </span>
+          <span className="spacer" />
+          {!noPreview && (
+            <button type="button" className="pill secondary small" onClick={() => play(clip.startMs, clip.endMs)}>
+              <IconPlay size={16} />
+              Prévisualiser <span className="mono">{formatTime(clip.endMs - clip.startMs)}</span>
+            </button>
+          )}
+        </ClipBar>
       )}
     </>
   );
@@ -262,7 +272,7 @@ export const MediaScreen = ({
   const advanced = scene.active;
   const plays = advanced ? scene.leader !== null : leader !== null;
   const hasContent = advanced
-    ? scene.layers.length > 0 && (!plays || scene.clip !== null)
+    ? scene.layers.length > 0 && (!plays || scene.passage !== null)
     : hasFiles
       ? !unreadable && (!plays || clip !== null)
       : caption.trim().length > 0;
@@ -288,21 +298,19 @@ export const MediaScreen = ({
 
   const sceneInput = (): SceneInput => ({
     caption,
-    videoMuted,
+    videoMuted: scene.hasVideo && !scene.hasVideoSound,
     soundMuted,
     speak,
     layers: scene.layers.map(({ key: _key, ...layer }) => layer),
     soundId: scene.soundId,
-    ...(scene.clip
-      ? { clipStartMs: scene.clip.startMs, durationMs: Math.max(MIN_DISPLAY_MS, scene.clip.endMs - scene.clip.startMs) }
-      : { clipStartMs: 0, durationMs: shownMs }),
+    ...(scene.passage ?? { clipStartMs: 0, durationMs: shownMs }),
   });
 
   const stopPreview = () => setPreview(null);
 
   const lengthSeconds = (advanced ? sceneInput() : recipe()).durationMs / 1_000;
   const hasMusic = (advanced ? scene.sound : sound) !== null && !soundMuted;
-  const hasVideoSound = (advanced ? scene.hasVideo : picture?.kind === 'video') && !videoMuted;
+  const hasVideoSound = advanced ? scene.hasVideoSound : picture?.kind === 'video' && !videoMuted;
   const summary = [
     `${lengthSeconds.toLocaleString('fr', { maximumFractionDigits: 1 })} s`,
     hasMusic ? 'avec musique' : hasVideoSound ? 'avec le son de la vidéo' : 'sans son',
@@ -339,7 +347,7 @@ export const MediaScreen = ({
         mediaUrl: null,
         hasSound: scene.sound !== null,
         soundUrl: scene.sound?.previewUrl ?? null,
-        videoMuted,
+        videoMuted: input.videoMuted,
         soundMuted,
         speak: false,
         scene: input.layers.map(({ fileId, ...layer }) => {
@@ -365,7 +373,7 @@ export const MediaScreen = ({
     setSaved(false);
     stopPreview();
     if (!toAdvanced) scene.leave();
-    else setError(await scene.enter());
+    else setError(await scene.enter(picture?.kind === 'video' ? clip : null, picture?.kind === 'video' && videoMuted));
   };
 
   const save = async (event: FormEvent) => {
@@ -460,9 +468,35 @@ export const MediaScreen = ({
           <>
             <SceneBoard scene={scene} state={state} caption={caption} preview={preview} onError={setError} onStopPreview={stopPreview} />
             {scene.sound && <DraftRow file={scene.sound} slot="sound" locked={isUploading} onRemove={scene.removeSound} />}
+            {scene.hasVideo && (
+              <div className="clip-videos" role="group" aria-label="Vidéos">
+                {scene.videos.map(({ layer, name }) => (
+                  <span key={layer.key} className="clip-video" data-testid="clip-video">
+                    <button
+                      type="button"
+                      className={layer.key === scene.clipLayerKey ? 'pill secondary small clip-video-name' : 'pill quiet small clip-video-name'}
+                      aria-pressed={layer.key === scene.clipLayerKey}
+                      title={name}
+                      onClick={() => scene.showVideo(layer.key)}
+                    >
+                      {name}
+                    </button>
+                    <button
+                      type="button"
+                      className="pill quiet small"
+                      data-testid="video-sound"
+                      aria-pressed={!layer.muted}
+                      onClick={() => scene.setVideoMuted(layer.key, !layer.muted)}
+                    >
+                      {layer.muted ? 'Muet' : 'Son'}
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             {scene.leader && (
               <ClipEditor
-                key={scene.leader.previewUrl}
+                key={scene.clipLayerKey ?? scene.leader.previewUrl}
                 draft={scene.leader}
                 besidePicture
                 noPreview
@@ -471,6 +505,8 @@ export const MediaScreen = ({
                 clip={scene.clip}
                 onClip={scene.setClip}
                 onUnreadable={() => setError('Ce fichier ne peut pas être lu. Essaie un autre format.')}
+                silent={scene.videos.find(({ layer }) => layer.key === scene.clipLayerKey)?.layer.muted ?? false}
+                {...(scene.clipLayerKey ? { shownIn: () => scene.stageVideo(scene.clipLayerKey!) } : {})}
               />
             )}
           </>
@@ -607,9 +643,11 @@ export const MediaScreen = ({
 
         {!selectedLayer && (advanced ? scene.hasVideo && scene.sound : picture?.kind === 'video' && sound) && (
           <div className="stack">
-            <Switch checked={!videoMuted} onChange={(on) => files.setVideoMuted(!on)}>
-              Son de la vidéo
-            </Switch>
+            {!advanced && (
+              <Switch checked={!videoMuted} onChange={(on) => files.setVideoMuted(!on)}>
+                Son de la vidéo
+              </Switch>
+            )}
             <Switch checked={!soundMuted} onChange={(on) => files.setSoundMuted(!on)}>
               Son ajouté
             </Switch>

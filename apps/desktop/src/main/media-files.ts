@@ -116,6 +116,8 @@ export const serveMediaFiles = (): void => {
         'content-type': file.contentType,
         'content-length': String(end - start + 1),
         'accept-ranges': 'bytes',
+        // For the shape of a sound in the editor, and for nobody else.
+        'access-control-allow-origin': 'app://bundle',
         'x-content-type-options': 'nosniff',
         ...(range ? { 'content-range': `bytes ${start}-${end}/${size}` } : {}),
       },

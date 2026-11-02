@@ -11,9 +11,10 @@ export const MAX_ONLINE_MEMBERS = 10;
 export const MAX_REGISTERED_MEMBERS = 30;
 
 export const MAX_MEDIA_BYTES = 500 * 1024 * 1024;
-// In the advanced mode: 5 pictures, a video and a sound. Otherwise, a picture or a video, and a sound.
+// In the advanced mode: 5 pictures, 3 videos and a sound. Otherwise, a picture or a video, and a sound.
 export const MAX_SCENE_PICTURES = 5;
-export const MAX_MEDIA_FILES = MAX_SCENE_PICTURES + 2;
+export const MAX_SCENE_VIDEOS = 3;
+export const MAX_MEDIA_FILES = MAX_SCENE_PICTURES + MAX_SCENE_VIDEOS + 1;
 // R2 needs every part of an upload but the last to be the same size, and at least 5 MiB.
 export const MEDIA_PART_BYTES = 8 * 1024 * 1024;
 export const MAX_CAPTION_LENGTH = 300;
@@ -196,11 +197,15 @@ export const SceneLayerSchema = z.object({
   spinRpm: z.number().int().min(-120).max(120),
   enter: SceneMotionSchema,
   exit: SceneMotionSchema,
+  // A video has its own passage and its own sound. Saved before they did, it follows the LiveChat.
+  clipStartMs: z.number().int().min(0).max(24 * MAX_CLIP_MS).optional(),
+  clipMs: z.number().int().min(MIN_DISPLAY_MS).max(MAX_CLIP_MS).optional(),
+  muted: z.boolean().default(false),
 });
 export type SceneLayer = z.infer<typeof SceneLayerSchema>;
 
 // From the back to the front. The same file can be there twice, and is only sent once.
-const SceneSchema = z.array(SceneLayerSchema).min(1).max(MAX_SCENE_PICTURES + 1).nullable();
+const SceneSchema = z.array(SceneLayerSchema).min(1).max(MAX_SCENE_PICTURES + MAX_SCENE_VIDEOS).nullable();
 
 const isValidScene = (scene: SceneLayer[], files: WithType[]): boolean => {
   const kindOfLayer = (layer: SceneLayer) => {
@@ -215,7 +220,7 @@ const isValidScene = (scene: SceneLayer[], files: WithType[]): boolean => {
     !kinds.includes('audio') &&
     unused.length === 0 &&
     kinds.filter((kind) => kind === 'image').length <= MAX_SCENE_PICTURES &&
-    kinds.filter((kind) => kind === 'video').length <= 1 &&
+    kinds.filter((kind) => kind === 'video').length <= MAX_SCENE_VIDEOS &&
     files.filter(({ contentType }) => fileKindOf(contentType) === 'audio').length <= 1 &&
     // Blur is what costs the most on a PC that is playing.
     scene.filter(({ blur }) => blur > 0).length <= 1

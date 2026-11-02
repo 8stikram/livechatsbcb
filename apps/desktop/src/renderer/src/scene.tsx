@@ -174,28 +174,38 @@ const PlayingLayer = ({
   startAt: number;
   onScreen: boolean;
   volume: number;
-}) => (
-  <div className="scene-layer" style={layerPlace(layer)} data-testid="overlay-layer">
-    {/* Three levels, as moving in, spinning and being placed each need a transform of their own. */}
-    <div className="scene-motion" style={onScreen ? motionStyle(layer, item.durationMs) : undefined}>
-      <div className="scene-motion" style={onScreen ? spinStyle(layer) : undefined}>
-        {layer.kind === 'image' ? (
-          <img className="overlay-media" style={layerLook(layer)} src={layer.url ?? undefined} alt="" data-testid="overlay-image" />
-        ) : (
-          <SyncedMedia
-            kind="video"
-            url={layer.url}
-            clipStartMs={item.clipStartMs}
-            durationMs={item.durationMs}
-            startAt={startAt}
-            volume={item.hasSound && item.videoMuted ? 0 : volume}
-            style={layerLook(layer)}
-          />
-        )}
+}) => {
+  // A video goes away at the end of its passage, rather than staying frozen until the longest one is over.
+  const shownMs = layer.kind === 'video' ? (layer.clipMs ?? item.durationMs) : item.durationMs;
+  const stillThere = useOnScreen(startAt, shownMs);
+  const silent = layer.muted || (item.hasSound && item.videoMuted);
+  return (
+    <div
+      className="scene-layer"
+      style={{ ...layerPlace(layer), ...(onScreen && !stillThere ? { visibility: 'hidden' } : {}) }}
+      data-testid="overlay-layer"
+    >
+      {/* Three levels, as moving in, spinning and being placed each need a transform of their own. */}
+      <div className="scene-motion" style={onScreen ? motionStyle(layer, shownMs) : undefined}>
+        <div className="scene-motion" style={onScreen ? spinStyle(layer) : undefined}>
+          {layer.kind === 'image' ? (
+            <img className="overlay-media" style={layerLook(layer)} src={layer.url ?? undefined} alt="" data-testid="overlay-image" />
+          ) : (
+            <SyncedMedia
+              kind="video"
+              url={layer.url}
+              clipStartMs={layer.clipStartMs ?? item.clipStartMs}
+              durationMs={shownMs}
+              startAt={startAt}
+              volume={silent ? 0 : volume}
+              style={layerLook(layer)}
+            />
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export type Speech = { voice: string | null; rate: number };
 
@@ -230,6 +240,7 @@ export const Playing = ({
 }) => {
   const onScreen = useOnScreen(startAt, item.durationMs);
   useSpeech(item, startAt, volume, speech);
+  const withVideo = item.kind === 'video' || (item.scene?.some(({ kind }) => kind === 'video') ?? false);
 
   return (
     <div className={onScreen ? 'scene' : 'scene is-waiting'} data-testid="overlay-scene" data-on-screen={onScreen}>
@@ -262,7 +273,7 @@ export const Playing = ({
         <SyncedMedia
           kind="audio"
           url={item.hasSound ? item.soundUrl : item.mediaUrl}
-          clipStartMs={item.kind === 'video' ? 0 : item.clipStartMs}
+          clipStartMs={withVideo ? 0 : item.clipStartMs}
           durationMs={item.durationMs}
           startAt={startAt}
           volume={item.hasSound && item.soundMuted ? 0 : volume}

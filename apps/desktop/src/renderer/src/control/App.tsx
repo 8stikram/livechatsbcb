@@ -154,7 +154,7 @@ export const App = () => {
       const { picture, sound, clipStartMs, durationMs } = result.draft;
       const plays = sound !== null || picture?.kind === 'video';
       const passage = plays ? { startMs: clipStartMs, endMs: clipStartMs + durationMs } : null;
-      const problem = await scene.openWith(await window.liveChat.startScene(), passage);
+      const problem = await scene.openWith(await window.liveChat.startScene(), passage, result.draft.videoMuted);
       if (problem) setIncomingNote(problem);
     }
     return true;

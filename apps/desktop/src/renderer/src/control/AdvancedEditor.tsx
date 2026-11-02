@@ -41,7 +41,7 @@ const EditingStage = ({ scene, state, caption }: { scene: Scene; state: AppState
   useEffect(() => {
     if (scene.selected === null) return;
     const onDown = (event: globalThis.PointerEvent) => {
-      if (!(event.target as Element).closest?.('.scene-layer, .layer-panel, button, input, select, textarea, label, a')) scene.setSelected(null);
+      if (!(event.target as Element).closest?.('.scene-layer, .layer-panel, .clip, button, input, select, textarea, label, a')) scene.setSelected(null);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') scene.setSelected(null);
@@ -136,7 +136,15 @@ const EditingStage = ({ scene, state, caption }: { scene: Scene; state: AppState
                 onPointerDown={(event) => startGrip(layer, 'move', event)}
               >
                 {file?.kind === 'video' ? (
-                  <video className="overlay-media" style={layerLook(layer)} src={`${file.previewUrl}#t=0.1`} preload="metadata" muted playsInline />
+                  <video
+                    ref={(element) => scene.registerVideo(layer.key, element)}
+                    className="overlay-media"
+                    style={layerLook(layer)}
+                    src={`${file.previewUrl}#t=0.1`}
+                    preload="metadata"
+                    muted
+                    playsInline
+                  />
                 ) : (
                   <img className="overlay-media" style={layerLook(layer)} src={file?.previewUrl} alt="" draggable={false} />
                 )}

@@ -2043,6 +2043,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await answerDialogWith(host, sound);
     await control.getByRole('group', { name: 'Ajouter un son' }).getByRole('button', { name: 'Depuis mon PC' }).click();
     await control.getByTestId('clip-start').waitFor({ timeout: 15_000 });
+    await control.locator('[data-testid="clip-wave"][data-ready="true"]').waitFor();
     await picture(control, '20-advanced.png');
 
     // The preview plays it here alone.
@@ -2098,9 +2099,8 @@ describe.skipIf(online)('party flow in the real app', () => {
     await answerDialogWith(host, join(sandbox, 'clip.webm'));
     await control.getByRole('button', { name: 'Depuis mon PC' }).first().click();
     await expect.poll(() => layers.count()).toBe(3);
-    await control.getByText('Son de la vidéo').waitFor({ state: 'hidden' });
     await control.getByRole('button', { name: 'Terminé' }).click();
-    await control.getByText('Son de la vidéo').click();
+    await control.getByTestId('video-sound').click();
     await sendButton(host).click();
     await overlayState(guest, 'playing');
     const video = guest.stage.getByTestId('overlay-layer').getByTestId('overlay-video');
@@ -2117,6 +2117,77 @@ describe.skipIf(online)('party flow in the real app', () => {
     await saved.getByRole('button', { name: 'Supprimer' }).click();
     await saved.getByRole('button', { name: 'Vraiment ?' }).click();
     await expect.poll(() => saved.count()).toBe(0);
+  });
+
+  it('plays several videos at once, each with its own passage and sound', async () => {
+    const control = host.control;
+    const clip = join(sandbox, 'clip.webm');
+    await openTab(host, 'LiveChat');
+    await control.getByRole('button', { name: 'Avancé' }).click();
+    const videos = control.getByTestId('clip-video');
+    for (const count of [1, 2, 3]) {
+      await answerDialogWith(host, clip);
+      await control.getByRole('button', { name: 'Depuis mon PC' }).first().click();
+      await expect.poll(() => videos.count()).toBe(count);
+    }
+    await answerDialogWith(host, clip);
+    await control.getByRole('button', { name: 'Depuis mon PC' }).first().click();
+    await control.getByText('3 vidéos maximum.').waitFor();
+    await control.keyboard.press('Escape');
+    await videos.nth(0).getByRole('button').first().click();
+
+    // The bar shows the video, and the chosen part moves whole.
+    await expect.poll(() => control.getByTestId('clip-frames').getAttribute('data-filled').then(Number), { timeout: 15_000 }).toBeGreaterThan(0);
+    await setRange(host, /Début du passage/, 1_000);
+    await setRange(host, /Fin du passage/, 3_000);
+    await control.getByTestId('clip-length').filter({ hasText: '0:02,0' }).waitFor();
+    await picture(control, 'clip-bar.png');
+    const chosen = (await control.getByTestId('clip-chosen').boundingBox())!;
+    await control.mouse.move(chosen.x + chosen.width / 2, chosen.y + chosen.height / 2);
+    await control.mouse.down();
+    await control.mouse.move(chosen.x + chosen.width / 2 + 60, chosen.y + chosen.height / 2, { steps: 4 });
+    await control.mouse.up();
+    await expect.poll(() => control.getByTestId('clip-start').textContent()).not.toBe('0:01,0');
+    await control.getByTestId('clip-length').filter({ hasText: '0:02,0' }).waitFor();
+    await setRange(host, /Début du passage/, 1_000);
+    await setRange(host, /Fin du passage/, 3_000);
+
+    await control.getByRole('button', { name: 'Zoomer', exact: true }).click();
+    await control.getByLabel('Déplacer la vue').waitFor();
+    await control.getByRole('button', { name: 'Dézoomer' }).click();
+    await control.getByLabel('Déplacer la vue').waitFor({ state: 'detached' });
+
+    // The second one has its own passage, and stays silent.
+    await videos.nth(1).getByRole('button').first().click();
+    await setRange(host, /Début du passage/, 2_000);
+    await setRange(host, /Fin du passage/, 4_000);
+    await videos.nth(1).getByTestId('video-sound').click();
+    await videos.nth(0).getByRole('button').first().click();
+    await control.getByTestId('clip-start').filter({ hasText: '0:01,0' }).waitFor();
+
+    await sendButton(host).click();
+    await overlayState(guest, 'playing');
+    const shown = guest.stage.getByTestId('overlay-video');
+    await expect.poll(() => shown.count()).toBe(3);
+    const readings = () => shown.evaluateAll((elements) => elements.map((element) => {
+      const video = element as HTMLVideoElement;
+      return { volume: video.volume, at: video.currentTime };
+    }));
+    await guest.stage.locator('[data-on-screen="true"]').waitFor({ state: 'attached' });
+    await expect.poll(async () => (await readings())[1]!.volume).toBe(0);
+    const [first, second] = await readings();
+    expect(first!.volume).toBeGreaterThan(0);
+    expect(first!.at).toBeGreaterThanOrEqual(1);
+    expect(second!.at).toBeGreaterThanOrEqual(2);
+    await picture(guest.stage, 'overlay-videos.png');
+    // The shorter ones leave when they are over, and the longest one is what lasts.
+    await expect.poll(() => guest.stage.getByTestId('overlay-layer').first().evaluate((element) => (element as HTMLElement).style.visibility), { timeout: 8_000 }).toBe('hidden');
+    expect(await guest.stage.getByTestId('overlay-layer').last().evaluate((element) => (element as HTMLElement).style.visibility)).toBe('');
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
+    await overlayState(guest, 'idle');
+
+    await expect.poll(() => control.getByTestId('scene-layer').count()).toBe(0);
+    await control.getByRole('button', { name: 'Simple', exact: true }).click();
   });
 
   it('moves a zone of the overlay, and shows the result on the real screen', async () => {

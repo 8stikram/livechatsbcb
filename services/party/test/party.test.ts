@@ -460,7 +460,10 @@ describe('party service', () => {
     // Beyond what was promised to hold up on a PC that is playing.
     const six = ['a', 'b', 'c', 'd', 'e', 'f'].map((name) => image(`${name}.png`));
     expect((await send(six, six.map((_, file) => ({ ...layer, file })))).status).toBe(400);
-    expect((await send([video, video], [layer, { ...layer, file: 1 }])).status).toBe(400);
+    const four = [video, video, video, video];
+    expect((await send(four, four.map((_, file) => ({ ...layer, file })))).status).toBe(400);
+    const three = [video, video, video];
+    expect((await send(three, three.map((_, file) => ({ ...layer, file, clipStartMs: file * 1_000, clipMs: 1_000, muted: file > 0 })))).status).toBe(201);
     expect((await send([image('a.png')], [{ ...layer, blur: 1 }, { ...layer, blur: 1 }])).status).toBe(400);
     expect((await send([image('a.png')], [{ ...layer, width: 1_000 }])).status).toBe(400);
 
@@ -490,7 +493,7 @@ describe('party service', () => {
       body: JSON.stringify({ parts: [await part.json()] }),
     });
     const [item] = await socket.queueWhere((queue) => queue.length === 1, 'the scene');
-    expect(item!.scene).toEqual([layer, { ...layer, flip: true, x: 70 }]);
+    expect(item!.scene).toEqual([{ ...layer, muted: false }, { ...layer, flip: true, x: 70, muted: false }]);
     socket.close();
   });
 

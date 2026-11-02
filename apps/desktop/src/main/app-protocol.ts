@@ -13,6 +13,7 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self'",
   `img-src 'self' ${MEDIA_SCHEME}: ${DISCORD_IMAGE_ORIGIN}`,
   `media-src ${MEDIA_SCHEME}:`,
+  `connect-src ${MEDIA_SCHEME}:`,
   "font-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",
@@ -24,7 +25,7 @@ export const registerAppScheme = (): void => {
   protocol.registerSchemesAsPrivileged([
     { scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
     // "stream" is what lets a video element read it progressively and seek.
-    { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, stream: true } },
+    { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } },
   ]);
 };
 

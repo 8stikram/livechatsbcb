@@ -1632,9 +1632,37 @@ select.input {
   --end: 1;
   --handle: 14px;
   position: relative;
-  height: 36px;
+  height: 52px;
   border-radius: 10px;
   background: var(--well);
+}
+
+.clip-pictures {
+  position: absolute;
+  inset: 0 calc(var(--handle) / 2);
+  overflow: hidden;
+}
+
+.clip-picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.clip-dim {
+  position: absolute;
+  inset: 0 auto;
+  background: rgb(0 0 0 / 60%);
+}
+
+.clip-dim.is-before {
+  left: calc(var(--handle) / 2);
+  width: calc((100% - var(--handle)) * var(--start));
+}
+
+.clip-dim.is-after {
+  right: calc(var(--handle) / 2);
+  width: calc((100% - var(--handle)) * (1 - var(--end)));
 }
 
 .clip-chosen {
@@ -1642,7 +1670,53 @@ select.input {
   inset: 0 auto;
   left: calc(var(--handle) / 2 + (100% - var(--handle)) * var(--start));
   width: calc((100% - var(--handle)) * (var(--end) - var(--start)));
-  background: rgb(255 255 255 / 16%);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-block: 2px solid var(--text);
+  cursor: grab;
+  touch-action: none;
+  -webkit-app-region: no-drag;
+}
+
+.clip-chosen:active {
+  cursor: grabbing;
+}
+
+.clip-length {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 65%);
+  font-size: 12px;
+  color: var(--text);
+  pointer-events: none;
+}
+
+.clip-zoom {
+  flex: none;
+  display: flex;
+  gap: 2px;
+}
+
+.clip-videos {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.clip-video {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.clip-video-name {
+  display: block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .clip-range input {
@@ -1659,7 +1733,7 @@ select.input {
 
 .clip-range input::-webkit-slider-thumb {
   width: var(--handle);
-  height: 36px;
+  height: 52px;
   border-radius: 6px;
   background: var(--text);
   box-shadow: 0 1px 6px rgb(0 0 0 / 50%);

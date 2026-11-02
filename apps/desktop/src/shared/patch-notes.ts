@@ -3,6 +3,16 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.15.0',
+    date: '2 novembre 2026',
+    items: [
+      'La barre du passage montre les images de la vidéo, ou la forme du son, comme un logiciel de montage',
+      'Bouge un bord : la vidéo suit, et le passage se rejoue quand tu lâches',
+      'Attrape le milieu pour déplacer tout le passage, et zoome pour couper précisément. Sa durée s’écrit sur la barre',
+      'Mode avancé : jusqu’à 3 vidéos en même temps à l’écran, chacune avec son passage et son bouton pour couper le son',
+    ],
+  },
+  {
     version: '0.14.0',
     date: '2 novembre 2026',
     items: [
