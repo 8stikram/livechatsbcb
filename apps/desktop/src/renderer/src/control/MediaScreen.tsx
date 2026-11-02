@@ -8,7 +8,7 @@ import {
 import { DEFAULT_SETTINGS, type AppState, type DraftMedia, type DraftSlot, type PlaybackView, type SceneInput } from '../../../shared/ipc';
 import { Caption, Profile, ScreenPreview, zoneStyle } from '../scene';
 import { LayerPanel, SceneBoard } from './AdvancedEditor';
-import { IconPlay, KindIcon } from './icons';
+import { IconCheck, IconPlay, KindIcon } from './icons';
 import { isLongerThanSpoken, readingMs } from '../speech';
 import { EmojiButton } from './EmojiPicker';
 import { canSendIn, mediaErrorMessage } from './messages';
@@ -16,6 +16,8 @@ import { Slider } from './NowPlaying';
 import { Switch } from './SettingsScreen';
 import type { Clip, DraftFiles } from './use-draft';
 import type { Scene } from './use-scene';
+
+const SENT_SHOWN_MS = 1_400;
 
 const formatTime = (ms: number): string => {
   const tenths = Math.floor(ms / 100);
@@ -371,6 +373,10 @@ export const MediaScreen = ({
     }
   };
 
+  const [justSent, setJustSent] = useState(false);
+  const sentTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(sentTimer.current), []);
+
   const send = async () => {
     setError(null);
     setSaved(false);
@@ -382,6 +388,9 @@ export const MediaScreen = ({
       files.setSpeak(false);
       // Keeps whatever was typed while this one was on its way.
       files.setCaption((typed) => (typed === caption ? '' : typed));
+      setJustSent(true);
+      window.clearTimeout(sentTimer.current);
+      sentTimer.current = window.setTimeout(() => setJustSent(false), SENT_SHOWN_MS);
     } else if (result.error !== 'cancelled') {
       setError(mediaErrorMessage(result.error));
     }
@@ -678,10 +687,20 @@ export const MediaScreen = ({
                 Annuler
               </button>
             </div>
-            <progress max={100} value={state.upload.percent} />
+            <progress className={state.upload.paused ? 'is-paused' : undefined} max={100} value={state.upload.percent} />
           </div>
         ) : (
-          <button type="button" className="pill primary" disabled={!hasContent || !isOnline} onClick={() => void send()}>
+          <button
+            type="button"
+            className={justSent ? 'pill primary is-sent' : 'pill primary'}
+            disabled={!hasContent || !isOnline}
+            onClick={() => void send()}
+          >
+            {justSent && (
+              <span className="sent-check" aria-hidden="true" data-testid="sent-check">
+                <IconCheck size={16} />
+              </span>
+            )}
             Envoyer à tout le monde
           </button>
         )}

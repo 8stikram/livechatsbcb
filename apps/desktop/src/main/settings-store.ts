@@ -16,6 +16,7 @@ export const SettingsSchema = z.object({
   muted: z.boolean(),
   layout: z.object({ profile: ZoneSchema, media: ZoneSchema, text: ZoneSchema }),
   launchAtStartup: z.boolean(),
+  reduceMotion: z.boolean(),
   backgroundHintShown: z.boolean(),
   clean: z.boolean(),
   cleanKey: z.string(),

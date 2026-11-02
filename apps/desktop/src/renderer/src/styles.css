@@ -34,6 +34,12 @@
   --fast: 140ms;
   --enter: 240ms;
 
+  /* Springs, as iOS moves things. The first barely passes its target, the second is for the moments that matter. */
+  --spring: linear(0, 0.044, 0.147, 0.275, 0.407, 0.53, 0.638, 0.729, 0.803, 0.861, 0.905, 0.938, 0.962, 0.979, 0.99, 0.997, 1.001, 1.004, 1.005, 1.005, 1.005, 1.004, 1.004, 1.003, 1);
+  --spring-time: 525ms;
+  --bounce: linear(0, 0.047, 0.161, 0.31, 0.47, 0.623, 0.757, 0.868, 0.954, 1.015, 1.054, 1.076, 1.083, 1.081, 1.073, 1.061, 1.047, 1.034, 1.023, 1.013, 1.005, 1, 0.996, 0.994, 1);
+  --bounce-time: 550ms;
+
   /* What Windows keeps for its own buttons, top right. */
   --window-buttons: 150px;
 
@@ -113,11 +119,18 @@ button {
     border-color var(--fast) var(--ease),
     color var(--fast) var(--ease),
     opacity var(--fast) var(--ease),
-    transform var(--fast) var(--ease);
+    filter var(--fast) var(--ease),
+    transform var(--spring-time) var(--spring);
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.12);
 }
 
 button:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: scale(0.96);
+  transition-duration: var(--fast), var(--fast), var(--fast), var(--fast), var(--fast), 80ms;
+  transition-timing-function: var(--ease);
 }
 
 button:disabled {
@@ -524,7 +537,7 @@ select.input {
   border: 1px solid var(--line);
   background: var(--glass-raised);
   font-size: 13px;
-  animation: rise var(--enter) var(--ease);
+  animation: banner-in 420ms var(--spring) backwards;
 }
 
 .banner.is-error {
@@ -557,9 +570,16 @@ select.input {
   background: rgb(255 255 255 / 18%);
 }
 
-.banner progress::-webkit-progress-value {
-  background: var(--text);
-  transition: width 200ms linear;
+.banner progress::-webkit-progress-value,
+.upload progress::-webkit-progress-value {
+  background: linear-gradient(100deg, var(--bar) 30%, #fff 50%, var(--bar) 70%) 0 0 / 240% 100%;
+  animation: sheen 1500ms linear infinite;
+  transition: width 420ms var(--ease);
+}
+
+.upload progress.is-paused::-webkit-progress-value {
+  background: var(--bar);
+  animation: none;
 }
 
 /* Avatars and little squares */
@@ -808,6 +828,7 @@ select.input {
 }
 
 .tabs {
+  position: relative;
   flex: none;
   display: flex;
   gap: 2px;
@@ -818,7 +839,25 @@ select.input {
   border: 1px solid var(--line);
 }
 
+.tab-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: var(--glass-active);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.tab-marker.is-moving {
+  transition:
+    transform var(--spring-time) var(--spring),
+    width var(--spring-time) var(--spring),
+    height var(--spring-time) var(--spring),
+    opacity var(--fast) var(--ease);
+}
+
 .tab {
+  position: relative;
   height: 34px;
   padding: 0 16px;
   border-radius: 999px;
@@ -831,7 +870,6 @@ select.input {
 }
 
 .tab.is-active {
-  background: var(--glass-active);
   color: var(--text);
 }
 
@@ -847,7 +885,7 @@ select.input {
 }
 
 .view {
-  animation: rise var(--enter) var(--ease);
+  animation: view-in var(--spring-time) var(--spring) backwards;
 }
 
 .empty {
@@ -1597,11 +1635,6 @@ select.input {
   background: rgb(255 255 255 / 18%);
 }
 
-.upload progress::-webkit-progress-value {
-  background: var(--text);
-  transition: width 200ms linear;
-}
-
 /* The history */
 
 .history {
@@ -1715,6 +1748,7 @@ select.input {
 }
 
 .settings-nav {
+  position: relative;
   align-self: start;
   display: flex;
   flex-direction: column;
@@ -1737,6 +1771,7 @@ select.input {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  animation: rise var(--spring-time) var(--spring) backwards;
 }
 
 .account {
@@ -1962,7 +1997,8 @@ select.input {
   border: 1px solid var(--line-strong);
   background: #17171c;
   box-shadow: 0 20px 50px rgb(0 0 0 / 50%);
-  animation: rise 180ms var(--ease);
+  transform-origin: bottom left;
+  animation: pop-in 320ms var(--spring) backwards;
 }
 
 /* Logging in */
@@ -2075,7 +2111,183 @@ select.input {
   color: var(--text-muted);
 }
 
+/* How the window moves. The overlay has its own animations, further up, and they stay as they are. */
+
+:root {
+  --bar: #c9c9d1;
+}
+
+.glide {
+  position: relative;
+}
+
+.cascade > * {
+  animation: row-in 420ms var(--spring) backwards;
+}
+
+.cascade.is-pop > * {
+  animation-name: row-pop;
+}
+
+.cascade > :nth-child(2) { animation-delay: 24ms; }
+.cascade > :nth-child(3) { animation-delay: 48ms; }
+.cascade > :nth-child(4) { animation-delay: 72ms; }
+.cascade > :nth-child(5) { animation-delay: 96ms; }
+.cascade > :nth-child(6) { animation-delay: 120ms; }
+.cascade > :nth-child(7) { animation-delay: 144ms; }
+.cascade > :nth-child(8) { animation-delay: 168ms; }
+.cascade > :nth-child(n + 9) { animation-delay: 192ms; }
+
+.cascade > .is-leaving {
+  animation: none;
+  pointer-events: none;
+}
+
+.pill.is-sent {
+  animation: sent-bounce var(--bounce-time) var(--bounce);
+}
+
+.pill.is-sent:disabled {
+  opacity: 1;
+}
+
+.sent-check {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  animation: sent-check var(--bounce-time) var(--bounce) backwards;
+}
+
+.launch {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: launch-out 220ms ease-in 620ms forwards;
+}
+
+.launch img {
+  border-radius: 24px;
+  animation: launch-logo var(--bounce-time) var(--bounce) backwards;
+}
+
+.launch ~ .app {
+  animation: appear 340ms ease-out 520ms backwards;
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--slide, 0));
+  }
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes row-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+    margin-bottom: -56px;
+  }
+}
+
+@keyframes sent-bounce {
+  from {
+    transform: scale(0.94);
+  }
+}
+
+@keyframes sent-check {
+  from {
+    width: 0;
+    opacity: 0;
+    transform: scale(0.3) rotate(-30deg);
+  }
+}
+
+@keyframes star-pop {
+  from {
+    transform: scale(0.4) rotate(-24deg);
+  }
+}
+
+@keyframes launch-logo {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+}
+
+@keyframes launch-out {
+  to {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes sheen {
+  from {
+    background-position: 120% 0;
+  }
+
+  to {
+    background-position: -120% 0;
+  }
+}
+
+/* The setting. The spinners keep turning: they say something is happening. */
+html.calm *:not(.progress i, .spinner, .sound-bars i),
+html.calm *::before,
+html.calm *::after {
+  animation-duration: 1ms !important;
+  animation-delay: 0s !important;
+  transition-duration: 1ms !important;
+}
+
+html.calm progress::-webkit-progress-value {
+  animation: none;
+  background: var(--bar);
+}
+
+html.calm .launch {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .launch {
+    display: none;
+  }
+
+  html:not(.overlay) *:not(.progress i) {
+    animation-delay: 0s !important;
+  }
+
+  progress::-webkit-progress-value {
+    animation: none !important;
+  }
+
   /* Not the progress bars: they say how far along something is, and that isn't decoration. */
   *:not(.progress i),
   *::before,
@@ -2233,6 +2445,7 @@ select.input {
 }
 
 .speech-confirm {
+  animation: pop-in 320ms var(--spring) backwards;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2248,6 +2461,8 @@ select.input {
 }
 
 .emoji-panel {
+  transform-origin: bottom left;
+  animation: pop-in 320ms var(--spring) backwards;
   position: absolute;
   z-index: 20;
   bottom: calc(100% + 8px);
@@ -2332,6 +2547,10 @@ select.input {
 
 .star.is-on svg {
   fill: currentColor;
+}
+
+.star.is-popping svg {
+  animation: star-pop var(--bounce-time) var(--bounce);
 }
 
 .saved-picture {

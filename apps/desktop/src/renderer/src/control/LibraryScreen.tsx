@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AppState, LibraryFileView, LibraryView, RenameOutcome, SavedView } from '../../../shared/ipc';
 import { ConfirmButton } from './ConfirmButton';
+import { GlideList } from './glide';
 import { IconPlay, IconStar, KindIcon } from './icons';
 import { loadInEditor } from './load-editor';
 import { playLengthMs } from './play-length';
@@ -46,18 +47,26 @@ const sorted = <Item extends { name: string; favorite: boolean }>(
     return byName(a, b);
   });
 
-export const Star = ({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) => (
-  <button
-    type="button"
-    className={on ? 'round tiny star is-on' : 'round tiny star'}
-    title={on ? 'Retirer des favoris' : 'Épingler en favori'}
-    aria-label={on ? 'Retirer des favoris' : 'Épingler en favori'}
-    aria-pressed={on}
-    onClick={() => onChange(!on)}
-  >
-    <IconStar size={16} />
-  </button>
-);
+export const Star = ({ on, landing = false, onChange }: { on: boolean; landing?: boolean; onChange: (on: boolean) => void }) => {
+  const [popping, setPopping] = useState(landing);
+
+  return (
+    <button
+      type="button"
+      className={`round tiny star${on ? ' is-on' : ''}${popping ? ' is-popping' : ''}`}
+      title={on ? 'Retirer des favoris' : 'Épingler en favori'}
+      aria-label={on ? 'Retirer des favoris' : 'Épingler en favori'}
+      aria-pressed={on}
+      onClick={() => {
+        if (!on) setPopping(true);
+        onChange(!on);
+      }}
+      onAnimationEnd={() => setPopping(false)}
+    >
+      <IconStar size={16} />
+    </button>
+  );
+};
 
 const ShortcutBadge = ({ shortcut }: { shortcut: string | null }) =>
   shortcut && (
@@ -546,7 +555,7 @@ export const LibraryScreen = ({
       ) : (
         <div className="library-list scroll">
           {category === 'saved' && (
-            <ul className="history-list">
+            <GlideList className="history-list">
               {savedItems.map((saved) => (
                 <SavedRow
                   key={saved.id}
@@ -560,10 +569,10 @@ export const LibraryScreen = ({
                   onMenu={() => void showSavedMenu(saved)}
                 />
               ))}
-            </ul>
+            </GlideList>
           )}
           {category === 'audio' && (
-            <ul className="history-list">
+            <GlideList className="history-list">
               {kindFiles.slice(0, shown).map((file) => (
                 <SoundRow
                   key={file.id}
@@ -575,10 +584,10 @@ export const LibraryScreen = ({
                   onMenu={() => void showFileMenu(file)}
                 />
               ))}
-            </ul>
+            </GlideList>
           )}
           {(category === 'image' || category === 'video') && (
-            <ul className="library-grid">
+            <GlideList className="library-grid">
               {kindFiles.slice(0, shown).map((file) => (
                 <FileCard
                   key={file.id}
@@ -588,7 +597,7 @@ export const LibraryScreen = ({
                   onMenu={() => void showFileMenu(file)}
                 />
               ))}
-            </ul>
+            </GlideList>
           )}
           {category !== 'saved' && kindFiles.length > shown && (
             <button type="button" className="pill quiet small library-more" onClick={() => setShown(shown + PAGE_SIZE)}>

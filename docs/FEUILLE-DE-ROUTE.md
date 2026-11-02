@@ -6,7 +6,19 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.10.0** (dernière version) : envoi rapide et texte vivant
+**0.11.0** (dernière version) : motion design
+
+- Animations façon Apple dans toute l'app
+- Onglets qui glissent, avec la marque qui suit
+- Bouton Envoyer avec rebond et coche
+- Listes en cascade qui se décalent en douceur, membres qui arrivent et partent en animation
+- Fenêtres, emojis, bandeaux, favoris et barres d'envoi animés
+- Logo au lancement, sauf après une mise à jour
+- Case « Réduire les animations » dans les réglages
+- Rien ne change sur ce qui s'affiche en jeu
+- Le menu du clic droit sur un pote reste celui de Windows, sans animation
+
+**0.10.0** : envoi rapide et texte vivant
 
 - Ctrl+V depuis n'importe quel onglet : image, vidéo ou son copié, et ça prépare le LiveChat
 - Lien direct vers une image, un GIF ou une vidéo
@@ -43,10 +55,6 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 - Favoris dans l'historique, gardés sur le PC
 
 ## À venir
-
-### 5. Motion design (la prochaine)
-
-- Des animations soignées partout dans l'app
 
 ### 6. Liens vidéo
 

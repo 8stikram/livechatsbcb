@@ -43,6 +43,8 @@ export type Settings = {
   muted: boolean;
   layout: OverlayLayout;
   launchAtStartup: boolean;
+  // Only this window: what shows in game moves the same for everyone.
+  reduceMotion: boolean;
   // Closing the window keeps the app running, which is worth explaining the first time and only then.
   backgroundHintShown: boolean;
   // Nothing shows and nothing is heard on this PC until it is turned off again.
@@ -74,6 +76,7 @@ export const DEFAULT_SETTINGS: Settings = {
   muted: false,
   layout: DEFAULT_LAYOUT,
   launchAtStartup: true,
+  reduceMotion: false,
   backgroundHintShown: false,
   clean: false,
   cleanKey: 'Shift+F12',

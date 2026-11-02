@@ -3,6 +3,19 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.11.0',
+    date: '2 novembre 2026',
+    items: [
+      'Toute l’app bouge en douceur, façon Apple',
+      'Les onglets glissent, et leur marque suit celui que tu choisis',
+      'Envoyer fait un petit rebond avec une coche : tu vois que c’est parti',
+      'Les listes arrivent en cascade et se décalent quand une ligne part. Un pote qui arrive ou qui part s’anime aussi',
+      'Fenêtres, emojis, bandeaux et favoris s’animent, et les barres d’envoi ont un léger reflet',
+      'Le logo s’affiche moins d’une seconde au lancement, pas après une mise à jour',
+      'Nouvelle case dans les réglages : Réduire les animations. Ce qui s’affiche en jeu ne change pas',
+    ],
+  },
+  {
     version: '0.10.0',
     date: '2 novembre 2026',
     items: [

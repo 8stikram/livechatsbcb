@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { DEFAULT_DISPLAY_MS, MAX_CAPTION_LENGTH } from '@livechatsbcb/protocol';
 import type { IncomingResult } from '../../../shared/ipc';
+import logo from '../assets/logo.png';
 import { useAppState } from '../use-app-state';
 import { GuildPicker } from './GuildPicker';
 import { Header, type View } from './Header';
@@ -25,6 +26,11 @@ const NOTICES = {
   session_expired: 'Tu ne fais plus partie de ta party privée.',
   guild_lost: "Tu n'es plus sur ce serveur Discord.",
 } as const;
+
+// The order they sit in, so that a tab further along comes in from the right.
+const VIEW_ORDER: View[] = ['media', 'party', 'library', 'history', 'settings', 'notes'];
+const SLIDE_PX = 18;
+const LAUNCH_MS = 860;
 
 const LINK = /^https?:\/\/\S+$/i;
 const MEDIA_LINK = /\.(png|jpe?g|gif|webp|mp4|m4v|mov|webm|mp3|ogg|opus|wav|m4a|flac)$/i;
@@ -62,9 +68,23 @@ export const App = () => {
   // Where an update found this window, for when the party comes back.
   const viewBeforeRestart = useRef<View | null>(null);
   const restartIn = state?.restartIn ?? null;
+  // Unknown until we know whether this start comes from an update, which goes straight back to work.
+  const [launch, setLaunch] = useState<'unknown' | 'playing' | 'over'>('unknown');
+  const reduceMotion = state?.settings.reduceMotion ?? false;
+
+  useLayoutEffect(() => {
+    document.documentElement.classList.toggle('calm', reduceMotion);
+  }, [reduceMotion]);
+
+  useEffect(() => {
+    if (launch !== 'playing') return;
+    const timer = setTimeout(() => setLaunch('over'), LAUNCH_MS);
+    return () => clearTimeout(timer);
+  }, [launch]);
 
   useEffect(() => {
     void window.liveChat.takeRestartStash().then(({ view, loaded }) => {
+      setLaunch(view ? 'over' : 'playing');
       if (loaded) loadInEditor(loaded, files, scene);
       if (!view) return;
       viewBeforeRestart.current = view as View;
@@ -197,16 +217,29 @@ export const App = () => {
     scene.forgetAll();
   }, [loggedOut]);
 
-  if (!state) return null;
+  // Kept until the next tab: the page reads it for as long as the slide lasts, whatever renders meanwhile.
+  const lastView = useRef<View>('media');
+  const slide = useRef(SLIDE_PX);
+
+  if (!state || launch === 'unknown') return null;
+
+  const launchLogo = launch === 'playing' && (
+    <div className="launch" aria-hidden="true">
+      <img src={logo} alt="" width={96} height={96} />
+    </div>
+  );
 
   const { account, addedGuilds, party, notice, joinError } = state;
 
   if (!account) {
     return (
-      <div className="app is-login">
-        <UpdateBanner update={state.update} restartIn={restartIn} />
-        <LoginScreen state={state} />
-      </div>
+      <>
+        {launchLogo}
+        <div className="app is-login">
+          <UpdateBanner update={state.update} restartIn={restartIn} />
+          <LoginScreen state={state} />
+        </div>
+      </>
     );
   }
 
@@ -217,8 +250,12 @@ export const App = () => {
   const shownNotice = notice === 'session_expired' || notice === 'guild_lost' ? NOTICES[notice] : null;
   const { current } = state.queue;
   const ownBan = party ? bannedUntilOf(party) : null;
+  if (view !== lastView.current) {
+    slide.current = VIEW_ORDER.indexOf(view) < VIEW_ORDER.indexOf(lastView.current) ? -SLIDE_PX : SLIDE_PX;
+    lastView.current = view;
+  }
 
-  return (
+  const page = (
     <div className="app">
       <div className="titlebar" />
       <ServerRail
@@ -311,7 +348,7 @@ export const App = () => {
         )}
 
         {/* Kept mounted but hidden, so that going elsewhere doesn't lose a media being prepared. */}
-        <div className="views" hidden={showPicker}>
+        <div className="views" hidden={showPicker} style={{ '--slide': `${slide.current}px` } as CSSProperties}>
           <div className="view" hidden={view !== 'party'}>
             {party ? (
               <PartyScreen state={state} party={party} active={view === 'party' && !showPicker} />
@@ -364,5 +401,12 @@ export const App = () => {
         )}
       </div>
     </div>
+  );
+
+  return (
+    <>
+      {launchLogo}
+      {page}
+    </>
   );
 };

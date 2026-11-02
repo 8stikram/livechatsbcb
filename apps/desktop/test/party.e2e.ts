@@ -1377,6 +1377,100 @@ describe.skipIf(online)('party flow in the real app', () => {
     await openTab(host, 'LiveChat');
   });
 
+  it('moves the window around, and calms down for whoever asks', async () => {
+    // Stops everything where it would be at that moment, to see it.
+    const frame = async (member: Member, atMs: number, name: string) => {
+      await member.control.evaluate((at) => {
+        for (const animation of document.getAnimations()) {
+          animation.pause();
+          animation.currentTime = at;
+        }
+      }, atMs);
+      await picture(member.control, name);
+      await member.control.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.play();
+      });
+    };
+    const markerSitsOn = (member: Member, name: string) =>
+      member.control.evaluate((tabName) => {
+        const marker = document.querySelector<HTMLElement>('.tabs > .tab-marker')!;
+        const tab = [...document.querySelectorAll<HTMLElement>('.tabs > .tab')].find((one) => one.textContent === tabName)!;
+        const box = marker.getBoundingClientRect();
+        const target = tab.getBoundingClientRect();
+        return Math.abs(box.left - target.left) < 1 && Math.abs(box.width - target.width) < 1 && marker.style.opacity === '1';
+      }, name);
+
+    // The logo has been and gone, and the marker follows the tabs.
+    expect(await host.control.locator('.launch').count()).toBe(0);
+    await openTab(host, 'LiveChat');
+    await expect.poll(() => markerSitsOn(host, 'LiveChat')).toBe(true);
+    await openTab(host, 'Historique');
+    await frame(host, 120, 'motion-tab.png');
+    await expect.poll(() => markerSitsOn(host, 'Historique')).toBe(true);
+    await openTab(host, 'LiveChat');
+
+    // Sending says it worked, and the button stays the same button for whoever uses it next.
+    await host.control.getByLabel(/Texte à afficher/).fill('Ça part');
+    await sendButton(host).click();
+    await host.control.getByTestId('sent-check').waitFor();
+    await frame(host, 90, 'motion-sent.png');
+    await expect(sendButton(host).count()).resolves.toBe(1);
+    await host.control.getByTestId('sent-check').waitFor({ state: 'detached' });
+
+    // A row that leaves the queue is drawn a moment longer, and then nothing is left of it.
+    await overlayState(guest, 'playing');
+    await host.control.getByLabel(/Texte à afficher/).fill('En attente');
+    await sendButton(host).click();
+    await host.control.getByLabel(/Texte à afficher/).fill('Encore en attente');
+    await sendButton(host).click();
+    await openTab(host, 'Party');
+    await expect.poll(() => host.control.locator('.party-side .rows').first().locator('li').count()).toBe(2);
+    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await expect.poll(() => host.control.locator('li:not(.is-leaving)', { hasText: 'Encore en attente' }).count(), { timeout: 15_000 }).toBeLessThanOrEqual(1);
+    await expect.poll(() => host.control.locator('.is-leaving').count(), { timeout: 15_000 }).toBe(0);
+    await overlayState(guest, 'playing');
+    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'playing');
+    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+    await overlayState(host, 'idle');
+    await expect.poll(() => host.control.locator('.is-leaving').count()).toBe(0);
+
+    // The bars: a sheen while it goes, none while it waits.
+    const barMoves = async (paused: boolean) => {
+      await host.control.evaluate((isPaused) => {
+        const box = document.createElement('div');
+        box.id = 'bar-check';
+        box.className = 'upload';
+        box.style.cssText = 'position:fixed;left:20px;right:20px;top:20px;z-index:99';
+        box.innerHTML = `<progress max="100" value="60" class="${isPaused ? 'is-paused' : ''}"></progress>`;
+        document.body.append(box);
+      }, paused);
+      const bar = host.control.locator('#bar-check');
+      await host.control.waitForTimeout(500);
+      const first = await bar.screenshot();
+      await host.control.waitForTimeout(300);
+      const second = await bar.screenshot();
+      await picture(host.control, paused ? 'motion-bar-paused.png' : 'motion-bar.png');
+      await bar.evaluate((box) => box.remove());
+      return !first.equals(second);
+    };
+    expect(await barMoves(false)).toBe(true);
+    expect(await barMoves(true)).toBe(false);
+
+    // The setting reaches this window, not the overlay.
+    await openSettings(host, 'Général');
+    await host.control.locator('label.switch', { hasText: 'Réduire les animations' }).click();
+    await expect.poll(() => host.control.evaluate(() => document.documentElement.classList.contains('calm'))).toBe(true);
+    await picture(host.control, 'settings-motion.png');
+    expect(await host.stage.evaluate(() => document.documentElement.classList.contains('calm'))).toBe(false);
+    await openTab(host, 'Historique');
+    expect(await host.control.evaluate(() => getComputedStyle(document.querySelector('.view:not([hidden])')!).animationDuration)).toBe('0.001s');
+    await host.control.evaluate(() => window.liveChat.setSettings({ reduceMotion: false }));
+    await expect.poll(() => host.control.evaluate(() => document.documentElement.classList.contains('calm'))).toBe(false);
+    await openTab(host, 'LiveChat');
+  });
+
   it('sends from LiveChat and shows it in the party, which only says who is there', async () => {
     await openTab(guest, 'Party');
     await sendText(host, 'Vite fait');

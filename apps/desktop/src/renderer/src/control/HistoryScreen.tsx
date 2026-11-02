@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ActionResult, AppState, FavoriteView, HistoryView } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { ConfirmButton } from './ConfirmButton';
+import { GlideList } from './glide';
 import { IconPlay, KindIcon } from './icons';
 import { Star } from './LibraryScreen';
 import { canSendIn, errorMessage, replayErrorMessage } from './messages';
@@ -39,6 +40,32 @@ const ReplayForMeButton = ({
       Revoir pour moi
     </button>
   );
+
+// Pinning makes a copy first, so the star that lands is a new one.
+const KeepStar = ({ item, onResult }: { item: HistoryView; onResult: (result: ActionResult) => void }) => {
+  const wasKeeping = useRef(false);
+  const justKept = wasKeeping.current && !item.keeping && item.favoriteId !== null;
+  wasKeeping.current = item.keeping;
+
+  if (item.keeping) {
+    return (
+      <span className="round tiny star is-on" title="Copie sur ton PC…" data-testid="keeping">
+        <span className="spinner is-small" aria-hidden="true" />
+      </span>
+    );
+  }
+
+  return (
+    <Star
+      on={item.favoriteId !== null}
+      landing={justKept}
+      onChange={(on) => {
+        if (on) void window.liveChat.keepHistory(item.id).then(onResult);
+        else if (item.favoriteId) void window.liveChat.deleteSaved(item.favoriteId);
+      }}
+    />
+  );
+};
 
 const FavoriteRow = ({
   favorite,
@@ -121,19 +148,7 @@ const HistoryRow = ({
       </span>
     </span>
     <span className="history-actions">
-      {item.keeping ? (
-        <span className="round tiny star is-on" title="Copie sur ton PC…" data-testid="keeping">
-          <span className="spinner is-small" aria-hidden="true" />
-        </span>
-      ) : (
-        <Star
-          on={item.favoriteId !== null}
-          onChange={(on) => {
-            if (on) void window.liveChat.keepHistory(item.id).then(onResult);
-            else if (item.favoriteId) void window.liveChat.deleteSaved(item.favoriteId);
-          }}
-        />
-      )}
+      <KeepStar item={item} onResult={onResult} />
       <ReplayForMeButton
         replayState={replayState}
         busyPlaying={busyPlaying}
@@ -206,7 +221,7 @@ export const HistoryScreen = ({ state, active }: { state: AppState; active: bool
             <p className="hint">Clique sur l'étoile d'un LiveChat marrant : il reste sur ton PC et tu pourras le ressortir quand tu veux.</p>
           </div>
         ) : (
-          <ul className="history-list scroll">
+          <GlideList className="history-list scroll">
             {favorites.map((favorite) => (
               <FavoriteRow
                 key={favorite.id}
@@ -217,7 +232,7 @@ export const HistoryScreen = ({ state, active }: { state: AppState; active: bool
                 onResult={onFavoriteResult}
               />
             ))}
-          </ul>
+          </GlideList>
         )
       ) : history.length === 0 ? (
         <div className="history-empty">
@@ -225,7 +240,7 @@ export const HistoryScreen = ({ state, active }: { state: AppState; active: bool
           <p className="hint">Ce qui passe dans la party s'affiche ici pendant 1 jour.</p>
         </div>
       ) : (
-        <ul className="history-list scroll">
+        <GlideList className="history-list scroll">
           {history.map((item) => (
             <HistoryRow
               key={item.id}
@@ -236,7 +251,7 @@ export const HistoryScreen = ({ state, active }: { state: AppState; active: bool
               onResult={onResult}
             />
           ))}
-        </ul>
+        </GlideList>
       )}
     </section>
   );

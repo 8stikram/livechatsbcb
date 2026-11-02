@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useTabMarker } from './glide';
 import { DEFAULT_LAYOUT, SKIP_KEY, type AppState, type CleanKeyOutcome, type OverlayLayout, type Settings, type UpdateCheckOutcome, type Zone } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { say } from '../speech';
@@ -187,6 +188,7 @@ type Section = (typeof SECTIONS)[number][0];
 export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpenNotes: () => void }) => {
   const { settings, displays } = state;
   const [section, setSection] = useState<Section>('general');
+  const tabArea = useTabMarker<HTMLElement>(section);
   const voices = useVoices();
   const [checking, setChecking] = useState(false);
   const [checked, setChecked] = useState<UpdateCheckOutcome | null>(null);
@@ -203,7 +205,8 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
 
   return (
     <div className="settings-layout">
-      <nav className="glass settings-nav" aria-label="Sections des réglages">
+      <nav ref={tabArea} className="glass settings-nav" aria-label="Sections des réglages">
+        <span className="tab-marker" aria-hidden="true" />
         {SECTIONS.map(([id, label]) => (
           <button
             key={id}
@@ -238,6 +241,14 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
               </div>
             </section>
           )}
+
+          <section className="glass panel" aria-labelledby="motion-title">
+            <h2 id="motion-title">Animations</h2>
+            <Switch checked={settings.reduceMotion} onChange={(reduceMotion) => set({ reduceMotion })}>
+              Réduire les animations
+            </Switch>
+            <p className="hint">L'app devient plus calme. Ce qui s'affiche en jeu ne change pas.</p>
+          </section>
 
           <section className="glass panel" aria-labelledby="startup-title">
             <h2 id="startup-title">Démarrage</h2>

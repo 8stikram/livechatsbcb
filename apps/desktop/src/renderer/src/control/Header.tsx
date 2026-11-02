@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ActionError, ConnectionStatus, PartyView } from '../../../shared/ipc';
+import { useTabMarker } from './glide';
 import { IconCheck, IconCopy } from './icons';
 
 export type View = 'party' | 'media' | 'library' | 'history' | 'settings' | 'notes';
@@ -67,6 +68,7 @@ export const Header = ({
   onView: (view: View) => void;
 }) => {
   const inSettings = view === 'settings' || view === 'notes';
+  const tabArea = useTabMarker<HTMLDivElement>(view);
 
   return (
     <header className="head">
@@ -100,7 +102,8 @@ export const Header = ({
       </div>
 
       {party && (
-        <div className="tabs" role="tablist" aria-label="Sections">
+        <div ref={tabArea} className="tabs" role="tablist" aria-label="Sections">
+          <span className="tab-marker" aria-hidden="true" />
           {TABS.map(([id, label]) => (
             <button
               key={id}

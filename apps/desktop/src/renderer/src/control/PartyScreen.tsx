@@ -3,6 +3,7 @@ import { MAX_ONLINE_MEMBERS } from '@livechatsbcb/protocol';
 import type { ActionResult, AppState, PartyView, UpcomingView } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { ConfirmButton } from './ConfirmButton';
+import { GlideList } from './glide';
 import { KindIcon } from './icons';
 import { errorMessage, minutesLeft } from './messages';
 import { mediaTitle, NowCard } from './NowPlaying';
@@ -20,7 +21,7 @@ const Upcoming = ({ upcoming, active }: { upcoming: UpcomingView[]; active: bool
     {upcoming.length === 0 ? (
       <p className="hint">Personne n'attend.</p>
     ) : (
-      <ul className="rows scroll">
+      <GlideList className="rows scroll">
         {upcoming.map((item) => (
           <li key={item.id} className="row">
             <span className="kind-tile is-small">
@@ -34,7 +35,7 @@ const Upcoming = ({ upcoming, active }: { upcoming: UpcomingView[]; active: bool
             </span>
           </li>
         ))}
-      </ul>
+      </GlideList>
     )}
   </section>
 );
@@ -60,7 +61,7 @@ const Members = ({ party }: { party: PartyView }) => {
           en ligne
         </span>
       </h2>
-      <ul className="rows scroll">
+      <GlideList className="rows scroll is-pop">
         {party.members.map((member) => (
           <li
             key={member.id}
@@ -93,7 +94,7 @@ const Members = ({ party }: { party: PartyView }) => {
             {member.online && <span className="dot is-online" title="En ligne" />}
           </li>
         ))}
-      </ul>
+      </GlideList>
 
       {error && (
         <p className="error" role="alert">
