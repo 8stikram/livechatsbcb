@@ -26,6 +26,9 @@ const field = (yaml, name) => yaml.match(new RegExp(`^${name}:\\s*(\\S+)\\s*$`, 
 const version = process.argv[2];
 if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error('Usage: npm run release -- 1.2.3');
 
+const notes = readFileSync(join(desktop, 'src', 'shared', 'patch-notes.ts'), 'utf8');
+if (!notes.includes(`version: '${version}'`)) throw new Error(`Write the patch notes of ${version} first`);
+
 const published = await fetch(`${SERVICE_URL}/updates/latest.yml`);
 const previous = published.ok ? await published.text() : '';
 const previousVersion = field(previous, 'version');

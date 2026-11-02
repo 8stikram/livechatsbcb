@@ -1,6 +1,6 @@
 import type { UpdateStatus } from '../../../shared/ipc';
 
-export const UpdateBanner = ({ update }: { update: UpdateStatus }) => {
+export const UpdateBanner = ({ update, restartIn }: { update: UpdateStatus; restartIn: number | null }) => {
   if (update.state === 'downloading') {
     return (
       <div className="banner is-downloading" role="status" data-testid="update-progress">
@@ -13,12 +13,15 @@ export const UpdateBanner = ({ update }: { update: UpdateStatus }) => {
 
   if (update.state === 'ready') {
     return (
-      <div className="banner" role="status">
-        <span>Version {update.version} prête</span>
-        <button type="button" className="pill primary small" onClick={() => void window.liveChat.installUpdate()}>
-          Redémarrer
-        </button>
-      </div>
+      <p className="banner" role="status" data-testid="update-ready">
+        {restartIn !== null ? (
+          <span>
+            Version {update.version} : l’app redémarre dans <span className="mono">{restartIn}</span> s
+          </span>
+        ) : (
+          <span>Version {update.version} prête : l’app redémarrera dès que plus rien ne passe</span>
+        )}
+      </p>
     );
   }
 

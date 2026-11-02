@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppState } from '../use-app-state';
 import { GuildPicker } from './GuildPicker';
 import { Header, type View } from './Header';
 import { HistoryScreen } from './HistoryScreen';
 import { LibraryScreen, type Category } from './LibraryScreen';
+import { loadInEditor } from './load-editor';
+import { NotesScreen } from './NotesScreen';
 import { LoginScreen } from './LoginScreen';
 import { MediaScreen } from './MediaScreen';
 import { errorMessage } from './messages';
@@ -28,11 +30,28 @@ export const App = () => {
   const [picking, setPicking] = useState(false);
   const [libraryCategory, setLibraryCategory] = useState<Category>('image');
   const partyId = state?.party?.partyId;
+  // Where an update found this window, for when the party comes back.
+  const viewBeforeRestart = useRef<View | null>(null);
+  const restartIn = state?.restartIn ?? null;
+
+  useEffect(() => {
+    void window.liveChat.takeRestartStash().then(({ view, loaded }) => {
+      if (loaded) loadInEditor(loaded, files, scene);
+      if (!view) return;
+      viewBeforeRestart.current = view as View;
+      setChosenView(view as View);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (restartIn !== null) void window.liveChat.stashView(chosenView);
+  }, [restartIn, chosenView]);
 
   // Whoever just entered a party is there to send something.
   useEffect(() => {
     if (!partyId) return;
-    setChosenView('media');
+    setChosenView(viewBeforeRestart.current ?? 'media');
+    viewBeforeRestart.current = null;
     setPicking(false);
   }, [partyId]);
 
@@ -53,15 +72,16 @@ export const App = () => {
   if (!account) {
     return (
       <div className="app is-login">
-        <UpdateBanner update={state.update} />
+        <UpdateBanner update={state.update} restartIn={restartIn} />
         <LoginScreen state={state} />
       </div>
     );
   }
 
   const hasPlaces = addedGuilds.length > 0 || state.hasPrivateParty || party !== null;
-  const view: View = !party && chosenView !== 'settings' ? 'party' : chosenView;
-  const showPicker = picking || (!hasPlaces && view !== 'settings');
+  const standalone = chosenView === 'settings' || chosenView === 'notes';
+  const view: View = !party && !standalone ? 'party' : chosenView;
+  const showPicker = picking || (!hasPlaces && !standalone);
   const shownNotice = notice === 'session_expired' || notice === 'guild_lost' ? NOTICES[notice] : null;
   const { current } = state.queue;
 
@@ -86,7 +106,28 @@ export const App = () => {
       <div className="workspace">
         {!showPicker && <Header party={party} view={view} joinError={joinError} onView={setChosenView} />}
 
-        <UpdateBanner update={state.update} />
+        <UpdateBanner update={state.update} restartIn={restartIn} />
+        {state.whatsNew && view !== 'notes' && (
+          <div className="banner" role="status" data-testid="whats-new">
+            <span>Mise à jour installée : version {state.version}</span>
+            <span className="history-actions">
+              <button
+                type="button"
+                className="pill primary small"
+                onClick={() => {
+                  setPicking(false);
+                  setChosenView('notes');
+                  void window.liveChat.markNotesSeen();
+                }}
+              >
+                Voir les nouveautés
+              </button>
+              <button type="button" className="pill quiet small" onClick={() => void window.liveChat.markNotesSeen()}>
+                Fermer
+              </button>
+            </span>
+          </div>
+        )}
         {shownNotice && (
           <p className="banner" role="status" data-testid="notice">
             {shownNotice}
@@ -148,7 +189,10 @@ export const App = () => {
             </>
           )}
           <div className="view" hidden={view !== 'settings'}>
-            <SettingsScreen state={state} />
+            <SettingsScreen state={state} onOpenNotes={() => setChosenView('notes')} />
+          </div>
+          <div className="view" hidden={view !== 'notes'}>
+            <NotesScreen version={state.version} />
           </div>
         </div>
 

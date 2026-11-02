@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ActionError, ConnectionStatus, PartyView } from '../../../shared/ipc';
 import { IconCheck, IconCopy } from './icons';
 
-export type View = 'party' | 'media' | 'library' | 'history' | 'settings';
+export type View = 'party' | 'media' | 'library' | 'history' | 'settings' | 'notes';
 
 const TABS: Array<[View, string]> = [
   ['media', 'LiveChat'],
@@ -66,7 +66,7 @@ export const Header = ({
   joinError: ActionError | null;
   onView: (view: View) => void;
 }) => {
-  const inSettings = view === 'settings';
+  const inSettings = view === 'settings' || view === 'notes';
 
   return (
     <header className="head">
@@ -76,7 +76,7 @@ export const Header = ({
           {party && <Connection status={party.connection} />}
         </p>
         <div className="head-title">
-          {inSettings && <h1 className="title">Réglages</h1>}
+          {inSettings && <h1 className="title">{view === 'notes' ? 'Nouveautés' : 'Réglages'}</h1>}
           {!inSettings && !party && <h1 className="title">{joinError ? 'Aucune party' : 'Connexion…'}</h1>}
           {!inSettings && party?.guild && (
             <h1 className="title" title={party.guild.name} data-testid="party-guild">

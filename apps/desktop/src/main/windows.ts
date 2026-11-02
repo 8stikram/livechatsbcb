@@ -57,7 +57,9 @@ const secureWebPreferences = {
 const canSeeThrough = (): boolean =>
   process.platform === 'win32' && Number(release().split('.')[2]) >= 22621;
 
-export const createControlWindow = (startHidden: boolean): BrowserWindow => {
+export type StartMode = 'shown' | 'inactive' | 'hidden';
+
+export const createControlWindow = (startMode: StartMode): BrowserWindow => {
   const { workAreaSize } = screen.getPrimaryDisplay();
   const seeThrough = canSeeThrough();
   // The blur follows the theme of Windows, and this page is dark whatever that theme is.
@@ -79,7 +81,9 @@ export const createControlWindow = (startHidden: boolean): BrowserWindow => {
   });
   lockDown(window);
   window.once('ready-to-show', () => {
-    if (!startHidden) window.show();
+    if (startMode === 'shown') window.show();
+    // Back from an update over a game: on screen as before, without taking the game's focus.
+    else if (startMode === 'inactive') window.showInactive();
   });
   void window.loadURL(`${pageUrl('control')}${seeThrough ? '?see-through' : ''}`);
   return window;

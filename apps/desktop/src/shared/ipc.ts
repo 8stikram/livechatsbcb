@@ -25,6 +25,8 @@ export type UpdateStatus =
   | { state: 'downloading'; version: string; percent: number }
   | { state: 'ready'; version: string };
 
+export type UpdateCheckOutcome = 'latest' | 'found' | 'failed' | 'unavailable';
+
 // In percent of the screen, so a layout survives a change of resolution.
 export type Zone = { x: number; y: number; w: number; h: number };
 export type OverlayLayout = { profile: Zone; media: Zone; text: Zone };
@@ -38,6 +40,8 @@ export type Settings = {
   launchAtStartup: boolean;
   // Closing the window keeps the app running, which is worth explaining the first time and only then.
   backgroundHintShown: boolean;
+  // The notes were offered for this version. Null for someone who never had the choice yet.
+  seenVersion: string | null;
 };
 
 export const DEFAULT_LAYOUT: OverlayLayout = {
@@ -54,6 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   layout: DEFAULT_LAYOUT,
   launchAtStartup: true,
   backgroundHintShown: false,
+  seenVersion: null,
 };
 
 export type DisplayView = { id: number; label: string };
@@ -183,11 +188,15 @@ export type LoadedDraft = {
   videoMuted: boolean;
   soundMuted: boolean;
 };
-export type UploadView = { name: string; percent: number };
+// Paused: no connection for now, and it carries on by itself when it comes back.
+export type UploadView = { name: string; percent: number; paused: boolean };
 
 export type AppState = {
   version: string;
   update: UpdateStatus;
+  // Seconds before the app restarts to install an update. Null when it isn't about to.
+  restartIn: number | null;
+  whatsNew: boolean;
   account: Account | null;
   // Waiting for the browser to come back from Discord.
   loggingIn: boolean;
@@ -214,7 +223,7 @@ export type AppState = {
   upload: UploadView | null;
 };
 
-export type ActionError = ApiErrorCode | 'network' | 'cancelled' | 'login_denied' | 'login_timeout';
+export type ActionError = ApiErrorCode | 'network' | 'gave_up' | 'cancelled' | 'login_denied' | 'login_timeout';
 export type ActionResult = { ok: true } | { ok: false; error: ActionError };
 
 export type PickResult =
@@ -283,7 +292,11 @@ export const IpcChannel = {
   StopLocalReplay: 'history:stop-local-replay',
   SetSettings: 'settings:set',
   TestOverlay: 'overlay:test',
-  InstallUpdate: 'update:install',
+  CheckForUpdates: 'update:check',
+  MarkNotesSeen: 'update:notes-seen',
+  StashView: 'restart:stash-view',
+  StashDraft: 'restart:stash-draft',
+  TakeRestartStash: 'restart:take-stash',
 } as const;
 
 export type LiveChatApi = {
@@ -337,5 +350,9 @@ export type LiveChatApi = {
   stopLocalReplay(): Promise<void>;
   setSettings(change: Partial<Settings>): Promise<void>;
   testOverlay(): Promise<void>;
-  installUpdate(): Promise<void>;
+  checkForUpdates(): Promise<UpdateCheckOutcome>;
+  markNotesSeen(): Promise<void>;
+  stashView(view: string): Promise<void>;
+  stashDraft(advanced: boolean, input: unknown): Promise<void>;
+  takeRestartStash(): Promise<{ view: string | null; loaded: { draft: LoadedDraft } | { scene: LoadedScene } | null }>;
 };

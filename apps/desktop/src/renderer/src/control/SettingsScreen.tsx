@@ -1,5 +1,5 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { DEFAULT_LAYOUT, type AppState, type OverlayLayout, type Settings, type Zone } from '../../../shared/ipc';
+import { DEFAULT_LAYOUT, type AppState, type OverlayLayout, type Settings, type UpdateCheckOutcome, type Zone } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { ConfirmButton } from './ConfirmButton';
 import { Slider } from './NowPlaying';
@@ -10,6 +10,13 @@ const ZONE_LABELS: Record<keyof OverlayLayout, string> = {
   text: 'Texte',
 };
 const ZONES = Object.keys(ZONE_LABELS) as Array<keyof OverlayLayout>;
+
+const CHECK_MESSAGES: Record<UpdateCheckOutcome, string> = {
+  latest: 'Tu as déjà la dernière version.',
+  found: 'Une nouvelle version arrive : elle s’installe toute seule.',
+  failed: 'Impossible de vérifier pour le moment. Vérifie ta connexion et réessaie.',
+  unavailable: 'Les mises à jour ne marchent que sur l’app installée.',
+};
 
 export const Switch = ({
   checked,
@@ -105,9 +112,17 @@ const LayoutEditor = ({ layout }: { layout: OverlayLayout }) => {
   );
 };
 
-export const SettingsScreen = ({ state }: { state: AppState }) => {
+export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpenNotes: () => void }) => {
   const { settings, displays } = state;
+  const [checking, setChecking] = useState(false);
+  const [checked, setChecked] = useState<UpdateCheckOutcome | null>(null);
   const set = (change: Partial<Settings>) => void window.liveChat.setSettings(change);
+
+  const check = async () => {
+    setChecking(true);
+    setChecked(await window.liveChat.checkForUpdates());
+    setChecking(false);
+  };
 
   return (
     <div className="settings-grid scroll">
@@ -156,7 +171,25 @@ export const SettingsScreen = ({ state }: { state: AppState }) => {
           </Switch>
         </section>
 
-        <p className="version mono">Version {state.version}</p>
+        <section className="glass panel" aria-labelledby="updates-title">
+          <h2 id="updates-title" className="panel-title">
+            Mises à jour
+            <span className="count mono">Version {state.version}</span>
+          </h2>
+          <div className="panel-actions">
+            <button type="button" className="pill secondary small" disabled={checking} onClick={() => void check()}>
+              {checking ? 'Vérification…' : 'Vérifier les mises à jour'}
+            </button>
+            <button type="button" className="pill quiet small" onClick={onOpenNotes}>
+              Voir les nouveautés
+            </button>
+          </div>
+          {checked && (
+            <p className="hint" role="status" data-testid="update-check">
+              {CHECK_MESSAGES[checked]}
+            </p>
+          )}
+        </section>
       </div>
 
       <div className="settings-column">

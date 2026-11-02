@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import { autoUpdater } from 'electron-updater';
-import type { UpdateStatus } from '../shared/ipc';
+import type { UpdateCheckOutcome, UpdateStatus } from '../shared/ipc';
 
 const CHECK_INTERVAL_MS = 60 * 60 * 1_000;
 
@@ -44,6 +44,18 @@ export class Updater {
     autoUpdater.checkForUpdates().catch(() => {
       // Already reported by the error event.
     });
+  }
+
+  // Said to someone waiting on the button, unlike the regular checks.
+  async checkNow(): Promise<UpdateCheckOutcome> {
+    if (!app.isPackaged) return 'unavailable';
+    if (this.status.state !== 'idle') return 'found';
+    try {
+      await autoUpdater.checkForUpdates();
+    } catch {
+      return 'failed';
+    }
+    return this.status.state === 'idle' ? 'latest' : 'found';
   }
 
   installNow(): void {

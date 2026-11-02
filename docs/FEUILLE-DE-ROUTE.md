@@ -12,13 +12,20 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 - LiveChat en premier, Party réduite aux membres, au média en cours et à la suite
 - Favoris dans l'historique, gardés sur le PC
 
+## Prête à publier
+
+**0.8.0** : solide d'abord
+
+- Notes de mise à jour, proposées après chaque mise à jour
+- Bouton « Vérifier les mises à jour »
+- Redémarrage automatique après 3 secondes de compte à rebours, quand rien ne passe
+- LiveChat en préparation, onglet et party retrouvés après ce redémarrage
+- Envoi repris tout seul après une coupure, pendant 10 minutes
+- Envoi possible sans connexion, parti au retour du réseau
+
+Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
+
 ## À venir
-
-### 1. Solide d'abord
-
-- Vrai test à deux PC
-- Mise à jour auto améliorée
-- Vérifier que la reconnexion auto tient après une vraie coupure
 
 ### 2. En jeu
 

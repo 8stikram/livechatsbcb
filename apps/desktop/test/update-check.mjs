@@ -37,11 +37,9 @@ for (let attempt = 0; attempt < 100 && !control; attempt++) {
 if (!control) throw new Error('The control window did not open');
 
 const started = Date.now();
-const restart = control.getByRole('button', { name: 'Redémarrer' });
-await restart.waitFor({ timeout: 300_000 });
+await control.getByTestId('update-ready').waitFor({ timeout: 300_000 });
 console.log(`Update downloaded in ${Math.round((Date.now() - started) / 1000)} s`);
 const clickedAt = new Date();
-await restart.click();
 
 // The file disappears for a moment during the update, so an empty version doesn't count as a change.
 const deadline = Date.now() + 180_000;

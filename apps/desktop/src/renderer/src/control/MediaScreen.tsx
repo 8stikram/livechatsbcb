@@ -9,7 +9,7 @@ import type { AppState, DraftMedia, DraftSlot, PlaybackView, SceneInput } from '
 import { Caption, Profile, ScreenPreview, zoneStyle } from '../scene';
 import { LayerPanel, SceneBoard } from './AdvancedEditor';
 import { IconPlay, KindIcon } from './icons';
-import { mediaErrorMessage } from './messages';
+import { canSendIn, mediaErrorMessage } from './messages';
 import { Slider } from './NowPlaying';
 import { Switch } from './SettingsScreen';
 import type { Clip, DraftFiles } from './use-draft';
@@ -256,7 +256,7 @@ export const MediaScreen = ({
       ? !unreadable && (!plays || clip !== null)
       : caption.trim().length > 0;
   const selectedLayer = advanced ? (scene.layers.find(({ key }) => key === scene.selected) ?? null) : null;
-  const isOnline = state.party?.connection === 'online';
+  const isOnline = canSendIn(state.party);
 
   const pick = async (slot?: DraftSlot) => {
     setError(null);
@@ -363,6 +363,11 @@ export const MediaScreen = ({
       setError(mediaErrorMessage(result.error));
     }
   };
+
+  // Each second of the countdown, so that what was just typed comes back too.
+  useEffect(() => {
+    if (state.restartIn !== null) void window.liveChat.stashDraft(advanced, advanced ? sceneInput() : recipe());
+  }, [state.restartIn]);
 
   // Only while this screen is the one in use, and never while someone types.
   useEffect(() => {
@@ -578,9 +583,13 @@ export const MediaScreen = ({
         {state.upload ? (
           <div className="upload" role="status">
             <div className="field-line">
-              <span>
-                Envoi… <span className="mono">{state.upload.percent} %</span>
-              </span>
+              {state.upload.paused ? (
+                <span data-testid="upload-paused">Pas de connexion : ça partira tout seul à son retour</span>
+              ) : (
+                <span>
+                  Envoi… <span className="mono">{state.upload.percent} %</span>
+                </span>
+              )}
               <button type="button" className="pill quiet small" onClick={() => void window.liveChat.cancelUpload()}>
                 Annuler
               </button>

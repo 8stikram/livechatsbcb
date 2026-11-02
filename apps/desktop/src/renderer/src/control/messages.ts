@@ -1,4 +1,4 @@
-import type { ActionError, PickResult } from '../../../shared/ipc';
+import type { ActionError, PartyView, PickResult } from '../../../shared/ipc';
 
 export const errorMessage = (error: ActionError): string => {
   switch (error) {
@@ -28,11 +28,17 @@ export const errorMessage = (error: ActionError): string => {
       return 'Trop de médias sont déjà en attente. Réessaie dans un instant.';
     case 'cancelled':
       return 'Envoi annulé.';
+    case 'gave_up':
+      return 'Toujours pas de connexion après 10 minutes : l’envoi est arrêté. Réessaie quand le réseau est revenu.';
     case 'network':
     case 'not_found':
       return 'Impossible de joindre le serveur. Vérifie ta connexion et réessaie.';
   }
 };
+
+// A send also waits for a connection that is only gone for now. These three need someone to do something first.
+export const canSendIn = (party: PartyView | null): boolean =>
+  party !== null && party.connection !== 'replaced' && party.connection !== 'party_full' && party.connection !== 'update_required';
 
 export const mediaErrorMessage = (error: ActionError): string =>
   error === 'invalid_request' ? 'Ce média n’a pas pu être envoyé. Vérifie le fichier et réessaie.' : errorMessage(error);

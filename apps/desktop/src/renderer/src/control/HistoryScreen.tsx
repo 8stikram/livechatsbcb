@@ -4,7 +4,7 @@ import { Avatar } from '../Avatar';
 import { ConfirmButton } from './ConfirmButton';
 import { IconPlay, KindIcon } from './icons';
 import { Star } from './LibraryScreen';
-import { errorMessage, replayErrorMessage } from './messages';
+import { canSendIn, errorMessage, replayErrorMessage } from './messages';
 import { mediaTitle } from './NowPlaying';
 
 const CLOCK_TICK_MS = 30_000;
@@ -212,7 +212,7 @@ export const HistoryScreen = ({ state, active }: { state: AppState; active: bool
                 key={favorite.id}
                 favorite={favorite}
                 busyPlaying={busyPlaying}
-                canSend={state.upload === null && state.party?.connection === 'online'}
+                canSend={state.upload === null && canSendIn(state.party)}
                 replayState={replayStateOf(favorite.id)}
                 onResult={onFavoriteResult}
               />

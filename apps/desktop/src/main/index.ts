@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir, rm, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell, type IpcMainInvokeEvent } from 'electron';
@@ -30,14 +30,16 @@ import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
 import { MediaCache } from './media-cache';
 import { CONTENT_TYPE_BY_EXTENSION, contentTypeOf, extensionOf, forgetMediaFile, registerMediaFile, serveMediaFiles } from './media-files';
-import { uploadFile } from './media-upload';
+import { retryWhileOffline, uploadFile } from './media-upload';
+import { forgetRestartStash, takeRestartStash, writeRestartStash, type RestartStash, type StashedRecipe } from './restart-stash';
+import { RestartCountdown } from './update-restart';
 import * as partyApi from './party-api';
 import { PartyConnection } from './party-connection';
 import { SessionStore } from './session-store';
 import { SettingsSchema, SettingsStore } from './settings-store';
 import { AppTray } from './tray';
 import { Updater } from './updater';
-import { createControlWindow, createStageWindow, denyAllPermissions, isOwnPage, openInBrowser, placeOverlay } from './windows';
+import { createControlWindow, createStageWindow, denyAllPermissions, isOwnPage, openInBrowser, placeOverlay, type StartMode } from './windows';
 
 // Lets one PC run several members for testing; each profile has its own folder and its own single-instance lock.
 const profile = process.env['LIVECHATSBCB_PROFILE'];
@@ -93,11 +95,13 @@ const START_HIDDEN_ARG = '--hidden';
 // An update installed unnoticed should come back the same way, and an installer can't pass an argument along.
 const quietRestartFlag = () => join(app.getPath('userData'), 'restart-quietly');
 
-const takeQuietRestart = (): boolean => {
+// Says how the window was. A flag written by an older version is empty, and it only ever restarted hidden.
+const takeRestartMode = (): StartMode | null => {
   const flag = quietRestartFlag();
-  if (!existsSync(flag)) return false;
+  if (!existsSync(flag)) return null;
+  const written = readFileSync(flag, 'utf8');
   rmSync(flag, { force: true });
-  return true;
+  return written === 'shown' || written === 'inactive' ? written : 'hidden';
 };
 
 function start(): void {
@@ -123,14 +127,18 @@ function start(): void {
   const library = new Library(app.getPath('userData'));
   type DraftFile = SavedFile & { fileId: string };
   const draft: Record<DraftSlot, DraftFile | null> = { picture: null, sound: null };
-  let upload: { name: string; percent: number; controller: AbortController } | null = null;
+  let upload: { name: string; percent: number; paused: boolean; controller: AbortController } | null = null;
   let quitting = false;
   let localReplay: { key: string; historyId: string; item: HistoryItem; startAt: number | null } | null = null;
   let localReplayTimer: NodeJS.Timeout | undefined;
   const keeping = new Set<string>();
 
   const stageWindow = createStageWindow(settings.current.displayId);
-  const controlWindow = createControlWindow(process.argv.includes(START_HIDDEN_ARG) || takeQuietRestart());
+  const controlWindow = createControlWindow(takeRestartMode() ?? (process.argv.includes(START_HIDDEN_ARG) ? 'hidden' : 'shown'));
+  const restartStash = takeRestartStash();
+  const stashed: RestartStash = { view: null, recipe: null };
+  // Someone new starts on this version. Someone already logged in came from an older one, and gets told what changed.
+  if (settings.current.seenVersion === null && !store.login) settings.update({ seenVersion: app.getVersion() });
 
   const cache = new MediaCache(join(app.getPath('userData'), 'media-cache'), (mediaId) => {
     connection?.reportReady(mediaId);
@@ -214,6 +222,8 @@ function start(): void {
     return {
       version: app.getVersion(),
       update: updater.current(),
+      restartIn: restartCountdown.seconds,
+      whatsNew: settings.current.seenVersion !== app.getVersion(),
       account: store.login?.account ?? null,
       loggingIn: login !== null,
       guilds,
@@ -259,7 +269,7 @@ function start(): void {
         : [],
       favorites: library.favorites(),
       localReplay: localReplayView(),
-      upload: upload && { name: upload.name, percent: upload.percent },
+      upload: upload && { name: upload.name, percent: upload.percent, paused: upload.paused },
     };
   };
 
@@ -283,24 +293,34 @@ function start(): void {
     }
   };
 
-  // Someone living near the clock never sees the button to restart, and an old version ends up shut out of the party.
-  const installUpdateUnnoticed = (): void => {
-    if (quitting || updater.current().state !== 'ready') return;
-    if (controlWindow.isVisible() || upload || localReplay || connection?.current().queue.length) return;
-
-    writeFileSync(quietRestartFlag(), '');
+  const installUpdate = (): void => {
+    const mode: StartMode = !controlWindow.isVisible() ? 'hidden' : controlWindow.isFocused() ? 'shown' : 'inactive';
+    writeFileSync(quietRestartFlag(), mode);
+    // The updater closes every window before it emits before-quit, so the stage must already allow closing.
     quitting = true;
     updater.installNow();
   };
 
+  const restartCountdown = new RestartCountdown(() => publishState(), installUpdate, () => {
+    stashed.view = null;
+    stashed.recipe = null;
+    forgetRestartStash();
+  });
+
+  // An old version ends up shut out of the party, so nobody has to think of it. Never in the middle of anything.
+  const syncRestart = (): void => {
+    const busy = upload || localReplay || login || keeping.size > 0 || connection?.current().queue.length;
+    restartCountdown.sync(!quitting && updater.current().state === 'ready' && !busy);
+  };
+
   const publishState = (): void => {
+    syncRestart();
     const state = getState();
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(IpcChannel.StateChanged, state);
     }
     syncOverlay();
     tray.showMuted(settings.current.muted);
-    installUpdateUnnoticed();
   };
 
   const updater = new Updater(publishState);
@@ -564,19 +584,36 @@ function start(): void {
   };
 
   const sendFiles = async (session: SessionResponse, files: SavedFile[], timing: Timing): Promise<ActionResult> => {
-    const created = await partyApi.createMedia(session, {
-      ...timing,
-      scene: timing.scene ?? null,
-      files: files.map(({ contentType, size, name }) => ({ contentType, size, name: name.slice(0, MAX_FILE_NAME_LENGTH) })),
-    });
-    if (!created.ok) return created;
-    if (files.length === 0) return { ok: true };
+    const controller = new AbortController();
+    const online = connection?.current().status === 'online';
+    const current = { name: files.map(({ name }) => name).join(' + ') || 'Texte', percent: 0, paused: !online, controller };
+    // A text normally leaves at once, so it only shows when it has to wait.
+    if (files.length > 0 || !online) upload = current;
+    publishState();
+
+    const onPaused = (paused: boolean): void => {
+      current.paused = paused;
+      upload ??= current;
+      publishState();
+    };
+    const created = await retryWhileOffline(
+      () =>
+        partyApi.createMedia(session, {
+          ...timing,
+          scene: timing.scene ?? null,
+          files: files.map(({ contentType, size, name }) => ({ contentType, size, name: name.slice(0, MAX_FILE_NAME_LENGTH) })),
+        }),
+      controller.signal,
+      onPaused,
+    );
+    if (!created.ok || files.length === 0) {
+      if (upload === current) upload = null;
+      publishState();
+      return created.ok ? { ok: true } : created;
+    }
 
     const { mediaId, fileIds } = created.value;
-    const controller = new AbortController();
-    const current = { name: files.map(({ name }) => name).join(' + '), percent: 0, controller };
-    upload = current;
-    publishState();
+    current.paused = false;
 
     // Before the last step: the service can announce the media before it answers that step.
     for (const [index, file] of files.entries()) cache.adopt(mediaId, fileIds[index]!, file.path, file.contentType);
@@ -588,7 +625,7 @@ function start(): void {
       result = await uploadFile(session, fileIds[index]!, file.path, file.size, controller.signal, (percent) => {
         current.percent = Math.round(((sentBytes + (file.size * percent) / 100) / totalBytes) * 100);
         publishState();
-      });
+      }, onPaused);
       if (!result.ok) break;
       sentBytes += file.size;
     }
@@ -1059,16 +1096,13 @@ function start(): void {
     return sendFiles(session, saved.files, saved);
   });
 
-  handle(IpcChannel.EditSaved, async (savedId: unknown) => {
-    const saved = typeof savedId === 'string' ? library.savedById(savedId) : null;
-    if (!saved || !(await library.allThere(saved))) return { ok: false };
-
+  const loadRecipe = (saved: StashedRecipe) => {
     if (saved.scene) {
       const { caption, clipStartMs, durationMs, videoMuted, soundMuted } = saved;
       for (const id of [...sceneFiles.keys()]) forgetSceneFile(id);
       const files = saved.files.map((file) => putInScene(file));
       return {
-        ok: true,
+        ok: true as const,
         scene: {
           caption,
           clipStartMs,
@@ -1087,7 +1121,7 @@ function start(): void {
     const loaded = saved.files.map((file) => putInDraft(file));
     const { caption, clipStartMs, durationMs, videoMuted, soundMuted } = saved;
     return {
-      ok: true,
+      ok: true as const,
       draft: {
         picture: loaded.find(({ kind }) => kind !== 'audio') ?? null,
         sound: loaded.find(({ kind }) => kind === 'audio') ?? null,
@@ -1098,6 +1132,53 @@ function start(): void {
         soundMuted,
       },
     };
+  };
+
+  handle(IpcChannel.EditSaved, async (savedId: unknown) => {
+    const saved = typeof savedId === 'string' ? library.savedById(savedId) : null;
+    if (!saved || !(await library.allThere(saved))) return { ok: false };
+    return loadRecipe(saved);
+  });
+
+  handle(IpcChannel.StashView, (view: unknown) => {
+    if (typeof view !== 'string') return;
+    stashed.view = view;
+    writeRestartStash(stashed);
+  });
+
+  handle(IpcChannel.StashDraft, (advanced: unknown, raw: unknown) => {
+    stashed.recipe = null;
+    if (advanced === true) {
+      const input = SceneInputSchema.safeParse(raw);
+      const recipe = input.success ? sceneRecipe(input.data) : null;
+      if (input.success && recipe) {
+        const { soundId: _soundId, layers: _layers, ...timing } = input.data;
+        stashed.recipe = { ...timing, ...recipe };
+      }
+    } else {
+      const input = SendMediaInputSchema.safeParse(raw);
+      if (input.success) {
+        const { withPicture, withSound, ...timing } = input.data;
+        const chosen = [withPicture ? draft.picture : null, withSound ? draft.sound : null].filter((file) => file !== null);
+        const files = chosen.map(({ path, name, size, contentType }) => ({ path, name, size, contentType }));
+        stashed.recipe = { ...timing, files, scene: null };
+      }
+    }
+    if (stashed.recipe?.files.length === 0 && !stashed.recipe.caption.trim()) stashed.recipe = null;
+    writeRestartStash(stashed);
+  });
+
+  handle(IpcChannel.TakeRestartStash, async () => {
+    const recipe = restartStash?.recipe;
+    const loaded = recipe && (await library.allThere(recipe)) ? loadRecipe(recipe) : null;
+    return { view: restartStash?.view ?? null, loaded };
+  });
+
+  handle(IpcChannel.CheckForUpdates, () => updater.checkNow());
+
+  handle(IpcChannel.MarkNotesSeen, () => {
+    settings.update({ seenVersion: app.getVersion() });
+    publishState();
   });
 
   handle(IpcChannel.RelocateSaved, async (savedId: unknown) => {
@@ -1269,12 +1350,6 @@ function start(): void {
 
   handle(IpcChannel.TestOverlay, showOverlayTest);
 
-  handle(IpcChannel.InstallUpdate, () => {
-    // The updater closes every window before it emits before-quit, so the stage must already allow closing.
-    quitting = true;
-    updater.installNow();
-  });
-
   // Nothing should close the overlay but quitting.
   stageWindow.on('close', (event) => {
     if (!quitting) event.preventDefault();
@@ -1291,7 +1366,6 @@ function start(): void {
     // Not during the tests: the point of them is to leave this PC alone.
     if (!profile) tray.explain();
   });
-  controlWindow.on('hide', installUpdateUnnoticed);
 
   // Windows doesn't announce a quit when it shuts down, and a window refusing to close would hold up the shutdown.
   for (const window of [controlWindow, stageWindow]) {

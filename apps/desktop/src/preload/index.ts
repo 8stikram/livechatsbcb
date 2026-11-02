@@ -55,7 +55,11 @@ const api: LiveChatApi = {
   stopLocalReplay: () => ipcRenderer.invoke(IpcChannel.StopLocalReplay),
   setSettings: (change) => ipcRenderer.invoke(IpcChannel.SetSettings, change),
   testOverlay: () => ipcRenderer.invoke(IpcChannel.TestOverlay),
-  installUpdate: () => ipcRenderer.invoke(IpcChannel.InstallUpdate),
+  checkForUpdates: () => ipcRenderer.invoke(IpcChannel.CheckForUpdates),
+  markNotesSeen: () => ipcRenderer.invoke(IpcChannel.MarkNotesSeen),
+  stashView: (view) => ipcRenderer.invoke(IpcChannel.StashView, view),
+  stashDraft: (advanced, input) => ipcRenderer.invoke(IpcChannel.StashDraft, advanced, input),
+  takeRestartStash: () => ipcRenderer.invoke(IpcChannel.TakeRestartStash),
 };
 
 contextBridge.exposeInMainWorld('liveChat', api);

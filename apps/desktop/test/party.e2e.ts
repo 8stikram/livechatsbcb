@@ -3,7 +3,9 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, w
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { RestartCountdown } from '../src/main/update-restart';
+import { PATCH_NOTES } from '../src/shared/patch-notes';
 import { FAKE_DISCORD, FakeDiscord } from '../../../services/party/test/fake-discord';
 
 const SERVER_PORT = 8787;
@@ -647,6 +649,41 @@ describe.skipIf(online)('party flow in the real app', () => {
     await onlineCount(host, 2);
   });
 
+  it('sends without a connection, and resumes a send when the connection comes back', async () => {
+    await openTab(host, 'LiveChat');
+    const big = join(sandbox, 'gros.wav');
+    writeFileSync(big, silentWav(12_000));
+
+    stopServer();
+    await host.control.getByTestId('connection').filter({ hasText: 'nouvelle tentative' }).waitFor({ timeout: 15_000 });
+    await host.control.getByLabel('Texte à afficher').fill('Parti hors ligne');
+    await sendButton(host).click();
+    await host.control.getByTestId('upload-paused').waitFor();
+    await picture(host.control, 'send-offline.png');
+
+    await startServer();
+    await connected(host, 30_000);
+    await overlayState(guest, 'playing', 60_000);
+    await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Parti hors ligne' }).waitFor();
+    await guest.control.getByRole('button', { name: 'Passer' }).first().click({ force: true }).catch(() => {});
+    await overlayState(guest, 'idle', 30_000);
+
+    await pickFile(host, big);
+    await host.control.getByTestId('draft-name').filter({ hasText: 'gros.wav' }).waitFor();
+    await sendButton(host).click();
+    await host.control.locator('.upload progress').waitFor();
+    stopServer();
+    await host.control.getByTestId('upload-paused').waitFor({ timeout: 60_000 });
+
+    await startServer();
+    await overlayState(guest, 'playing', 120_000);
+    await guest.control.getByRole('button', { name: 'Passer' }).first().click({ force: true }).catch(() => {});
+    await overlayState(guest, 'idle', 30_000);
+    await overlayState(host, 'idle', 30_000);
+    await connected(host, 30_000);
+    await connected(guest, 30_000);
+  });
+
   it('reconnects within 10 s of the service coming back', async () => {
     stopServer();
     await host.control
@@ -960,6 +997,86 @@ describe.skipIf(online)('party flow in the real app', () => {
     await favorite.waitFor({ state: 'detached' });
     await expect.poll(keptFiles).toEqual([]);
     await guest.control.getByRole('group', { name: 'Ce qui est affiché' }).getByRole('button', { name: 'Récents' }).click();
+  });
+
+  it('counts down 3 seconds before restarting, and anything starting calls it off', () => {
+    vi.useFakeTimers();
+    try {
+      const finished = vi.fn();
+      const cancelled = vi.fn();
+      const countdown = new RestartCountdown(() => {}, finished, cancelled);
+
+      countdown.sync(true);
+      expect(countdown.seconds).toBe(3);
+      vi.advanceTimersByTime(1_000);
+      expect(countdown.seconds).toBe(2);
+      countdown.sync(false);
+      expect(countdown.seconds).toBeNull();
+      expect(cancelled).toHaveBeenCalledOnce();
+      vi.advanceTimersByTime(5_000);
+      expect(finished).not.toHaveBeenCalled();
+
+      countdown.sync(true);
+      vi.advanceTimersByTime(3_000);
+      expect(finished).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('offers what is new after an update, newest first, and checks for updates on demand', async () => {
+    const state = await host.control.evaluate(() => window.liveChat.getState());
+    await host.app.evaluate(({ BrowserWindow }, shown) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('state:changed', shown);
+    }, { ...state, whatsNew: true, update: { state: 'ready', version: '9.9.9' }, restartIn: 3 });
+    await host.control.getByTestId('update-ready').filter({ hasText: 'redémarre dans 3 s' }).waitFor();
+    await picture(host.control, 'restart-countdown.png');
+
+    await host.control.getByTestId('whats-new').getByRole('button', { name: 'Voir les nouveautés' }).click();
+    const notes = host.control.getByTestId('patch-note');
+    await notes.first().waitFor();
+    expect(await notes.first().locator('h3 .mono').textContent()).toBe(PATCH_NOTES[0]!.version);
+    expect(await notes.last().locator('h3 .mono').textContent()).toBe('0.1.0');
+    await picture(host.control, 'patch-notes.png');
+    await host.control.getByTestId('whats-new').waitFor({ state: 'detached' });
+
+    await openTab(host, 'Réglages');
+    await host.control.getByRole('button', { name: 'Vérifier les mises à jour' }).click();
+    await host.control.getByTestId('update-check').filter({ hasText: 'app installée' }).waitFor();
+    await openTab(host, 'LiveChat');
+  });
+
+  it('finds the LiveChat being prepared, the tab and the party again after restarting', async () => {
+    const stashExists = () =>
+      guest.app.evaluate(({ app }) => process.getBuiltinModule('node:fs').existsSync(process.getBuiltinModule('node:path').join(app.getPath('userData'), 'restart-stash.json')));
+
+    await pickFile(guest, join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png'));
+    await guest.control.getByTestId('draft-name').filter({ hasText: 'logo.png' }).waitFor();
+    await guest.control.getByLabel('Texte à afficher').fill('Pas perdu');
+    await openTab(guest, 'Bibliothèque');
+
+    const state = await guest.control.evaluate(() => window.liveChat.getState());
+    await guest.app.evaluate(({ BrowserWindow }, shown) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('state:changed', shown);
+    }, { ...state, update: { state: 'ready', version: '9.9.9' }, restartIn: 3 });
+    await expect.poll(stashExists).toBe(true);
+    await new Promise((done) => setTimeout(done, 300));
+
+    await guest.app.close();
+    guest = await launch('guest');
+    await connected(guest, 30_000);
+    await guest.control.getByRole('tab', { name: 'Bibliothèque', selected: true }).waitFor();
+    expect(await stashExists()).toBe(false);
+
+    await openTab(guest, 'LiveChat');
+    await guest.control.getByTestId('draft-name').filter({ hasText: 'logo.png' }).waitFor();
+    expect(await guest.control.getByLabel('Texte à afficher').inputValue()).toBe('Pas perdu');
+
+    await sendButton(guest).click();
+    await overlayState(guest, 'playing');
+    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+    await overlayState(host, 'idle');
   });
 
   it('sends from LiveChat and shows it in the party, which only says who is there', async () => {

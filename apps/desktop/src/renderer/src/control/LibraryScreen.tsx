@@ -3,7 +3,8 @@ import { DEFAULT_DISPLAY_MS, MAX_CLIP_MS, MIN_DISPLAY_MS } from '@livechatsbcb/p
 import type { AppState, LibraryFileView, LibraryView, RenameOutcome, SavedView } from '../../../shared/ipc';
 import { ConfirmButton } from './ConfirmButton';
 import { IconPlay, IconStar, KindIcon } from './icons';
-import { mediaErrorMessage } from './messages';
+import { loadInEditor } from './load-editor';
+import { canSendIn, mediaErrorMessage } from './messages';
 import type { DraftFiles } from './use-draft';
 import type { Scene } from './use-scene';
 
@@ -282,7 +283,7 @@ export const LibraryScreen = ({
 
   const needle = search.trim().toLocaleLowerCase('fr');
   const matches = (name: string) => name.toLocaleLowerCase('fr').includes(needle);
-  const isOnline = state.party?.connection === 'online';
+  const isOnline = canSendIn(state.party);
   const canSend = isOnline && state.upload === null;
 
   const addFolder = async () => {
@@ -337,18 +338,7 @@ export const LibraryScreen = ({
       setError('Un fichier de ce LiveChat n’est plus là.');
       return;
     }
-    if ('scene' in result) {
-      scene.load(result.scene);
-      files.setCaption(result.scene.caption);
-      files.setVideoMuted(result.scene.videoMuted);
-      files.setSoundMuted(result.scene.soundMuted);
-      if (!result.scene.soundId && !result.scene.layers.some(({ fileId }) => result.scene.files.find(({ id }) => id === fileId)?.kind === 'video')) {
-        files.setDisplayMs(result.scene.durationMs);
-      }
-    } else {
-      scene.leave();
-      files.load(result.draft);
-    }
+    loadInEditor(result, files, scene);
     onOpenEditor();
   };
 
@@ -533,7 +523,13 @@ export const LibraryScreen = ({
       )}
       {state.upload && (
         <p className="hint" role="status">
-          Envoi de {state.upload.name}… <span className="mono">{state.upload.percent} %</span>
+          {state.upload.paused ? (
+            <>Pas de connexion : {state.upload.name} partira tout seul à son retour</>
+          ) : (
+            <>
+              Envoi de {state.upload.name}… <span className="mono">{state.upload.percent} %</span>
+            </>
+          )}
         </p>
       )}
 

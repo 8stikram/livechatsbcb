@@ -24,7 +24,7 @@ const THUMBNAIL_SIZE = { width: 320, height: 180 };
 const FORBIDDEN_NAME = /[<>:"/\\|?*\x00-\x1f]|[. ]$|^(con|prn|aux|nul|com\d|lpt\d)$/i;
 const MAX_NAME_LENGTH = 200;
 
-const SavedFileSchema = z.object({ path: z.string(), name: z.string(), size: z.number(), contentType: MediaContentTypeSchema });
+export const SavedFileSchema = z.object({ path: z.string(), name: z.string(), size: z.number(), contentType: MediaContentTypeSchema });
 export type SavedFile = z.infer<typeof SavedFileSchema>;
 
 const SavedSchema = z.object({
@@ -330,7 +330,7 @@ export class Library {
     return this.data.saved.find((saved) => saved.id === id) ?? null;
   }
 
-  async allThere(saved: SavedLiveChat): Promise<boolean> {
+  async allThere(saved: Pick<SavedLiveChat, 'files'>): Promise<boolean> {
     return (await Promise.all(saved.files.map((file) => this.isThere(file)))).every(Boolean);
   }
 
