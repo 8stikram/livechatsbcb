@@ -13,7 +13,7 @@ import {
   type FileKind,
   type MediaContentType,
 } from '@livechatsbcb/protocol';
-import type { FavoriteView, LibraryFileView, LibraryView, RenameOutcome, SavedView } from '../shared/ipc';
+import { WHEEL_SIZE, type FavoriteView, type LibraryFileView, type LibraryView, type RenameOutcome, type SavedView } from '../shared/ipc';
 import { contentTypeOf, forgetMediaFile, registerMediaFile } from './media-files';
 
 // Enough for a big meme folder, and a folder someone picks by mistake (a whole disk) still answers quickly.
@@ -59,6 +59,7 @@ const StoredSchema = z.object({
   favorites: z.array(z.string()),
   saved: z.array(SavedSchema),
   shortcuts: z.record(z.string(), ShortcutTargetSchema).default({}),
+  wheel: z.array(ShortcutTargetSchema.nullable()).default([]),
 });
 type Stored = z.infer<typeof StoredSchema>;
 
@@ -94,7 +95,7 @@ export class Library {
     try {
       return StoredSchema.parse(JSON.parse(readFileSync(this.storePath, 'utf8')));
     } catch {
-      return { folders: [], favorites: [], saved: [], shortcuts: {} };
+      return { folders: [], favorites: [], saved: [], shortcuts: {}, wheel: [] };
     }
   }
 
@@ -224,10 +225,43 @@ export class Library {
     return this.shortcutWhere((target) => target.kind === 'file' && target.path === path);
   }
 
+  private targetName(target: ShortcutTarget): string {
+    return target.kind === 'saved' ? (this.savedById(target.id)?.name ?? '') : basename(target.path);
+  }
+
   shortcutName(key: string): string {
     const target = this.data.shortcuts[key];
-    if (!target) return '';
-    return target.kind === 'saved' ? (this.savedById(target.id)?.name ?? '') : basename(target.path);
+    return target ? this.targetName(target) : '';
+  }
+
+  wheelTarget(index: number): ShortcutTarget | null {
+    return this.data.wheel[index] ?? null;
+  }
+
+  wheelName(index: number): string {
+    const target = this.data.wheel[index];
+    return target ? this.targetName(target) : '';
+  }
+
+  wheelSlots(): Array<{ name: string } | null> {
+    return Array.from({ length: WHEEL_SIZE }, (_, index) => {
+      const target = this.data.wheel[index];
+      return target ? { name: this.targetName(target) } : null;
+    });
+  }
+
+  setWheel(index: number, target: ShortcutTarget | null): void {
+    this.data.wheel = Array.from({ length: WHEEL_SIZE }, (_, place) => (place === index ? target : (this.data.wheel[place] ?? null)));
+    this.save();
+  }
+
+  private emptyWheelWhere(matches: (target: ShortcutTarget) => boolean): void {
+    this.data.wheel = this.data.wheel.map((target) => (target && matches(target) ? null : target));
+  }
+
+  clearShortcuts(): void {
+    this.data.shortcuts = {};
+    this.save();
   }
 
   // One key for one thing, and one thing for one key.
@@ -315,6 +349,9 @@ export class Library {
     for (const target of Object.values(this.data.shortcuts)) {
       if (target.kind === 'file' && target.path === file.path) target.path = path;
     }
+    for (const target of this.data.wheel) {
+      if (target?.kind === 'file' && target.path === file.path) target.path = path;
+    }
     for (const saved of this.data.saved) {
       for (const used of saved.files) {
         if (used.path !== file.path) continue;
@@ -330,6 +367,7 @@ export class Library {
     this.data.favorites = this.data.favorites.filter((favorite) => favorite !== path);
     const key = this.shortcutOfFile(path);
     if (key) delete this.data.shortcuts[key];
+    this.emptyWheelWhere((target) => target.kind === 'file' && target.path === path);
     this.save();
   }
 
@@ -405,6 +443,7 @@ export class Library {
     this.data.saved = this.data.saved.filter((saved) => saved.id !== id);
     const key = this.shortcutOfSaved(id);
     if (key) delete this.data.shortcuts[key];
+    this.emptyWheelWhere((target) => target.kind === 'saved' && target.id === id);
     this.save();
     this.thumbnailUrls.delete(id);
     rmSync(this.thumbnailPath(id), { force: true });

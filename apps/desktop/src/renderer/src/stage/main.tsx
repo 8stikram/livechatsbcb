@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import type { Account } from '@livechatsbcb/protocol';
 import type { OverlayLayout } from '../../../shared/ipc';
 import { Caption, Playing, Profile, zoneStyle } from '../scene';
+import { Wheel } from './Wheel';
 import { useAppState } from '../use-app-state';
 import logo from '../assets/logo.png';
 import '../styles.css';
@@ -42,6 +43,7 @@ const Stage = () => {
         />
       )}
       {!playing && overlayTest && <TestScene layout={settings.layout} account={state.account} />}
+      {state.wheel.open && <Wheel wheel={state.wheel} />}
     </main>
   );
 };

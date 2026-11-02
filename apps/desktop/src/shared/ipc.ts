@@ -62,9 +62,11 @@ export type Settings = {
   backgroundHintShown: boolean;
   // Nothing shows and nothing is heard on this PC until it is turned off again.
   clean: boolean;
-  cleanKey: string;
-  skipKey: string;
-  skipMineKey: string;
+  // Null when another action took the key, or it was removed.
+  cleanKey: string | null;
+  skipKey: string | null;
+  skipMineKey: string | null;
+  wheelKey: string | null;
   speechEnabled: boolean;
   // Null: the voice Windows uses by default.
   speechVoice: string | null;
@@ -97,6 +99,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cleanKey: ON_MAC ? 'Ctrl+Alt+=' : 'Shift+F12',
   skipKey: ON_MAC ? 'Ctrl+Alt+-' : 'Shift+F11',
   skipMineKey: ON_MAC ? 'Ctrl+Alt+Shift+-' : 'Ctrl+Shift+F11',
+  wheelKey: ON_MAC ? 'Ctrl+Alt+Space' : 'Ctrl+Shift+Space',
   speechEnabled: true,
   speechVoice: null,
   speechRate: 100,
@@ -106,12 +109,20 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 // The function keys of a Mac need fn as well, so it has its own keys.
-export const MEME_KEYS = Array.from({ length: 10 }, (_, index) => (ON_MAC ? `Ctrl+Alt+${(index + 1) % 10}` : `Shift+F${index + 1}`));
+export const WHEEL_SIZE = 8;
 // A Mac keyboard says Option.
-export const keyLabel = (key: string): string => (ON_MAC ? key.replace('Alt', 'Option') : key);
+export const keyLabel = (key: string | null): string => {
+  if (key === null) return 'Aucune';
+  const named = key.replace('Space', 'Espace');
+  return ON_MAC ? named.replace('Alt', 'Option') : named;
+};
 export type ShortcutView = { key: string; name: string };
-export type ActionKey = 'cleanKey' | 'skipKey' | 'skipMineKey';
-export type CleanKeyOutcome = 'ok' | 'reserved' | 'taken';
+export type ActionKey = 'cleanKey' | 'skipKey' | 'skipMineKey' | 'wheelKey';
+// A key has one use: whatever had it gives it up, and is named so that nobody wonders.
+export type KeyChange = { ok: true; took: string | null } | { ok: false };
+export type WheelSlotView = { name: string } | null;
+export type WheelView = { open: boolean; preview: boolean; slots: WheelSlotView[]; last: string | null };
+export type WheelChoice = { kind: 'saved'; id: string } | { kind: 'file'; fileId: string; durationMs: number };
 // Why this PC isn't showing what is playing for the others.
 export type HiddenReason = 'clean' | 'ignored' | 'cut' | 'skipped';
 
@@ -240,8 +251,8 @@ export type LibraryView = {
 };
 
 // What a line of a right-click menu leaves to the window. The other lines are done by the app itself.
-export type FileMenuAction = 'use' | 'send' | 'listen' | 'favorite' | 'rename' | 'trash' | `assign:${string}`;
-export type SavedMenuAction = 'send' | 'edit' | 'relocate' | 'favorite';
+export type FileMenuAction = 'use' | 'send' | 'listen' | 'favorite' | 'rename' | 'trash' | 'shortcut';
+export type SavedMenuAction = 'send' | 'edit' | 'relocate' | 'favorite' | 'shortcut';
 export type RenameOutcome = 'renamed' | 'invalid' | 'exists' | 'not_found' | 'busy';
 
 // A saved LiveChat put back in the editor.
@@ -264,6 +275,9 @@ export type AppState = {
   version: string;
   // Who just skipped for everybody. Not said to the one who did.
   skippedBy: string | null;
+  wheel: WheelView;
+  // While keys are only being tried: what was last heard, and nothing leaves.
+  keyTest: { heard: string | null } | null;
   update: UpdateStatus;
   shortcuts: ShortcutView[];
   // Another app has these keys.
@@ -351,6 +365,14 @@ export const IpcChannel = {
   AssignFileShortcut: 'shortcut:assign-file',
   AssignSavedShortcut: 'shortcut:assign-saved',
   ClearShortcut: 'shortcut:clear',
+  ChangeShortcutKey: 'shortcut:change-key',
+  TestKeys: 'keys:test',
+  ResetKeys: 'keys:reset',
+  SetWheelSlot: 'wheel:set-slot',
+  PreviewWheel: 'wheel:preview',
+  PickWheel: 'wheel:pick',
+  CloseWheel: 'wheel:close',
+  WheelActivity: 'wheel:activity',
   SkipMedia: 'media:skip',
   SkipMediaForMe: 'media:skip-for-me',
   ScanLibrary: 'library:scan',
@@ -452,11 +474,19 @@ export type LiveChatApi = {
   sendExternalFiles(durationMs: number): Promise<ActionResult>;
   onShortcutFeedback(listener: (sent: boolean) => void): () => void;
   setClean(clean: boolean): Promise<void>;
-  setActionKey(which: ActionKey, key: string): Promise<CleanKeyOutcome>;
+  setActionKey(which: ActionKey, key: string | null): Promise<KeyChange>;
   showMemberMenu(memberId: string): Promise<IgnoreChoice | null>;
   ignoreMember(memberId: string, choice: IgnoreChoice): Promise<void>;
-  assignFileShortcut(fileId: string, key: string, durationMs: number): Promise<LibraryView>;
-  assignSavedShortcut(savedId: string, key: string): Promise<LibraryView>;
+  assignFileShortcut(fileId: string, key: string, durationMs: number): Promise<{ library: LibraryView; change: KeyChange }>;
+  assignSavedShortcut(savedId: string, key: string): Promise<{ library: LibraryView; change: KeyChange }>;
+  changeShortcutKey(key: string, next: string): Promise<KeyChange>;
+  testKeys(on: boolean): Promise<void>;
+  resetKeys(): Promise<void>;
+  setWheelSlot(index: number, choice: WheelChoice | null): Promise<void>;
+  previewWheel(): Promise<void>;
+  pickWheel(index: number): Promise<void>;
+  closeWheel(): Promise<void>;
+  wheelActivity(): Promise<void>;
   clearShortcut(key: string): Promise<void>;
   checkForUpdates(): Promise<UpdateCheckOutcome>;
   markNotesSeen(): Promise<void>;

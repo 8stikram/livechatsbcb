@@ -3,6 +3,17 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.16.0',
+    date: '2 novembre 2026',
+    items: [
+      'La roue : 8 LiveChats autour de ton curseur. Une touche l’ouvre, tu vises, tu cliques',
+      'Le menu Raccourcis est refait par groupes : le nom à gauche, la touche à droite. Clique et appuie',
+      'Plus de touches imposées : tu donnes à chaque LiveChat la touche que tu veux',
+      'Une touche déjà prise ? Elle change de place, et l’app te dit ce qui l’a perdue',
+      'Nouveaux outils : tester une touche sans rien envoyer, et tout remettre par défaut',
+    ],
+  },
+  {
     version: '0.15.0',
     date: '2 novembre 2026',
     items: [

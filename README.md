@@ -105,7 +105,7 @@ Donne un nom à un LiveChat réussi, et renvoie-le plus tard en un clic. Si un f
 - **Ton volume à toi :** chacun règle le son et peut couper le sien.
 - **Envoi rapide :** Ctrl+V colle une image, une vidéo, un son ou un lien direct. Dans Windows, le clic droit sur un fichier propose « préparer » ou « envoyer direct ».
 - **Emojis et voix robot :** des emojis façon Discord dans ton texte, et une case pour le faire lire à voix haute. Chacun peut couper la voix chez lui.
-- **En plein jeu :** Shift+F1 à Shift+F10 envoient tes memes, Shift+F11 passe au suivant, sans quitter ton jeu.
+- **En plein jeu :** donne à tes LiveChats les touches que tu veux, ouvre la roue et vise avec la souris, Shift+F11 passe au suivant.
 - **Mode clean :** Shift+F12 coupe tout chez toi, son et image, jusqu'à ce que tu réappuies. La touche se change dans les réglages.
 - **Ta tranquillité :** ignore un pote pour un moment, sans qu'il le sache, et coupe chez toi ce qui dure plus de 20 secondes.
 - **Anti-spam :** le même LiveChat 5 fois en 1 minute, et plus aucun envoi pendant 30 minutes.

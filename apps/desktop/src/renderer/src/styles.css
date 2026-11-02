@@ -2729,6 +2729,172 @@ html.calm .launch {
   background: var(--glass-hover);
 }
 
+.key-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 2px 0;
+}
+
+.key-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.key-row-name.hint {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.key-button {
+  flex: none;
+  min-width: 120px;
+}
+
+.wheel-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wheel-places {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: center;
+}
+
+.wheel-place {
+  height: 48px;
+  padding: 4px 8px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--well);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.wheel-place.is-choosing {
+  border-color: var(--text);
+}
+
+.wheel-try {
+  justify-self: center;
+}
+
+.wheel-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wheel-choice-list {
+  max-height: 180px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.wheel-choice {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.key-capture {
+  flex: none;
+}
+
+/* The wheel: on this screen only, drawn above whatever is playing. */
+.wheel {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.wheel-ring {
+  position: relative;
+  width: 70vmin;
+  height: 70vmin;
+  animation: wheel-open 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.wheel-ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.wheel-slice {
+  fill: rgb(14 14 16 / 82%);
+  stroke: rgb(255 255 255 / 22%);
+  stroke-width: 0.5;
+  transition: fill 90ms ease-out;
+}
+
+.wheel-slice.is-empty {
+  fill: rgb(14 14 16 / 50%);
+}
+
+.wheel-slice.is-aimed {
+  fill: rgb(255 255 255 / 88%);
+}
+
+.wheel-label {
+  position: absolute;
+  width: 20%;
+  overflow: hidden;
+  transform: translate(-50%, -50%);
+  font-size: 1.9vmin;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #fff;
+  mix-blend-mode: difference;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.wheel-label.is-empty {
+  opacity: 0.45;
+  font-weight: 400;
+}
+
+.wheel-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 26%;
+  transform: translate(-50%, -50%);
+  font-size: 1.7vmin;
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 80%);
+  overflow-wrap: anywhere;
+}
+
+@keyframes wheel-open {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
 .shortcut-badge {
   flex: none;
   padding: 2px 8px;

@@ -1155,8 +1155,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     // Both test apps run on one PC, and a key can only belong to one of them.
     await guest.app.evaluate(({ globalShortcut }) => globalShortcut.unregisterAll());
     // Not the default key: another app can hold it on the PC running this.
-    expect(await host.control.evaluate(() => window.liveChat.setActionKey('cleanKey', 'Shift+F3'))).toBe('reserved');
-    expect(await host.control.evaluate(() => window.liveChat.setActionKey('cleanKey', 'Ctrl+Shift+F12'))).toBe('ok');
+    expect(await host.control.evaluate(() => window.liveChat.setActionKey('cleanKey', 'Ctrl+Shift+F12'))).toEqual({ ok: true, took: null });
     await expect.poll(() => host.app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Ctrl+Shift+F12'))).toBe(true);
     await host.control.getByTestId('clean-key-taken').waitFor({ state: 'detached' });
 
@@ -1200,6 +1199,59 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await host.control.evaluate(() => window.liveChat.clearShortcut('Shift+F3'));
     await expect.poll(() => host.app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Shift+F3'))).toBe(false);
+  });
+
+  it('opens a wheel with one key, aims with the mouse, and keeps keys tidy', async () => {
+    const { control, stage } = host;
+    await openSettings(host, 'Raccourcis');
+
+    // A key has one use: the other action gives it up, and you are told.
+    expect(await control.evaluate(() => window.liveChat.setActionKey('wheelKey', 'Ctrl+Shift+F9'))).toEqual({ ok: true, took: null });
+    expect(await control.evaluate(() => window.liveChat.setActionKey('skipMineKey', 'Ctrl+Shift+F9'))).toEqual({ ok: true, took: 'Ouvrir la roue' });
+    await control.getByTestId('wheel-key').filter({ hasText: 'Aucune' }).waitFor();
+    await control.evaluate(() => window.liveChat.setActionKey('wheelKey', 'Ctrl+Shift+F8'));
+    await control.evaluate(() => window.liveChat.setActionKey('skipMineKey', 'Ctrl+Shift+F11'));
+
+    await control.getByTestId('wheel-place-0').click();
+    await control.getByLabel('Chercher pour cette place').fill('Mon raccourci');
+    await control.getByTestId('wheel-choice').filter({ hasText: 'Mon raccourci' }).click();
+    await control.getByTestId('wheel-place-0').filter({ hasText: 'Mon raccourci' }).waitFor();
+    await picture(control, 'settings-shortcuts.png');
+
+    // The preview shows it, and nothing leaves.
+    await control.getByRole('button', { name: 'Aperçu', exact: true }).click();
+    await stage.getByTestId('wheel').waitFor();
+    await picture(stage, 'wheel.png');
+    await stage.getByTestId('wheel-slot-0').click();
+    await stage.getByTestId('wheel').waitFor({ state: 'detached' });
+    expect(await guest.stage.getByTestId('stage').getAttribute('data-state')).toBe('idle');
+
+    // The real one sends what is aimed at, and clicks stop being caught afterwards.
+    pressKeys('^+{F8}');
+    await stage.getByTestId('wheel').waitFor();
+    await stage.getByTestId('wheel-slot-0').click();
+    await overlayState(guest, 'playing', 15_000);
+    await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Par la touche' }).waitFor();
+    await host.control.evaluate(() => window.liveChat.getState().then(({ queue }) => queue.current && window.liveChat.skipMedia(queue.current.id)));
+    await overlayState(guest, 'idle', 10_000);
+
+    // Left alone it goes away, and remembers the last one.
+    pressKeys('^+{F8}');
+    await stage.getByTestId('wheel-center').filter({ hasText: 'Mon raccourci' }).waitFor();
+    await stage.getByTestId('wheel').waitFor({ state: 'detached', timeout: 8_000 });
+
+    // Trying a key says what it does, and sends nothing.
+    await control.getByRole('button', { name: 'Tester une touche' }).click();
+    await control.evaluate(() => window.liveChat.setActionKey('skipKey', 'Ctrl+Shift+F7'));
+    pressKeys('^+{F8}');
+    await control.getByTestId('key-test').filter({ hasText: 'Ouvrir la roue' }).waitFor();
+    expect(await stage.getByTestId('wheel').count()).toBe(0);
+    await control.getByRole('button', { name: 'Arrêter le test' }).click();
+
+    await control.getByRole('button', { name: 'Tout remettre par défaut' }).click();
+    await control.getByRole('button', { name: 'Vraiment ?' }).click();
+    await expect.poll(() => control.getByTestId('wheel-key').textContent()).toBe('Ctrl+Shift+Espace');
+    await control.getByTestId('wheel-place-0').filter({ hasText: 'Mon raccourci' }).waitFor();
   });
 
   it('shows who is banned for spamming, to everyone', async () => {

@@ -25,7 +25,7 @@ import {
   type SceneLayer,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, isNewerVersion, keyLabel, MEME_KEYS, type ActionKey, type ExternalFiles, type IncomingError, type IncomingResult, type ActionResult, type HiddenReason, type CleanKeyOutcome, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
+import { IpcChannel, isNewerVersion, keyLabel, DEFAULT_SETTINGS, WHEEL_SIZE, type ActionKey, type KeyChange, type ExternalFiles, type IncomingError, type IncomingResult, type ActionResult, type HiddenReason, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
@@ -66,6 +66,21 @@ const SendMediaInputSchema = z.object({
   withPicture: z.boolean(),
   withSound: z.boolean(),
 });
+
+const WheelChoiceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('saved'), id: z.string() }),
+  z.object({ kind: z.literal('file'), fileId: z.string(), durationMs: z.number() }),
+]);
+
+const ACTION_KEYS: readonly ActionKey[] = ['cleanKey', 'skipKey', 'skipMineKey', 'wheelKey'];
+const ACTION_NAMES: Record<ActionKey, string> = {
+  cleanKey: 'Mode clean',
+  skipKey: 'Passer pour tout le monde',
+  skipMineKey: 'Passer pour moi',
+  wheelKey: 'Ouvrir la roue',
+};
+const WHEEL_OPEN_MS = 4_000;
+const KEY_TEST_MS = 20_000;
 
 const SAVE_NAME = z.string().trim().min(1).max(80);
 const SaveLiveChatInputSchema = SendMediaInputSchema.extend({ name: SAVE_NAME });
@@ -141,6 +156,11 @@ function start(): void {
   const keeping = new Set<string>();
   // Passed on this PC only: the others keep watching, and the queue moves on once nobody is.
   const skippedHere = new Set<string>();
+  let wheelOpen: { preview: boolean } | null = null;
+  let wheelTimer: NodeJS.Timeout | undefined;
+  let wheelLast: string | null = null;
+  let keyTest: { heard: string | null } | null = null;
+  let keyTestTimer: NodeJS.Timeout | undefined;
   let skippedBy: string | null = null;
   let skippedByTimer: NodeJS.Timeout | undefined;
   let unavailableKeys: string[] = [];
@@ -325,6 +345,8 @@ function start(): void {
       favorites: library.favorites(),
       localReplay: localReplayView(),
       skippedBy,
+      wheel: { open: wheelOpen !== null, preview: wheelOpen?.preview ?? false, slots: library.wheelSlots(), last: wheelLast },
+      keyTest,
       upload: upload && { name: upload.name, percent: upload.percent, paused: upload.paused },
     };
   };
@@ -337,7 +359,7 @@ function start(): void {
     const head = connection?.current().queue[0];
     const playing = head?.startAt != null && hiddenReason(head) === null;
     // Asked for on this PC, like the test: it shows even for someone who keeps the overlay off.
-    const wanted = overlayTest || localReplay?.startAt != null || (playing && settings.current.overlayEnabled);
+    const wanted = wheelOpen !== null || overlayTest || localReplay?.startAt != null || (playing && settings.current.overlayEnabled);
 
     if (wanted && !stageWindow.isVisible()) {
       placeOverlay(stageWindow, settings.current.displayId);
@@ -1131,42 +1153,35 @@ function start(): void {
       Menu.buildFromTemplate(lines).popup({ window: controlWindow, callback: () => setTimeout(() => resolve(null), 1_000) });
     });
 
-  const shortcutLines = <Action>(current: string | null, assign: (key: string) => MenuLine<Action>): MenuLine<Action> => ({
-    label: current ? `Raccourci : ${keyLabel(current)}` : 'Assigner un raccourci',
-    submenu: [
-      ...MEME_KEYS.map((key) => {
-        const used = key !== current ? library.shortcutName(key) : '';
-        return { ...assign(key), label: used ? `${keyLabel(key)} (remplace ${used})` : keyLabel(key) };
-      }),
-      ...(current
-        ? [
-            {
-              label: 'Retirer le raccourci',
-              run: () => {
-                library.clearShortcut(current);
-                syncShortcuts();
-                publishState();
-              },
+  const shortcutLines = <Action>(current: string | null, ask: Action): Array<MenuLine<Action>> => [
+    { label: current ? `Changer le raccourci (${keyLabel(current)})` : 'Donner un raccourci…', action: ask },
+    ...(current
+      ? [
+          {
+            label: 'Retirer le raccourci',
+            run: () => {
+              library.clearShortcut(current);
+              syncShortcuts();
+              publishState();
             },
-          ]
-        : []),
-    ],
-  });
+          },
+        ]
+      : []),
+  ];
 
   const shortcutFeedback = (sent: boolean): void => {
     if (!settings.current.clean && !controlWindow.isDestroyed()) controlWindow.webContents.send(IpcChannel.ShortcutFeedback, sent);
   };
 
-  const pressShortcut = async (key: string): Promise<void> => {
+  const sendTarget = async (target: ReturnType<typeof library.shortcutTarget>): Promise<boolean> => {
     // A key held down, or pressed twice by accident, sends once.
-    if (Date.now() - lastShortcutAt < SHORTCUT_COOLDOWN_MS) return;
+    if (Date.now() - lastShortcutAt < SHORTCUT_COOLDOWN_MS) return false;
     lastShortcutAt = Date.now();
 
     const session = store.session;
-    const target = library.shortcutTarget(key);
     if (!session || !target || upload) {
       shortcutFeedback(false);
-      return;
+      return false;
     }
 
     let result: ActionResult = { ok: false, error: 'not_found' };
@@ -1183,6 +1198,31 @@ function start(): void {
       }
     }
     shortcutFeedback(result.ok);
+    return result.ok;
+  };
+
+  const closeWheel = (): void => {
+    if (!wheelOpen) return;
+    wheelOpen = null;
+    clearTimeout(wheelTimer);
+    if (!stageWindow.isDestroyed()) stageWindow.setIgnoreMouseEvents(true);
+    publishState();
+    syncOverlay();
+  };
+
+  const keepWheelOpen = (): void => {
+    clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(closeWheel, WHEEL_OPEN_MS);
+  };
+
+  const openWheel = (preview: boolean): void => {
+    if (stageWindow.isDestroyed() || (settings.current.clean && !preview)) return;
+    wheelOpen = { preview };
+    // For as long as it is there, the overlay catches the mouse instead of letting it through.
+    stageWindow.setIgnoreMouseEvents(false);
+    keepWheelOpen();
+    publishState();
+    syncOverlay();
   };
 
   const setClean = (clean: boolean): void => {
@@ -1203,10 +1243,12 @@ function start(): void {
   // A key is only taken from games while it does something here.
   const syncShortcuts = (): void => {
     globalShortcut.unregisterAll();
-    const wanted: Array<[string, () => void]> = [
-      [settings.current.cleanKey, () => setClean(!settings.current.clean)],
+    const { cleanKey, skipKey, skipMineKey, wheelKey } = settings.current;
+    const actions: Array<[string | null, string, () => void]> = [
+      [cleanKey, ACTION_NAMES.cleanKey, () => setClean(!settings.current.clean)],
       [
-        settings.current.skipKey,
+        skipKey,
+        ACTION_NAMES.skipKey,
         () => {
           const head = connection?.current().queue[0];
           if (head) connection?.skip(head.id);
@@ -1214,24 +1256,72 @@ function start(): void {
         },
       ],
       [
-        settings.current.skipMineKey,
+        skipMineKey,
+        ACTION_NAMES.skipMineKey,
         () => {
           const head = connection?.current().queue[0];
           if (head) skipForMe(head.id);
           shortcutFeedback(head !== undefined);
         },
       ],
-      ...library.shortcutKeys().map((key): [string, () => void] => [key, () => void pressShortcut(key)]),
+      [wheelKey, ACTION_NAMES.wheelKey, () => (wheelOpen ? closeWheel() : openWheel(false))],
+      ...library.shortcutKeys().map((key): [string, string, () => void] => [key, library.shortcutName(key), () => void sendTarget(library.shortcutTarget(key))]),
     ];
+    const wanted = actions.filter((action): action is [string, string, () => void] => action[0] !== null);
     unavailableKeys = wanted
-      .filter(([key, run]) => {
+      .filter(([key, name, run]) => {
+        const onPress = () => {
+          if (!keyTest) {
+            run();
+            return;
+          }
+          keyTest = { heard: `${keyLabel(key)} : ${name}` };
+          shortcutFeedback(true);
+          publishState();
+        };
         try {
-          return !globalShortcut.register(key, run);
+          return !globalShortcut.register(key, onPress);
         } catch {
           return true;
         }
       })
       .map(([key]) => key);
+  };
+
+  // Is it ours already, or can it be? Another app may be holding it.
+  const canUseKey = (key: string): boolean => {
+    try {
+      if (globalShortcut.isRegistered(key)) return true;
+      const free = globalShortcut.register(key, () => {});
+      if (free) globalShortcut.unregister(key);
+      return free;
+    } catch {
+      return false;
+    }
+  };
+
+  // Whatever had this key gives it up.
+  const freeKey = (key: string, except?: ActionKey): string | null => {
+    for (const which of ACTION_KEYS) {
+      if (which !== except && settings.current[which] === key) {
+        settings.update({ [which]: null });
+        return ACTION_NAMES[which];
+      }
+    }
+    if (!library.shortcutTarget(key)) return null;
+    const name = library.shortcutName(key);
+    library.clearShortcut(key);
+    return name;
+  };
+
+  const giveKey = (key: string, target: NonNullable<ReturnType<typeof library.shortcutTarget>>): KeyChange => {
+    if (!canUseKey(key)) return { ok: false };
+    const same = JSON.stringify(library.shortcutTarget(key)) === JSON.stringify(target);
+    const took = same ? null : freeKey(key);
+    library.setShortcut(key, target);
+    syncShortcuts();
+    publishState();
+    return { ok: true, took };
   };
   syncShortcuts();
 
@@ -1268,7 +1358,7 @@ function start(): void {
       ],
       [
         { label: library.isFileFavorite(id) ? 'Retirer des favoris' : 'Épingler en favori', action: 'favorite' },
-        shortcutLines<FileMenuAction>(library.shortcutOfFile(file.path), (key) => ({ label: key, action: `assign:${key}` })),
+        ...shortcutLines<FileMenuAction>(library.shortcutOfFile(file.path), 'shortcut'),
       ],
       [
         { label: 'Afficher dans l’Explorateur', run: () => shell.showItemInFolder(file.path) },
@@ -1296,14 +1386,7 @@ function start(): void {
       ],
       [
         { label: saved.favorite ? 'Retirer des favoris' : 'Épingler en favori', action: 'favorite' },
-        shortcutLines<SavedMenuAction | 'delete'>(library.shortcutOfSaved(saved.id), (key) => ({
-          label: key,
-          run: () => {
-            library.setShortcut(key, { kind: 'saved', id: saved.id });
-            syncShortcuts();
-            publishState();
-          },
-        })),
+        ...shortcutLines<SavedMenuAction | 'delete'>(library.shortcutOfSaved(saved.id), 'shortcut'),
       ],
       saved.files.flatMap((file, index) =>
         there[index] ? [{ label: `Afficher ${file.name} dans l’Explorateur`, run: () => shell.showItemInFolder(file.path) }] : [],
@@ -1547,21 +1630,15 @@ function start(): void {
 
   handle(IpcChannel.SetClean, (clean: unknown) => setClean(clean === true));
 
-  handle(IpcChannel.SetActionKey, (rawWhich: unknown, key: unknown): CleanKeyOutcome => {
+  handle(IpcChannel.SetActionKey, (rawWhich: unknown, key: unknown): KeyChange => {
     const which = rawWhich as ActionKey;
-    if (which !== 'cleanKey' && which !== 'skipKey' && which !== 'skipMineKey') return 'reserved';
-    const taken = (['cleanKey', 'skipKey', 'skipMineKey'] as const).filter((other) => other !== which).map((other) => settings.current[other]);
-    if (typeof key !== 'string' || taken.includes(key) || MEME_KEYS.includes(key)) return 'reserved';
-    const before = settings.current[which];
+    if (!ACTION_KEYS.includes(which) || (key !== null && typeof key !== 'string')) return { ok: false };
+    if (key !== null && !canUseKey(key)) return { ok: false };
+    const took = key === null ? null : freeKey(key, which);
     settings.update({ [which]: key });
     syncShortcuts();
-    const free = !unavailableKeys.includes(key);
-    if (!free) {
-      settings.update({ [which]: before });
-      syncShortcuts();
-    }
     publishState();
-    return free ? 'ok' : 'taken';
+    return { ok: true, took };
   });
 
   handle(IpcChannel.ShowMemberMenu, (memberId: unknown) => {
@@ -1587,21 +1664,70 @@ function start(): void {
 
   handle(IpcChannel.AssignFileShortcut, async (fileId: unknown, key: unknown, durationMs: unknown) => {
     const file = typeof fileId === 'string' ? library.fileById(fileId) : null;
-    if (file && typeof key === 'string' && MEME_KEYS.includes(key) && typeof durationMs === 'number') {
-      library.setShortcut(key, { kind: 'file', path: file.path, durationMs });
-      syncShortcuts();
-      publishState();
-    }
-    return library.view();
+    const change: KeyChange =
+      file && typeof key === 'string' && typeof durationMs === 'number' ? giveKey(key, { kind: 'file', path: file.path, durationMs }) : { ok: false };
+    return { library: await library.view(), change };
   });
 
   handle(IpcChannel.AssignSavedShortcut, async (savedId: unknown, key: unknown) => {
-    if (typeof savedId === 'string' && library.savedById(savedId) && typeof key === 'string' && MEME_KEYS.includes(key)) {
-      library.setShortcut(key, { kind: 'saved', id: savedId });
-      syncShortcuts();
+    const change: KeyChange =
+      typeof savedId === 'string' && library.savedById(savedId) && typeof key === 'string' ? giveKey(key, { kind: 'saved', id: savedId }) : { ok: false };
+    return { library: await library.view(), change };
+  });
+
+  handle(IpcChannel.ChangeShortcutKey, (key: unknown, next: unknown): KeyChange => {
+    const target = typeof key === 'string' ? library.shortcutTarget(key) : null;
+    return target && typeof next === 'string' ? giveKey(next, target) : { ok: false };
+  });
+
+  handle(IpcChannel.TestKeys, (on: unknown) => {
+    clearTimeout(keyTestTimer);
+    keyTest = on === true ? { heard: null } : null;
+    if (keyTest) {
+      keyTestTimer = setTimeout(() => {
+        keyTest = null;
+        publishState();
+      }, KEY_TEST_MS);
+    }
+    publishState();
+  });
+
+  handle(IpcChannel.ResetKeys, () => {
+    const { cleanKey, skipKey, skipMineKey, wheelKey } = DEFAULT_SETTINGS;
+    settings.update({ cleanKey, skipKey, skipMineKey, wheelKey });
+    library.clearShortcuts();
+    syncShortcuts();
+    publishState();
+  });
+
+  handle(IpcChannel.SetWheelSlot, (rawIndex: unknown, rawChoice: unknown) => {
+    const index = typeof rawIndex === 'number' && Number.isInteger(rawIndex) && rawIndex >= 0 && rawIndex < WHEEL_SIZE ? rawIndex : null;
+    const choice = WheelChoiceSchema.nullable().safeParse(rawChoice);
+    if (index === null || !choice.success) return;
+    if (choice.data === null) library.setWheel(index, null);
+    else if (choice.data.kind === 'saved') {
+      if (library.savedById(choice.data.id)) library.setWheel(index, { kind: 'saved', id: choice.data.id });
+    } else {
+      const file = library.fileById(choice.data.fileId);
+      if (file) library.setWheel(index, { kind: 'file', path: file.path, durationMs: choice.data.durationMs });
+    }
+    publishState();
+  });
+
+  handle(IpcChannel.PreviewWheel, () => openWheel(true));
+  handle(IpcChannel.CloseWheel, closeWheel);
+  handle(IpcChannel.WheelActivity, () => {
+    if (wheelOpen) keepWheelOpen();
+  });
+  handle(IpcChannel.PickWheel, async (index: unknown) => {
+    const preview = wheelOpen?.preview ?? true;
+    closeWheel();
+    if (preview || typeof index !== 'number') return;
+    const name = library.wheelName(index);
+    if (await sendTarget(library.wheelTarget(index))) {
+      wheelLast = name;
       publishState();
     }
-    return library.view();
   });
 
   handle(IpcChannel.ClearShortcut, (key: unknown) => {

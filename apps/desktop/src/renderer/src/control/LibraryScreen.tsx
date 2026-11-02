@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { keyLabel, ON_MAC, type AppState, type LibraryFileView, type LibraryView, type RenameOutcome, type SavedView } from '../../../shared/ipc';
+import { keyLabel, ON_MAC, type AppState, type KeyChange, type LibraryFileView, type LibraryView, type RenameOutcome, type SavedView } from '../../../shared/ipc';
 import { ConfirmButton } from './ConfirmButton';
 import { GlideList } from './glide';
 import { IconPlay, IconStar, KindIcon } from './icons';
+import { useKeyCapture } from './KeyButton';
+import { keyChangeNote } from './KeysPanel';
 import { loadInEditor } from './load-editor';
 import { playLengthMs } from './play-length';
 import { canSendIn, mediaErrorMessage } from './messages';
@@ -256,6 +258,20 @@ export const LibraryScreen = ({
   const [shown, setShown] = useState(PAGE_SIZE);
   const [showFolders, setShowFolders] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [givingKey, setGivingKey] = useState<{ name: string; give: (key: string) => Promise<{ library: LibraryView; change: KeyChange }> } | null>(null);
+  useKeyCapture(
+    givingKey !== null,
+    (key) => {
+      const giving = givingKey;
+      setGivingKey(null);
+      void giving?.give(key).then(({ library: changed, change }) => {
+        setLibrary(changed);
+        setError(keyChangeNote(change));
+      });
+    },
+    () => setGivingKey(null),
+  );
+
   const [listening, setListening] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ file: LibraryFileView; name: string } | null>(null);
   const player = useRef<HTMLAudioElement>(null);
@@ -388,10 +404,10 @@ export const LibraryScreen = ({
     const { action, missing, library: changed } = await window.liveChat.showLibraryFileMenu(file.id, canSend);
     if (changed) setLibrary(changed);
     if (missing) setError('Ce fichier n’est plus là.');
-    if (action?.startsWith('assign:')) {
+    if (action === 'shortcut') {
       const length = await playLengthMs(file);
       if (length === null) setError('Ce fichier ne peut pas être lu. Essaie un autre format.');
-      else setLibrary(await window.liveChat.assignFileShortcut(file.id, action.slice('assign:'.length), length));
+      else setGivingKey({ name: file.name, give: (key) => window.liveChat.assignFileShortcut(file.id, key, length) });
     }
     if (action === 'use') void use(file);
     if (action === 'send') void sendNow(file);
@@ -412,6 +428,7 @@ export const LibraryScreen = ({
     if (action === 'edit') void editSaved(saved);
     if (action === 'relocate') void relocate(saved);
     if (action === 'favorite') void window.liveChat.setSavedFavorite(saved.id, !saved.favorite).then(setLibrary);
+    if (action === 'shortcut') setGivingKey({ name: saved.name, give: (key) => window.liveChat.assignSavedShortcut(saved.id, key) });
   };
 
   const kindFiles =
@@ -518,6 +535,11 @@ export const LibraryScreen = ({
         </form>
       )}
 
+      {givingKey && (
+        <p className="banner" role="status" data-testid="give-key">
+          Appuie sur la touche pour « {givingKey.name} ». Échap pour annuler.
+        </p>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}

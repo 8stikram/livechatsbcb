@@ -363,7 +363,7 @@ export const App = () => {
             </button>
           </div>
         )}
-        {state.unavailableKeys.includes(state.settings.cleanKey) && (
+        {state.settings.cleanKey !== null && state.unavailableKeys.includes(state.settings.cleanKey) && (
           <p className="banner is-error" role="status" data-testid="clean-key-taken">
             Une autre app utilise déjà <span className="mono">{keyLabel(state.settings.cleanKey)}</span>. Choisis une autre touche pour le mode clean dans Réglages, Raccourcis.
           </p>
