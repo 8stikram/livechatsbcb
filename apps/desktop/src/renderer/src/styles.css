@@ -1155,8 +1155,20 @@ select.input {
 }
 
 .draft-add {
-  align-self: flex-start;
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   margin: 0 0 8px 16px;
+}
+
+.draft-choice {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .draft-head {
@@ -1763,6 +1775,16 @@ select.input {
   padding: 12px;
   border-radius: var(--radius-inner);
   background: var(--well);
+}
+
+.library-rename .field {
+  width: 100%;
+}
+
+.library-rename-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .library-folders {

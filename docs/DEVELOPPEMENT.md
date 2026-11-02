@@ -76,6 +76,8 @@ L'onglet Historique garde ce qui est passé dans la party, 50 envois au maximum 
 
 La bibliothèque vit dans `library.json`, dans le dossier de données de l'app, et le service n'en sait rien. Elle parcourt les dossiers choisis (5 000 fichiers et 8 niveaux au maximum) à chaque ouverture de l'onglet.
 
+Le clic droit passe par un menu de Windows. Renommer et mettre à la corbeille sont bloqués tant que l'app compte sur le fichier : envoi en cours, file d'attente non vide, ou fichier en préparation dans l'onglet LiveChat. Un fichier renommé reste suivi par les favoris et les LiveChats sauvegardés.
+
 Un LiveChat sauvegardé garde le chemin de ses fichiers et une petite image. Un fichier compte comme manquant s'il a disparu ou si sa taille a changé. « Retrouver » accepte un fichier de même nature et de même taille que l'un de ceux qui manquent, puis cherche les autres à côté, sous leur nom.
 
 ## Fenêtre et démarrage

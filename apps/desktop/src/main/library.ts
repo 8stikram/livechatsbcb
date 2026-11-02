@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { readdir, stat } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { readdir, rename, stat } from 'node:fs/promises';
+import { basename, dirname, extname, join } from 'node:path';
 import { nativeImage } from 'electron';
 import { z } from 'zod';
 import {
@@ -12,13 +12,16 @@ import {
   type FileKind,
   type MediaContentType,
 } from '@livechatsbcb/protocol';
-import type { LibraryFileView, LibraryView, SavedView } from '../shared/ipc';
+import type { LibraryFileView, LibraryView, RenameOutcome, SavedView } from '../shared/ipc';
 import { contentTypeOf, forgetMediaFile, registerMediaFile } from './media-files';
 
 // Enough for a big meme folder, and a folder someone picks by mistake (a whole disk) still answers quickly.
 const MAX_FILES = 5_000;
 const MAX_DEPTH = 8;
 const THUMBNAIL_SIZE = { width: 320, height: 180 };
+// What Windows refuses in a file name.
+const FORBIDDEN_NAME = /[<>:"/\\|?*\x00-\x1f]|[. ]$|^(con|prn|aux|nul|com\d|lpt\d)$/i;
+const MAX_NAME_LENGTH = 200;
 
 const SavedFileSchema = z.object({ path: z.string(), name: z.string(), size: z.number(), contentType: MediaContentTypeSchema });
 export type SavedFile = z.infer<typeof SavedFileSchema>;
@@ -206,6 +209,52 @@ export class Library {
   fileById(id: string): SavedFile | null {
     const file = this.found.get(id);
     return file ? { path: file.path, name: file.name, size: file.size, contentType: file.contentType } : null;
+  }
+
+  isFileFavorite(id: string): boolean {
+    const file = this.found.get(id);
+    return file !== undefined && this.data.favorites.includes(file.path);
+  }
+
+  savedUsing(path: string): SavedLiveChat[] {
+    return this.data.saved.filter((saved) => saved.files.some((file) => file.path === path));
+  }
+
+  // The extension stays, and what pointed at the file follows it.
+  async renameFile(id: string, wanted: string): Promise<RenameOutcome> {
+    const file = this.found.get(id);
+    if (!file) return 'not_found';
+
+    const name = wanted.trim();
+    if (!name || name.length > MAX_NAME_LENGTH || FORBIDDEN_NAME.test(name)) return 'invalid';
+    const fullName = `${name}${extname(file.name)}`;
+    if (fullName === file.name) return 'renamed';
+
+    const path = join(dirname(file.path), fullName);
+    // Windows sees the same file when only capitals change.
+    const taken = fullName.toLowerCase() !== file.name.toLowerCase() && (await stat(path).catch(() => null)) !== null;
+    if (taken) return 'exists';
+
+    try {
+      await rename(file.path, path);
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'not_found' : 'busy';
+    }
+    this.data.favorites = this.data.favorites.map((favorite) => (favorite === file.path ? path : favorite));
+    for (const saved of this.data.saved) {
+      for (const used of saved.files) {
+        if (used.path !== file.path) continue;
+        used.path = path;
+        used.name = fullName;
+      }
+    }
+    this.save();
+    return 'renamed';
+  }
+
+  forgetFavorite(path: string): void {
+    this.data.favorites = this.data.favorites.filter((favorite) => favorite !== path);
+    this.save();
   }
 
   setFileFavorite(id: string, favorite: boolean): void {

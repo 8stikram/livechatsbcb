@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core';
@@ -300,8 +300,9 @@ const answerDialogWith = (member: Member, path: string) =>
   }, path);
 
 const pickFile = async (member: Member, path: string): Promise<void> => {
+  await openTab(member, 'LiveChat');
   await answerDialogWith(member, path);
-  await member.control.getByRole('button', { name: 'Choisir un fichier' }).click();
+  await member.control.getByRole('button', { name: 'Depuis mon PC' }).click();
 };
 
 const sendButton = (member: Member) => member.control.getByRole('button', { name: 'Envoyer à tout le monde' });
@@ -949,7 +950,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     const sound = join(sandbox, 'son-meme.wav');
     writeFileSync(sound, silentWav(3));
     await answerDialogWith(host, sound);
-    await host.control.getByRole('button', { name: 'Ajouter un son' }).click();
+    await host.control.getByRole('group', { name: 'Ajouter un son' }).getByRole('button', { name: 'Depuis mon PC' }).click();
     await host.control.getByTestId('clip-start').waitFor({ timeout: 15_000 });
     await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(2);
     await picture(host.control, '11-meme-base.png');
@@ -978,7 +979,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     const sound = join(sandbox, 'son-video.wav');
     writeFileSync(sound, silentWav(2));
     await answerDialogWith(host, sound);
-    await host.control.getByRole('button', { name: 'Ajouter un son' }).click();
+    await host.control.getByRole('group', { name: 'Ajouter un son' }).getByRole('button', { name: 'Depuis mon PC' }).click();
     await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(2);
     await host.control.getByTestId('clip-end').waitFor({ timeout: 15_000 });
 
@@ -1017,9 +1018,6 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await host.control.getByRole('button', { name: /^Sons/ }).click();
     await cards.filter({ hasText: 'bruit.wav' }).waitFor();
-    rmSync(join(folder, 'bruit.wav'));
-    await cards.filter({ hasText: 'bruit.wav' }).click({ button: 'right', position: { x: 300, y: 5 } });
-    await host.control.getByRole('alert').filter({ hasText: 'plus là' }).waitFor();
     await host.control.getByRole('button', { name: /^Images/ }).click();
     await host.control.getByLabel('Rechercher par nom').fill('nope');
     await host.control.getByText('Rien à ce nom').waitFor();
@@ -1028,25 +1026,6 @@ describe.skipIf(online)('party flow in the real app', () => {
     await cards.filter({ hasText: 'cowboy.png' }).getByRole('button', { name: 'Épingler en favori' }).click();
     await cards.filter({ hasText: 'cowboy.png' }).getByRole('button', { name: 'Retirer des favoris' }).waitFor();
 
-    // The real menu can't be clicked from here: its one line is pressed for it, and Windows isn't asked to open anything.
-    await host.app.evaluate(({ Menu, shell }) => {
-      const seen = globalThis as unknown as { fileMenu?: Electron.Menu; shownFiles: string[] };
-      seen.shownFiles = [];
-      Menu.prototype.popup = function (this: Electron.Menu) {
-        seen.fileMenu = this;
-      };
-      shell.showItemInFolder = (path) => void seen.shownFiles.push(path);
-    });
-    await cards.filter({ hasText: 'cowboy.png' }).getByRole('button', { name: 'Utiliser cowboy.png' }).click({ button: 'right' });
-    await expect
-      .poll(() => host.app.evaluate(() => (globalThis as unknown as { fileMenu?: Electron.Menu }).fileMenu?.items[0]?.label))
-      .toBe('Afficher dans l’Explorateur');
-    await host.app.evaluate(() => {
-      const seen = globalThis as unknown as { fileMenu: Electron.Menu; shownFiles: string[] };
-      (seen.fileMenu.items[0] as unknown as { click: () => void }).click();
-      return seen.shownFiles.length;
-    });
-    await expect(host.app.evaluate(() => (globalThis as unknown as { shownFiles: string[] }).shownFiles)).resolves.toEqual([image]);
 
     await host.control.getByRole('button', { name: 'Utiliser cowboy.png' }).click();
     await host.control.getByTestId('draft-name').filter({ hasText: 'cowboy.png' }).waitFor();
@@ -1097,6 +1076,172 @@ describe.skipIf(online)('party flow in the real app', () => {
     await saved.getByRole('button', { name: 'Supprimer' }).click();
     await saved.getByRole('button', { name: 'Vraiment ?' }).click();
     await expect.poll(() => saved.count()).toBe(0);
+  });
+
+  it('does everything from a right click, and takes files from the library in the LiveChat tab', async () => {
+    const folder = join(sandbox, 'clic-droit');
+    mkdirSync(folder);
+    const logo = join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png');
+    for (const name of ['menu-image.png', 'dans-sauvegarde.png', 'a-jeter.png']) copyFileSync(logo, join(folder, name));
+    copyFileSync(join(sandbox, 'clip.webm'), join(folder, 'menu-video.webm'));
+    writeFileSync(join(folder, 'menu-son.wav'), silentWav(2));
+    writeFileSync(join(folder, 'disparu.wav'), silentWav(1));
+
+    // The real menu can't be clicked from here: its lines are pressed for it, and Windows isn't asked to open anything.
+    await host.app.evaluate(({ Menu, dialog, shell }) => {
+      const seen = globalThis as unknown as { menu?: Electron.Menu; shown: string[]; opened: string[]; answer: number };
+      seen.shown = [];
+      seen.opened = [];
+      seen.answer = 1;
+      Menu.prototype.popup = function (this: Electron.Menu) {
+        seen.menu = this;
+      };
+      shell.showItemInFolder = (path) => void seen.shown.push(path);
+      shell.openPath = async (path) => {
+        seen.opened.push(path);
+        return '';
+      };
+      shell.trashItem = async (path) => process.getBuiltinModule('node:fs').rmSync(path);
+      dialog.showMessageBox = (async () => ({ response: seen.answer, checkboxChecked: false })) as typeof dialog.showMessageBox;
+    });
+    type Line = { label: string; enabled: boolean };
+    const openMenu = async (row: ReturnType<typeof host.control.getByTestId>): Promise<Line[]> => {
+      await host.app.evaluate(() => void ((globalThis as unknown as { menu?: Electron.Menu }).menu = undefined));
+      await row.click({ button: 'right', position: { x: 5, y: 5 } });
+      await expect.poll(() => host.app.evaluate(() => Boolean((globalThis as unknown as { menu?: Electron.Menu }).menu))).toBe(true);
+      return host.app.evaluate(() =>
+        (globalThis as unknown as { menu: Electron.Menu }).menu.items.map(({ label, enabled }) => ({ label, enabled })),
+      );
+    };
+    const press = (label: string) =>
+      host.app.evaluate((_, wanted) => {
+        const { items } = (globalThis as unknown as { menu: Electron.Menu }).menu;
+        (items.find((item) => item.label === wanted) as unknown as { click: () => void }).click();
+      }, label);
+    const seenBy = (name: 'shown' | 'opened') =>
+      host.app.evaluate((_, list) => (globalThis as unknown as Record<string, string[]>)[list]!, name);
+    const setAnswer = (answer: number) =>
+      host.app.evaluate((_, value) => void ((globalThis as unknown as { answer: number }).answer = value), answer);
+
+    await openTab(host, 'Bibliothèque');
+    await host.control.getByRole('button', { name: 'Dossiers' }).click();
+    await answerDialogWith(host, folder);
+    await host.control.getByRole('button', { name: 'Ajouter un dossier' }).click();
+    await host.control.getByRole('button', { name: 'Dossiers' }).click();
+    await host.control.getByRole('button', { name: /^Images/ }).click();
+    const cards = host.control.getByTestId('library-file');
+    const card = (name: string) => cards.filter({ hasText: name });
+    await card('menu-image.png').waitFor();
+
+    await openMenu(card('menu-image.png'));
+    await press('Afficher dans l’Explorateur');
+    await expect(seenBy('shown')).resolves.toEqual([join(folder, 'menu-image.png')]);
+    await openMenu(card('menu-image.png'));
+    await press('Ouvrir avec l’app par défaut');
+    await expect(seenBy('opened')).resolves.toEqual([join(folder, 'menu-image.png')]);
+    await openMenu(card('menu-image.png'));
+    await press('Copier le chemin');
+    await expect(host.app.evaluate(({ clipboard }) => clipboard.readText())).resolves.toBe(join(folder, 'menu-image.png'));
+    await openMenu(card('menu-image.png'));
+    await press('Épingler en favori');
+    await card('menu-image.png').getByRole('button', { name: 'Retirer des favoris' }).waitFor();
+
+    // In the LiveChat tab, it can't be renamed or thrown away. Saved with it, the LiveChat follows it when it is free again.
+    await openMenu(card('dans-sauvegarde.png'));
+    await press('Utiliser dans un LiveChat');
+    await host.control.getByTestId('draft-name').filter({ hasText: 'dans-sauvegarde.png' }).waitFor();
+    await host.control.getByLabel('Texte à afficher').fill('Suit son fichier');
+    await host.control.getByRole('button', { name: 'Sauvegarder dans la bibliothèque' }).click();
+    await host.control.getByLabel('Nom de ce LiveChat').fill('Clic droit');
+    await host.control.getByRole('button', { name: 'Sauvegarder', exact: true }).click();
+    await host.control.getByText('Sauvegardé sur ce PC.').waitFor();
+    await openTab(host, 'Bibliothèque');
+    const locked = await openMenu(card('dans-sauvegarde.png'));
+    expect(locked.find(({ label }) => label === 'Renommer')?.enabled).toBe(false);
+    expect(locked.find(({ label }) => label === 'Mettre à la corbeille')?.enabled).toBe(false);
+    await openTab(host, 'LiveChat');
+    await host.control.getByRole('button', { name: 'Retirer', exact: true }).click();
+    await host.control.getByLabel('Texte à afficher').fill('');
+    await openTab(host, 'Bibliothèque');
+
+    const rename = async (from: string, to: string) => {
+      await openMenu(card(from));
+      await press('Renommer');
+      await host.control.getByLabel('Nouveau nom').fill(to);
+      await host.control.locator('.library-rename').getByRole('button', { name: 'Renommer' }).click();
+    };
+    await rename('dans-sauvegarde.png', 'mauvais:nom');
+    await picture(host.control, '15-library-rename.png');
+    await host.control.getByRole('alert').filter({ hasText: 'Windows refuse' }).waitFor();
+    await host.control.locator('.library-rename').getByRole('button', { name: 'Annuler' }).click();
+    await rename('dans-sauvegarde.png', 'menu-image');
+    await host.control.getByRole('alert').filter({ hasText: 'déjà ce nom' }).waitFor();
+    await host.control.locator('.library-rename').getByRole('button', { name: 'Annuler' }).click();
+    await rename('dans-sauvegarde.png', 'nouveau-nom');
+    await card('nouveau-nom.png').waitFor();
+    expect(existsSync(join(folder, 'nouveau-nom.png'))).toBe(true);
+    expect(existsSync(join(folder, 'dans-sauvegarde.png'))).toBe(false);
+
+    // Its picture is on screen, which must not hold it back.
+    await host.control.getByRole('button', { name: /^Vidéos/ }).click();
+    await card('menu-video.webm').waitFor();
+    await rename('menu-video.webm', 'video-renommee');
+    await card('video-renommee.webm').waitFor();
+    await host.control.getByRole('button', { name: /^Images/ }).click();
+
+    await setAnswer(1);
+    await openMenu(card('a-jeter.png'));
+    await press('Mettre à la corbeille');
+    await expect.poll(() => existsSync(join(folder, 'a-jeter.png'))).toBe(true);
+    await card('a-jeter.png').waitFor();
+    await setAnswer(0);
+    await openMenu(card('a-jeter.png'));
+    await press('Mettre à la corbeille');
+    await expect.poll(() => card('a-jeter.png').count()).toBe(0);
+    expect(existsSync(join(folder, 'a-jeter.png'))).toBe(false);
+
+    await host.control.getByRole('button', { name: /^Sauvegardés/ }).click();
+    const saved = host.control.getByTestId('saved-livechat').filter({ hasText: 'Clic droit' });
+    await saved.waitFor();
+    expect(await saved.getByTestId('saved-missing').count()).toBe(0);
+    const savedLines = await openMenu(saved);
+    expect(savedLines.map(({ label }) => label)).toEqual(expect.arrayContaining(['Envoyer', 'Modifier', 'Afficher nouveau-nom.png dans l’Explorateur', 'Supprimer']));
+    await press('Supprimer');
+    await expect.poll(() => saved.count()).toBe(0);
+
+    await host.control.getByRole('button', { name: /^Sons/ }).click();
+    rmSync(join(folder, 'disparu.wav'));
+    await card('disparu.wav').click({ button: 'right', position: { x: 300, y: 5 } });
+    await host.control.getByRole('alert').filter({ hasText: 'plus là' }).waitFor();
+
+    // Straight to everyone, with no stop in the LiveChat tab.
+    await openMenu(card('menu-son.wav'));
+    await press('Envoyer tout de suite');
+    await overlayState(guest, 'playing');
+    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+    await host.control.getByRole('button', { name: /^Images/ }).click();
+    await openMenu(card('menu-image.png'));
+    await press('Envoyer tout de suite');
+    await overlayState(guest, 'playing');
+    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+
+    // The LiveChat tab sends you to the right shelf, and brings you back.
+    await openTab(host, 'LiveChat');
+    await picture(host.control, '17-livechat-choice.png');
+    await host.control.getByRole('button', { name: 'Depuis ma bibliothèque' }).click();
+    await expect(host.control.getByRole('button', { name: /^Images/ }).getAttribute('aria-pressed')).resolves.toBe('true');
+    await host.control.getByRole('button', { name: 'Utiliser menu-image.png' }).click();
+    await host.control.getByTestId('draft-name').filter({ hasText: 'menu-image.png' }).waitFor();
+    await picture(host.control, '16-livechat-add-sound.png');
+    await host.control.getByRole('group', { name: 'Ajouter un son' }).getByRole('button', { name: 'Depuis ma bibliothèque' }).click();
+    await expect(host.control.getByRole('button', { name: /^Sons/ }).getAttribute('aria-pressed')).resolves.toBe('true');
+    await card('menu-son.wav').getByRole('button', { name: 'Utiliser' }).click();
+    await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(2);
+    await host.control.getByRole('button', { name: 'Retirer', exact: true }).first().click();
+    await host.control.getByRole('button', { name: 'Retirer', exact: true }).first().click();
+    await host.control.getByRole('button', { name: 'Depuis mon PC' }).waitFor();
   });
 
   it('moves a zone of the overlay, and shows the result on the real screen', async () => {

@@ -41,18 +41,6 @@ const QuickSend = ({
     else setError(mediaErrorMessage(result.error));
   };
 
-  const pick = async () => {
-    // A file already being prepared is what the media tab is for.
-    if (files.hasFiles) {
-      onOpenMedia();
-      return;
-    }
-    setError(null);
-    const { picked, error: refused } = await files.pick();
-    if (picked) onOpenMedia();
-    setError(refused);
-  };
-
   return (
     <section className="glass panel" aria-labelledby="quick-send-title">
       <h2 id="quick-send-title">Envoyer à tout le monde</h2>
@@ -80,7 +68,7 @@ const QuickSend = ({
             </button>
           </div>
         </div>
-        <button type="button" className="pill primary" disabled={isUploading} onClick={() => void pick()}>
+        <button type="button" className="pill primary" disabled={isUploading} onClick={onOpenMedia}>
           {files.hasFiles ? 'Reprendre ton LiveChat' : 'Choisir un fichier'}
         </button>
       </form>

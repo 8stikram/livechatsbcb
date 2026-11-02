@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import type { AppState, LibraryFileView, LibraryView, SavedView } from '../../../shared/ipc';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { DEFAULT_DISPLAY_MS, MAX_CLIP_MS, MIN_DISPLAY_MS } from '@livechatsbcb/protocol';
+import type { AppState, LibraryFileView, LibraryView, RenameOutcome, SavedView } from '../../../shared/ipc';
 import { ConfirmButton } from './ConfirmButton';
 import { IconPlay, IconStar, KindIcon } from './icons';
 import { mediaErrorMessage } from './messages';
 import type { DraftFiles } from './use-draft';
 
-type Category = 'image' | 'video' | 'audio' | 'saved';
+export type Category = 'image' | 'video' | 'audio' | 'saved';
 type Sort = 'date' | 'name' | 'type';
 
 const CATEGORIES: Array<[Category, string]> = [
@@ -17,6 +18,40 @@ const CATEGORIES: Array<[Category, string]> = [
 
 // Pictures of videos are costly to load: the rest waits until someone asks.
 const PAGE_SIZE = 60;
+
+const RENAME_ERRORS: Record<Exclude<RenameOutcome, 'renamed'>, string> = {
+  invalid: 'Windows refuse ce nom. Évite ces signes : < > : " / \\ | ? *',
+  exists: 'Un fichier porte déjà ce nom.',
+  not_found: 'Ce fichier n’est plus là.',
+  busy: 'Ce fichier est utilisé ailleurs. Ferme-le et réessaie.',
+};
+
+// How long a file sent straight away plays: all of it, as nobody chose a passage.
+const playLengthMs = (file: LibraryFileView): Promise<number | null> => {
+  if (file.kind === 'image') return Promise.resolve(DEFAULT_DISPLAY_MS);
+  return new Promise((resolve) => {
+    const element = document.createElement(file.kind === 'video' ? 'video' : 'audio');
+    const done = (length: number | null) => {
+      element.onerror = null;
+      element.removeAttribute('src');
+      element.load();
+      resolve(length);
+    };
+    const onLength = () => {
+      if (!Number.isFinite(element.duration) || element.duration <= 0) return;
+      done(Math.max(MIN_DISPLAY_MS, Math.min(MAX_CLIP_MS, Math.round(element.duration * 1000))));
+    };
+    element.preload = 'metadata';
+    element.onerror = () => done(null);
+    element.ondurationchange = onLength;
+    // Some recorders write no duration in the file: asking for a far-off position makes the browser work it out.
+    element.onloadedmetadata = () => {
+      if (Number.isFinite(element.duration)) onLength();
+      else element.currentTime = Number.MAX_SAFE_INTEGER;
+    };
+    element.src = file.url;
+  });
+};
 
 const extensionOf = (name: string): string => name.slice(name.lastIndexOf('.') + 1).toLowerCase();
 
@@ -126,6 +161,7 @@ const SavedRow = ({
   onRelocate,
   onFavorite,
   onDelete,
+  onMenu,
 }: {
   saved: SavedView;
   canSend: boolean;
@@ -134,12 +170,13 @@ const SavedRow = ({
   onRelocate: () => void;
   onFavorite: (on: boolean) => void;
   onDelete: () => void;
+  onMenu: () => void;
 }) => {
   const missing = saved.files.filter((file) => file.missing).length;
   const parts = saved.files.map((file) => file.name).join(' + ') || `« ${saved.caption} »`;
 
   return (
-    <li className="history-row" data-testid="saved-livechat">
+    <li className="history-row" data-testid="saved-livechat" onContextMenu={onMenu}>
       {saved.thumbnailUrl ? (
         <img className="saved-picture" src={saved.thumbnailUrl} alt="" />
       ) : (
@@ -206,21 +243,25 @@ export const LibraryScreen = ({
   state,
   files,
   active,
+  category,
+  onCategory,
   onOpenEditor,
 }: {
   state: AppState;
   files: DraftFiles;
   active: boolean;
+  category: Category;
+  onCategory: (category: Category) => void;
   onOpenEditor: () => void;
 }) => {
   const [library, setLibrary] = useState<LibraryView | null>(null);
-  const [category, setCategory] = useState<Category>('image');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<Sort>('date');
   const [shown, setShown] = useState(PAGE_SIZE);
   const [showFolders, setShowFolders] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [listening, setListening] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<{ file: LibraryFileView; name: string } | null>(null);
   const player = useRef<HTMLAudioElement>(null);
 
   // Files may have changed on the disk since the last visit.
@@ -256,12 +297,6 @@ export const LibraryScreen = ({
     }
     files.adopt(result.draft);
     onOpenEditor();
-  };
-
-  const showMenu = async (file: LibraryFileView) => {
-    setError(null);
-    const result = await window.liveChat.showLibraryFileMenu(file.id);
-    if (!result.ok) setError('Ce fichier n’est plus là.');
   };
 
   const favorite = (file: LibraryFileView, on: boolean) =>
@@ -304,6 +339,69 @@ export const LibraryScreen = ({
     if (result.outcome === 'wrong_file') setError('Ce n’est pas un des fichiers qui manquent.');
   };
 
+  const sendNow = async (file: LibraryFileView) => {
+    const length = await playLengthMs(file);
+    if (length === null) {
+      setError('Ce fichier ne peut pas être lu. Essaie un autre format.');
+      return;
+    }
+    const result = await window.liveChat.sendLibraryFile(file.id, length);
+    if (!result.ok && result.error !== 'cancelled') setError(mediaErrorMessage(result.error));
+  };
+
+  // A file being listened to can't be renamed or thrown away on Windows.
+  const stopListening = () => {
+    player.current?.pause();
+    player.current?.removeAttribute('src');
+    player.current?.load();
+    setListening(null);
+  };
+
+  const rename = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!renaming) return;
+    const result = await window.liveChat.renameLibraryFile(renaming.file.id, renaming.name);
+    setLibrary(result.library);
+    if (result.outcome === 'renamed') {
+      setRenaming(null);
+      setError(null);
+    } else {
+      setError(RENAME_ERRORS[result.outcome]);
+    }
+  };
+
+  const trash = async (file: LibraryFileView) => {
+    stopListening();
+    const result = await window.liveChat.trashLibraryFile(file.id);
+    setLibrary(result.library);
+    if (result.outcome === 'busy') setError(RENAME_ERRORS.busy);
+  };
+
+  const showFileMenu = async (file: LibraryFileView) => {
+    setError(null);
+    const { action, missing } = await window.liveChat.showLibraryFileMenu(file.id, canSend);
+    if (missing) setError('Ce fichier n’est plus là.');
+    if (action === 'use') void use(file);
+    if (action === 'send') void sendNow(file);
+    if (action === 'listen') listen(file);
+    if (action === 'favorite') favorite(file, !file.favorite);
+    if (action === 'trash') void trash(file);
+    if (action === 'rename') {
+      stopListening();
+      setRenaming({ file, name: file.name.slice(0, file.name.lastIndexOf('.')) });
+    }
+  };
+
+  const showSavedMenu = async (saved: SavedView) => {
+    setError(null);
+    const { action, library: changed } = await window.liveChat.showSavedMenu(saved.id, canSend);
+    if (changed) setLibrary(changed);
+    if (action === 'send') void sendSaved(saved);
+    if (action === 'edit') void editSaved(saved);
+    if (action === 'relocate') void relocate(saved);
+    if (action === 'favorite') void window.liveChat.setSavedFavorite(saved.id, !saved.favorite).then(setLibrary);
+  };
+
   const kindFiles =
     category === 'saved'
       ? []
@@ -335,7 +433,7 @@ export const LibraryScreen = ({
               type="button"
               className={category === value ? 'tab is-active' : 'tab'}
               aria-pressed={category === value}
-              onClick={() => setCategory(value)}
+              onClick={() => onCategory(value)}
             >
               {label} <span className="mono library-count">{count(value)}</span>
             </button>
@@ -377,6 +475,35 @@ export const LibraryScreen = ({
             Ajouter un dossier
           </button>
         </div>
+      )}
+
+      {renaming && (
+        <form className="library-manage library-rename" onSubmit={(event) => void rename(event)}>
+          <label className="field">
+            <span>Nouveau nom</span>
+            <span className="library-rename-name">
+              <input
+                className="input"
+                autoFocus
+                value={renaming.name}
+                onFocus={(event) => event.target.select()}
+                onChange={(event) => setRenaming({ ...renaming, name: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setRenaming(null);
+                }}
+              />
+              <span className="mono hint">.{extensionOf(renaming.file.name)}</span>
+            </span>
+          </label>
+          <span className="field-line">
+            <button type="button" className="pill quiet small" onClick={() => setRenaming(null)}>
+              Annuler
+            </button>
+            <button type="submit" className="pill secondary small" disabled={!renaming.name.trim()}>
+              Renommer
+            </button>
+          </span>
+        </form>
       )}
 
       {error && (
@@ -421,6 +548,7 @@ export const LibraryScreen = ({
                   onRelocate={() => void relocate(saved)}
                   onFavorite={(on) => void window.liveChat.setSavedFavorite(saved.id, on).then(setLibrary)}
                   onDelete={() => void window.liveChat.deleteSaved(saved.id).then(setLibrary)}
+                  onMenu={() => void showSavedMenu(saved)}
                 />
               ))}
             </ul>
@@ -435,7 +563,7 @@ export const LibraryScreen = ({
                   onListen={() => listen(file)}
                   onUse={() => void use(file)}
                   onFavorite={(on) => favorite(file, on)}
-                  onMenu={() => void showMenu(file)}
+                  onMenu={() => void showFileMenu(file)}
                 />
               ))}
             </ul>
@@ -448,7 +576,7 @@ export const LibraryScreen = ({
                   file={file}
                   onUse={() => void use(file)}
                   onFavorite={(on) => favorite(file, on)}
-                  onMenu={() => void showMenu(file)}
+                  onMenu={() => void showFileMenu(file)}
                 />
               ))}
             </ul>

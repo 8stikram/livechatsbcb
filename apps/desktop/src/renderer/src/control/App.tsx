@@ -3,7 +3,7 @@ import { useAppState } from '../use-app-state';
 import { GuildPicker } from './GuildPicker';
 import { Header, type View } from './Header';
 import { HistoryScreen } from './HistoryScreen';
-import { LibraryScreen } from './LibraryScreen';
+import { LibraryScreen, type Category } from './LibraryScreen';
 import { LoginScreen } from './LoginScreen';
 import { MediaScreen } from './MediaScreen';
 import { errorMessage } from './messages';
@@ -24,6 +24,7 @@ export const App = () => {
   const files = useDraft();
   const [chosenView, setChosenView] = useState<View>('party');
   const [picking, setPicking] = useState(false);
+  const [libraryCategory, setLibraryCategory] = useState<Category>('image');
   const partyId = state?.party?.partyId;
 
   // Whoever just entered a party wants to see it.
@@ -122,13 +123,22 @@ export const App = () => {
           {party && (
             <>
               <div className="view" hidden={view !== 'media'}>
-                <MediaScreen state={state} files={files} />
+                <MediaScreen
+                  state={state}
+                  files={files}
+                  onOpenLibrary={(category) => {
+                    setLibraryCategory(category);
+                    setChosenView('library');
+                  }}
+                />
               </div>
               <div className="view" hidden={view !== 'library'}>
                 <LibraryScreen
                   state={state}
                   files={files}
                   active={view === 'library' && !showPicker}
+                  category={libraryCategory}
+                  onCategory={setLibraryCategory}
                   onOpenEditor={() => setChosenView('media')}
                 />
               </div>

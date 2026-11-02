@@ -200,7 +200,15 @@ const DraftRow = ({
   </header>
 );
 
-export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFiles }) => {
+export const MediaScreen = ({
+  state,
+  files,
+  onOpenLibrary,
+}: {
+  state: AppState;
+  files: DraftFiles;
+  onOpenLibrary: (category: 'image' | 'audio') => void;
+}) => {
   const { picture, sound, leader, hasFiles, clip, unreadable, caption, displayMs, videoMuted, soundMuted } = files;
   const [error, setError] = useState<string | null>(null);
   const [saveName, setSaveName] = useState<string | null>(null);
@@ -261,13 +269,15 @@ export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFil
             {picture && <DraftRow file={picture} slot="picture" locked={isUploading} onRemove={files.remove} />}
             {sound && <DraftRow file={sound} slot="sound" locked={isUploading} onRemove={files.remove} />}
             {!isUploading && (!picture || !sound) && (
-              <button
-                type="button"
-                className="pill quiet small draft-add"
-                onClick={() => void pick(picture ? 'sound' : 'picture')}
-              >
-                {picture ? 'Ajouter un son' : 'Ajouter une image ou une vidéo'}
-              </button>
+              <div className="draft-add" role="group" aria-label={picture ? 'Ajouter un son' : 'Ajouter une image ou une vidéo'}>
+                <span className="hint">{picture ? 'Ajouter un son' : 'Ajouter une image ou une vidéo'}</span>
+                <button type="button" className="pill quiet small" onClick={() => onOpenLibrary(picture ? 'audio' : 'image')}>
+                  Depuis ma bibliothèque
+                </button>
+                <button type="button" className="pill quiet small" onClick={() => void pick(picture ? 'sound' : 'picture')}>
+                  Depuis mon PC
+                </button>
+              </div>
             )}
             {picture?.kind === 'image' && (
               <div className="draft-picture">
@@ -299,9 +309,14 @@ export const MediaScreen = ({ state, files }: { state: AppState; files: DraftFil
           <div className="draft-empty">
             <p className="draft-empty-title">Une image ou une vidéo, avec un son si tu veux</p>
             <p className="hint">500 Mo maximum. Effacé du serveur après 1 jour.</p>
-            <button type="button" className="pill primary" disabled={isUploading} onClick={() => void pick()}>
-              Choisir un fichier
-            </button>
+            <div className="draft-choice">
+              <button type="button" className="pill primary" disabled={isUploading} onClick={() => onOpenLibrary('image')}>
+                Depuis ma bibliothèque
+              </button>
+              <button type="button" className="pill secondary" disabled={isUploading} onClick={() => void pick()}>
+                Depuis mon PC
+              </button>
+            </div>
           </div>
         )}
       </section>

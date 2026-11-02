@@ -135,6 +135,11 @@ export type LibraryView = {
   saved: SavedView[];
 };
 
+// What a line of a right-click menu leaves to the window. The other lines are done by the app itself.
+export type FileMenuAction = 'use' | 'send' | 'listen' | 'favorite' | 'rename' | 'trash';
+export type SavedMenuAction = 'send' | 'edit' | 'relocate' | 'favorite';
+export type RenameOutcome = 'renamed' | 'invalid' | 'exists' | 'not_found' | 'busy';
+
 // A saved LiveChat put back in the editor.
 export type LoadedDraft = {
   picture: DraftMedia | null;
@@ -221,6 +226,10 @@ export const IpcChannel = {
   SetLibraryFavorite: 'library:set-favorite',
   UseLibraryFile: 'library:use-file',
   ShowLibraryFileMenu: 'library:file-menu',
+  ShowSavedMenu: 'library:saved-menu',
+  SendLibraryFile: 'library:send-file',
+  RenameLibraryFile: 'library:rename-file',
+  TrashLibraryFile: 'library:trash-file',
   SaveLiveChat: 'library:save',
   SendSaved: 'library:send-saved',
   EditSaved: 'library:edit-saved',
@@ -262,7 +271,11 @@ export type LiveChatApi = {
   removeLibraryFolder(path: string): Promise<LibraryView>;
   setLibraryFavorite(fileId: string, favorite: boolean): Promise<LibraryView>;
   useLibraryFile(fileId: string): Promise<{ ok: true; draft: DraftMedia } | { ok: false }>;
-  showLibraryFileMenu(fileId: string): Promise<{ ok: boolean }>;
+  showLibraryFileMenu(fileId: string, canSend: boolean): Promise<{ action: FileMenuAction | null; missing?: true }>;
+  showSavedMenu(savedId: string, canSend: boolean): Promise<{ action: SavedMenuAction | null; library?: LibraryView }>;
+  sendLibraryFile(fileId: string, durationMs: number): Promise<ActionResult>;
+  renameLibraryFile(fileId: string, name: string): Promise<{ outcome: RenameOutcome; library: LibraryView }>;
+  trashLibraryFile(fileId: string): Promise<{ outcome: 'trashed' | 'cancelled' | 'busy'; library: LibraryView }>;
   saveLiveChat(input: SaveLiveChatInput): Promise<ActionResult>;
   sendSaved(savedId: string): Promise<ActionResult>;
   editSaved(savedId: string): Promise<{ ok: true; draft: LoadedDraft } | { ok: false }>;

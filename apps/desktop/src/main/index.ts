@@ -20,7 +20,7 @@ import {
   type QueueItem,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, type ActionResult, type AppState, type DraftMedia, type DraftSlot, type HistoryView, type PickResult, type PlaybackView } from '../shared/ipc';
+import { IpcChannel, type ActionResult, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
@@ -791,13 +791,126 @@ function start(): void {
     return { ok: true, draft: putInDraft({ ...file, size: info.size }) };
   });
 
-  handle(IpcChannel.ShowLibraryFileMenu, async (fileId: unknown) => {
+  type MenuLine<Action> = { label: string; enabled?: boolean } & ({ action: Action } | { run: () => void });
+
+  // Answers with the line chosen. The menu can say it closed just before the click arrives, so closing decides nothing at once.
+  const chooseFromMenu = <Action>(groups: Array<Array<MenuLine<Action>>>) =>
+    new Promise<Action | null>((resolve) => {
+      const lines = groups
+        .filter((group) => group.length > 0)
+        .flatMap((group, index) => [
+          ...(index > 0 ? [{ type: 'separator' as const }] : []),
+          ...group.map((line) => ({
+            label: line.label,
+            enabled: line.enabled ?? true,
+            click: () => {
+              if ('run' in line) line.run();
+              resolve('action' in line ? line.action : null);
+            },
+          })),
+        ]);
+      Menu.buildFromTemplate(lines).popup({ window: controlWindow, callback: () => setTimeout(() => resolve(null), 1_000) });
+    });
+
+  const confirmed = async (message: string, detail: string, button: string): Promise<boolean> => {
+    const { response } = await dialog.showMessageBox(controlWindow, {
+      type: 'warning',
+      message,
+      detail,
+      buttons: [button, 'Annuler'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true,
+    });
+    return response === 0;
+  };
+
+  handle(IpcChannel.ShowLibraryFileMenu, async (fileId: unknown, canSend: unknown) => {
+    const id = typeof fileId === 'string' ? fileId : '';
+    const file = library.fileById(id);
+    if (!file || !(await stat(file.path).catch(() => null))) return { action: null, missing: true };
+
+    // On its way, about to play or in the LiveChat tab: the app is counting on finding it where it is.
+    const locked =
+      upload !== null ||
+      Boolean(connection?.current().queue.length) ||
+      draft.picture?.path === file.path ||
+      draft.sound?.path === file.path;
+    const action = await chooseFromMenu<FileMenuAction>([
+      [
+        { label: 'Utiliser dans un LiveChat', action: 'use' },
+        { label: 'Envoyer tout de suite', action: 'send', enabled: canSend === true },
+        ...(fileKindOf(file.contentType) === 'audio' ? [{ label: 'Écouter ou arrêter', action: 'listen' as const }] : []),
+      ],
+      [{ label: library.isFileFavorite(id) ? 'Retirer des favoris' : 'Épingler en favori', action: 'favorite' }],
+      [
+        { label: 'Afficher dans l’Explorateur', run: () => shell.showItemInFolder(file.path) },
+        { label: 'Ouvrir avec l’app par défaut', run: () => void shell.openPath(file.path) },
+        { label: 'Copier le chemin', run: () => clipboard.writeText(file.path) },
+      ],
+      [
+        { label: 'Renommer', action: 'rename', enabled: !locked },
+        { label: 'Mettre à la corbeille', action: 'trash', enabled: !locked },
+      ],
+    ]);
+    return { action };
+  });
+
+  handle(IpcChannel.ShowSavedMenu, async (savedId: unknown, canSend: unknown) => {
+    const saved = typeof savedId === 'string' ? library.savedById(savedId) : null;
+    if (!saved) return { action: null };
+
+    const there = await Promise.all(saved.files.map(async (file) => (await stat(file.path).catch(() => null)) !== null));
+    const complete = await library.allThere(saved);
+    const action = await chooseFromMenu<SavedMenuAction | 'delete'>([
+      [
+        { label: 'Envoyer', action: 'send', enabled: canSend === true && complete },
+        complete ? { label: 'Modifier', action: 'edit' } : { label: 'Retrouver', action: 'relocate' },
+      ],
+      [{ label: saved.favorite ? 'Retirer des favoris' : 'Épingler en favori', action: 'favorite' }],
+      saved.files.flatMap((file, index) =>
+        there[index] ? [{ label: `Afficher ${file.name} dans l’Explorateur`, run: () => shell.showItemInFolder(file.path) }] : [],
+      ),
+      [{ label: 'Supprimer', action: 'delete' }],
+    ]);
+    if (action !== 'delete') return { action };
+
+    if (await confirmed(`Supprimer « ${saved.name} » ?`, 'Tes fichiers ne bougent pas.', 'Supprimer')) library.deleteSaved(saved.id);
+    return { action: null, library: await library.view() };
+  });
+
+  handle(IpcChannel.SendLibraryFile, async (fileId: unknown, durationMs: unknown): Promise<ActionResult> => {
+    const session = store.session;
+    if (!session) return { ok: false, error: 'unauthorized' };
     const file = typeof fileId === 'string' ? library.fileById(fileId) : null;
-    if (!file || !(await stat(file.path).catch(() => null))) return { ok: false };
-    Menu.buildFromTemplate([
-      { label: 'Afficher dans l’Explorateur', click: () => shell.showItemInFolder(file.path) },
-    ]).popup({ window: controlWindow });
-    return { ok: true };
+    if (!file || upload || typeof durationMs !== 'number') return { ok: false, error: 'invalid_request' };
+    const info = await stat(file.path).catch(() => null);
+    if (!info) return { ok: false, error: 'invalid_request' };
+    return sendFiles(session, [{ ...file, size: info.size }], { caption: '', clipStartMs: 0, durationMs, videoMuted: false, soundMuted: false });
+  });
+
+  handle(IpcChannel.RenameLibraryFile, async (fileId: unknown, name: unknown) => {
+    const outcome = typeof fileId === 'string' && typeof name === 'string' ? await library.renameFile(fileId, name) : 'invalid';
+    await library.scan();
+    return { outcome, library: await library.view() };
+  });
+
+  handle(IpcChannel.TrashLibraryFile, async (fileId: unknown) => {
+    const file = typeof fileId === 'string' ? library.fileById(fileId) : null;
+    const used = file ? library.savedUsing(file.path).length : 0;
+    const detail =
+      (used > 0 ? `${used > 1 ? `${used} LiveChats sauvegardés l’utilisent` : 'Un LiveChat sauvegardé l’utilise'} et ne pourra plus partir sans lui. ` : '') +
+      'Tu pourras le récupérer depuis la corbeille de Windows.';
+    let outcome: 'trashed' | 'cancelled' | 'busy' = 'cancelled';
+    if (file && (await confirmed(`Mettre ${file.name} à la corbeille ?`, detail, 'Mettre à la corbeille'))) {
+      outcome = await shell.trashItem(file.path).then(
+        () => 'trashed' as const,
+        () => 'busy' as const,
+      );
+      if (outcome === 'trashed') library.forgetFavorite(file.path);
+    }
+    await library.scan();
+    return { outcome, library: await library.view() };
   });
 
   handle(IpcChannel.SaveLiveChat, async (raw: unknown): Promise<ActionResult> => {
