@@ -469,12 +469,12 @@ export const MediaScreen = ({
             {picture && <DraftRow file={picture} slot="picture" locked={isUploading} onRemove={files.remove} />}
             {sound && <DraftRow file={sound} slot="sound" locked={isUploading} onRemove={files.remove} />}
             {!isUploading && (!picture || !sound) && (
-              <div className="draft-add" role="group" aria-label={picture ? 'Ajouter un son' : 'Ajouter une image ou une vidéo'}>
-                <span className="hint">{picture ? 'Ajouter un son' : 'Ajouter une image ou une vidéo'}</span>
-                <button type="button" className="pill quiet small" onClick={() => onOpenLibrary(picture ? 'audio' : 'image')}>
+              <div className="draft-add" role="group" aria-label={picture ? 'Ajouter une musique' : 'Ajouter une image ou une vidéo'}>
+                <span className="draft-add-title">{picture ? 'Ajouter une musique' : 'Ajouter une image ou une vidéo'}</span>
+                <button type="button" className="pill secondary small" onClick={() => onOpenLibrary(picture ? 'audio' : 'image')}>
                   Depuis ma bibliothèque
                 </button>
-                <button type="button" className="pill quiet small" onClick={() => void pick(picture ? 'sound' : 'picture')}>
+                <button type="button" className="pill secondary small" onClick={() => void pick(picture ? 'sound' : 'picture')}>
                   Depuis mon PC
                 </button>
               </div>
@@ -505,8 +505,7 @@ export const MediaScreen = ({
         ) : (
           <div className="draft-empty">
             {caption.trim() && <LivePreview state={state} caption={caption} />}
-            <p className="draft-empty-title">Une image ou une vidéo, avec un son si tu veux</p>
-            <p className="hint">500 Mo maximum. Effacé du serveur après 1 jour.</p>
+            <p className="draft-empty-title">Une image ou une vidéo</p>
             <div className="draft-choice">
               <button type="button" className="pill primary" disabled={isUploading} onClick={() => onOpenLibrary('image')}>
                 Depuis ma bibliothèque
@@ -515,6 +514,16 @@ export const MediaScreen = ({
                 Depuis mon PC
               </button>
             </div>
+            <p className="draft-empty-title draft-empty-next">Une musique</p>
+            <div className="draft-choice">
+              <button type="button" className="pill primary" disabled={isUploading} onClick={() => onOpenLibrary('audio')}>
+                Musique de ma bibliothèque
+              </button>
+              <button type="button" className="pill secondary" disabled={isUploading} onClick={() => void pick('sound')}>
+                Musique de mon PC
+              </button>
+            </div>
+            <p className="hint draft-empty-next">Tu peux mettre les deux. 500 Mo maximum. Effacé du serveur après 1 jour.</p>
           </div>
         )}
       </section>

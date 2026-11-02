@@ -1527,7 +1527,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     const sound = join(sandbox, 'son-meme.wav');
     writeFileSync(sound, silentWav(3));
     await answerDialogWith(host, sound);
-    await host.control.getByRole('group', { name: 'Ajouter un son' }).getByRole('button', { name: 'Depuis mon PC' }).click();
+    await host.control.getByRole('group', { name: 'Ajouter une musique' }).getByRole('button', { name: 'Depuis mon PC' }).click();
     await host.control.getByTestId('clip-start').waitFor({ timeout: 15_000 });
     await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(2);
     await picture(host.control, '11-meme-base.png');
@@ -1556,7 +1556,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     const sound = join(sandbox, 'son-video.wav');
     writeFileSync(sound, silentWav(2));
     await answerDialogWith(host, sound);
-    await host.control.getByRole('group', { name: 'Ajouter un son' }).getByRole('button', { name: 'Depuis mon PC' }).click();
+    await host.control.getByRole('group', { name: 'Ajouter une musique' }).getByRole('button', { name: 'Depuis mon PC' }).click();
     await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(2);
     await host.control.getByTestId('clip-end').waitFor({ timeout: 15_000 });
 
@@ -1812,13 +1812,35 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByRole('button', { name: 'Utiliser menu-image.png' }).click();
     await host.control.getByTestId('draft-name').filter({ hasText: 'menu-image.png' }).waitFor();
     await picture(host.control, '16-livechat-add-sound.png');
-    await host.control.getByRole('group', { name: 'Ajouter un son' }).getByRole('button', { name: 'Depuis ma bibliothèque' }).click();
+    await host.control.getByRole('group', { name: 'Ajouter une musique' }).getByRole('button', { name: 'Depuis ma bibliothèque' }).click();
     await expect(host.control.getByRole('button', { name: /^Sons/ }).getAttribute('aria-pressed')).resolves.toBe('true');
     await card('menu-son.wav').getByRole('button', { name: 'Utiliser' }).click();
     await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(2);
     await host.control.getByRole('button', { name: 'Retirer', exact: true }).first().click();
     await host.control.getByRole('button', { name: 'Retirer', exact: true }).first().click();
     await host.control.getByRole('button', { name: 'Depuis mon PC' }).waitFor();
+  });
+
+  it('takes a music the same way as a picture, even with nothing else chosen', async () => {
+    const music = join(sandbox, 'ma-musique.wav');
+    writeFileSync(music, silentWav(3));
+
+    await openTab(host, 'LiveChat');
+    await picture(host.control, 'music-choice.png');
+    await host.control.getByRole('button', { name: 'Musique de ma bibliothèque' }).click();
+    await expect(host.control.getByRole('button', { name: /^Sons/ }).getAttribute('aria-pressed')).resolves.toBe('true');
+    await expect
+      .poll(() => host.control.getByRole('button', { name: /^Sons/ }).evaluate((tab) => getComputedStyle(tab).backgroundColor))
+      .not.toBe('rgba(0, 0, 0, 0)');
+
+    await openTab(host, 'LiveChat');
+    await answerDialogWith(host, music);
+    await host.control.getByRole('button', { name: 'Musique de mon PC' }).click();
+    await host.control.getByTestId('draft-name').filter({ hasText: 'ma-musique.wav' }).waitFor();
+    await host.control.getByRole('group', { name: 'Ajouter une image ou une vidéo' }).waitFor();
+    await picture(host.control, 'music-only.png');
+    await host.control.getByRole('button', { name: 'Retirer', exact: true }).first().click();
+    await host.control.getByRole('button', { name: 'Musique de mon PC' }).waitFor();
   });
 
   it('shows in small what the others will see, and places things freely in the advanced mode', async () => {
