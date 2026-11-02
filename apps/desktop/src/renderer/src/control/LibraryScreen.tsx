@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { DEFAULT_DISPLAY_MS, MAX_CLIP_MS, MIN_DISPLAY_MS } from '@livechatsbcb/protocol';
 import type { AppState, LibraryFileView, LibraryView, RenameOutcome, SavedView } from '../../../shared/ipc';
 import { ConfirmButton } from './ConfirmButton';
 import { IconPlay, IconStar, KindIcon } from './icons';
 import { loadInEditor } from './load-editor';
+import { playLengthMs } from './play-length';
 import { canSendIn, mediaErrorMessage } from './messages';
 import type { DraftFiles } from './use-draft';
 import type { Scene } from './use-scene';
@@ -26,33 +26,6 @@ const RENAME_ERRORS: Record<Exclude<RenameOutcome, 'renamed'>, string> = {
   exists: 'Un fichier porte déjà ce nom.',
   not_found: 'Ce fichier n’est plus là.',
   busy: 'Ce fichier est utilisé ailleurs. Ferme-le et réessaie.',
-};
-
-// How long a file sent straight away plays: all of it, as nobody chose a passage.
-const playLengthMs = (file: LibraryFileView): Promise<number | null> => {
-  if (file.kind === 'image') return Promise.resolve(DEFAULT_DISPLAY_MS);
-  return new Promise((resolve) => {
-    const element = document.createElement(file.kind === 'video' ? 'video' : 'audio');
-    const done = (length: number | null) => {
-      element.onerror = null;
-      element.removeAttribute('src');
-      element.load();
-      resolve(length);
-    };
-    const onLength = () => {
-      if (!Number.isFinite(element.duration) || element.duration <= 0) return;
-      done(Math.max(MIN_DISPLAY_MS, Math.min(MAX_CLIP_MS, Math.round(element.duration * 1000))));
-    };
-    element.preload = 'metadata';
-    element.onerror = () => done(null);
-    element.ondurationchange = onLength;
-    // Some recorders write no duration in the file: asking for a far-off position makes the browser work it out.
-    element.onloadedmetadata = () => {
-      if (Number.isFinite(element.duration)) onLength();
-      else element.currentTime = Number.MAX_SAFE_INTEGER;
-    };
-    element.src = file.url;
-  });
 };
 
 const extensionOf = (name: string): string => name.slice(name.lastIndexOf('.') + 1).toLowerCase();

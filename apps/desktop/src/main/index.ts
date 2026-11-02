@@ -25,11 +25,13 @@ import {
   type SceneLayer,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, MEME_KEYS, SKIP_KEY, type ActionResult, type HiddenReason, type CleanKeyOutcome, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
+import { IpcChannel, MEME_KEYS, type ExternalFiles, type IncomingError, type IncomingResult, SKIP_KEY, type ActionResult, type HiddenReason, type CleanKeyOutcome, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
 import { MediaCache } from './media-cache';
+import { cleanPasted, downloadLink, savePastedImage, type Incoming } from './incoming';
+import { PREPARE_ARG, registerExplorerMenu, SEND_ARG } from './explorer-menu';
 import { CONTENT_TYPE_BY_EXTENSION, contentTypeOf, extensionOf, forgetMediaFile, registerMediaFile, serveMediaFiles } from './media-files';
 import { retryWhileOffline, uploadFile } from './media-upload';
 import { forgetRestartStash, takeRestartStash, writeRestartStash, type RestartStash, type StashedRecipe } from './restart-stash';
@@ -60,6 +62,7 @@ const SendMediaInputSchema = z.object({
   durationMs: z.number(),
   videoMuted: z.boolean(),
   soundMuted: z.boolean(),
+  speak: z.boolean().default(false),
   withPicture: z.boolean(),
   withSound: z.boolean(),
 });
@@ -73,6 +76,7 @@ const SceneInputSchema = z.object({
   durationMs: z.number(),
   videoMuted: z.boolean(),
   soundMuted: z.boolean(),
+  speak: z.boolean().default(false),
   layers: z.array(SceneLayerSchema.omit({ file: true }).extend({ fileId: z.string() })),
   soundId: z.string().nullable(),
 });
@@ -146,7 +150,7 @@ function start(): void {
     ),
   });
   const stageWindow = createStageWindow(settings.current.displayId);
-  const controlWindow = createControlWindow(restartMode ?? (process.argv.includes(START_HIDDEN_ARG) ? 'hidden' : 'shown'));
+  const controlWindow = createControlWindow(restartMode ?? (process.argv.includes(START_HIDDEN_ARG) || process.argv.includes(SEND_ARG) ? 'hidden' : 'shown'));
   const restartStash = takeRestartStash();
   const stashed: RestartStash = { view: null, recipe: null };
   // Someone new starts on this version. Someone already logged in came from an older one, and gets told what changed.
@@ -212,6 +216,7 @@ function start(): void {
     durationMs: item.durationMs,
     videoMuted: item.videoMuted,
     soundMuted: item.soundMuted,
+    speak: item.speak,
     startAt: item.startAt === null || !connection ? null : connection.toLocalTime(item.startAt),
     ...playbackFiles(item.id, item),
   });
@@ -245,6 +250,7 @@ function start(): void {
         durationMs: item.durationMs,
         videoMuted: item.videoMuted,
         soundMuted: item.soundMuted,
+        speak: item.speak,
         startAt,
         ...playbackFiles(key, item),
       },
@@ -612,6 +618,7 @@ function start(): void {
   };
 
   type Timing = Pick<z.infer<typeof SendMediaInputSchema>, 'caption' | 'clipStartMs' | 'durationMs' | 'videoMuted' | 'soundMuted'> & {
+    speak?: boolean;
     scene?: SceneLayer[] | null;
   };
 
@@ -657,6 +664,7 @@ function start(): void {
       () =>
         partyApi.createMedia(session, {
           ...timing,
+          speak: timing.speak ?? false,
           scene: timing.scene ?? null,
           files: files.map(({ contentType, size, name }) => ({ contentType, size, name: name.slice(0, MAX_FILE_NAME_LENGTH) })),
         }),
@@ -903,6 +911,112 @@ function start(): void {
       clearDraft('sound');
       publishState();
     }
+    return result;
+  });
+
+  const bringIn = (files: Incoming[], advanced: boolean): IncomingResult => {
+    if (advanced) return { ok: true, scene: files.map((file) => putInScene(file)) };
+    const sounds = files.filter(({ contentType }) => slotOf(contentType) === 'sound');
+    if (sounds.length > 1 || files.length - sounds.length > 1) return { ok: false, error: 'too_many' };
+    // Whatever arrives takes the place of its kind in what is being prepared.
+    const kept = sounds.length > 0 ? draft.picture : draft.sound;
+    const keptSize = files.length > 1 ? 0 : (kept?.size ?? 0);
+    if (files.reduce((total, { size }) => total + size, keptSize) > MAX_MEDIA_BYTES) return { ok: false, error: 'too_large' };
+    return { ok: true, drafts: files.map((file) => putInDraft(file)) };
+  };
+
+  const readFiles = async (paths: string[]): Promise<{ ok: true; files: Incoming[] } | { ok: false; error: IncomingError }> => {
+    const files: Incoming[] = [];
+    for (const path of paths) {
+      const contentType = contentTypeOf(path);
+      if (!contentType) return { ok: false, error: 'unsupported' };
+      const info = await stat(path).catch(() => null);
+      if (!info) return { ok: false, error: 'not_found' };
+      if (info.size === 0) return { ok: false, error: 'empty' };
+      if (info.size > MAX_MEDIA_BYTES) return { ok: false, error: 'too_large' };
+      files.push({ path, name: basename(path), size: info.size, contentType });
+    }
+    return { ok: true, files };
+  };
+
+  const PATH_LIST = z.array(z.string()).min(1).max(20);
+
+  handle(IpcChannel.PasteFiles, async (raw: unknown, advanced: unknown): Promise<IncomingResult> => {
+    const paths = PATH_LIST.safeParse(raw);
+    if (!paths.success) return { ok: false, error: 'unsupported' };
+    const read = await readFiles(paths.data);
+    return read.ok ? bringIn(read.files, advanced === true) : read;
+  });
+
+  handle(IpcChannel.PasteImage, async (bytes: unknown, contentType: unknown, name: unknown, advanced: unknown): Promise<IncomingResult> => {
+    if (!(bytes instanceof Uint8Array) || typeof contentType !== 'string' || typeof name !== 'string') return { ok: false, error: 'unsupported' };
+    const saved = await savePastedImage(bytes, contentType, name);
+    return saved.ok ? bringIn([saved.file], advanced === true) : saved;
+  });
+
+  handle(IpcChannel.PasteLink, async (url: unknown, advanced: unknown): Promise<IncomingResult> => {
+    if (typeof url !== 'string') return { ok: false, error: 'bad_link' };
+    const saved = await downloadLink(url);
+    return saved.ok ? bringIn([saved.file], advanced === true) : saved;
+  });
+
+  // Windows starts the app once per selected file: the ones that arrive together make one LiveChat.
+  const EXTERNAL_GATHER_MS = 400;
+  let gathering: { mode: ExternalFiles['mode']; paths: string[] } | null = null;
+  let gatherTimer: NodeJS.Timeout | undefined;
+  let waitingExternal: { mode: ExternalFiles['mode']; paths: string[] } | null = null;
+  let externalToSend: { files: Incoming[]; previewIds: string[] } | null = null;
+
+  const noticeExternal = (argv: string[]): boolean => {
+    const mode = argv.includes(SEND_ARG) ? 'send' : argv.includes(PREPARE_ARG) ? 'prepare' : null;
+    if (!mode) return false;
+    const paths = argv.slice(1).filter((arg) => !arg.startsWith('-') && contentTypeOf(arg));
+    gathering = { mode, paths: [...new Set([...(gathering?.paths ?? []), ...paths])] };
+    clearTimeout(gatherTimer);
+    gatherTimer = setTimeout(() => {
+      waitingExternal = gathering;
+      gathering = null;
+      if (waitingExternal?.mode === 'prepare') showControlWindow();
+      if (!controlWindow.isDestroyed()) controlWindow.webContents.send(IpcChannel.ExternalFilesWaiting);
+    }, EXTERNAL_GATHER_MS);
+    return true;
+  };
+
+  handle(IpcChannel.TakeExternalFiles, async (advanced: unknown): Promise<ExternalFiles | null> => {
+    const waiting = waitingExternal;
+    waitingExternal = null;
+    if (!waiting) return null;
+    const read = await readFiles(waiting.paths);
+    if (waiting.mode === 'prepare') return { mode: 'prepare', result: read.ok ? bringIn(read.files, advanced === true) : read };
+
+    if (!read.ok) return { mode: 'send', error: read.error };
+    const pictures = read.files.filter(({ contentType }) => slotOf(contentType) === 'picture');
+    const sounds = read.files.filter(({ contentType }) => slotOf(contentType) === 'sound');
+    if (read.files.length === 0) return { mode: 'send', error: 'unsupported' };
+    if (pictures.length > 1 || sounds.length > 1) return { mode: 'send', error: 'too_many' };
+    if (read.files.reduce((total, { size }) => total + size, 0) > MAX_MEDIA_BYTES) return { mode: 'send', error: 'too_large' };
+
+    // Pictures first, as everywhere else: a video leads, and a sound leads beside a picture.
+    const files = [...pictures, ...sounds];
+    const previews = files.map((file) => registerMediaFile(file.path, file.contentType));
+    externalToSend = { files, previewIds: previews.map(({ id }) => id) };
+    const video = files.findIndex(({ contentType }) => fileKindOf(contentType) === 'video');
+    const audio = files.findIndex(({ contentType }) => fileKindOf(contentType) === 'audio');
+    const leader = video >= 0 ? video : audio >= 0 ? audio : 0;
+    return { mode: 'send', leader: { kind: fileKindOf(files[leader]!.contentType), url: previews[leader]!.url } };
+  });
+
+  handle(IpcChannel.SendExternalFiles, async (durationMs: unknown): Promise<ActionResult> => {
+    const sending = externalToSend;
+    externalToSend = null;
+    const session = store.session;
+    let result: ActionResult = { ok: false, error: 'invalid_request' };
+    if (!session) result = { ok: false, error: 'unauthorized' };
+    else if (sending && !upload && typeof durationMs === 'number') {
+      result = await sendFiles(session, sending.files, { caption: '', clipStartMs: 0, durationMs, videoMuted: false, soundMuted: false });
+    }
+    for (const id of sending?.previewIds ?? []) forgetMediaFile(id);
+    if (!result.ok && result.error !== 'cancelled') showControlWindow();
     return result;
   });
 
@@ -1231,21 +1345,21 @@ function start(): void {
     const input = SaveSceneInputSchema.safeParse(raw);
     const recipe = input.success ? sceneRecipe(input.data) : null;
     if (!input.success || !recipe) return { ok: false, error: 'invalid_request' };
-    const { name, caption, clipStartMs, durationMs, videoMuted, soundMuted } = input.data;
-    await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, ...recipe });
+    const { name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak } = input.data;
+    await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, ...recipe });
     return { ok: true };
   });
 
   handle(IpcChannel.SaveLiveChat, async (raw: unknown): Promise<ActionResult> => {
     const input = SaveLiveChatInputSchema.safeParse(raw);
     if (!input.success) return { ok: false, error: 'invalid_request' };
-    const { name, caption, clipStartMs, durationMs, videoMuted, soundMuted, withPicture, withSound } = input.data;
+    const { name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, withPicture, withSound } = input.data;
 
     const chosen = [withPicture ? draft.picture : null, withSound ? draft.sound : null].filter((file) => file !== null);
     const files = chosen.map(({ path, name: fileName, size, contentType }) => ({ path, name: fileName, size, contentType }));
     if (files.length === 0 && !caption.trim()) return { ok: false, error: 'invalid_request' };
 
-    await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, files, scene: null });
+    await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, files, scene: null });
     return { ok: true };
   });
 
@@ -1261,7 +1375,7 @@ function start(): void {
 
   const loadRecipe = (saved: StashedRecipe) => {
     if (saved.scene) {
-      const { caption, clipStartMs, durationMs, videoMuted, soundMuted } = saved;
+      const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak } = saved;
       for (const id of [...sceneFiles.keys()]) forgetSceneFile(id);
       const files = saved.files.map((file) => putInScene(file));
       return {
@@ -1272,6 +1386,7 @@ function start(): void {
           durationMs,
           videoMuted,
           soundMuted,
+          speak,
           files,
           layers: saved.scene.map(({ file, ...layer }) => ({ ...layer, fileId: files[file]!.id })),
           soundId: files.find(({ kind }) => kind === 'audio')?.id ?? null,
@@ -1282,7 +1397,7 @@ function start(): void {
     clearDraft('picture');
     clearDraft('sound');
     const loaded = saved.files.map((file) => putInDraft(file));
-    const { caption, clipStartMs, durationMs, videoMuted, soundMuted } = saved;
+    const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak } = saved;
     return {
       ok: true as const,
       draft: {
@@ -1293,6 +1408,7 @@ function start(): void {
         durationMs,
         videoMuted,
         soundMuted,
+        speak,
       },
     };
   };
@@ -1469,11 +1585,11 @@ function start(): void {
         files.push({ path, name: name.replace(/[\\/]/g, '_'), size, contentType });
       }
 
-      const { caption, clipStartMs, durationMs, videoMuted, soundMuted, scene, senderName, senderAvatarUrl } = item;
+      const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, senderName, senderAvatarUrl } = item;
       const name = caption.split('\n')[0]!.trim().slice(0, 60) || item.files[0]?.name.replace(/\.[^.]*$/, '') || 'LiveChat';
       await library.keepFromHistory(
         id,
-        { name, caption, clipStartMs, durationMs, videoMuted, soundMuted, scene, files },
+        { name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, files },
         { historyId: item.id, senderName, senderAvatarUrl },
       );
       return { ok: true };
@@ -1509,7 +1625,7 @@ function start(): void {
     const files = saved.files.map(({ name, size, contentType }) => ({ id: randomUUID(), name, size, contentType }));
     for (const [index, file] of saved.files.entries()) cache.adopt(key, files[index]!.id, file.path, file.contentType);
 
-    const { caption, clipStartMs, durationMs, videoMuted, soundMuted, scene, savedAt, kept } = saved;
+    const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, savedAt, kept } = saved;
     const item: HistoryItem = {
       id: saved.id,
       files,
@@ -1522,6 +1638,7 @@ function start(): void {
       durationMs,
       videoMuted,
       soundMuted,
+      speak,
       scene,
       expiresAt: Number.MAX_SAFE_INTEGER,
       playedAt: savedAt,
@@ -1620,7 +1737,12 @@ function start(): void {
     settings.flush();
     tray.destroy();
   });
-  app.on('second-instance', showControlWindow);
+  app.on('second-instance', (_event, argv) => {
+    if (!noticeExternal(argv)) showControlWindow();
+  });
+  noticeExternal(process.argv);
+  void registerExplorerMenu();
+  void cleanPasted((path) => library.usesPath(path));
 
   applyLaunchAtStartup();
 

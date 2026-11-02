@@ -101,6 +101,8 @@ Donne un nom à un LiveChat réussi, et renvoie-le plus tard en un clic. Si un f
 - **Une file d'attente :** les envois passent l'un après l'autre, sans se couper. Tout le monde peut passer au suivant.
 - **Un historique :** rejoue un envoi pour tout le monde, ou revois-le juste pour toi. L'étoile garde un LiveChat marrant sur ton PC, pour le ressortir même des jours après.
 - **Ton volume à toi :** chacun règle le son et peut couper le sien.
+- **Envoi rapide :** Ctrl+V colle une image, une vidéo, un son ou un lien direct. Dans Windows, le clic droit sur un fichier propose « préparer » ou « envoyer direct ».
+- **Emojis et voix robot :** des emojis façon Discord dans ton texte, et une case pour le faire lire à voix haute. Chacun peut couper la voix chez lui.
 - **En plein jeu :** Shift+F1 à Shift+F10 envoient tes memes, Shift+F11 passe au suivant, sans quitter ton jeu.
 - **Mode clean :** Shift+F12 coupe tout chez toi, son et image, jusqu'à ce que tu réappuies. La touche se change dans les réglages.
 - **Ta tranquillité :** ignore un pote pour un moment, sans qu'il le sache, et coupe chez toi ce qui dure plus de 20 secondes.

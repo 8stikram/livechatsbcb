@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import { IpcChannel, type AppState, type LiveChatApi } from '../shared/ipc';
 
 const api: LiveChatApi = {
@@ -55,6 +55,17 @@ const api: LiveChatApi = {
   stopLocalReplay: () => ipcRenderer.invoke(IpcChannel.StopLocalReplay),
   setSettings: (change) => ipcRenderer.invoke(IpcChannel.SetSettings, change),
   testOverlay: () => ipcRenderer.invoke(IpcChannel.TestOverlay),
+  pathForFile: (file) => webUtils.getPathForFile(file),
+  pasteFiles: (paths, advanced) => ipcRenderer.invoke(IpcChannel.PasteFiles, paths, advanced),
+  pasteImage: (bytes, contentType, name, advanced) => ipcRenderer.invoke(IpcChannel.PasteImage, bytes, contentType, name, advanced),
+  pasteLink: (url, advanced) => ipcRenderer.invoke(IpcChannel.PasteLink, url, advanced),
+  onExternalFiles: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on(IpcChannel.ExternalFilesWaiting, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.ExternalFilesWaiting, handler);
+  },
+  takeExternalFiles: (advanced) => ipcRenderer.invoke(IpcChannel.TakeExternalFiles, advanced),
+  sendExternalFiles: (durationMs) => ipcRenderer.invoke(IpcChannel.SendExternalFiles, durationMs),
   onShortcutFeedback: (listener) => {
     const handler = (_event: unknown, sent: boolean) => listener(sent);
     ipcRenderer.on(IpcChannel.ShortcutFeedback, handler);

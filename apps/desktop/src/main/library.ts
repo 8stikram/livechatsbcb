@@ -35,6 +35,7 @@ const SavedSchema = z.object({
   durationMs: z.number(),
   videoMuted: z.boolean(),
   soundMuted: z.boolean(),
+  speak: z.boolean().default(false),
   favorite: z.boolean(),
   savedAt: z.number(),
   files: z.array(SavedFileSchema),
@@ -201,6 +202,10 @@ export class Library {
 
   private shortcutWhere(matches: (target: ShortcutTarget) => boolean): string | null {
     return Object.entries(this.data.shortcuts).find(([, target]) => matches(target))?.[0] ?? null;
+  }
+
+  usesPath(path: string): boolean {
+    return this.data.saved.some(({ files }) => files.some((file) => file.path === path));
   }
 
   shortcutTarget(key: string): ShortcutTarget | null {

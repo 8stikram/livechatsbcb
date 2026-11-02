@@ -3,6 +3,18 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.10.0',
+    date: '2 novembre 2026',
+    items: [
+      'Ctrl+V depuis n’importe quel onglet : une image, une vidéo ou un son copié prépare ton LiveChat',
+      'Colle le lien direct d’une image, d’un GIF ou d’une vidéo, l’app le récupère pour toi',
+      'Clic droit sur un fichier dans Windows : « préparer » ou « envoyer direct ». Une image et un son sélectionnés ensemble font un seul LiveChat',
+      'Emojis dans le texte, avec les mêmes dessins que Discord',
+      'Voix robot : une case à cocher pour lire ton texte à voix haute, 200 caractères au maximum',
+      'Dans les réglages, chacun peut couper la voix robot, choisir sa voix et sa vitesse',
+    ],
+  },
+  {
     version: '0.9.0',
     date: '2 novembre 2026',
     items: [

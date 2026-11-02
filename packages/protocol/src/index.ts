@@ -226,6 +226,8 @@ export const MediaDraftSchema = z
     // With a video and a sound together, whoever sends chooses which of the two is heard: one, both or neither.
     videoMuted: z.boolean().default(false),
     soundMuted: z.boolean().default(false),
+    // Read aloud on each PC, in that PC's own voice.
+    speak: z.boolean().default(false),
     scene: SceneSchema.default(null),
     files: z
       .array(
@@ -277,6 +279,7 @@ export const QueueItemSchema = z.object({
   durationMs: z.number(),
   videoMuted: z.boolean(),
   soundMuted: z.boolean(),
+  speak: z.boolean().default(false),
   scene: SceneSchema,
   // When the service forgets it, and deletes its file. Playing it again doesn't push this back.
   expiresAt: z.number(),

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import type { SceneLayer } from '@livechatsbcb/protocol';
 import type { OverlayLayout, PlaybackView, SceneLayerView, Zone } from '../../shared/ipc';
 import { Avatar } from './Avatar';
+import { say, spokenText } from './speech';
 import { useSyncedMedia } from './use-synced-media';
 
 // What the overlay draws, and what the LiveChat tab draws in small: what you see is what the others see.
@@ -165,18 +166,39 @@ const PlayingLayer = ({
   </div>
 );
 
+export type Speech = { voice: string | null; rate: number };
+
+// Someone arriving late hears nothing rather than a sentence already over for the others.
+const SPEECH_LATE_MS = 1_000;
+
+const useSpeech = (item: PlaybackView, startAt: number, volume: number, speech: Speech | null) => {
+  useEffect(() => {
+    const text = item.speak && speech ? spokenText(item.caption) : '';
+    const wait = startAt - Date.now();
+    if (!text || !speech || wait < -SPEECH_LATE_MS) return;
+    const timer = setTimeout(() => say(text, speech.voice, speech.rate, volume), Math.max(0, wait));
+    return () => {
+      clearTimeout(timer);
+      speechSynthesis.cancel();
+    };
+  }, [item.id, startAt]);
+};
+
 export const Playing = ({
   item,
   startAt,
   layout,
   volume,
+  speech = null,
 }: {
   item: PlaybackView;
   startAt: number;
   layout: OverlayLayout;
   volume: number;
+  speech?: Speech | null;
 }) => {
   const onScreen = useOnScreen(startAt, item.durationMs);
+  useSpeech(item, startAt, volume, speech);
 
   return (
     <div className={onScreen ? 'scene' : 'scene is-waiting'} data-testid="overlay-scene" data-on-screen={onScreen}>

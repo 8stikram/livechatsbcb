@@ -1,3 +1,11 @@
+/* Only the emojis: the digits and letters of this font must never show. */
+@font-face {
+  font-family: 'Twemoji';
+  src: url('./assets/twemoji.woff2') format('woff2');
+  unicode-range: U+203C, U+2049, U+20E3, U+2139, U+2194-21AA, U+231A-23FF, U+24C2, U+25AA-25FE, U+2600-27BF, U+2934-2935,
+    U+2B05-2B55, U+3030, U+303D, U+3297, U+3299, U+FE0F, U+200D, U+1F000-1FAFF, U+E0020-E007F;
+}
+
 :root {
   color-scheme: dark;
 
@@ -29,7 +37,7 @@
   /* What Windows keeps for its own buttons, top right. */
   --window-buttons: 150px;
 
-  --font: 'Geist Variable', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font: 'Twemoji', 'Geist Variable', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'Geist Mono Variable', 'Cascadia Mono', Consolas, monospace;
 
   font-family: var(--font);
@@ -2217,6 +2225,88 @@ select.input {
   margin: 12px auto 0;
 }
 
+.caption-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.speech-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--glass-raised);
+  font-size: 13px;
+}
+
+.emoji-root {
+  position: relative;
+}
+
+.emoji-panel {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 300px;
+  height: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #1b1b20;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 45%);
+}
+
+.emoji-groups {
+  display: flex;
+  justify-content: space-between;
+}
+
+.emoji-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  align-content: start;
+  gap: 2px;
+  overflow-x: hidden;
+}
+
+.emoji-title {
+  grid-column: 1 / -1;
+  margin: 6px 0 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.emoji-grid .hint {
+  grid-column: 1 / -1;
+}
+
+.emoji {
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.emoji:hover,
+.emoji.is-active {
+  background: var(--glass-hover);
+}
+
 .shortcut-badge {
   flex: none;
   padding: 2px 8px;
@@ -2271,7 +2361,7 @@ html.overlay {
   --on-accent: #17091f;
   color-scheme: normal;
   background: transparent;
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Twemoji', 'Segoe UI', system-ui, sans-serif;
 }
 
 html.overlay body {

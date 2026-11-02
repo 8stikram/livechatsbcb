@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { DEFAULT_LAYOUT, SKIP_KEY, type AppState, type CleanKeyOutcome, type OverlayLayout, type Settings, type UpdateCheckOutcome, type Zone } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
+import { say } from '../speech';
 import { ConfirmButton } from './ConfirmButton';
 import { Slider } from './NowPlaying';
 
@@ -112,6 +113,17 @@ const LayoutEditor = ({ layout }: { layout: OverlayLayout }) => {
   );
 };
 
+const useVoices = () => {
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  useEffect(() => {
+    const load = () => setVoices(speechSynthesis.getVoices());
+    load();
+    speechSynthesis.addEventListener('voiceschanged', load);
+    return () => speechSynthesis.removeEventListener('voiceschanged', load);
+  }, []);
+  return voices;
+};
+
 const MAX_DURATION_CHOICES = [10, 15, 20, 30, 45, 60];
 
 const CLEAN_KEY_ERRORS: Record<Exclude<CleanKeyOutcome, 'ok'>, string> = {
@@ -175,6 +187,7 @@ type Section = (typeof SECTIONS)[number][0];
 export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpenNotes: () => void }) => {
   const { settings, displays } = state;
   const [section, setSection] = useState<Section>('general');
+  const voices = useVoices();
   const [checking, setChecking] = useState(false);
   const [checked, setChecked] = useState<UpdateCheckOutcome | null>(null);
   const set = (change: Partial<Settings>) => void window.liveChat.setSettings(change);
@@ -308,6 +321,44 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
             <Switch checked={settings.muted} onChange={(muted) => set({ muted })}>
               Couper le son
             </Switch>
+          </section>
+
+          <section className="glass panel" aria-labelledby="speech-title">
+            <h2 id="speech-title">Voix robot</h2>
+            <Switch checked={settings.speechEnabled} onChange={(speechEnabled) => set({ speechEnabled })}>
+              Entendre la voix robot chez moi
+            </Switch>
+            <label className="field">
+              <span>Voix</span>
+              <select
+                className="input"
+                value={settings.speechVoice ?? ''}
+                onChange={(event) => set({ speechVoice: event.target.value || null })}
+              >
+                <option value="">Voix par défaut de Windows</option>
+                {voices.map(({ voiceURI, name }) => (
+                  <option key={voiceURI} value={voiceURI}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span className="field-line">
+                Vitesse <strong className="mono" data-testid="speech-rate">{settings.speechRate} %</strong>
+              </span>
+              <Slider value={settings.speechRate} min={50} max={200} onChange={(speechRate) => set({ speechRate })} />
+            </label>
+            <div className="panel-actions">
+              <button
+                type="button"
+                className="pill secondary small"
+                onClick={() => say('Ceci est la voix robot de LiveChat.', settings.speechVoice, settings.speechRate, settings.muted ? 0 : settings.volume / 100)}
+              >
+                Essayer
+              </button>
+            </div>
+            <p className="hint">Chaque PC lit avec sa propre voix : elle n’est pas forcément la même chez tout le monde.</p>
           </section>
         </div>
 

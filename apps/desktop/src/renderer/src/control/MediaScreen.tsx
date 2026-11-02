@@ -9,6 +9,8 @@ import { DEFAULT_SETTINGS, type AppState, type DraftMedia, type DraftSlot, type 
 import { Caption, Profile, ScreenPreview, zoneStyle } from '../scene';
 import { LayerPanel, SceneBoard } from './AdvancedEditor';
 import { IconPlay, KindIcon } from './icons';
+import { isLongerThanSpoken, readingMs } from '../speech';
+import { EmojiButton } from './EmojiPicker';
 import { canSendIn, mediaErrorMessage } from './messages';
 import { Slider } from './NowPlaying';
 import { Switch } from './SettingsScreen';
@@ -246,6 +248,12 @@ export const MediaScreen = ({
   const [error, setError] = useState<string | null>(null);
   const [saveName, setSaveName] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [confirmingSpeech, setConfirmingSpeech] = useState(false);
+  const captionField = useRef<HTMLTextAreaElement>(null);
+
+  const speak = files.speak && caption.trim() !== '';
+  // A text that is read stays for as long as the reading takes.
+  const shownMs = speak ? Math.min(MAX_CLIP_MS, Math.max(displayMs, readingMs(caption))) : displayMs;
 
   const isUploading = state.upload !== null;
   const advanced = scene.active;
@@ -267,25 +275,37 @@ export const MediaScreen = ({
     caption,
     videoMuted,
     soundMuted,
+    speak,
     withPicture: picture !== null,
     withSound: sound !== null,
     ...(plays && clip
       ? { clipStartMs: clip.startMs, durationMs: Math.max(MIN_DISPLAY_MS, clip.endMs - clip.startMs) }
-      : { clipStartMs: 0, durationMs: displayMs }),
+      : { clipStartMs: 0, durationMs: shownMs }),
   });
 
   const sceneInput = (): SceneInput => ({
     caption,
     videoMuted,
     soundMuted,
+    speak,
     layers: scene.layers.map(({ key: _key, ...layer }) => layer),
     soundId: scene.soundId,
     ...(scene.clip
       ? { clipStartMs: scene.clip.startMs, durationMs: Math.max(MIN_DISPLAY_MS, scene.clip.endMs - scene.clip.startMs) }
-      : { clipStartMs: 0, durationMs: displayMs }),
+      : { clipStartMs: 0, durationMs: shownMs }),
   });
 
   const stopPreview = () => setPreview(null);
+
+  const insertEmoji = (emoji: string) => {
+    const field = captionField.current;
+    const start = field?.selectionStart ?? caption.length;
+    const end = field?.selectionEnd ?? caption.length;
+    const next = caption.slice(0, start) + emoji + caption.slice(end);
+    if (next.length > MAX_CAPTION_LENGTH) return;
+    files.setCaption(next);
+    requestAnimationFrame(() => field?.setSelectionRange(start + emoji.length, start + emoji.length));
+  };
 
   // Played right here with its sound and its effects: nothing leaves this PC.
   const startPreview = () => {
@@ -309,6 +329,7 @@ export const MediaScreen = ({
         soundUrl: scene.sound?.previewUrl ?? null,
         videoMuted,
         soundMuted,
+        speak: false,
         scene: input.layers.map(({ fileId, ...layer }) => {
           const file = scene.fileOf(fileId);
           return { ...layer, kind: file?.kind === 'video' ? 'video' : 'image', url: file?.previewUrl ?? null };
@@ -358,6 +379,7 @@ export const MediaScreen = ({
     if (result.ok) {
       if (advanced) scene.clearStage();
       else files.reset();
+      files.setSpeak(false);
       // Keeps whatever was typed while this one was on its way.
       files.setCaption((typed) => (typed === caption ? '' : typed));
     } else if (result.error !== 'cancelled') {
@@ -497,12 +519,63 @@ export const MediaScreen = ({
           <span>{hasFiles || advanced ? 'Texte à afficher (facultatif)' : 'Texte à afficher'}</span>
           <textarea
             className="input is-area"
+            ref={captionField}
             value={caption}
             maxLength={MAX_CAPTION_LENGTH}
             onChange={(event) => files.setCaption(event.target.value)}
             placeholder="Ton message, en bas de l’écran de tout le monde"
           />
         </label>
+
+        {!selectedLayer && (
+          <div className="caption-tools">
+            <EmojiButton onPick={insertEmoji} />
+            {caption.trim() && !confirmingSpeech && (
+              <Switch
+                checked={files.speak}
+                onChange={(on) => {
+                  if (on) setConfirmingSpeech(true);
+                  else files.setSpeak(false);
+                }}
+              >
+                Lire à voix haute
+              </Switch>
+            )}
+          </div>
+        )}
+
+        {!selectedLayer && confirmingSpeech && (
+          <div className="speech-confirm" role="alertdialog" aria-label="Confirmer la voix robot">
+            <p>Tu es sûr ? La voix robot s’entend chez tout le monde, et ça peut vite être pénible.</p>
+            <div className="field-line">
+              <button type="button" className="pill quiet small" onClick={() => setConfirmingSpeech(false)}>
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="pill secondary small"
+                onClick={() => {
+                  files.setSpeak(true);
+                  setConfirmingSpeech(false);
+                }}
+              >
+                Oui, lire
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!selectedLayer && speak && isLongerThanSpoken(caption) && (
+          <p className="hint" data-testid="speech-limit">
+            Seuls les 200 premiers caractères seront lus.
+          </p>
+        )}
+
+        {!selectedLayer && speak && !plays && shownMs > displayMs && (
+          <p className="hint" data-testid="speech-duration">
+            Reste affiché {Math.ceil(shownMs / 1000)} s, le temps de la lecture.
+          </p>
+        )}
 
         {!selectedLayer && (advanced ? scene.hasVideo && scene.sound : picture?.kind === 'video' && sound) && (
           <div className="stack">

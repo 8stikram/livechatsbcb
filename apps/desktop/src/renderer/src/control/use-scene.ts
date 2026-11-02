@@ -159,6 +159,15 @@ export const useScene = () => {
       return null;
     },
     pick: async (wanted: 'picture' | 'sound') => accept(await window.liveChat.pickSceneFile(wanted)),
+    addIncoming: async (incoming: SceneFile[]): Promise<string | null> => {
+      const everything = [...files, ...incoming];
+      setFiles(everything);
+      for (const file of incoming) {
+        const problem = await add(file, everything);
+        if (problem) return problem;
+      }
+      return null;
+    },
     addFromLibrary: async (fileId: string, at?: { x: number; y: number }) =>
       accept(await window.liveChat.useLibraryFileInScene(fileId), at),
     updateLayer,

@@ -36,17 +36,15 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
-### 3. Envoi ultra rapide
+### 0.10.0 : envoi rapide et texte vivant (en cours)
 
-- Ctrl+V magique
-- Coller le lien d'une image
-- « Envoyer vers LiveChatSBCB » dans le clic droit de Windows
+Les deux mises à jour sortent ensemble.
 
-### 4. Texte vivant
-
-- Emojis dans le texte (ceux de Discord si possible)
-- GIF
-- TTS, avec la voix robot gratuite de Windows
+- Ctrl+V depuis n'importe quel onglet : image, vidéo ou son copié, et ça prépare le LiveChat
+- Lien direct vers une image, un GIF ou une vidéo
+- Clic droit de Windows : « préparer » ou « envoyer direct », et plusieurs fichiers donnent un seul LiveChat
+- Emojis avec le look de Discord, dans un bouton
+- Voix robot : case décochée de base, avec une confirmation, 200 caractères lus au maximum
 
 ### 5. Liens vidéo
 
@@ -72,6 +70,8 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 ### 9. Plus tard
 
 - Thèmes (Wii, Persona…)
+- GIF : bouton avec recherche via Klipy (compte et clé à créer), favoris et récents
+- Emojis perso des serveurs, avec un bot peut-être
 
 ## Jeux (place à choisir)
 

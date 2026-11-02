@@ -13,6 +13,7 @@ export const loadInEditor = (
     files.setCaption(loaded.scene.caption);
     files.setVideoMuted(loaded.scene.videoMuted);
     files.setSoundMuted(loaded.scene.soundMuted);
+    files.setSpeak(loaded.scene.speak);
     if (!loaded.scene.soundId && !loaded.scene.layers.some(({ fileId }) => loaded.scene.files.find(({ id }) => id === fileId)?.kind === 'video')) {
       files.setDisplayMs(loaded.scene.durationMs);
     }

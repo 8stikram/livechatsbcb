@@ -1,4 +1,4 @@
-import type { ActionError, PartyView, PickResult } from '../../../shared/ipc';
+import type { ActionError, IncomingError, PartyView, PickResult } from '../../../shared/ipc';
 
 export const errorMessage = (error: ActionError): string => {
   switch (error) {
@@ -56,6 +56,21 @@ export const mediaErrorMessage = (error: ActionError): string =>
 
 export const replayErrorMessage = (error: ActionError): string =>
   error === 'not_found' ? 'Ce média n’est plus disponible : tout est effacé après 1 jour.' : errorMessage(error);
+
+export const incomingErrorMessage = (error: IncomingError): string => {
+  switch (error) {
+    case 'too_many':
+      return 'Un LiveChat simple prend une image ou une vidéo, et un son. Pour plus de fichiers, passe en mode Avancé.';
+    case 'bad_link':
+      return 'Ce lien n’a pas pu être récupéré. Vérifie qu’il mène bien à un fichier.';
+    case 'not_found':
+      return 'Ce fichier n’est plus là.';
+    case 'unsupported':
+      return 'Ce n’est pas une image, un GIF, une vidéo ou un son. YouTube et TikTok arriveront plus tard.';
+    default:
+      return pickErrorMessage(error);
+  }
+};
 
 export const pickErrorMessage = (error: Exclude<Extract<PickResult, { ok: false }>['error'], 'cancelled'>): string => {
   switch (error) {

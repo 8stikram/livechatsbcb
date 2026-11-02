@@ -1,5 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core';
@@ -281,6 +283,19 @@ const openTab = (member: Member, name: string) =>
 const openSettings = async (member: Member, section: string): Promise<void> => {
   await openTab(member, 'Réglages');
   await member.control.getByRole('navigation', { name: 'Sections des réglages' }).getByRole('button', { name: section }).click();
+};
+
+const pasteIn = async (member: Member): Promise<void> => {
+  await member.control.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await member.app.evaluate(({ BrowserWindow }) => {
+    for (const window of BrowserWindow.getAllWindows()) if (!window.getTitle().includes('Scène')) window.webContents.paste();
+  });
+};
+
+const emptyDraft = async (member: Member): Promise<void> => {
+  const remove = member.control.locator('.draft-head').getByRole('button', { name: 'Retirer' });
+  while ((await remove.count()) > 0) await remove.first().click();
+  await member.control.getByLabel(/Texte à afficher/).fill('');
 };
 
 const pressKeys = (keys: string): void => {
@@ -1198,6 +1213,168 @@ describe.skipIf(online)('party flow in the real app', () => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('state:changed', shown);
     }, state);
     await host.control.getByTestId('own-ban').waitFor({ state: 'detached' });
+  });
+
+  it('prepares a LiveChat from what is pasted, from any tab', async () => {
+    const logo = join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png');
+    const copyFiles = (...paths: string[]) => {
+      spawnSync('powershell', ['-NoProfile', '-Command', `Set-Clipboard -Path ${paths.map((path) => `'${path}'`).join(',')}`]);
+    };
+    const sound = join(sandbox, 'colle.wav');
+    writeFileSync(sound, silentWav(2_000));
+    const other = join(sandbox, 'autre.png');
+    copyFileSync(logo, other);
+
+    const server = createServer((request, response) => {
+      if (request.url === '/image.png') {
+        response.writeHead(200, { 'content-type': 'image/png' });
+        response.end(readFileSync(logo));
+      } else {
+        response.writeHead(200, { 'content-type': 'text/html' });
+        response.end('<p>Pas un média</p>');
+      }
+    });
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+    const { port } = server.address() as AddressInfo;
+
+    try {
+      // A picture, from another tab.
+      await openTab(host, 'Party');
+      spawnSync('powershell', ['-NoProfile', '-STA', '-Command', `Add-Type -AssemblyName System.Windows.Forms, System.Drawing; [System.Windows.Forms.Clipboard]::SetImage([System.Drawing.Image]::FromFile('${logo}'))`]);
+      await pasteIn(host);
+      await host.control.getByRole('tab', { name: 'LiveChat', selected: true }).waitFor();
+      await host.control.getByTestId('draft-name').first().waitFor();
+      await emptyDraft(host);
+
+      // Files copied in the Explorer: a picture and a sound make one LiveChat.
+      copyFiles(logo, sound);
+      await pasteIn(host);
+      await host.control.getByTestId('draft-name').filter({ hasText: 'logo.png' }).waitFor();
+      await host.control.getByTestId('draft-name').filter({ hasText: 'colle.wav' }).waitFor();
+      await picture(host.control, 'paste-files.png');
+      await emptyDraft(host);
+
+      // Two pictures don't fit, and it says so.
+      copyFiles(logo, other);
+      await pasteIn(host);
+      await host.control.getByTestId('incoming-note').filter({ hasText: 'mode Avancé' }).waitFor();
+      expect(await host.control.getByTestId('draft-name').count()).toBe(0);
+
+      // A link to a picture, then a link to something else.
+      await host.app.evaluate(({ clipboard }, url) => clipboard.writeText(url), `http://127.0.0.1:${port}/image.png`);
+      await pasteIn(host);
+      await host.control.getByTestId('draft-name').filter({ hasText: 'image.png' }).waitFor();
+      await emptyDraft(host);
+
+      await host.app.evaluate(({ clipboard }, url) => clipboard.writeText(url), `http://127.0.0.1:${port}/page`);
+      await pasteIn(host);
+      await host.control.getByTestId('incoming-note').filter({ hasText: 'YouTube' }).waitFor();
+      expect(await host.control.getByTestId('draft-name').count()).toBe(0);
+
+      // Words simply become the text.
+      await host.app.evaluate(({ clipboard }) => clipboard.writeText('Collé ici'));
+      await pasteIn(host);
+      await expect.poll(() => host.control.getByLabel(/Texte à afficher/).inputValue()).toBe('Collé ici');
+      await emptyDraft(host);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('takes files from the Windows right click, ready or sent straight away', async () => {
+    const logo = join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png');
+    const sound = join(sandbox, 'clic.wav');
+    writeFileSync(sound, silentWav(2_000));
+
+    // Windows starts the app once per file.
+    await openTab(host, 'Party');
+    await host.app.evaluate(({ app }, files) => {
+      for (const file of files) app.emit('second-instance', {}, ['LiveChatSBCB.exe', '--livechat-prepare', file], '');
+    }, [logo, sound]);
+    await host.control.getByTestId('draft-name').filter({ hasText: 'logo.png' }).waitFor();
+    await host.control.getByTestId('draft-name').filter({ hasText: 'clic.wav' }).waitFor();
+    await emptyDraft(host);
+
+    await host.app.evaluate(({ app }, file) => {
+      app.emit('second-instance', {}, ['LiveChatSBCB.exe', '--livechat-send', file], '');
+    }, logo);
+    await overlayState(guest, 'playing');
+    await guest.stage.getByTestId('overlay-image').waitFor();
+    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+    await overlayState(host, 'idle');
+  });
+
+  it('puts emojis in the text, drawn the same on the overlay', async () => {
+    await openTab(host, 'LiveChat');
+    await host.control.getByRole('button', { name: 'Emoji', exact: false }).click();
+    await host.control.getByLabel('Chercher un emoji').waitFor();
+    await picture(host.control, 'emoji-picker.png');
+    await host.control.getByLabel('Chercher un emoji').fill('chat qui');
+    await host.control.getByRole('button', { name: 'chat qui sourit', exact: true }).click();
+    await host.control.keyboard.press('Escape');
+    expect(await host.control.getByLabel(/Texte à afficher/).inputValue()).toBe('😺');
+
+    await host.control.getByLabel(/Texte à afficher/).fill('Quel beau chat 😺');
+    await sendButton(host).click();
+    await overlayState(guest, 'playing');
+    await guest.stage.getByTestId('overlay-text').filter({ hasText: '😺' }).waitFor();
+    await picture(guest.stage, 'overlay-emoji.png');
+    await expect.poll(() => guest.stage.evaluate(async () => (await document.fonts.load('40px Twemoji', '😺')).length)).toBeGreaterThan(0);
+    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+    await overlayState(host, 'idle');
+  });
+
+  it('reads a text aloud only once it was confirmed, and not for whoever turned it off', async () => {
+    const speaking = (member: Member) => member.stage.evaluate(() => speechSynthesis.speaking);
+    const voiceBox = host.control.locator('label.switch', { hasText: 'Lire à voix haute' });
+    const voiceOn = () => voiceBox.locator('input').isChecked();
+
+    await openTab(host, 'LiveChat');
+    const caption = host.control.getByLabel(/Texte à afficher/);
+    await caption.fill('Ceci est un texte assez long pour que la lecture dure plus longtemps que le temps normal.');
+    expect(await voiceOn()).toBe(false);
+
+    await voiceBox.click();
+    const confirm = host.control.getByRole('alertdialog', { name: 'Confirmer la voix robot' });
+    await confirm.waitFor();
+    await picture(host.control, 'speech-confirm.png');
+    await confirm.getByRole('button', { name: 'Annuler' }).click();
+    expect(await voiceOn()).toBe(false);
+
+    await voiceBox.click();
+    await confirm.getByRole('button', { name: 'Oui, lire' }).click();
+    expect(await voiceOn()).toBe(true);
+    await host.control.getByTestId('speech-duration').waitFor();
+
+    await sendButton(host).click();
+    await overlayState(guest, 'playing');
+    await expect.poll(() => speaking(guest), { timeout: 5_000 }).toBe(true);
+    await expect.poll(() => speaking(host), { timeout: 5_000 }).toBe(true);
+    expect(await voiceBox.count()).toBe(0);
+    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+    await expect.poll(() => speaking(guest)).toBe(false);
+    await overlayState(host, 'idle');
+
+    await guest.control.evaluate(() => window.liveChat.setSettings({ speechEnabled: false }));
+    await caption.fill('Toi tu ne m’entends plus.');
+    await voiceBox.click();
+    await confirm.getByRole('button', { name: 'Oui, lire' }).click();
+    await sendButton(host).click();
+    await overlayState(guest, 'playing');
+    await expect.poll(() => speaking(host), { timeout: 5_000 }).toBe(true);
+    expect(await speaking(guest)).toBe(false);
+    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+    await overlayState(host, 'idle');
+    await guest.control.evaluate(() => window.liveChat.setSettings({ speechEnabled: true }));
+
+    await openSettings(host, 'Son');
+    await host.control.getByRole('heading', { name: 'Voix robot' }).waitFor();
+    await picture(host.control, 'settings-speech.png');
+    await openTab(host, 'LiveChat');
   });
 
   it('sends from LiveChat and shows it in the party, which only says who is there', async () => {

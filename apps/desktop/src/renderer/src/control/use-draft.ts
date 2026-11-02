@@ -15,6 +15,7 @@ export const useDraft = () => {
   const [displayMs, setDisplayMs] = useState(DEFAULT_DISPLAY_MS);
   const [videoMuted, setVideoMuted] = useState(false);
   const [soundMuted, setSoundMuted] = useState(false);
+  const [speak, setSpeak] = useState(false);
 
   const leaderOf = (shownPicture: DraftMedia | null, shownSound: DraftMedia | null) =>
     shownPicture?.kind === 'video' ? shownPicture : shownSound;
@@ -39,6 +40,7 @@ export const useDraft = () => {
     setUnreadable(false);
     setVideoMuted(false);
     setSoundMuted(false);
+    setSpeak(false);
   };
 
   return {
@@ -50,6 +52,7 @@ export const useDraft = () => {
     displayMs,
     videoMuted,
     soundMuted,
+    speak,
     hasFiles: picture !== null || sound !== null,
     // The one that sets the passage and the duration: a video if there is one, or else a sound.
     leader: leaderOf(picture, sound),
@@ -59,7 +62,14 @@ export const useDraft = () => {
     setDisplayMs,
     setVideoMuted,
     setSoundMuted,
+    setSpeak,
     adopt,
+    // Several at once: each takes its own place.
+    adoptAll: (arrived: DraftMedia[]) => {
+      const nextPicture = arrived.find(({ kind }) => kind !== 'audio') ?? picture;
+      const nextSound = arrived.find(({ kind }) => kind === 'audio') ?? sound;
+      change(nextPicture, nextSound);
+    },
     reset,
     load: (loaded: LoadedDraft) => {
       setPicture(loaded.picture);
@@ -68,6 +78,7 @@ export const useDraft = () => {
       setCaption(loaded.caption);
       setVideoMuted(loaded.videoMuted);
       setSoundMuted(loaded.soundMuted);
+      setSpeak(loaded.speak);
       const plays = loaded.sound !== null || loaded.picture?.kind === 'video';
       setClip(plays ? { startMs: loaded.clipStartMs, endMs: loaded.clipStartMs + loaded.durationMs } : null);
       if (!plays) setDisplayMs(loaded.durationMs);

@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { DEFAULT_DISPLAY_MS, MAX_CAPTION_LENGTH } from '@livechatsbcb/protocol';
+import type { IncomingResult } from '../../../shared/ipc';
 import { useAppState } from '../use-app-state';
 import { GuildPicker } from './GuildPicker';
 import { Header, type View } from './Header';
 import { HistoryScreen } from './HistoryScreen';
 import { LibraryScreen, type Category } from './LibraryScreen';
-import { bannedUntilOf, minutesLeft } from './messages';
+import { bannedUntilOf, incomingErrorMessage, mediaErrorMessage, minutesLeft } from './messages';
+import { playLengthMs } from './play-length';
 import { loadInEditor } from './load-editor';
 import { NotesScreen } from './NotesScreen';
 import { LoginScreen } from './LoginScreen';
@@ -22,6 +25,17 @@ const NOTICES = {
   session_expired: 'Tu ne fais plus partie de ta party privée.',
   guild_lost: "Tu n'es plus sur ce serveur Discord.",
 } as const;
+
+const LINK = /^https?:\/\/\S+$/i;
+const MEDIA_LINK = /\.(png|jpe?g|gif|webp|mp4|m4v|mov|webm|mp3|ogg|opus|wav|m4a|flac)$/i;
+
+const looksLikeMedia = (link: string): boolean => {
+  try {
+    return MEDIA_LINK.test(new URL(link).pathname);
+  } catch {
+    return false;
+  }
+};
 
 // You can't see the app while playing, so a small sound says what the key did. Only on this PC.
 const playShortcutSound = (sent: boolean): void => {
@@ -78,6 +92,92 @@ export const App = () => {
       }),
     [],
   );
+
+  const [incomingBusy, setIncomingBusy] = useState(false);
+  const [incomingNote, setIncomingNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!incomingNote) return;
+    const timer = setTimeout(() => setIncomingNote(null), 8_000);
+    return () => clearTimeout(timer);
+  }, [incomingNote]);
+
+  const bringIn = (result: IncomingResult) => {
+    if (!result.ok) {
+      setIncomingNote(incomingErrorMessage(result.error));
+      return;
+    }
+    setPicking(false);
+    setChosenView('media');
+    if ('scene' in result) void scene.addIncoming(result.scene).then(setIncomingNote);
+    else files.adoptAll(result.drafts);
+  };
+
+  const waitFor = async (pasted: Promise<IncomingResult>) => {
+    setIncomingNote(null);
+    setIncomingBusy(true);
+    try {
+      bringIn(await pasted);
+    } finally {
+      setIncomingBusy(false);
+    }
+  };
+
+  // Follows every render: what it does depends on the tab and on what is being prepared.
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const data = event.clipboardData;
+      if (!data || !state?.party || state.upload || incomingBusy) return;
+      const inField = (event.target as Element | null)?.closest?.('input, textarea') != null;
+      const text = data.getData('text/plain').trim();
+      const pasted = [...data.files];
+      const paths = pasted.map((file) => window.liveChat.pathForFile(file)).filter((path) => path !== '');
+
+      if (paths.length > 0) {
+        event.preventDefault();
+        void waitFor(window.liveChat.pasteFiles(paths, scene.active));
+      } else if (pasted[0] && !(inField && text)) {
+        event.preventDefault();
+        const image = pasted[0];
+        void waitFor(
+          image.arrayBuffer().then((bytes) => window.liveChat.pasteImage(new Uint8Array(bytes), image.type, image.name, scene.active)),
+        );
+      } else if (LINK.test(text) && (!inField || looksLikeMedia(text))) {
+        event.preventDefault();
+        void waitFor(window.liveChat.pasteLink(text, scene.active));
+      } else if (text && !inField) {
+        event.preventDefault();
+        setPicking(false);
+        setChosenView('media');
+        files.setCaption((typed) => (typed ? `${typed} ${text}` : text).slice(0, MAX_CAPTION_LENGTH));
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  });
+
+  const takeExternal = useRef<() => Promise<void>>(async () => {});
+  takeExternal.current = async () => {
+    const external = await window.liveChat.takeExternalFiles(scene.active);
+    if (!external) return;
+    if (external.mode === 'prepare') {
+      bringIn(external.result);
+      return;
+    }
+    if ('error' in external) {
+      setIncomingNote(incomingErrorMessage(external.error));
+      return;
+    }
+    const length = await playLengthMs(external.leader);
+    const result = await window.liveChat.sendExternalFiles(length ?? DEFAULT_DISPLAY_MS);
+    if (!mutedRef.current && !state?.settings.clean) playShortcutSound(result.ok);
+    if (!result.ok && result.error !== 'cancelled') setIncomingNote(mediaErrorMessage(result.error));
+  };
+  useEffect(() => {
+    const stop = window.liveChat.onExternalFiles(() => void takeExternal.current());
+    void takeExternal.current();
+    return stop;
+  }, []);
 
   // Whoever just entered a party is there to send something.
   useEffect(() => {
@@ -140,6 +240,16 @@ export const App = () => {
         {!showPicker && <Header party={party} view={view} joinError={joinError} onView={setChosenView} />}
 
         <UpdateBanner update={state.update} restartIn={restartIn} />
+        {incomingBusy && (
+          <p className="banner" role="status" data-testid="incoming-busy">
+            Récupération du média…
+          </p>
+        )}
+        {incomingNote && (
+          <p className="banner is-error" role="alert" data-testid="incoming-note">
+            {incomingNote}
+          </p>
+        )}
         {state.settings.clean && (
           <div className="banner is-clean" role="status" data-testid="clean-banner">
             <span>

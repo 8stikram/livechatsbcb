@@ -14,13 +14,14 @@ const StashSchema = z.object({
       durationMs: z.number(),
       videoMuted: z.boolean(),
       soundMuted: z.boolean(),
+      speak: z.boolean().default(false),
       files: z.array(SavedFileSchema),
       scene: z.array(SceneLayerSchema).nullable(),
     })
     .nullable(),
 });
 export type RestartStash = z.infer<typeof StashSchema>;
-export type StashedRecipe = Pick<SavedLiveChat, 'caption' | 'clipStartMs' | 'durationMs' | 'videoMuted' | 'soundMuted' | 'files' | 'scene'>;
+export type StashedRecipe = Pick<SavedLiveChat, 'caption' | 'clipStartMs' | 'durationMs' | 'videoMuted' | 'soundMuted' | 'speak' | 'files' | 'scene'>;
 
 const stashPath = () => join(app.getPath('userData'), 'restart-stash.json');
 

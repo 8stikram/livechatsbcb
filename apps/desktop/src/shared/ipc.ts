@@ -48,6 +48,11 @@ export type Settings = {
   // Nothing shows and nothing is heard on this PC until it is turned off again.
   clean: boolean;
   cleanKey: string;
+  speechEnabled: boolean;
+  // Null: the voice Windows uses by default.
+  speechVoice: string | null;
+  // In percent of the normal speed.
+  speechRate: number;
   // Cut on this PC after this long, for everyone who keeps the limit. Null: no limit.
   maxDurationSec: number | null;
   // By member. A time on this PC's clock, or null for until the app closes.
@@ -72,6 +77,9 @@ export const DEFAULT_SETTINGS: Settings = {
   backgroundHintShown: false,
   clean: false,
   cleanKey: 'Shift+F12',
+  speechEnabled: true,
+  speechVoice: null,
+  speechRate: 100,
   maxDurationSec: 20,
   ignored: {},
   seenVersion: null,
@@ -105,6 +113,7 @@ export type PlaybackView = {
   soundUrl: string | null;
   videoMuted: boolean;
   soundMuted: boolean;
+  speak: boolean;
   // The advanced mode: what replaces the picture, each with its file. Null url until it has reached this PC.
   scene: SceneLayerView[] | null;
 };
@@ -161,10 +170,18 @@ export type SceneInput = {
   durationMs: number;
   videoMuted: boolean;
   soundMuted: boolean;
+  speak: boolean;
   layers: EditedLayer[];
   soundId: string | null;
 };
 export type LoadedScene = SceneInput & { files: SceneFile[] };
+export type IncomingError = 'too_large' | 'empty' | 'unsupported' | 'too_many' | 'bad_link' | 'not_found';
+// What was pasted or came from Windows, ready in whichever editor is open.
+export type IncomingResult = { ok: true; drafts: DraftMedia[] } | { ok: true; scene: SceneFile[] } | { ok: false; error: IncomingError };
+export type ExternalFiles =
+  | { mode: 'prepare'; result: IncomingResult }
+  | { mode: 'send'; leader: { kind: DraftMedia['kind']; url: string } }
+  | { mode: 'send'; error: IncomingError };
 // What is being asked for: anything at first, then whichever of the two is still missing.
 export type DraftSlot = 'picture' | 'sound';
 
@@ -213,6 +230,7 @@ export type LoadedDraft = {
   durationMs: number;
   videoMuted: boolean;
   soundMuted: boolean;
+  speak: boolean;
 };
 // Paused: no connection for now, and it carries on by itself when it comes back.
 export type UploadView = { name: string; percent: number; paused: boolean };
@@ -265,6 +283,7 @@ export type SendMediaInput = {
   durationMs: number;
   videoMuted: boolean;
   soundMuted: boolean;
+  speak: boolean;
   withPicture: boolean;
   withSound: boolean;
 };
@@ -291,6 +310,12 @@ export const IpcChannel = {
   ClearDraft: 'media:clear-draft',
   SendMedia: 'media:send',
   CancelUpload: 'media:cancel-upload',
+  PasteFiles: 'paste:files',
+  PasteImage: 'paste:image',
+  PasteLink: 'paste:link',
+  ExternalFilesWaiting: 'external:waiting',
+  TakeExternalFiles: 'external:take',
+  SendExternalFiles: 'external:send',
   ShortcutFeedback: 'shortcut:feedback',
   SetClean: 'clean:set',
   SetCleanKey: 'clean:set-key',
@@ -387,6 +412,13 @@ export type LiveChatApi = {
   stopLocalReplay(): Promise<void>;
   setSettings(change: Partial<Settings>): Promise<void>;
   testOverlay(): Promise<void>;
+  pathForFile(file: File): string;
+  pasteFiles(paths: string[], advanced: boolean): Promise<IncomingResult>;
+  pasteImage(bytes: Uint8Array, contentType: string, name: string, advanced: boolean): Promise<IncomingResult>;
+  pasteLink(url: string, advanced: boolean): Promise<IncomingResult>;
+  onExternalFiles(listener: () => void): () => void;
+  takeExternalFiles(advanced: boolean): Promise<ExternalFiles | null>;
+  sendExternalFiles(durationMs: number): Promise<ActionResult>;
   onShortcutFeedback(listener: (sent: boolean) => void): () => void;
   setClean(clean: boolean): Promise<void>;
   setCleanKey(key: string): Promise<CleanKeyOutcome>;

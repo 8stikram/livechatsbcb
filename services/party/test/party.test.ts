@@ -330,6 +330,19 @@ describe('party service', () => {
     socket.close();
   });
 
+  it('says which text is to be read aloud, and nothing else is', async () => {
+    const host = await createParty();
+    const socket = new TestSocket(host);
+    await socket.welcome();
+
+    await sendText(host, 'Sans voix', 60_000);
+    const response = await post(`/v1/parties/${host.partyId}/media`, { caption: 'Avec voix', clipStartMs: 0, durationMs: 1_000, speak: true, files: [] }, authorized(host));
+    expect(response.status).toBe(201);
+    const queue = await socket.queueWhere((items) => items.length === 2, 'both');
+    expect(queue.map(({ speak }) => speak)).toEqual([false, true]);
+    socket.close();
+  });
+
   it('moves on once everyone online has cut it, and not before', async () => {
     const host = await createParty();
     const guest = await joinParty(host.code, 'Invite');

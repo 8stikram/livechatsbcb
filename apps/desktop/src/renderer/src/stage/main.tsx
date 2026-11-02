@@ -32,7 +32,14 @@ const Stage = () => {
   return (
     <main className="stage" data-testid="stage" data-state={scene}>
       {playing && (
-        <Playing key={playing.id} item={playing} startAt={playing.startAt!} layout={settings.layout} volume={volume} />
+        <Playing
+          key={playing.id}
+          item={playing}
+          startAt={playing.startAt!}
+          layout={settings.layout}
+          volume={volume}
+          speech={settings.speechEnabled ? { voice: settings.speechVoice, rate: settings.speechRate } : null}
+        />
       )}
       {!playing && overlayTest && <TestScene layout={settings.layout} account={state.account} />}
     </main>
