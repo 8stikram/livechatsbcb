@@ -6,15 +6,7 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.7.0** (dernière version)
-
-- Barre de téléchargement des mises à jour
-- LiveChat en premier, Party réduite aux membres, au média en cours et à la suite
-- Favoris dans l'historique, gardés sur le PC
-
-## Prête à publier
-
-**0.8.0** : solide d'abord
+**0.8.0** (dernière version) : solide d'abord
 
 - Notes de mise à jour, proposées après chaque mise à jour
 - Bouton « Vérifier les mises à jour »
@@ -24,6 +16,12 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 - Envoi possible sans connexion, parti au retour du réseau
 
 Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
+
+**0.7.0**
+
+- Barre de téléchargement des mises à jour
+- LiveChat en premier, Party réduite aux membres, au média en cours et à la suite
+- Favoris dans l'historique, gardés sur le PC
 
 ## À venir
 
