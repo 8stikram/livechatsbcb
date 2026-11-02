@@ -6,7 +6,17 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.11.0** (dernière version) : motion design
+**0.12.0** (dernière version) : version Mac
+
+- L'app sur Mac récents (puces Apple), sans abonnement Apple
+- Mise à jour automatique sur Mac aussi
+- Un seul lien de téléchargement, et une page d'aide « Ouvrir quand même »
+- Raccourcis Ctrl+Option+1 à 0, icône dans le Dock et la barre du haut
+- Fichiers aussi publiés sur la page GitHub
+- Mode Simple : une musique se choisit comme une image
+- Surbrillance des petits onglets réparée
+
+**0.11.0** : motion design
 
 - Animations façon Apple dans toute l'app
 - Onglets qui glissent, avec la marque qui suit

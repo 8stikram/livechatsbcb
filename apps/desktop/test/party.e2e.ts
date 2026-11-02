@@ -727,6 +727,10 @@ describe.skipIf(online)('party flow in the real app', () => {
     await openTab(host, 'LiveChat');
     await openTab(guest, 'LiveChat');
     await picture(host.control, '7-media-empty.png');
+    // Room for the window buttons of a Mac, top left.
+    await host.control.evaluate(() => document.documentElement.classList.add('mac'));
+    await picture(host.control, 'mac-layout.png');
+    await host.control.evaluate(() => document.documentElement.classList.remove('mac'));
   });
 
   it('makes the stage a transparent, click-through overlay that never takes focus', async () => {

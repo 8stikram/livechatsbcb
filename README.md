@@ -4,7 +4,7 @@
 
 <br />
 
-**L'app Windows pour faire rire tes potes, directement sur leur écran.**
+**L'app Windows et Mac pour faire rire tes potes, directement sur leur écran.**
 
 Une image, une vidéo, un son ou un texte : tu l'envoies, et il s'affiche chez toute ta party en même temps, même en pleine partie.
 
@@ -14,7 +14,7 @@ Une image, une vidéo, un son ou un texte : tu l'envoies, et il s'affiche chez t
 
 <br /><br />
 
-<img src="https://img.shields.io/badge/Fait_pour-Windows-2f7bff?style=flat-square" alt="Fait pour Windows" />
+<img src="https://img.shields.io/badge/Fait_pour-Windows_et_Mac-2f7bff?style=flat-square" alt="Fait pour Windows et Mac" />
 <img src="https://img.shields.io/badge/Connexion-Discord-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Connexion avec Discord" />
 <img src="https://img.shields.io/badge/Party-jusqu%27%C3%A0_10_en_ligne-ff5ecb?style=flat-square" alt="Jusqu'à 10 en ligne" />
 <img src="https://img.shields.io/badge/Prix-gratuit-8ee6b4?style=flat-square" alt="Gratuit" />
@@ -108,16 +108,17 @@ Donne un nom à un LiveChat réussi, et renvoie-le plus tard en un clic. Si un f
 - **Ta tranquillité :** ignore un pote pour un moment, sans qu'il le sache, et coupe chez toi ce qui dure plus de 20 secondes.
 - **Anti-spam :** le même LiveChat 5 fois en 1 minute, et plus aucun envoi pendant 30 minutes.
 - **Une party privée :** avec un code à 6 caractères, sans passer par un serveur.
-- **Discrète :** l'app reste près de l'horloge et peut se lancer avec Windows. Une case dans les réglages le désactive.
+- **Discrète :** l'app reste près de l'horloge, ou dans la barre du haut sur Mac, et peut se lancer avec l'ordinateur. Une case dans les réglages le désactive.
 - **Toujours à jour :** les mises à jour se font toutes seules.
 
 <br />
 
 ## Installer
 
-1. [Télécharge l'installateur](https://livechatsbcb-party.livechatsbcb-party.workers.dev/download) et lance-le.
+1. [Télécharge l'app](https://livechatsbcb-party.livechatsbcb-party.workers.dev/download) et lance-la. Le même lien marche sur Windows et sur Mac.
 2. Windows peut afficher un avertissement, car l'app n'est pas signée : clique sur « Informations complémentaires », puis « Exécuter quand même ».
-3. Connecte-toi avec Discord et choisis ton serveur. C'est tout.
+3. Sur Mac (puce Apple), [cette page](https://livechatsbcb-party.livechatsbcb-party.workers.dev/mac) explique comment l'ouvrir la première fois.
+4. Connecte-toi avec Discord et choisis ton serveur. C'est tout.
 
 <br />
 
@@ -126,7 +127,7 @@ Donne un nom à un LiveChat réussi, et renvoie-le plus tard en un clic. Si un f
 <details>
 <summary><b>Ça marche avec tous les jeux ?</b></summary>
 <br />
-L'affichage passe par-dessus les jeux en mode <b>fenêtré sans bordure</b>. En plein écran exclusif, Windows ne le laisse pas passer : change ce réglage dans ton jeu.
+L'affichage passe par-dessus les jeux en mode <b>fenêtré sans bordure</b>. En plein écran exclusif, Windows ne le laisse pas passer : change ce réglage dans ton jeu. Sur Mac, les raccourcis sont Ctrl+Option+1 à 0.
 </details>
 
 <details>
