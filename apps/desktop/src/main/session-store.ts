@@ -22,14 +22,17 @@ type StoredData = z.infer<typeof StoredDataSchema>;
 
 const dataPath = () => join(app.getPath('userData'), 'party.dat');
 
+// The Mac ties this encryption to Apple's paid signature: without it, every update would ask for the Mac's password.
+const canEncrypt = (): boolean => process.platform !== 'darwin' && safeStorage.isEncryptionAvailable();
+
 const decode = (raw: Buffer): unknown => {
-  const text = safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(raw) : raw.toString('utf8');
+  const text = canEncrypt() ? safeStorage.decryptString(raw) : raw.toString('utf8');
   return JSON.parse(text);
 };
 
 const encode = (data: StoredData): Buffer => {
   const text = JSON.stringify(data);
-  return safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text) : Buffer.from(text, 'utf8');
+  return canEncrypt() ? safeStorage.encryptString(text) : Buffer.from(text, 'utf8');
 };
 
 export class SessionStore {
@@ -80,7 +83,7 @@ export class SessionStore {
     const target = dataPath();
     const temporary = `${target}.tmp`;
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(temporary, encode(this.data));
+    writeFileSync(temporary, encode(this.data), { mode: 0o600 });
     try {
       renameSync(temporary, target);
     } catch (error) {

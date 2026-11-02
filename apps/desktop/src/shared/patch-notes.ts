@@ -3,6 +3,16 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.12.0',
+    date: '2 novembre 2026',
+    items: [
+      'LiveChatSBCB arrive sur Mac (puces Apple), avec ses propres raccourcis : Ctrl+Option+1 à 0',
+      'Le même lien de téléchargement marche sur Mac, et une page explique comment l’ouvrir la première fois',
+      'Mode Simple : tu choisis une musique comme une image, depuis ta bibliothèque ou ton PC, sans passer par autre chose',
+      'Réparé : Simple et Avancé, Images et Sons, Récents et Favoris montrent de nouveau lequel est choisi',
+    ],
+  },
+  {
     version: '0.11.0',
     date: '2 novembre 2026',
     items: [

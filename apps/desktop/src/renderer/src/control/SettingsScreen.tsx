@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { useTabMarker } from './glide';
-import { DEFAULT_LAYOUT, SKIP_KEY, type AppState, type CleanKeyOutcome, type OverlayLayout, type Settings, type UpdateCheckOutcome, type Zone } from '../../../shared/ipc';
+import { DEFAULT_LAYOUT, keyLabel, ON_MAC, SKIP_KEY, type AppState, type CleanKeyOutcome, type OverlayLayout, type Settings, type UpdateCheckOutcome, type Zone } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { say } from '../speech';
 import { ConfirmButton } from './ConfirmButton';
@@ -133,7 +133,9 @@ const CLEAN_KEY_ERRORS: Record<Exclude<CleanKeyOutcome, 'ok'>, string> = {
 };
 
 const acceleratorOf = (event: KeyboardEvent): string | null => {
-  const key = /^F\d{1,2}$/.test(event.key) || event.key === 'Pause' ? event.key : /^[a-z0-9]$/i.test(event.key) ? event.key.toUpperCase() : null;
+  // Option changes the character typed on a Mac, so the key is read from its place.
+  const typed = ON_MAC ? (event.code.match(/^(?:Digit|Key)(.)$/)?.[1] ?? event.key) : event.key;
+  const key = /^F\d{1,2}$/.test(event.key) || event.key === 'Pause' ? event.key : /^[a-z0-9]$/i.test(typed) ? typed.toUpperCase() : null;
   if (!key) return null;
   const mods = [event.ctrlKey && 'Ctrl', event.altKey && 'Alt', event.shiftKey && 'Shift'].filter(Boolean);
   // A letter alone would be taken from everything you type, everywhere.
@@ -165,7 +167,7 @@ const CleanKeyButton = ({ current }: { current: string }) => {
   return (
     <>
       <button type="button" className="pill secondary small mono" data-testid="clean-key" onClick={() => setRecording(true)}>
-        {recording ? 'Appuie sur une touche…' : current}
+        {recording ? 'Appuie sur une touche…' : keyLabel(current)}
       </button>
       {error && (
         <p className="error" role="alert">
@@ -253,7 +255,7 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
           <section className="glass panel" aria-labelledby="startup-title">
             <h2 id="startup-title">Démarrage</h2>
             <Switch checked={settings.launchAtStartup} onChange={(launchAtStartup) => set({ launchAtStartup })}>
-              Lancer LiveChatSBCB au démarrage de Windows
+              Lancer LiveChatSBCB au démarrage {ON_MAC ? 'du Mac' : 'de Windows'}
             </Switch>
             <p className="hint">
               Il démarre discrètement près de l'horloge. Fermer la fenêtre le laisse ouvert : pour quitter, fais un clic
@@ -346,7 +348,7 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
                 value={settings.speechVoice ?? ''}
                 onChange={(event) => set({ speechVoice: event.target.value || null })}
               >
-                <option value="">Voix par défaut de Windows</option>
+                <option value="">Voix par défaut {ON_MAC ? 'du Mac' : 'de Windows'}</option>
                 {voices.map(({ voiceURI, name }) => (
                   <option key={voiceURI} value={voiceURI}>
                     {name}
@@ -390,7 +392,7 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
             <h2 id="keys-title">Raccourcis en jeu</h2>
             <div className="field-line">
               <span>Passer le LiveChat en cours {unavailable(SKIP_KEY)}</span>
-              <span className="shortcut-badge mono">{SKIP_KEY}</span>
+              <span className="shortcut-badge mono">{keyLabel(SKIP_KEY)}</span>
             </div>
             {state.shortcuts.length === 0 ? (
               <p className="hint">Dans la bibliothèque, fais un clic droit sur un fichier ou un LiveChat sauvegardé pour lui donner une touche, de Shift+F1 à Shift+F10.</p>
@@ -398,7 +400,7 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
               <ul className="rows" data-testid="shortcut-list">
                 {state.shortcuts.map(({ key, name }) => (
                   <li key={key} className="row">
-                    <span className="shortcut-badge mono">{key}</span>
+                    <span className="shortcut-badge mono">{keyLabel(key)}</span>
                     <span className="row-text">
                       <span className="row-title" title={name}>
                         {name}

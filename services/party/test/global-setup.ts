@@ -16,6 +16,8 @@ export default async function setup() {
   const seeds: Record<string, string> = {
     'latest.yml': 'version: 9.9.9\npath: LiveChatSBCB-Setup-9.9.9.exe\nsha512: fake\n',
     'LiveChatSBCB-Setup-9.9.9.exe': 'fake installer',
+    'latest-mac.yml': 'version: 9.9.9\nfiles:\n  - url: LiveChatSBCB-Mac-9.9.9.zip\n    sha512: fake\n  - url: LiveChatSBCB-Mac-9.9.9.dmg\n    sha512: fake\npath: LiveChatSBCB-Mac-9.9.9.zip\n',
+    'LiveChatSBCB-Mac-9.9.9.dmg': 'fake disk image',
     'private.txt': 'must not be served',
   };
   for (const [key, content] of Object.entries(seeds)) {

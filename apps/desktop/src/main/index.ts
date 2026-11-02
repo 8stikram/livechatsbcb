@@ -25,7 +25,7 @@ import {
   type SceneLayer,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, MEME_KEYS, type ExternalFiles, type IncomingError, type IncomingResult, SKIP_KEY, type ActionResult, type HiddenReason, type CleanKeyOutcome, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
+import { IpcChannel, keyLabel, MEME_KEYS, type ExternalFiles, type IncomingError, type IncomingResult, SKIP_KEY, type ActionResult, type HiddenReason, type CleanKeyOutcome, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
@@ -150,7 +150,11 @@ function start(): void {
     ),
   });
   const stageWindow = createStageWindow(settings.current.displayId);
-  const controlWindow = createControlWindow(restartMode ?? (process.argv.includes(START_HIDDEN_ARG) || process.argv.includes(SEND_ARG) ? 'hidden' : 'shown'));
+  // A Mac doesn't pass arguments to what it starts at login, it says so instead.
+  const startedAtLogin = process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAtLogin;
+  const controlWindow = createControlWindow(
+    restartMode ?? (startedAtLogin || process.argv.includes(START_HIDDEN_ARG) || process.argv.includes(SEND_ARG) ? 'hidden' : 'shown'),
+  );
   const restartStash = takeRestartStash();
   const stashed: RestartStash = { view: null, recipe: null };
   // Someone new starts on this version. Someone already logged in came from an older one, and gets told what changed.
@@ -411,6 +415,25 @@ function start(): void {
       name: 'LiveChatSBCB',
       args: [START_HIDDEN_ARG],
     });
+  };
+
+  // Only from Applications can the app replace itself later. A Mac starts it where it was opened, even in the disk image.
+  const offerApplicationsFolder = async (): Promise<void> => {
+    if (process.platform !== 'darwin' || !app.isPackaged || profile || app.isInApplicationsFolder()) return;
+    const { response } = await dialog.showMessageBox(controlWindow, {
+      type: 'question',
+      message: 'Mettre LiveChatSBCB dans Applications ?',
+      detail: 'C’est nécessaire pour que l’app se mette à jour toute seule.',
+      buttons: ['Oui', 'Plus tard'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response !== 0) return;
+    try {
+      app.moveToApplicationsFolder();
+    } catch (error) {
+      console.error('Could not move to Applications:', (error as Error).message);
+    }
   };
 
   const stopLocalReplay = (): void => {
@@ -1078,11 +1101,11 @@ function start(): void {
     });
 
   const shortcutLines = <Action>(current: string | null, assign: (key: string) => MenuLine<Action>): MenuLine<Action> => ({
-    label: current ? `Raccourci : ${current}` : 'Assigner un raccourci',
+    label: current ? `Raccourci : ${keyLabel(current)}` : 'Assigner un raccourci',
     submenu: [
       ...MEME_KEYS.map((key) => {
         const used = key !== current ? library.shortcutName(key) : '';
-        return { ...assign(key), label: used ? `${key} (remplace ${used})` : key };
+        return { ...assign(key), label: used ? `${keyLabel(key)} (remplace ${used})` : keyLabel(key) };
       }),
       ...(current
         ? [
@@ -1273,7 +1296,7 @@ function start(): void {
     const used = file ? library.savedUsing(file.path).length : 0;
     const detail =
       (used > 0 ? `${used > 1 ? `${used} LiveChats sauvegardés l’utilisent` : 'Un LiveChat sauvegardé l’utilise'} et ne pourra plus partir sans lui. ` : '') +
-      'Tu pourras le récupérer depuis la corbeille de Windows.';
+      `Tu pourras le récupérer depuis la ${process.platform === 'darwin' ? 'corbeille' : 'corbeille de Windows'}.`;
     let outcome: 'trashed' | 'cancelled' | 'busy' = 'cancelled';
     if (file && (await confirmed(`Mettre ${file.name} à la corbeille ?`, detail, 'Mettre à la corbeille'))) {
       outcome = await shell.trashItem(file.path).then(
@@ -1737,11 +1760,14 @@ function start(): void {
     settings.flush();
     tray.destroy();
   });
+  // On a Mac, clicking the Dock is how the closed window comes back.
+  app.on('activate', () => showControlWindow());
   app.on('second-instance', (_event, argv) => {
     if (!noticeExternal(argv)) showControlWindow();
   });
   noticeExternal(process.argv);
   void registerExplorerMenu();
+  void offerApplicationsFolder();
   void cleanPasted((path) => library.usesPath(path));
 
   applyLaunchAtStartup();

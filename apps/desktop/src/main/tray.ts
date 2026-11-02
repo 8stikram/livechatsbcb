@@ -1,6 +1,9 @@
 import { Menu, nativeImage, Tray } from 'electron';
 import iconPath from '../renderer/src/assets/logo.png?asset';
 
+// The bar at the top of a Mac is thinner than the Windows one.
+const TRAY_ICON_SIZE = process.platform === 'darwin' ? 18 : 32;
+
 type TrayActions = {
   open: () => void;
   setMuted: (muted: boolean) => void;
@@ -13,7 +16,7 @@ export class AppTray {
   private readonly tray: Tray;
   private muted: boolean | null = null;
   private clean: boolean | null = null;
-  private readonly normalIcon = nativeImage.createFromPath(iconPath).resize({ width: 32, height: 32, quality: 'best' });
+  private readonly normalIcon = nativeImage.createFromPath(iconPath).resize({ width: TRAY_ICON_SIZE, height: TRAY_ICON_SIZE, quality: 'best' });
 
   constructor(private readonly actions: TrayActions) {
     this.tray = new Tray(this.normalIcon);

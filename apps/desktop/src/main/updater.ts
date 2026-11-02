@@ -1,11 +1,13 @@
 import { app } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import type { UpdateCheckOutcome, UpdateStatus } from '../shared/ipc';
+import { MacUpdate } from './mac-update';
 
 const CHECK_INTERVAL_MS = 60 * 60 * 1_000;
 
 export class Updater {
   private status: UpdateStatus = { state: 'idle' };
+  private mac: MacUpdate | null = null;
 
   constructor(private readonly onChange: () => void) {}
 
@@ -16,6 +18,13 @@ export class Updater {
   start(): void {
     // Dev and test builds have no published version to compare with.
     if (!app.isPackaged) return;
+
+    if (process.platform === 'darwin') {
+      this.mac = new MacUpdate((status) => this.publish(status));
+      this.check();
+      setInterval(() => this.check(), CHECK_INTERVAL_MS);
+      return;
+    }
 
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
@@ -41,6 +50,14 @@ export class Updater {
 
   check(): void {
     if (!app.isPackaged || this.status.state !== 'idle') return;
+    if (this.mac) {
+      // A failed check or download only costs a delay: the next check tries again.
+      this.mac.check().catch((error: Error) => {
+        console.error('Update failed:', error.message);
+        this.publish({ state: 'idle' });
+      });
+      return;
+    }
     autoUpdater.checkForUpdates().catch(() => {
       // Already reported by the error event.
     });
@@ -51,15 +68,18 @@ export class Updater {
     if (!app.isPackaged) return 'unavailable';
     if (this.status.state !== 'idle') return 'found';
     try {
-      await autoUpdater.checkForUpdates();
+      await (this.mac ? this.mac.check() : autoUpdater.checkForUpdates());
     } catch {
+      if (this.mac) this.publish({ state: 'idle' });
       return 'failed';
     }
     return this.status.state === 'idle' ? 'latest' : 'found';
   }
 
   installNow(): void {
-    if (this.status.state === 'ready') autoUpdater.quitAndInstall(true, true);
+    if (this.status.state !== 'ready') return;
+    if (this.mac) this.mac.install();
+    else autoUpdater.quitAndInstall(true, true);
   }
 
   private publish(status: UpdateStatus): void {

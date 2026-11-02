@@ -8,6 +8,9 @@ import type {
   SceneLayer,
 } from '@livechatsbcb/protocol';
 
+// The pages have no process: they read it from the browser.
+export const ON_MAC = typeof process !== 'undefined' && process.platform ? process.platform === 'darwin' : navigator.userAgent.includes('Macintosh');
+
 export type ConnectionStatus = 'connecting' | 'online' | 'reconnecting' | 'replaced' | 'party_full' | 'update_required';
 
 export type PartyView = {
@@ -26,7 +29,9 @@ export type MemberView = Omit<Member, 'bannedUntil'> & { bannedUntil: number | n
 export type UpdateStatus =
   | { state: 'idle' }
   | { state: 'downloading'; version: string; percent: number }
-  | { state: 'ready'; version: string };
+  | { state: 'ready'; version: string }
+  // On a Mac, a copy that isn't in Applications can't replace itself.
+  | { state: 'manual'; version: string };
 
 export type IgnoreChoice = '10min' | '1h' | 'close' | 'stop';
 
@@ -79,7 +84,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reduceMotion: false,
   backgroundHintShown: false,
   clean: false,
-  cleanKey: 'Shift+F12',
+  cleanKey: ON_MAC ? 'Ctrl+Alt+=' : 'Shift+F12',
   speechEnabled: true,
   speechVoice: null,
   speechRate: 100,
@@ -88,8 +93,11 @@ export const DEFAULT_SETTINGS: Settings = {
   seenVersion: null,
 };
 
-export const SKIP_KEY = 'Shift+F11';
-export const MEME_KEYS = Array.from({ length: 10 }, (_, index) => `Shift+F${index + 1}`);
+export const SKIP_KEY = ON_MAC ? 'Ctrl+Alt+-' : 'Shift+F11';
+// The function keys of a Mac need fn as well, so it has its own keys.
+export const MEME_KEYS = Array.from({ length: 10 }, (_, index) => (ON_MAC ? `Ctrl+Alt+${(index + 1) % 10}` : `Shift+F${index + 1}`));
+// A Mac keyboard says Option.
+export const keyLabel = (key: string): string => (ON_MAC ? key.replace('Alt', 'Option') : key);
 export type ShortcutView = { key: string; name: string };
 export type CleanKeyOutcome = 'ok' | 'reserved' | 'taken';
 // Why this PC isn't showing what is playing for the others.

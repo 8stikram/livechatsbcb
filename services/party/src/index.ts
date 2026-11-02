@@ -332,7 +332,8 @@ const privacyPage = (): Response =>
   );
 
 const UPDATE_MANIFEST = 'latest.yml';
-const UPDATE_FILE = /^(latest\.yml|LiveChatSBCB-Setup-\d+\.\d+\.\d+\.exe)$/;
+const UPDATE_MAC_MANIFEST = 'latest-mac.yml';
+const UPDATE_FILE = /^(latest\.yml|latest-mac\.yml|LiveChatSBCB-Setup-\d+\.\d+\.\d+\.exe|LiveChatSBCB-Mac-\d+\.\d+\.\d+\.(dmg|zip))$/;
 
 const serveUpdateFile = async (env: Env, file: string): Promise<Response> => {
   if (!UPDATE_FILE.test(file)) return fail('not_found', 404);
@@ -340,7 +341,7 @@ const serveUpdateFile = async (env: Env, file: string): Promise<Response> => {
   const object = await env.UPDATES.get(file);
   if (!object) return fail('not_found', 404);
 
-  const isManifest = file === UPDATE_MANIFEST;
+  const isManifest = file === UPDATE_MANIFEST || file === UPDATE_MAC_MANIFEST;
   return new Response(object.body, {
     headers: {
       'content-type': isManifest ? 'text/yaml; charset=utf-8' : 'application/octet-stream',
@@ -352,8 +353,56 @@ const serveUpdateFile = async (env: Env, file: string): Promise<Response> => {
   });
 };
 
-// A stable link to share with friends: always the installer of the latest version.
+// Apple blocks an app nobody paid to sign, so someone on a Mac first reads how to get past that.
+const MAC_PAGE = `<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiveChatSBCB pour Mac</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px 20px; background: #0a0a0d; color: #f4f4f5; font: 16px/1.5 -apple-system, system-ui, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 28px; font-weight: 400; margin: 0 0 8px; }
+  h2 { font-size: 18px; font-weight: 500; margin: 32px 0 8px; }
+  li { margin-bottom: 8px; }
+  p { color: #d9d9df; }
+  a.get { display: inline-block; margin: 12px 0; padding: 12px 22px; border-radius: 999px; background: #f4f4f5; color: #0a0a0d; font-weight: 500; text-decoration: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LiveChatSBCB pour Mac</h1>
+  <p>Pour les Mac avec une puce Apple (M1 ou plus récent).</p>
+  <a class="get" href="/download/mac">Télécharger pour Mac</a>
+  <h2>Installer</h2>
+  <ol>
+    <li>Ouvre le fichier téléchargé et glisse LiveChatSBCB dans Applications.</li>
+    <li>Ouvre LiveChatSBCB depuis Applications. Le Mac refuse de l'ouvrir, c'est normal : clique sur Terminé.</li>
+    <li>Va dans Réglages Système, puis Confidentialité et sécurité, et descends tout en bas.</li>
+    <li>Clique sur « Ouvrir quand même », puis confirme avec ton mot de passe.</li>
+  </ol>
+  <p>Le Mac bloque l'app parce que la signature d'Apple est payante et que ce projet reste gratuit. Tu ne le fais qu'une fois, et les mises à jour se font ensuite toutes seules.</p>
+  <h2>Le Mac dit que l'app est endommagée ?</h2>
+  <p>Vérifie que ton Mac a bien une puce Apple. Sinon, ouvre Terminal et colle cette ligne, puis réessaie :</p>
+  <pre>xattr -cr /Applications/LiveChatSBCB.app</pre>
+</main>
+</body>
+</html>`;
+
+const macPage = (): Response => new Response(MAC_PAGE, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+
+const redirectToMacInstaller = async (request: Request, env: Env): Promise<Response> => {
+  const manifest = await env.UPDATES.get(UPDATE_MAC_MANIFEST);
+  const installer = `LiveChatSBCB-Mac-${(await manifest?.text())?.match(/^version:\s*(\S+)\s*$/m)?.[1]}.dmg`;
+  if (!UPDATE_FILE.test(installer)) return fail('not_found', 404);
+  return Response.redirect(new URL(`/updates/${installer}`, request.url).toString(), 302);
+};
+
+// A stable link to share with friends: always the installer of the latest version, for the machine asking.
 const redirectToLatestInstaller = async (request: Request, env: Env): Promise<Response> => {
+  if (request.headers.get('user-agent')?.includes('Macintosh')) return Response.redirect(new URL('/mac', request.url).toString(), 302);
   const manifest = await env.UPDATES.get(UPDATE_MANIFEST);
   const installer = (await manifest?.text())?.match(/^path:\s*(\S+)\s*$/m)?.[1];
   if (!installer || !UPDATE_FILE.test(installer)) return fail('not_found', 404);
@@ -367,6 +416,8 @@ export default {
 
     if (method === 'GET' && pathname === '/v1/health') return json({ ok: true });
     if (method === 'GET' && pathname === '/download') return redirectToLatestInstaller(request, env);
+    if (method === 'GET' && pathname === '/download/mac') return redirectToMacInstaller(request, env);
+    if (method === 'GET' && pathname === '/mac') return macPage();
     if (method === 'GET' && pathname.startsWith('/updates/')) {
       return serveUpdateFile(env, pathname.slice('/updates/'.length));
     }

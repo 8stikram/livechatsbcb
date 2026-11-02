@@ -932,6 +932,23 @@ describe('party service', () => {
     expect(response.headers.get('location')).toBe(`${BASE}/updates/LiveChatSBCB-Setup-9.9.9.exe`);
   });
 
+  it('sends someone on a Mac to the explanations, then to the Mac installer', async () => {
+    const macBrowser = { 'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15' };
+    const link = await fetch(`${BASE}/download`, { redirect: 'manual', headers: macBrowser });
+    expect(link.status).toBe(302);
+    expect(link.headers.get('location')).toBe(`${BASE}/mac`);
+
+    const page = await fetch(`${BASE}/mac`);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('Ouvrir quand même');
+
+    const installer = await fetch(`${BASE}/download/mac`, { redirect: 'manual' });
+    expect(installer.status).toBe(302);
+    expect(installer.headers.get('location')).toBe(`${BASE}/updates/LiveChatSBCB-Mac-9.9.9.dmg`);
+    expect((await fetch(`${BASE}/updates/latest-mac.yml`)).headers.get('cache-control')).toBe('no-store');
+    expect((await fetch(`${BASE}/updates/LiveChatSBCB-Mac-9.9.9.dmg`)).status).toBe(200);
+  });
+
   it('answers keep-alive pings', async () => {
     const host = await createParty();
     const socket = new TestSocket(host);

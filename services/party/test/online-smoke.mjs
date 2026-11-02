@@ -43,6 +43,7 @@ const download = await fetch(`${base}/download`, { redirect: 'manual' });
 check('download link answers', download.status < 400, `status ${download.status}`);
 await download.body?.cancel();
 check('privacy page answers', (await fetch(`${base}/privacy`)).ok);
+check('Mac explanations answer', (await fetch(`${base}/mac`)).ok);
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

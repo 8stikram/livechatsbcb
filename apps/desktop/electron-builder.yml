@@ -21,6 +21,21 @@ win:
   target: nsis
   icon: build/icon.ico
   artifactName: LiveChatSBCB-Setup-${version}.${ext}
+mac:
+  target:
+    - target: dmg
+      arch: arm64
+    - target: zip
+      arch: arm64
+  icon: src/renderer/src/assets/logo.png
+  category: public.app-category.social-networking
+  artifactName: LiveChatSBCB-Mac-${version}.${ext}
+  # Apple's signature is paid. This one costs nothing and is what a recent Mac asks for at the very least.
+  identity: '-'
+  hardenedRuntime: false
+  gatekeeperAssess: false
+dmg:
+  sign: false
 nsis:
   oneClick: true
   perMachine: false

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { AppState, LibraryFileView, LibraryView, RenameOutcome, SavedView } from '../../../shared/ipc';
+import { keyLabel, ON_MAC, type AppState, type LibraryFileView, type LibraryView, type RenameOutcome, type SavedView } from '../../../shared/ipc';
 import { ConfirmButton } from './ConfirmButton';
 import { GlideList } from './glide';
 import { IconPlay, IconStar, KindIcon } from './icons';
@@ -23,7 +23,7 @@ const CATEGORIES: Array<[Category, string]> = [
 const PAGE_SIZE = 60;
 
 const RENAME_ERRORS: Record<Exclude<RenameOutcome, 'renamed'>, string> = {
-  invalid: 'Windows refuse ce nom. Évite ces signes : < > : " / \\ | ? *',
+  invalid: `${ON_MAC ? 'Le Mac' : 'Windows'} refuse ce nom. Évite ces signes : < > : " / \\ | ? *`,
   exists: 'Un fichier porte déjà ce nom.',
   not_found: 'Ce fichier n’est plus là.',
   busy: 'Ce fichier est utilisé ailleurs. Ferme-le et réessaie.',
@@ -70,8 +70,8 @@ export const Star = ({ on, landing = false, onChange }: { on: boolean; landing?:
 
 const ShortcutBadge = ({ shortcut }: { shortcut: string | null }) =>
   shortcut && (
-    <span className="shortcut-badge mono" title={`Raccourci : ${shortcut}`} data-testid="shortcut-badge">
-      {shortcut}
+    <span className="shortcut-badge mono" title={`Raccourci : ${keyLabel(shortcut)}`} data-testid="shortcut-badge">
+      {keyLabel(shortcut)}
     </span>
   );
 

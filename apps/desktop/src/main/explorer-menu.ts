@@ -17,7 +17,7 @@ const reg = (...args: string[]): Promise<void> => new Promise((done) => execFile
 
 // Only for this Windows account, and only on the kinds of file the app can send.
 export const registerExplorerMenu = async (): Promise<void> => {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged || process.platform !== 'win32') return;
   const exe = process.execPath;
   for (const { key, label, arg } of VERBS) {
     const root = `HKCU\\Software\\Classes\\*\\shell\\${key}`;

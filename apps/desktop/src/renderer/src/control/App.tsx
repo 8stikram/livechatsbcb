@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { DEFAULT_DISPLAY_MS, MAX_CAPTION_LENGTH } from '@livechatsbcb/protocol';
-import type { IncomingResult } from '../../../shared/ipc';
+import { keyLabel, type IncomingResult } from '../../../shared/ipc';
 import logo from '../assets/logo.png';
 import { useAppState } from '../use-app-state';
 import { GuildPicker } from './GuildPicker';
@@ -290,7 +290,7 @@ export const App = () => {
         {state.settings.clean && (
           <div className="banner is-clean" role="status" data-testid="clean-banner">
             <span>
-              Mode clean actif : rien ne s’affiche ni ne s’entend chez toi. <span className="mono">{state.settings.cleanKey}</span> pour revenir.
+              Mode clean actif : rien ne s’affiche ni ne s’entend chez toi. <span className="mono">{keyLabel(state.settings.cleanKey)}</span> pour revenir.
             </span>
             <button type="button" className="pill primary small" onClick={() => void window.liveChat.setClean(false)}>
               Désactiver
@@ -299,7 +299,7 @@ export const App = () => {
         )}
         {state.unavailableKeys.includes(state.settings.cleanKey) && (
           <p className="banner is-error" role="status" data-testid="clean-key-taken">
-            Une autre app utilise déjà <span className="mono">{state.settings.cleanKey}</span>. Choisis une autre touche pour le mode clean dans Réglages, Raccourcis.
+            Une autre app utilise déjà <span className="mono">{keyLabel(state.settings.cleanKey)}</span>. Choisis une autre touche pour le mode clean dans Réglages, Raccourcis.
           </p>
         )}
         {ownBan !== null && ownBan > Date.now() && (

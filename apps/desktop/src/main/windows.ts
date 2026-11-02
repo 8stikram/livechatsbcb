@@ -76,7 +76,7 @@ export const createControlWindow = (startMode: StartMode): BrowserWindow => {
     ...(seeThrough ? { backgroundMaterial: 'acrylic' as const } : {}),
     // The page goes all the way up, and Windows keeps drawing its own buttons on top of it.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#00000000', symbolColor: '#f4f4f5', height: 40 },
+    ...(process.platform === 'darwin' ? {} : { titleBarOverlay: { color: '#00000000', symbolColor: '#f4f4f5', height: 40 } }),
     webPreferences: secureWebPreferences,
   });
   lockDown(window);
@@ -112,6 +112,8 @@ export const createStageWindow = (displayId: number | null): BrowserWindow => {
     // Never takes the keyboard from the game, and has no place in the taskbar or in Alt+Tab.
     focusable: false,
     skipTaskbar: true,
+    // The only kind of window a Mac lets float over another app in full screen.
+    ...(process.platform === 'darwin' ? { type: 'panel' } : {}),
     webPreferences: {
       ...secureWebPreferences,
       // Medias must start on the shared timeline, with no click in this window.
@@ -123,6 +125,8 @@ export const createStageWindow = (displayId: number | null): BrowserWindow => {
   // Clicks go through to whatever is underneath.
   window.setIgnoreMouseEvents(true);
   window.setAlwaysOnTop(true, 'screen-saver');
+  // A Mac game in full screen lives in its own space: the overlay has to be in that one too.
+  if (process.platform === 'darwin') window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   placeOverlay(window, displayId);
   lockDown(window);
   void window.loadURL(pageUrl('stage'));

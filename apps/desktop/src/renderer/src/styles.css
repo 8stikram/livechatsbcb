@@ -2125,6 +2125,19 @@ select.input {
   color: var(--text-muted);
 }
 
+/* On a Mac the window buttons are top left, over the servers, and nothing is kept for them on the right. */
+html.mac {
+  --window-buttons: 16px;
+}
+
+html.mac .app:not(.is-login) {
+  padding-top: 44px;
+}
+
+html.mac .titlebar {
+  height: 44px;
+}
+
 /* How the window moves. The overlay has its own animations, further up, and they stay as they are. */
 
 :root {

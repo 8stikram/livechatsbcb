@@ -11,6 +11,14 @@ export const UpdateBanner = ({ update, restartIn }: { update: UpdateStatus; rest
     );
   }
 
+  if (update.state === 'manual') {
+    return (
+      <p className="banner" role="status" data-testid="update-manual">
+        <span>Version {update.version} disponible : mets l’app dans Applications pour la recevoir toute seule</span>
+      </p>
+    );
+  }
+
   if (update.state === 'ready') {
     return (
       <p className="banner" role="status" data-testid="update-ready">
