@@ -8,6 +8,11 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 **0.14.0** (dernière version) : LiveChat plus clair
 
+- Mode avancé : bibliothèque en barre à gauche, repliable
+- Une ligne au-dessus d'Envoyer dit la durée et s'il y a du son
+- Passer pour moi ou pour tous, avec deux raccourcis modifiables, et le nom de qui a passé dans l'app
+- Modifier dans l'historique et les favoris : ça rouvre une copie en mode avancé
+
 **0.13.0** : réparations et tous les Mac
 
 - Glisser une image, une vidéo ou un son n'importe où dans l'app, avec un grand cadre « Lâche ici »
