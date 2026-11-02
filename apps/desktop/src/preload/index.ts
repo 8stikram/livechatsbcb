@@ -26,6 +26,7 @@ const api: LiveChatApi = {
   removeLibraryFolder: (path) => ipcRenderer.invoke(IpcChannel.RemoveLibraryFolder, path),
   setLibraryFavorite: (fileId, favorite) => ipcRenderer.invoke(IpcChannel.SetLibraryFavorite, fileId, favorite),
   useLibraryFile: (fileId) => ipcRenderer.invoke(IpcChannel.UseLibraryFile, fileId),
+  showLibraryFileMenu: (fileId) => ipcRenderer.invoke(IpcChannel.ShowLibraryFileMenu, fileId),
   saveLiveChat: (input) => ipcRenderer.invoke(IpcChannel.SaveLiveChat, input),
   sendSaved: (savedId) => ipcRenderer.invoke(IpcChannel.SendSaved, savedId),
   editSaved: (savedId) => ipcRenderer.invoke(IpcChannel.EditSaved, savedId),

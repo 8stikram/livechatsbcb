@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { app, BrowserWindow, clipboard, dialog, ipcMain, screen, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell, type IpcMainInvokeEvent } from 'electron';
 import { z } from 'zod';
 import {
   CloseCode,
@@ -789,6 +789,15 @@ function start(): void {
     const info = file && (await stat(file.path).catch(() => null));
     if (!file || !info) return { ok: false };
     return { ok: true, draft: putInDraft({ ...file, size: info.size }) };
+  });
+
+  handle(IpcChannel.ShowLibraryFileMenu, async (fileId: unknown) => {
+    const file = typeof fileId === 'string' ? library.fileById(fileId) : null;
+    if (!file || !(await stat(file.path).catch(() => null))) return { ok: false };
+    Menu.buildFromTemplate([
+      { label: 'Afficher dans l’Explorateur', click: () => shell.showItemInFolder(file.path) },
+    ]).popup({ window: controlWindow });
+    return { ok: true };
   });
 
   handle(IpcChannel.SaveLiveChat, async (raw: unknown): Promise<ActionResult> => {

@@ -220,6 +220,7 @@ export const IpcChannel = {
   RemoveLibraryFolder: 'library:remove-folder',
   SetLibraryFavorite: 'library:set-favorite',
   UseLibraryFile: 'library:use-file',
+  ShowLibraryFileMenu: 'library:file-menu',
   SaveLiveChat: 'library:save',
   SendSaved: 'library:send-saved',
   EditSaved: 'library:edit-saved',
@@ -261,6 +262,7 @@ export type LiveChatApi = {
   removeLibraryFolder(path: string): Promise<LibraryView>;
   setLibraryFavorite(fileId: string, favorite: boolean): Promise<LibraryView>;
   useLibraryFile(fileId: string): Promise<{ ok: true; draft: DraftMedia } | { ok: false }>;
+  showLibraryFileMenu(fileId: string): Promise<{ ok: boolean }>;
   saveLiveChat(input: SaveLiveChatInput): Promise<ActionResult>;
   sendSaved(savedId: string): Promise<ActionResult>;
   editSaved(savedId: string): Promise<{ ok: true; draft: LoadedDraft } | { ok: false }>;

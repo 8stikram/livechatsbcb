@@ -1017,6 +1017,9 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await host.control.getByRole('button', { name: /^Sons/ }).click();
     await cards.filter({ hasText: 'bruit.wav' }).waitFor();
+    rmSync(join(folder, 'bruit.wav'));
+    await cards.filter({ hasText: 'bruit.wav' }).click({ button: 'right', position: { x: 300, y: 5 } });
+    await host.control.getByRole('alert').filter({ hasText: 'plus là' }).waitFor();
     await host.control.getByRole('button', { name: /^Images/ }).click();
     await host.control.getByLabel('Rechercher par nom').fill('nope');
     await host.control.getByText('Rien à ce nom').waitFor();
@@ -1024,6 +1027,26 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await cards.filter({ hasText: 'cowboy.png' }).getByRole('button', { name: 'Épingler en favori' }).click();
     await cards.filter({ hasText: 'cowboy.png' }).getByRole('button', { name: 'Retirer des favoris' }).waitFor();
+
+    // The real menu can't be clicked from here: its one line is pressed for it, and Windows isn't asked to open anything.
+    await host.app.evaluate(({ Menu, shell }) => {
+      const seen = globalThis as unknown as { fileMenu?: Electron.Menu; shownFiles: string[] };
+      seen.shownFiles = [];
+      Menu.prototype.popup = function (this: Electron.Menu) {
+        seen.fileMenu = this;
+      };
+      shell.showItemInFolder = (path) => void seen.shownFiles.push(path);
+    });
+    await cards.filter({ hasText: 'cowboy.png' }).getByRole('button', { name: 'Utiliser cowboy.png' }).click({ button: 'right' });
+    await expect
+      .poll(() => host.app.evaluate(() => (globalThis as unknown as { fileMenu?: Electron.Menu }).fileMenu?.items[0]?.label))
+      .toBe('Afficher dans l’Explorateur');
+    await host.app.evaluate(() => {
+      const seen = globalThis as unknown as { fileMenu: Electron.Menu; shownFiles: string[] };
+      (seen.fileMenu.items[0] as unknown as { click: () => void }).click();
+      return seen.shownFiles.length;
+    });
+    await expect(host.app.evaluate(() => (globalThis as unknown as { shownFiles: string[] }).shownFiles)).resolves.toEqual([image]);
 
     await host.control.getByRole('button', { name: 'Utiliser cowboy.png' }).click();
     await host.control.getByTestId('draft-name').filter({ hasText: 'cowboy.png' }).waitFor();

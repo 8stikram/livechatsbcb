@@ -69,7 +69,7 @@ Avec une vidéo et un son, c'est toi qui décides ce qu'on entend : l'un, l'autr
 
 ### Ranger ta bibliothèque
 
-Montre tes dossiers, et l'app trie toute seule tes images, tes vidéos et tes sons. Recherche, tri, et favoris épinglés en haut.
+Montre tes dossiers, et l'app trie toute seule tes images, tes vidéos et tes sons. Recherche, tri, favoris épinglés en haut, et clic droit sur un fichier pour le retrouver dans l'Explorateur.
 
 </td>
 <td width="50%"><img src="docs/readme/library.webp" alt="La bibliothèque, avec une grille d'images et des favoris" /></td>

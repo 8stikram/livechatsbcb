@@ -53,12 +53,14 @@ const FileCard = ({
   file,
   onUse,
   onFavorite,
+  onMenu,
 }: {
   file: LibraryFileView;
   onUse: () => void;
   onFavorite: (on: boolean) => void;
+  onMenu: () => void;
 }) => (
-  <li className="library-card" data-testid="library-file">
+  <li className="library-card" data-testid="library-file" onContextMenu={onMenu}>
     <button type="button" className="library-picture" title={`Utiliser ${file.name}`} onClick={onUse}>
       {file.kind === 'image' ? (
         <img src={file.url} alt="" loading="lazy" />
@@ -81,14 +83,16 @@ const SoundRow = ({
   onListen,
   onUse,
   onFavorite,
+  onMenu,
 }: {
   file: LibraryFileView;
   playing: boolean;
   onListen: () => void;
   onUse: () => void;
   onFavorite: (on: boolean) => void;
+  onMenu: () => void;
 }) => (
-  <li className="history-row" data-testid="library-file">
+  <li className="history-row" data-testid="library-file" onContextMenu={onMenu}>
     <button
       type="button"
       className="round tiny"
@@ -252,6 +256,12 @@ export const LibraryScreen = ({
     }
     files.adopt(result.draft);
     onOpenEditor();
+  };
+
+  const showMenu = async (file: LibraryFileView) => {
+    setError(null);
+    const result = await window.liveChat.showLibraryFileMenu(file.id);
+    if (!result.ok) setError('Ce fichier n’est plus là.');
   };
 
   const favorite = (file: LibraryFileView, on: boolean) =>
@@ -425,6 +435,7 @@ export const LibraryScreen = ({
                   onListen={() => listen(file)}
                   onUse={() => void use(file)}
                   onFavorite={(on) => favorite(file, on)}
+                  onMenu={() => void showMenu(file)}
                 />
               ))}
             </ul>
@@ -437,6 +448,7 @@ export const LibraryScreen = ({
                   file={file}
                   onUse={() => void use(file)}
                   onFavorite={(on) => favorite(file, on)}
+                  onMenu={() => void showMenu(file)}
                 />
               ))}
             </ul>
