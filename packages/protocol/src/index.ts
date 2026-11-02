@@ -319,6 +319,8 @@ export const ServerMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('history'), history: z.array(HistoryItemSchema) }),
   z.object({ t: z.literal('time'), c: z.number(), s: z.number() }),
   z.object({ t: z.literal('code'), code: z.string() }),
+  // Someone skipped for everybody, so that nobody wonders where it went.
+  z.object({ t: z.literal('skipped'), memberId: z.string(), name: z.string() }),
   z.object({ t: z.literal('pong') }),
   z.object({ t: z.literal('closing'), code: z.number() }),
 ]);

@@ -25,7 +25,7 @@ const known = (contentType: string): MediaContentType | null => {
   return OTHER_NAMES[contentType] ?? null;
 };
 
-const folder = () => join(app.getPath('userData'), 'pasted');
+export const folder = () => join(app.getPath('userData'), 'pasted');
 
 const newPath = async (contentType: MediaContentType): Promise<string> => {
   await mkdir(folder(), { recursive: true });

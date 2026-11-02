@@ -20,6 +20,8 @@ export const SettingsSchema = z.object({
   backgroundHintShown: z.boolean(),
   clean: z.boolean(),
   cleanKey: z.string(),
+  skipKey: z.string(),
+  skipMineKey: z.string(),
   speechEnabled: z.boolean(),
   speechVoice: z.string().nullable(),
   speechRate: z.number().min(50).max(200),

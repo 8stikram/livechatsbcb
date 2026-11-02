@@ -855,6 +855,21 @@ describe('party service', () => {
     expect(versionOf(fourth.memberId)).toBeNull();
   });
 
+  it('tells everyone who skipped', async () => {
+    const host = await createParty();
+    const guest = await joinParty(host.code, 'Invite');
+    const hostSocket = new TestSocket(host);
+    const guestSocket = new TestSocket(guest);
+    await hostSocket.welcome();
+    await guestSocket.welcome();
+    const mediaId = await sendText(host, 'Passe', 20_000);
+    await guestSocket.queueWhere((queue) => queue.length === 1, 'announcement');
+
+    guestSocket.send(JSON.stringify({ t: 'skip', mediaId }));
+    const told = await hostSocket.until(() => hostSocket.messages.find((message) => message.t === 'skipped'), 'who skipped');
+    expect(told).toMatchObject({ memberId: guest.memberId, name: 'Invite' });
+  });
+
   it('replaces an older connection of the same member', async () => {
     const host = await createParty();
     const first = new TestSocket(host);

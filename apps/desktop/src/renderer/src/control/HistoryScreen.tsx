@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ActionResult, AppState, FavoriteView, HistoryView } from '../../../shared/ipc';
+import type { ActionResult, AppState, EditResult, FavoriteView, HistoryView } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { FitText } from '../scene';
 import { ConfirmButton } from './ConfirmButton';
@@ -74,7 +74,9 @@ const FavoriteRow = ({
   canSend,
   replayState,
   onResult,
+  onEdit,
 }: {
+  onEdit: () => Promise<void>;
   favorite: FavoriteView;
   busyPlaying: boolean;
   canSend: boolean;
@@ -99,6 +101,7 @@ const FavoriteRow = ({
       </FitText>
     </span>
     <span className="history-actions">
+      <EditButton onEdit={onEdit} />
       <ConfirmButton
         label="Retirer"
         confirmLabel="Effacer pour de bon ?"
@@ -122,13 +125,32 @@ const FavoriteRow = ({
   </li>
 );
 
+const EditButton = ({ onEdit }: { onEdit: () => Promise<void> }) => {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      className="pill quiet small"
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        void onEdit().finally(() => setBusy(false));
+      }}
+    >
+      {busy ? 'Ouverture…' : 'Modifier'}
+    </button>
+  );
+};
+
 const HistoryRow = ({
   item,
   now,
   busyPlaying,
   replayState,
   onResult,
+  onEdit,
 }: {
+  onEdit: () => Promise<void>;
   item: HistoryView;
   now: number;
   busyPlaying: boolean;
@@ -150,6 +172,7 @@ const HistoryRow = ({
     </span>
     <span className="history-actions">
       <KeepStar item={item} onResult={onResult} />
+      <EditButton onEdit={onEdit} />
       <ReplayForMeButton
         replayState={replayState}
         busyPlaying={busyPlaying}
@@ -167,7 +190,15 @@ const HistoryRow = ({
   </li>
 );
 
-export const HistoryScreen = ({ state, active }: { state: AppState; active: boolean }) => {
+export const HistoryScreen = ({
+  state,
+  active,
+  onEdit,
+}: {
+  state: AppState;
+  active: boolean;
+  onEdit: (loading: Promise<EditResult>) => Promise<boolean>;
+}) => {
   const { history, favorites, localReplay } = state;
   const [showFavorites, setShowFavorites] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -180,6 +211,10 @@ export const HistoryScreen = ({ state, active }: { state: AppState; active: bool
     const timer = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
     return () => clearInterval(timer);
   }, [active, history]);
+
+  const edit = async (loading: Promise<EditResult>) => {
+    setError((await onEdit(loading)) ? null : 'Ce LiveChat n’est plus disponible.');
+  };
 
   const onResult = (result: ActionResult) => setError(result.ok ? null : replayErrorMessage(result.error));
   const onFavoriteResult = (result: ActionResult) => {
@@ -231,6 +266,7 @@ export const HistoryScreen = ({ state, active }: { state: AppState; active: bool
                 canSend={state.upload === null && canSendIn(state.party)}
                 replayState={replayStateOf(favorite.id)}
                 onResult={onFavoriteResult}
+                onEdit={() => edit(window.liveChat.editSaved(favorite.id))}
               />
             ))}
           </GlideList>
@@ -250,6 +286,7 @@ export const HistoryScreen = ({ state, active }: { state: AppState; active: bool
               busyPlaying={busyPlaying}
               replayState={replayStateOf(item.id)}
               onResult={onResult}
+              onEdit={() => edit(window.liveChat.editHistory(item.id))}
             />
           ))}
         </GlideList>

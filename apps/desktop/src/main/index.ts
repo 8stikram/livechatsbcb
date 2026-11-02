@@ -25,12 +25,12 @@ import {
   type SceneLayer,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, isNewerVersion, keyLabel, MEME_KEYS, type ExternalFiles, type IncomingError, type IncomingResult, SKIP_KEY, type ActionResult, type HiddenReason, type CleanKeyOutcome, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
+import { IpcChannel, isNewerVersion, keyLabel, MEME_KEYS, type ActionKey, type ExternalFiles, type IncomingError, type IncomingResult, type ActionResult, type HiddenReason, type CleanKeyOutcome, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
 import { MediaCache } from './media-cache';
-import { cleanPasted, downloadLink, savePastedImage, type Incoming } from './incoming';
+import { cleanPasted, downloadLink, folder as pastedFolder, savePastedImage, type Incoming } from './incoming';
 import { PREPARE_ARG, registerExplorerMenu, SEND_ARG } from './explorer-menu';
 import { CONTENT_TYPE_BY_EXTENSION, contentTypeOf, extensionOf, forgetMediaFile, registerMediaFile, serveMediaFiles } from './media-files';
 import { retryWhileOffline, uploadFile } from './media-upload';
@@ -97,6 +97,7 @@ const SHORTCUT_COOLDOWN_MS = 3_000;
 
 // How Windows starts the app at login: no window, only the icon near the clock.
 const START_HIDDEN_ARG = '--hidden';
+const SKIPPED_BY_SHOWN_MS = 6_000;
 
 // An update installed unnoticed should come back the same way, and an installer can't pass an argument along.
 const quietRestartFlag = () => join(app.getPath('userData'), 'restart-quietly');
@@ -138,6 +139,10 @@ function start(): void {
   let localReplay: { key: string; historyId: string; item: HistoryItem; startAt: number | null } | null = null;
   let localReplayTimer: NodeJS.Timeout | undefined;
   const keeping = new Set<string>();
+  // Passed on this PC only: the others keep watching, and the queue moves on once nobody is.
+  const skippedHere = new Set<string>();
+  let skippedBy: string | null = null;
+  let skippedByTimer: NodeJS.Timeout | undefined;
   let unavailableKeys: string[] = [];
   let cutTimer: NodeJS.Timeout | undefined;
   let lastShortcutAt = 0;
@@ -194,8 +199,9 @@ function start(): void {
     return until === null || (until !== undefined && until > Date.now());
   };
 
-  const hiddenReason = (item: Pick<QueueItem, 'senderId' | 'durationMs' | 'startAt'>): HiddenReason | null => {
+  const hiddenReason = (item: Pick<QueueItem, 'id' | 'senderId' | 'durationMs' | 'startAt'>): HiddenReason | null => {
     if (settings.current.clean) return 'clean';
+    if (skippedHere.has(item.id)) return 'skipped';
     if (isIgnored(item.senderId)) return 'ignored';
     const limit = maxDurationMs();
     const startedAt = item.startAt !== null && connection ? connection.toLocalTime(item.startAt) : null;
@@ -318,6 +324,7 @@ function start(): void {
         : [],
       favorites: library.favorites(),
       localReplay: localReplayView(),
+      skippedBy,
       upload: upload && { name: upload.name, percent: upload.percent, paused: upload.paused },
     };
   };
@@ -504,7 +511,18 @@ function start(): void {
     let wasOnline = false;
     connection = new PartyConnection(session, {
       onUnreadable: () => updater.check(),
+      onSkipped: (memberId, name) => {
+        if (memberId === connection?.current().memberId) return;
+        skippedBy = name;
+        clearTimeout(skippedByTimer);
+        skippedByTimer = setTimeout(() => {
+          skippedBy = null;
+          publishState();
+        }, SKIPPED_BY_SHOWN_MS);
+        publishState();
+      },
       onChange: (snapshot) => {
+        for (const id of skippedHere) if (!snapshot.queue.some((item) => item.id === id)) skippedHere.delete(id);
         if (snapshot.status === 'update_required') updater.check();
         // Joining is when being behind starts to matter, and a friend on a newer version proves there is one.
         if (snapshot.status === 'online' && !wasOnline) updater.check();
@@ -1177,16 +1195,29 @@ function start(): void {
     publishState();
   };
 
+  const skipForMe = (mediaId: string): void => {
+    skippedHere.add(mediaId);
+    publishState();
+  };
+
   // A key is only taken from games while it does something here.
   const syncShortcuts = (): void => {
     globalShortcut.unregisterAll();
     const wanted: Array<[string, () => void]> = [
       [settings.current.cleanKey, () => setClean(!settings.current.clean)],
       [
-        SKIP_KEY,
+        settings.current.skipKey,
         () => {
           const head = connection?.current().queue[0];
           if (head) connection?.skip(head.id);
+          shortcutFeedback(head !== undefined);
+        },
+      ],
+      [
+        settings.current.skipMineKey,
+        () => {
+          const head = connection?.current().queue[0];
+          if (head) skipForMe(head.id);
           shortcutFeedback(head !== undefined);
         },
       ],
@@ -1455,6 +1486,31 @@ function start(): void {
     return loadRecipe(saved);
   });
 
+  // A copy to rework: what played stays as it was, and nothing leaves without a click.
+  handle(IpcChannel.EditHistory, async (rawId: unknown) => {
+    const session = store.session;
+    const item = connection?.current().history.find(({ id }) => id === rawId);
+    if (!session || !item) return { ok: false };
+    const key = randomUUID();
+    try {
+      if (!(await cache.fetchForMe(key, session, item.files))) return { ok: false };
+      await mkdir(pastedFolder(), { recursive: true });
+      const files: SavedFile[] = [];
+      for (const { id: fileId, name, size, contentType } of item.files) {
+        const path = join(pastedFolder(), `${randomUUID()}.${extensionOf(contentType)}`);
+        if (!(await cache.moveOut(key, fileId, path))) return { ok: false };
+        // Written by someone else, and this name can end up in a path.
+        files.push({ path, name: name.replace(/[\\/]/g, '_'), size, contentType });
+      }
+      const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene } = item;
+      return loadRecipe({ caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, files });
+    } catch {
+      return { ok: false };
+    } finally {
+      cache.forget(key);
+    }
+  });
+
   handle(IpcChannel.StashView, (view: unknown) => {
     if (typeof view !== 'string') return;
     stashed.view = view;
@@ -1491,14 +1547,17 @@ function start(): void {
 
   handle(IpcChannel.SetClean, (clean: unknown) => setClean(clean === true));
 
-  handle(IpcChannel.SetCleanKey, (key: unknown): CleanKeyOutcome => {
-    if (typeof key !== 'string' || key === SKIP_KEY || MEME_KEYS.includes(key)) return 'reserved';
-    const before = settings.current.cleanKey;
-    settings.update({ cleanKey: key });
+  handle(IpcChannel.SetActionKey, (rawWhich: unknown, key: unknown): CleanKeyOutcome => {
+    const which = rawWhich as ActionKey;
+    if (which !== 'cleanKey' && which !== 'skipKey' && which !== 'skipMineKey') return 'reserved';
+    const taken = (['cleanKey', 'skipKey', 'skipMineKey'] as const).filter((other) => other !== which).map((other) => settings.current[other]);
+    if (typeof key !== 'string' || taken.includes(key) || MEME_KEYS.includes(key)) return 'reserved';
+    const before = settings.current[which];
+    settings.update({ [which]: key });
     syncShortcuts();
     const free = !unavailableKeys.includes(key);
     if (!free) {
-      settings.update({ cleanKey: before });
+      settings.update({ [which]: before });
       syncShortcuts();
     }
     publishState();
@@ -1584,6 +1643,10 @@ function start(): void {
   });
 
   handle(IpcChannel.CancelUpload, () => upload?.controller.abort());
+
+  handle(IpcChannel.SkipMediaForMe, (mediaId: unknown) => {
+    if (typeof mediaId === 'string') skipForMe(mediaId);
+  });
 
   handle(IpcChannel.SkipMedia, (mediaId: unknown) => {
     if (typeof mediaId === 'string') connection?.skip(mediaId);

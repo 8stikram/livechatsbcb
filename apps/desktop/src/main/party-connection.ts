@@ -36,6 +36,7 @@ type Listener = {
   onChange(snapshot: ConnectionSnapshot): void;
   onSessionRevoked(closeCode: number): void;
   onUnreadable(): void;
+  onSkipped(memberId: string, name: string): void;
 };
 
 // Lives in the main process so the member token never reaches a window, and so both windows share one connection.
@@ -182,6 +183,9 @@ export class PartyConnection {
         break;
       case 'closing':
         this.onClosed(message.code);
+        break;
+      case 'skipped':
+        this.listener.onSkipped(message.memberId, message.name);
         break;
       case 'pong':
         break;

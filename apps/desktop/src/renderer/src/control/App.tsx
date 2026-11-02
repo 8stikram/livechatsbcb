@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { DEFAULT_DISPLAY_MS, MAX_CAPTION_LENGTH } from '@livechatsbcb/protocol';
-import { keyLabel, type IncomingResult } from '../../../shared/ipc';
+import { keyLabel, type EditResult, type IncomingResult } from '../../../shared/ipc';
 import logo from '../assets/logo.png';
 import { useAppState } from '../use-app-state';
 import { GuildPicker } from './GuildPicker';
@@ -141,6 +141,23 @@ export const App = () => {
     } finally {
       setIncomingBusy(false);
     }
+  };
+
+  // Always in the advanced mode, with what the simple mode would have shown already placed.
+  const editInAdvanced = async (loading: Promise<EditResult>): Promise<boolean> => {
+    const result = await loading;
+    if (!result.ok) return false;
+    setPicking(false);
+    setChosenView('media');
+    loadInEditor(result, files, scene);
+    if ('draft' in result) {
+      const { picture, sound, clipStartMs, durationMs } = result.draft;
+      const plays = sound !== null || picture?.kind === 'video';
+      const passage = plays ? { startMs: clipStartMs, endMs: clipStartMs + durationMs } : null;
+      const problem = await scene.openWith(await window.liveChat.startScene(), passage);
+      if (problem) setIncomingNote(problem);
+    }
+    return true;
   };
 
   const canTakeFiles = Boolean(state?.party && !state.upload && !incomingBusy);
@@ -331,6 +348,11 @@ export const App = () => {
             {incomingNote}
           </p>
         )}
+        {state.skippedBy && (
+          <p className="banner" role="status" data-testid="skipped-by">
+            Passé par {state.skippedBy}
+          </p>
+        )}
         {state.settings.clean && (
           <div className="banner is-clean" role="status" data-testid="clean-banner">
             <span>
@@ -428,7 +450,7 @@ export const App = () => {
                 />
               </div>
               <div className="view" hidden={view !== 'history'}>
-                <HistoryScreen state={state} active={view === 'history'} />
+                <HistoryScreen state={state} active={view === 'history'} onEdit={editInAdvanced} />
               </div>
             </>
           )}

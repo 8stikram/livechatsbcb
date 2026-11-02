@@ -55,17 +55,26 @@ export const MuteButton = ({ settings }: { settings: Settings }) => (
   </button>
 );
 
-const SkipButton = ({ mediaId }: { mediaId: string | null }) => (
-  <button
-    type="button"
-    className="round solid"
-    title="Passer"
-    aria-label="Passer"
-    disabled={mediaId === null}
-    onClick={() => mediaId && void window.liveChat.skipMedia(mediaId)}
-  >
-    <IconSkip />
-  </button>
+const SkipButtons = ({ current }: { current: PlaybackView | null }) => (
+  <span className="skip-buttons">
+    <button
+      type="button"
+      className="pill quiet small"
+      disabled={!current || current.hiddenForMe !== null}
+      onClick={() => current && void window.liveChat.skipMediaForMe(current.id)}
+    >
+      Passer pour moi
+    </button>
+    <button
+      type="button"
+      className="pill secondary small"
+      disabled={!current}
+      onClick={() => current && void window.liveChat.skipMedia(current.id)}
+    >
+      <IconSkip size={16} />
+      Passer pour tous
+    </button>
+  </span>
 );
 
 const PreviewVideo = ({ item, startAt }: { item: PlaybackView; startAt: number }) => {
@@ -120,6 +129,7 @@ const HIDDEN_TEXT: Record<HiddenReason, string> = {
   clean: 'Mode clean : rien ne s’affiche chez toi.',
   ignored: 'Tu ignores cette personne pour le moment.',
   cut: 'Coupé chez toi : durée max atteinte.',
+  skipped: 'Passé pour toi. Les autres le voient encore.',
 };
 
 export const NowCard = ({
@@ -181,7 +191,7 @@ export const NowCard = ({
             max={100}
             onChange={(volume) => void window.liveChat.setSettings({ volume })}
           />
-          <SkipButton mediaId={current?.id ?? null} />
+          <SkipButtons current={current ?? null} />
         </div>
       </div>
     </section>
@@ -216,6 +226,6 @@ export const NowBar = ({
       {current.startAt !== null && <Progress key={current.id} startAt={current.startAt} durationMs={current.durationMs} />}
     </div>
     <MuteButton settings={settings} />
-    <SkipButton mediaId={current.id} />
+    <SkipButtons current={current} />
   </section>
 );

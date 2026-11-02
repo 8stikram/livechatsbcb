@@ -158,6 +158,20 @@ export const useScene = () => {
       }
       return null;
     },
+    // What was prepared here gives way to a LiveChat brought back to be reworked.
+    openWith: async (started: SceneFile[], passage: Clip | null): Promise<string | null> => {
+      setFiles(started);
+      setTimeline(EMPTY);
+      setSelected(null);
+      setActive(true);
+      for (const file of started) {
+        const problem = await add(file, started);
+        if (problem) return problem;
+      }
+      const lead = started.find(({ kind }) => kind === 'video') ?? started.find(({ kind }) => kind === 'audio');
+      setClipState(lead && passage ? { leader: lead.id, clip: passage } : null);
+      return null;
+    },
     pick: async (wanted: 'picture' | 'sound') => accept(await window.liveChat.pickSceneFile(wanted)),
     addIncoming: async (incoming: SceneFile[]): Promise<string | null> => {
       const everything = [...files, ...incoming];

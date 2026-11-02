@@ -339,13 +339,18 @@ const sendText = async (member: Member, text: string) => {
   await sendButton(member).click();
 };
 
-const setRange = (member: Member, label: RegExp, value: number) =>
-  member.control.getByLabel(label).evaluate((input, next) => {
+const setRange = async (member: Member, label: RegExp, value: number) => {
+  // The length of a picture stays folded under the summary.
+  if (label.source.includes('Durée') && (await member.control.getByLabel(label).count()) === 0) {
+    await member.control.getByTestId('send-summary').click();
+  }
+  await member.control.getByLabel(label).evaluate((input, next) => {
     // React only sees a change made through the native setter.
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
     setter.call(input, String(next));
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }, value);
+};
 
 const silentWav = (seconds: number): Buffer => {
   const rate = 8_000;
@@ -689,7 +694,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await connected(host, 30_000);
     await overlayState(guest, 'playing', 60_000);
     await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Parti hors ligne' }).waitFor();
-    await guest.control.getByRole('button', { name: 'Passer' }).first().click({ force: true }).catch(() => {});
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).first().click({ force: true }).catch(() => {});
     await overlayState(guest, 'idle', 30_000);
 
     await pickFile(host, big);
@@ -701,7 +706,7 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await startServer();
     await overlayState(guest, 'playing', 120_000);
-    await guest.control.getByRole('button', { name: 'Passer' }).first().click({ force: true }).catch(() => {});
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).first().click({ force: true }).catch(() => {});
     await overlayState(guest, 'idle', 30_000);
     await overlayState(host, 'idle', 30_000);
     await connected(host, 30_000);
@@ -902,6 +907,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     // Long enough that the first one can't finish before the others have even been sent.
     await setRange(host, /Durée d’affichage/, 30_000);
     await setRange(guest, /Durée d’affichage/, 30_000);
+    await picture(host.control, 'send-summary-open.png');
     await sendText(host, 'Premier message');
     await sendText(guest, 'Deuxième message');
     await sendText(guest, 'Troisième message');
@@ -909,13 +915,13 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByTestId('queue-waiting').filter({ hasText: '2 en attente' }).waitFor();
     await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Premier message' }).waitFor();
 
-    await guest.control.getByRole('button', { name: 'Passer' }).click();
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).click();
     await host.stage.getByTestId('overlay-text').filter({ hasText: 'Deuxième message' }).waitFor();
     await host.stage.getByTestId('overlay-profile').filter({ hasText: 'Pote' }).waitFor();
 
-    await host.control.getByRole('button', { name: 'Passer' }).click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).click();
     await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Troisième message' }).waitFor();
-    await host.control.getByRole('button', { name: 'Passer' }).click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).click();
     await overlayState(host, 'idle');
     await overlayState(guest, 'idle');
   });
@@ -938,7 +944,7 @@ describe.skipIf(online)('party flow in the real app', () => {
       await member.stage.getByTestId('overlay-profile').filter({ hasText: 'Pote' }).waitFor();
     }
     await picture(host.control, '10-history-playing.png');
-    await host.control.getByRole('button', { name: 'Passer' }).click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).click();
     await overlayState(host, 'idle');
     await overlayState(guest, 'idle');
 
@@ -990,7 +996,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await pickFile(host, join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png'));
     await sendText(host, 'Le marrant\nDeuxième ligne');
     await overlayState(guest, 'playing');
-    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
 
     await openTab(guest, 'Historique');
@@ -1016,7 +1022,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await overlayState(host, 'playing');
     await host.stage.getByTestId('overlay-text').filter({ hasText: 'Le marrant' }).waitFor();
     await openTab(host, 'Party');
-    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(host, 'idle');
     await overlayState(guest, 'idle');
 
@@ -1053,6 +1059,8 @@ describe.skipIf(online)('party flow in the real app', () => {
   });
 
   it('offers what is new after an update, newest first, and checks for updates on demand', async () => {
+    // A real change would replace this made-up state.
+    await host.control.getByTestId('skipped-by').waitFor({ state: 'detached' });
     const state = await host.control.evaluate(() => window.liveChat.getState());
     await host.app.evaluate(({ BrowserWindow }, shown) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('state:changed', shown);
@@ -1102,7 +1110,7 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await sendButton(guest).click();
     await overlayState(guest, 'playing');
-    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
     await overlayState(host, 'idle');
   });
@@ -1136,7 +1144,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await overlayState(host, 'playing');
     await guest.control.getByTestId('now-hidden').waitFor();
     expect(await guest.stage.locator('[data-testid="stage"]').getAttribute('data-state')).toBe('idle');
-    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(host, 'idle');
 
     await guest.control.evaluate((id) => window.liveChat.ignoreMember(id, 'stop'), hostId);
@@ -1147,8 +1155,8 @@ describe.skipIf(online)('party flow in the real app', () => {
     // Both test apps run on one PC, and a key can only belong to one of them.
     await guest.app.evaluate(({ globalShortcut }) => globalShortcut.unregisterAll());
     // Not the default key: another app can hold it on the PC running this.
-    expect(await host.control.evaluate(() => window.liveChat.setCleanKey('Shift+F3'))).toBe('reserved');
-    expect(await host.control.evaluate(() => window.liveChat.setCleanKey('Ctrl+Shift+F12'))).toBe('ok');
+    expect(await host.control.evaluate(() => window.liveChat.setActionKey('cleanKey', 'Shift+F3'))).toBe('reserved');
+    expect(await host.control.evaluate(() => window.liveChat.setActionKey('cleanKey', 'Ctrl+Shift+F12'))).toBe('ok');
     await expect.poll(() => host.app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Ctrl+Shift+F12'))).toBe(true);
     await host.control.getByTestId('clean-key-taken').waitFor({ state: 'detached' });
 
@@ -1160,7 +1168,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await new Promise((done) => setTimeout(done, 500));
     expect(await host.stage.locator('[data-testid="stage"]').getAttribute('data-state')).toBe('idle');
     expect(await stageVisible(host)).toBe(false);
-    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
 
     await host.control.getByTestId('clean-banner').getByRole('button', { name: 'Désactiver' }).click();
@@ -1304,7 +1312,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     }, logo);
     await overlayState(guest, 'playing');
     await guest.stage.getByTestId('overlay-image').waitFor();
-    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
     await overlayState(host, 'idle');
   });
@@ -1325,7 +1333,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await guest.stage.getByTestId('overlay-text').filter({ hasText: '😺' }).waitFor();
     await picture(guest.stage, 'overlay-emoji.png');
     await expect.poll(() => guest.stage.evaluate(async () => (await document.fonts.load('40px Twemoji', '😺')).length)).toBeGreaterThan(0);
-    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
     await overlayState(host, 'idle');
   });
@@ -1357,7 +1365,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await expect.poll(() => speaking(guest), { timeout: 5_000 }).toBe(true);
     await expect.poll(() => speaking(host), { timeout: 5_000 }).toBe(true);
     expect(await voiceBox.count()).toBe(0);
-    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
     await expect.poll(() => speaking(guest)).toBe(false);
     await overlayState(host, 'idle');
@@ -1370,7 +1378,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await overlayState(guest, 'playing');
     await expect.poll(() => speaking(host), { timeout: 5_000 }).toBe(true);
     expect(await speaking(guest)).toBe(false);
-    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
     await overlayState(host, 'idle');
     await guest.control.evaluate(() => window.liveChat.setSettings({ speechEnabled: true }));
@@ -1429,13 +1437,13 @@ describe.skipIf(online)('party flow in the real app', () => {
     await sendButton(host).click();
     await openTab(host, 'Party');
     await expect.poll(() => host.control.locator('.party-side .rows').first().locator('li').count()).toBe(2);
-    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await expect.poll(() => host.control.locator('li:not(.is-leaving)', { hasText: 'Encore en attente' }).count(), { timeout: 15_000 }).toBeLessThanOrEqual(1);
     await expect.poll(() => host.control.locator('.is-leaving').count(), { timeout: 15_000 }).toBe(0);
     await overlayState(guest, 'playing');
-    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'playing');
-    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
     await overlayState(host, 'idle');
     await expect.poll(() => host.control.locator('.is-leaving').count()).toBe(0);
@@ -1485,7 +1493,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Vite fait' }).waitFor();
     await host.control.getByTestId('now-playing').filter({ hasText: 'Vite fait' }).waitFor();
     await picture(host.control, '3-party-playing.png');
-    await guest.control.getByRole('button', { name: 'Passer' }).click();
+    await guest.control.getByRole('button', { name: 'Passer pour tous' }).click();
     await overlayState(guest, 'idle');
     await overlayState(host, 'idle');
 
@@ -1514,7 +1522,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     expect(await audio.evaluate((element: HTMLAudioElement) => element.volume)).toBeCloseTo(0.3);
     expect(await host.stage.getByTestId('overlay-audio').evaluate((element: HTMLAudioElement) => element.volume)).toBe(1);
 
-    await host.control.getByRole('button', { name: 'Passer' }).click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).click();
     await overlayState(guest, 'idle');
 
     await guest.app.close();
@@ -1548,7 +1556,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await expect.poll(() => text.evaluate((element) => (element as HTMLElement).innerText)).toContain('\n');
     await picture(guest.stage, '12-overlay-meme.png');
 
-    await host.control.getByRole('button', { name: 'Passer' }).click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).click();
     await overlayState(guest, 'idle');
     await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(0);
   });
@@ -1577,7 +1585,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     const { queue } = await guest.control.evaluate(() => window.liveChat.getState());
     expect(queue.current!.durationMs).toBeGreaterThan(5_000);
 
-    await host.control.getByRole('button', { name: 'Passer' }).click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).click();
     await overlayState(guest, 'idle');
   });
 
@@ -1626,7 +1634,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await saved.getByRole('button', { name: 'Envoyer' }).click();
     await overlayState(guest, 'playing');
     await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Le cowboy' }).waitFor();
-    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
 
     // Moved: said so, can't be sent, and showing the file again brings it back.
@@ -1799,13 +1807,13 @@ describe.skipIf(online)('party flow in the real app', () => {
     await openMenu(card('menu-son.wav'));
     await press('Envoyer tout de suite');
     await overlayState(guest, 'playing');
-    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
     await host.control.getByRole('button', { name: /^Images/ }).click();
     await openMenu(card('menu-image.png'));
     await press('Envoyer tout de suite');
     await overlayState(guest, 'playing');
-    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
 
     // The LiveChat tab sends you to the right shelf, and brings you back.
@@ -1845,6 +1853,42 @@ describe.skipIf(online)('party flow in the real app', () => {
     await picture(host.control, 'music-only.png');
     await host.control.getByRole('button', { name: 'Retirer', exact: true }).first().click();
     await host.control.getByRole('button', { name: 'Musique de mon PC' }).waitFor();
+  });
+
+  it('skips for me or for everybody, and says who did', async () => {
+    await openTab(host, 'LiveChat');
+    await host.control.getByLabel('Texte à afficher').fill('Passe-moi');
+    await setRange(host, /Durée d’affichage/, 20_000);
+    await expect(host.control.getByTestId('send-summary').textContent()).resolves.toBe('20 s, sans son');
+    await host.control.getByRole('button', { name: 'Envoyer à tout le monde' }).click();
+    await overlayState(host, 'playing');
+    await overlayState(guest, 'playing');
+
+    await openTab(guest, 'LiveChat');
+    await guest.control.getByRole('button', { name: 'Passer pour moi' }).first().click();
+    await overlayState(guest, 'idle');
+    await overlayState(host, 'playing');
+
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
+    await overlayState(host, 'idle');
+    await guest.control.getByTestId('skipped-by').filter({ hasText: 'Passé par Nono' }).waitFor();
+    await expect(host.control.getByTestId('skipped-by').count()).resolves.toBe(0);
+    await setRange(host, /Durée d’affichage/, 5_000);
+  });
+
+  it('reopens what played as a copy in the advanced mode', async () => {
+    await openTab(host, 'Historique');
+    await host.control.getByTestId('history-item').filter({ hasText: '.png' }).first().getByRole('button', { name: 'Modifier' }).click();
+    await host.control.getByRole('tab', { name: 'LiveChat', selected: true }).waitFor();
+    const layer = host.control.getByTestId('scene-layer').first();
+    await layer.waitFor();
+    await host.control.getByTestId('scene-strip').waitFor();
+    await picture(host.control, 'edit-from-history.png');
+    await layer.click();
+    await host.control.getByTestId('layer-panel').getByRole('button', { name: /Retirer/ }).first().click();
+    await layer.waitFor({ state: 'detached' });
+    await host.control.getByRole('button', { name: 'Simple', exact: true }).click();
+    await emptyDraft(host);
   });
 
   it('takes files dropped anywhere in the window, from any tab', async () => {
@@ -1973,7 +2017,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     const corner = (await control.getByTestId('scene-resize-se').boundingBox())!;
     await control.mouse.move(corner.x + 6, corner.y + 6);
     await control.mouse.down();
-    await control.mouse.move(corner.x + 46, corner.y + 46, { steps: 5 });
+    await control.mouse.move(corner.x + 18, corner.y + 18, { steps: 5 });
     await control.mouse.up();
     expect(await widthOf()).toBeGreaterThan(startWidth);
 
@@ -2031,7 +2075,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     expect(looks.filter(({ flip }) => flip.includes('scaleX')).length).toBe(1);
     expect(looks[0]!.place).not.toBe(looks[1]!.place);
     await picture(guest.stage, '21-overlay-advanced.png');
-    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
 
     // After sending, the stage is free again. A saved one comes back whole, and leaves in one click.
@@ -2043,7 +2087,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await saved.getByRole('button', { name: 'Envoyer' }).click();
     await overlayState(guest, 'playing');
     await expect.poll(() => shown.count()).toBe(2);
-    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
 
     await saved.getByRole('button', { name: 'Modifier' }).click();
@@ -2062,7 +2106,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     const video = guest.stage.getByTestId('overlay-layer').getByTestId('overlay-video');
     await video.waitFor();
     await expect.poll(() => video.evaluate((element) => (element as HTMLVideoElement).volume)).toBe(0);
-    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
 
     // The simple mode kept its own file, and is what the next tests expect.

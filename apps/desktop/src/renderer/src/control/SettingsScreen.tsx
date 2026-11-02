@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { useTabMarker } from './glide';
-import { DEFAULT_LAYOUT, keyLabel, ON_MAC, SKIP_KEY, type AppState, type CleanKeyOutcome, type OverlayLayout, type Settings, type UpdateCheckOutcome, type Zone } from '../../../shared/ipc';
+import { DEFAULT_LAYOUT, keyLabel, ON_MAC, type ActionKey, type AppState, type CleanKeyOutcome, type OverlayLayout, type Settings, type UpdateCheckOutcome, type Zone } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { FitText } from '../scene';
 import { say } from '../speech';
@@ -144,7 +144,7 @@ const acceleratorOf = (event: KeyboardEvent): string | null => {
   return [...mods, key].join('+');
 };
 
-const CleanKeyButton = ({ current }: { current: string }) => {
+const ActionKeyButton = ({ which, current, testId }: { which: ActionKey; current: string; testId: string }) => {
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -159,15 +159,15 @@ const CleanKeyButton = ({ current }: { current: string }) => {
       const accelerator = acceleratorOf(event);
       if (!accelerator) return;
       setRecording(false);
-      void window.liveChat.setCleanKey(accelerator).then((outcome) => setError(outcome === 'ok' ? null : CLEAN_KEY_ERRORS[outcome]));
+      void window.liveChat.setActionKey(which, accelerator).then((outcome) => setError(outcome === 'ok' ? null : CLEAN_KEY_ERRORS[outcome]));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [recording]);
+  }, [recording, which]);
 
   return (
     <>
-      <button type="button" className="pill secondary small mono" data-testid="clean-key" onClick={() => setRecording(true)}>
+      <button type="button" className="pill secondary small mono" data-testid={testId} onClick={() => setRecording(true)}>
         {recording ? 'Appuie sur une touche…' : keyLabel(current)}
       </button>
       {error && (
@@ -384,7 +384,7 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
             </Switch>
             <div className="field-line">
               <span>Touche {unavailable(settings.cleanKey)}</span>
-              <CleanKeyButton current={settings.cleanKey} />
+              <ActionKeyButton which="cleanKey" current={settings.cleanKey} testId="clean-key" />
             </div>
             <p className="hint">Une touche marche même en plein jeu. Les autres ne voient rien.</p>
           </section>
@@ -392,8 +392,12 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
           <section className="glass panel" aria-labelledby="keys-title">
             <h2 id="keys-title">Raccourcis en jeu</h2>
             <div className="field-line">
-              <span>Passer le LiveChat en cours {unavailable(SKIP_KEY)}</span>
-              <span className="shortcut-badge mono">{keyLabel(SKIP_KEY)}</span>
+              <span>Passer pour tout le monde {unavailable(settings.skipKey)}</span>
+              <ActionKeyButton which="skipKey" current={settings.skipKey} testId="skip-key" />
+            </div>
+            <div className="field-line">
+              <span>Passer pour moi {unavailable(settings.skipMineKey)}</span>
+              <ActionKeyButton which="skipMineKey" current={settings.skipMineKey} testId="skip-mine-key" />
             </div>
             {state.shortcuts.length === 0 ? (
               <p className="hint">Dans la bibliothèque, fais un clic droit sur un fichier ou un LiveChat sauvegardé pour lui donner une touche, de Shift+F1 à Shift+F10.</p>

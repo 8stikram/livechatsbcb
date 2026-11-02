@@ -250,61 +250,62 @@ export const SceneBoard = ({
   onError: (message: string | null) => void;
   onStopPreview: () => void;
 }) => {
-  const [showLibrary, setShowLibrary] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(true);
 
   const pick = async (wanted: 'picture' | 'sound') => onError(await scene.pick(wanted));
 
   return (
-    <>
-      <div className="scene-tools">
-        <button type="button" className={showLibrary ? 'pill secondary small' : 'pill quiet small'} aria-expanded={showLibrary} onClick={() => setShowLibrary(!showLibrary)}>
-          Depuis ma bibliothèque
-        </button>
-        <button type="button" className="pill quiet small" onClick={() => void pick('picture')}>
-          Depuis mon PC
-        </button>
-        <span className="spacer" />
-        <button type="button" className="pill quiet small" disabled={!scene.canUndo} onClick={scene.undo}>
-          Annuler
-        </button>
-        <button type="button" className="pill quiet small" disabled={!scene.canRedo} onClick={scene.redo}>
-          Rétablir
-        </button>
-      </div>
-
+    <div className="scene-workspace">
       {showLibrary && <LibraryStrip scene={scene} />}
-
-      <ScreenPreview testId="scene-preview">
-        {preview ? (
-          <>
-            <Playing
-              key={preview.startAt}
-              item={preview.item}
-              startAt={preview.startAt}
-              layout={state.settings.layout}
-              volume={state.settings.muted ? 0 : state.settings.volume / 100}
-            />
-            <button type="button" className="pill secondary small scene-stop" onClick={onStopPreview}>
-              Arrêter l’aperçu
-            </button>
-          </>
-        ) : (
-          <EditingStage scene={scene} state={state} caption={caption} />
-        )}
-      </ScreenPreview>
-
-      {!scene.sound && (
-        <div className="draft-add" role="group" aria-label="Ajouter un son">
-          <span className="hint">Ajouter un son</span>
-          <button type="button" className="pill quiet small" onClick={() => setShowLibrary(true)}>
-            Depuis ma bibliothèque
+      <div className="scene-work">
+        <div className="scene-tools">
+          <button type="button" className={showLibrary ? 'pill secondary small' : 'pill quiet small'} aria-expanded={showLibrary} onClick={() => setShowLibrary(!showLibrary)}>
+            Bibliothèque
           </button>
-          <button type="button" className="pill quiet small" onClick={() => void pick('sound')}>
+          <button type="button" className="pill quiet small" onClick={() => void pick('picture')}>
             Depuis mon PC
           </button>
+          <span className="spacer" />
+          <button type="button" className="pill quiet small" disabled={!scene.canUndo} onClick={scene.undo}>
+            Annuler
+          </button>
+          <button type="button" className="pill quiet small" disabled={!scene.canRedo} onClick={scene.redo}>
+            Rétablir
+          </button>
         </div>
-      )}
-    </>
+
+        <ScreenPreview testId="scene-preview">
+          {preview ? (
+            <>
+              <Playing
+                key={preview.startAt}
+                item={preview.item}
+                startAt={preview.startAt}
+                layout={state.settings.layout}
+                volume={state.settings.muted ? 0 : state.settings.volume / 100}
+              />
+              <button type="button" className="pill secondary small scene-stop" onClick={onStopPreview}>
+                Arrêter l’aperçu
+              </button>
+            </>
+          ) : (
+            <EditingStage scene={scene} state={state} caption={caption} />
+          )}
+        </ScreenPreview>
+
+        {!scene.sound && (
+          <div className="draft-add" role="group" aria-label="Ajouter un son">
+            <span className="hint">Ajouter un son</span>
+            <button type="button" className="pill quiet small" onClick={() => setShowLibrary(true)}>
+              Depuis ma bibliothèque
+            </button>
+            <button type="button" className="pill quiet small" onClick={() => void pick('sound')}>
+              Depuis mon PC
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

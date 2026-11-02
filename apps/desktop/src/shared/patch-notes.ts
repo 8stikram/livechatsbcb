@@ -3,6 +3,17 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.14.0',
+    date: '2 novembre 2026',
+    items: [
+      'Mode avancé : la bibliothèque passe en barre à gauche, repliable, pour bien voir le rendu',
+      'Au-dessus d’Envoyer, une ligne dit la durée et s’il y a de la musique. Clique dessus pour changer la durée d’une image',
+      'Deux boutons : Passer pour moi, ou Passer pour tous. Chacun a son raccourci, modifiable dans les réglages',
+      'Quand quelqu’un passe pour tout le monde, son nom s’affiche dans l’app',
+      'Bouton Modifier dans l’historique et les favoris : ça rouvre une copie en mode avancé',
+    ],
+  },
+  {
     version: '0.13.0',
     date: '2 novembre 2026',
     items: [

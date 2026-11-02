@@ -251,6 +251,7 @@ export const MediaScreen = ({
   const [saveName, setSaveName] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [confirmingSpeech, setConfirmingSpeech] = useState(false);
+  const [changingLength, setChangingLength] = useState(false);
   const captionField = useRef<HTMLTextAreaElement>(null);
 
   const speak = files.speak && caption.trim() !== '';
@@ -298,6 +299,15 @@ export const MediaScreen = ({
   });
 
   const stopPreview = () => setPreview(null);
+
+  const lengthSeconds = (advanced ? sceneInput() : recipe()).durationMs / 1_000;
+  const hasMusic = (advanced ? scene.sound : sound) !== null && !soundMuted;
+  const hasVideoSound = (advanced ? scene.hasVideo : picture?.kind === 'video') && !videoMuted;
+  const summary = [
+    `${lengthSeconds.toLocaleString('fr', { maximumFractionDigits: 1 })} s`,
+    hasMusic ? 'avec musique' : hasVideoSound ? 'avec le son de la vidéo' : 'sans son',
+    ...(speak ? ['voix robot'] : []),
+  ].join(', ');
 
   const insertEmoji = (emoji: string) => {
     const field = captionField.current;
@@ -533,7 +543,7 @@ export const MediaScreen = ({
 
         {selectedLayer && <LayerPanel scene={scene} layer={selectedLayer} />}
 
-        <label className="field" hidden={selectedLayer !== null}>
+        <label className="field caption-field" hidden={selectedLayer !== null}>
           <span>{hasFiles || advanced ? 'Texte à afficher (facultatif)' : 'Texte à afficher'}</span>
           <textarea
             className="input is-area"
@@ -661,7 +671,7 @@ export const MediaScreen = ({
           </p>
         )}
 
-        {!plays && !selectedLayer && (
+        {!plays && !selectedLayer && changingLength && (
           <label className="field">
             <span className="field-line">
               Durée d’affichage <strong className="mono" data-testid="display-seconds">{displayMs / 1000} s</strong>
@@ -680,6 +690,23 @@ export const MediaScreen = ({
           <p className="hint" data-testid="too-long">
             Coupé après {DEFAULT_SETTINGS.maxDurationSec} s chez ceux qui gardent la limite. Rogne l’extrait à {DEFAULT_SETTINGS.maxDurationSec} s pour que tout soit vu.
           </p>
+        )}
+
+        {plays ? (
+          <p className="send-summary" data-testid="send-summary">
+            {summary}
+          </p>
+        ) : (
+          <button
+            type="button"
+            className="send-summary is-button"
+            data-testid="send-summary"
+            aria-expanded={changingLength}
+            title="Changer la durée"
+            onClick={() => setChangingLength(!changingLength)}
+          >
+            {summary}
+          </button>
         )}
 
         {state.upload ? (

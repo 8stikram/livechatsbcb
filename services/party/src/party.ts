@@ -416,7 +416,7 @@ export class Party extends DurableObject<Env> {
         this.markReady(memberId, message.data.mediaId);
         break;
       case 'skip':
-        this.skip(message.data.mediaId);
+        this.skip(memberId, message.data.mediaId);
         break;
       case 'cut':
         this.markCut(memberId, message.data.mediaId);
@@ -645,9 +645,11 @@ export class Party extends DurableObject<Env> {
   }
 
   // Names the media so that two people pressing at once can't skip the one after it too.
-  private skip(mediaId: string): void {
+  private skip(memberId: string, mediaId: string): void {
     if (this.queueRows()[0]?.id !== mediaId) return;
     this.ctx.storage.sql.exec('DELETE FROM queue WHERE id = ?', mediaId);
+    const [member] = this.ctx.storage.sql.exec<MemberRow>('SELECT id, name, avatar_url FROM members WHERE id = ?', memberId).toArray();
+    if (member) this.broadcast({ t: 'skipped', memberId, name: member.name });
     this.advanceQueue();
     this.broadcastQueue();
   }

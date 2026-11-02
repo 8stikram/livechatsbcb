@@ -63,6 +63,8 @@ export type Settings = {
   // Nothing shows and nothing is heard on this PC until it is turned off again.
   clean: boolean;
   cleanKey: string;
+  skipKey: string;
+  skipMineKey: string;
   speechEnabled: boolean;
   // Null: the voice Windows uses by default.
   speechVoice: string | null;
@@ -93,6 +95,8 @@ export const DEFAULT_SETTINGS: Settings = {
   backgroundHintShown: false,
   clean: false,
   cleanKey: ON_MAC ? 'Ctrl+Alt+=' : 'Shift+F12',
+  skipKey: ON_MAC ? 'Ctrl+Alt+-' : 'Shift+F11',
+  skipMineKey: ON_MAC ? 'Ctrl+Alt+Shift+-' : 'Ctrl+Shift+F11',
   speechEnabled: true,
   speechVoice: null,
   speechRate: 100,
@@ -101,15 +105,15 @@ export const DEFAULT_SETTINGS: Settings = {
   seenVersion: null,
 };
 
-export const SKIP_KEY = ON_MAC ? 'Ctrl+Alt+-' : 'Shift+F11';
 // The function keys of a Mac need fn as well, so it has its own keys.
 export const MEME_KEYS = Array.from({ length: 10 }, (_, index) => (ON_MAC ? `Ctrl+Alt+${(index + 1) % 10}` : `Shift+F${index + 1}`));
 // A Mac keyboard says Option.
 export const keyLabel = (key: string): string => (ON_MAC ? key.replace('Alt', 'Option') : key);
 export type ShortcutView = { key: string; name: string };
+export type ActionKey = 'cleanKey' | 'skipKey' | 'skipMineKey';
 export type CleanKeyOutcome = 'ok' | 'reserved' | 'taken';
 // Why this PC isn't showing what is playing for the others.
-export type HiddenReason = 'clean' | 'ignored' | 'cut';
+export type HiddenReason = 'clean' | 'ignored' | 'cut' | 'skipped';
 
 export type DisplayView = { id: number; label: string };
 
@@ -254,8 +258,12 @@ export type LoadedDraft = {
 // Paused: no connection for now, and it carries on by itself when it comes back.
 export type UploadView = { name: string; percent: number; paused: boolean };
 
+export type EditResult = { ok: true; draft: LoadedDraft } | { ok: true; scene: LoadedScene } | { ok: false };
+
 export type AppState = {
   version: string;
+  // Who just skipped for everybody. Not said to the one who did.
+  skippedBy: string | null;
   update: UpdateStatus;
   shortcuts: ShortcutView[];
   // Another app has these keys.
@@ -337,13 +345,14 @@ export const IpcChannel = {
   SendExternalFiles: 'external:send',
   ShortcutFeedback: 'shortcut:feedback',
   SetClean: 'clean:set',
-  SetCleanKey: 'clean:set-key',
+  SetActionKey: 'keys:set',
   ShowMemberMenu: 'member:menu',
   IgnoreMember: 'member:ignore',
   AssignFileShortcut: 'shortcut:assign-file',
   AssignSavedShortcut: 'shortcut:assign-saved',
   ClearShortcut: 'shortcut:clear',
   SkipMedia: 'media:skip',
+  SkipMediaForMe: 'media:skip-for-me',
   ScanLibrary: 'library:scan',
   AddLibraryFolder: 'library:add-folder',
   RemoveLibraryFolder: 'library:remove-folder',
@@ -363,6 +372,7 @@ export const IpcChannel = {
   SaveLiveChat: 'library:save',
   SendSaved: 'library:send-saved',
   EditSaved: 'library:edit-saved',
+  EditHistory: 'history:edit',
   RelocateSaved: 'library:relocate-saved',
   SetSavedFavorite: 'library:set-saved-favorite',
   DeleteSaved: 'library:delete-saved',
@@ -401,6 +411,7 @@ export type LiveChatApi = {
   sendMedia(input: SendMediaInput): Promise<ActionResult>;
   cancelUpload(): Promise<void>;
   skipMedia(mediaId: string): Promise<void>;
+  skipMediaForMe(mediaId: string): Promise<void>;
   scanLibrary(): Promise<LibraryView>;
   // Null when the person changed their mind.
   addLibraryFolder(): Promise<LibraryView | null>;
@@ -420,7 +431,8 @@ export type LiveChatApi = {
   trashLibraryFile(fileId: string): Promise<{ outcome: 'trashed' | 'cancelled' | 'busy'; library: LibraryView }>;
   saveLiveChat(input: SaveLiveChatInput): Promise<ActionResult>;
   sendSaved(savedId: string): Promise<ActionResult>;
-  editSaved(savedId: string): Promise<{ ok: true; draft: LoadedDraft } | { ok: true; scene: LoadedScene } | { ok: false }>;
+  editSaved(savedId: string): Promise<EditResult>;
+  editHistory(historyId: string): Promise<EditResult>;
   relocateSaved(savedId: string): Promise<{ outcome: 'found' | 'cancelled' | 'wrong_file'; library: LibraryView }>;
   setSavedFavorite(savedId: string, favorite: boolean): Promise<LibraryView>;
   deleteSaved(savedId: string): Promise<LibraryView>;
@@ -440,7 +452,7 @@ export type LiveChatApi = {
   sendExternalFiles(durationMs: number): Promise<ActionResult>;
   onShortcutFeedback(listener: (sent: boolean) => void): () => void;
   setClean(clean: boolean): Promise<void>;
-  setCleanKey(key: string): Promise<CleanKeyOutcome>;
+  setActionKey(which: ActionKey, key: string): Promise<CleanKeyOutcome>;
   showMemberMenu(memberId: string): Promise<IgnoreChoice | null>;
   ignoreMember(memberId: string, choice: IgnoreChoice): Promise<void>;
   assignFileShortcut(fileId: string, key: string, durationMs: number): Promise<LibraryView>;
