@@ -6,7 +6,9 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.13.0** (dernière version) : réparations et tous les Mac
+**0.14.0** (dernière version) : LiveChat plus clair
+
+**0.13.0** : réparations et tous les Mac
 
 - Glisser une image, une vidéo ou un son n'importe où dans l'app, avec un grand cadre « Lâche ici »
 - Pseudos longs en entier : le texte devient plus petit, dans l'app et en jeu
@@ -79,31 +81,23 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 - Parfois un LiveChat n'apparaît plus. Pas reproduit : regarder si une version s'affiche à côté du pote concerné dans la Party
 
-### 7. LiveChat plus clair
-
-- Mode avancé : la bibliothèque passe en barre latérale, pour bien voir le rendu
-- Durée : affichée au moment de valider le LiveChat, avec le temps et s'il y a une musique
-- Quel média décide de la durée : d'abord la vidéo, puis le son, puis le GIF ou l'image
-- Historique : un choix « Modifier » qui rouvre le LiveChat en mode avancé
-- Passer : pour soi seulement ou pour tout le monde
-
-### 8. Montage
+### 7. Montage
 
 - Couper un son ou une vidéo sur une barre avec des images du passage, comme dans un logiciel de montage
 - Mettre plusieurs vidéos dans un même LiveChat
 
-### 9. Raccourcis
+### 8. Raccourcis
 
 - Roue de LiveChats, comme la roue des armes dans GTA
 - Menu des raccourcis refait pour être facile à comprendre, comme celui de CS2
 
-### 10. Liens vidéo et sons
+### 9. Liens vidéo et sons
 
 - YouTube
 - TikTok
 - Un service comme SoundCloud pour ajouter des extraits sonores, à vérifier : il doit rester gratuit
 
-### 11. Vie de la party
+### 10. Vie de la party
 
 - Pendant un LiveChat, un contour vert autour de la photo de profil : il s'anime avec le son, et reste vert fixe s'il n'y a pas de son
 - Party jusqu'à 15 personnes au lieu de 10, à vérifier : ça doit rester gratuit
@@ -112,14 +106,14 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 - Historique par personne
 - Sondages éclair
 
-### 12. Finitions
+### 11. Finitions
 
 - Bandeau « Une autre app utilise déjà » : le texte est trop espacé
 - Clic droit de Windows : les entrées n'apparaissent pas encore dans le vrai menu, à reprendre
 - Tags personnels dans la bibliothèque
 - Tuto au premier lancement, à passer et à rejouer depuis les réglages
 
-### 13. Plus tard
+### 12. Plus tard
 
 - Thèmes (Wii, Persona…)
 - GIF : bouton avec recherche via Klipy (compte et clé à créer), favoris et récents
