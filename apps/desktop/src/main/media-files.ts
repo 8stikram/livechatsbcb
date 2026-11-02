@@ -27,6 +27,9 @@ export const CONTENT_TYPE_BY_EXTENSION: Record<string, MediaContentType> = {
 export const contentTypeOf = (path: string): MediaContentType | null =>
   CONTENT_TYPE_BY_EXTENSION[extname(path).slice(1).toLowerCase()] ?? null;
 
+export const extensionOf = (contentType: MediaContentType): string =>
+  Object.keys(CONTENT_TYPE_BY_EXTENSION).find((extension) => CONTENT_TYPE_BY_EXTENSION[extension] === contentType)!;
+
 type MediaFile = { path: string; contentType: MediaContentType };
 
 const READ_CHUNK_BYTES = 256 * 1024;

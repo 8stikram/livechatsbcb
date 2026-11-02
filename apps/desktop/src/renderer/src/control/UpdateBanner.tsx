@@ -3,9 +3,11 @@ import type { UpdateStatus } from '../../../shared/ipc';
 export const UpdateBanner = ({ update }: { update: UpdateStatus }) => {
   if (update.state === 'downloading') {
     return (
-      <p className="banner" role="status" data-testid="update-progress">
-        Téléchargement de la version {update.version} : <span className="mono">{update.percent} %</span>
-      </p>
+      <div className="banner is-downloading" role="status" data-testid="update-progress">
+        <span>Téléchargement de la version {update.version}</span>
+        <progress max={100} value={update.percent} aria-label="Téléchargement de la mise à jour" />
+        <span className="mono">{update.percent} %</span>
+      </div>
     );
   }
 

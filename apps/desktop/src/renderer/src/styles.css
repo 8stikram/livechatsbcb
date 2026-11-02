@@ -523,6 +523,33 @@ select.input {
   color: var(--danger);
 }
 
+.banner.is-downloading {
+  padding-right: 18px;
+}
+
+.banner.is-downloading span {
+  flex: none;
+}
+
+.banner progress {
+  flex: 1;
+  min-width: 0;
+  height: 6px;
+  border: none;
+  border-radius: 6px;
+  overflow: hidden;
+  appearance: none;
+}
+
+.banner progress::-webkit-progress-bar {
+  background: rgb(255 255 255 / 18%);
+}
+
+.banner progress::-webkit-progress-value {
+  background: var(--text);
+  transition: width 200ms linear;
+}
+
 /* Avatars and little squares */
 
 .avatar {
@@ -1596,6 +1623,26 @@ select.input {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.history-head {
+  flex-wrap: wrap;
+}
+
+.history-head h2 {
+  margin: 0;
+}
+
+.history-head .count {
+  margin-left: auto;
+}
+
+.history-picture {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-inner);
+  object-fit: cover;
 }
 
 .history-empty {

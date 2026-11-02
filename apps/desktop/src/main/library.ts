@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { readdir, rename, stat } from 'node:fs/promises';
+import { readdir, rename, rm, stat } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';
 import { nativeImage } from 'electron';
 import { z } from 'zod';
@@ -13,7 +13,7 @@ import {
   type FileKind,
   type MediaContentType,
 } from '@livechatsbcb/protocol';
-import type { LibraryFileView, LibraryView, RenameOutcome, SavedView } from '../shared/ipc';
+import type { FavoriteView, LibraryFileView, LibraryView, RenameOutcome, SavedView } from '../shared/ipc';
 import { contentTypeOf, forgetMediaFile, registerMediaFile } from './media-files';
 
 // Enough for a big meme folder, and a folder someone picks by mistake (a whole disk) still answers quickly.
@@ -40,8 +40,11 @@ const SavedSchema = z.object({
   files: z.array(SavedFileSchema),
   // Saved before the advanced mode existed: no scene.
   scene: z.array(SceneLayerSchema).nullable().default(null),
+  // Starred in the history: its files are copies that belong to it, in a folder of its own.
+  kept: z.object({ historyId: z.string(), senderName: z.string(), senderAvatarUrl: z.string().nullable() }).nullable().default(null),
 });
 export type SavedLiveChat = z.infer<typeof SavedSchema>;
+type NewSaved = Omit<SavedLiveChat, 'id' | 'favorite' | 'savedAt' | 'kept'>;
 
 const StoredSchema = z.object({
   folders: z.array(z.string()),
@@ -56,6 +59,7 @@ type Found = { id: string; url: string; path: string; name: string; size: number
 export class Library {
   private readonly storePath: string;
   private readonly thumbnails: string;
+  private readonly keptFiles: string;
   private data: Stored;
   private found = new Map<string, Found>();
   private truncated = false;
@@ -64,7 +68,17 @@ export class Library {
   constructor(root: string) {
     this.storePath = join(root, 'library.json');
     this.thumbnails = join(root, 'library-thumbnails');
+    this.keptFiles = join(root, 'kept-media');
     this.data = this.load();
+    void this.sweepKeptFiles();
+  }
+
+  // What Windows was still holding when a favourite was removed, or a star the app was closed in the middle of.
+  private async sweepKeptFiles(): Promise<void> {
+    const folders = await readdir(this.keptFiles).catch(() => []);
+    for (const folder of folders) {
+      if (!this.savedById(folder)?.kept) await rm(join(this.keptFiles, folder), { recursive: true, force: true }).catch(() => {});
+    }
   }
 
   private load(): Stored {
@@ -268,13 +282,48 @@ export class Library {
     this.save();
   }
 
-  async saveLiveChat(saved: Omit<SavedLiveChat, 'id' | 'favorite' | 'savedAt'>): Promise<void> {
-    const id = randomUUID();
-    this.data.saved.push({ ...saved, id, favorite: false, savedAt: Date.now() });
+  async saveLiveChat(saved: NewSaved): Promise<void> {
+    await this.add({ ...saved, id: randomUUID(), favorite: false, savedAt: Date.now(), kept: null });
+  }
+
+  private async add(saved: SavedLiveChat): Promise<void> {
+    this.data.saved.push(saved);
     this.save();
 
     const picture = saved.files.find(({ contentType }) => fileKindOf(contentType) !== 'audio');
-    if (picture) await this.writeThumbnail(id, picture);
+    if (picture) await this.writeThumbnail(saved.id, picture);
+  }
+
+  keptFolder(id: string): string {
+    return join(this.keptFiles, id);
+  }
+
+  async keepFromHistory(id: string, saved: NewSaved, kept: NonNullable<SavedLiveChat['kept']>): Promise<void> {
+    await this.add({ ...saved, id, favorite: true, savedAt: Date.now(), kept });
+  }
+
+  keptFrom(historyId: string): SavedLiveChat | null {
+    return this.data.saved.find((saved) => saved.kept?.historyId === historyId) ?? null;
+  }
+
+  favorites(): FavoriteView[] {
+    return this.data.saved
+      .flatMap((saved) =>
+        saved.kept
+          ? [
+              {
+                id: saved.id,
+                name: saved.name,
+                kind: mediaKindOf(saved.files),
+                senderName: saved.kept.senderName,
+                senderAvatarUrl: saved.kept.senderAvatarUrl,
+                savedAt: saved.savedAt,
+                thumbnailUrl: this.thumbnailUrl(saved.id),
+              },
+            ]
+          : [],
+      )
+      .sort((a, b) => b.savedAt - a.savedAt);
   }
 
   savedById(id: string): SavedLiveChat | null {
@@ -293,10 +342,13 @@ export class Library {
   }
 
   deleteSaved(id: string): void {
+    const kept = this.savedById(id)?.kept;
     this.data.saved = this.data.saved.filter((saved) => saved.id !== id);
     this.save();
     this.thumbnailUrls.delete(id);
     rmSync(this.thumbnailPath(id), { force: true });
+    // Windows can still hold a file that was just playing. Whatever remains goes at the next launch.
+    if (kept) void rm(this.keptFolder(id), { recursive: true, force: true, maxRetries: 3, retryDelay: 500 }).catch(() => {});
   }
 
   // The file shown must be one of those missing, going by its kind and its exact size, as it may have been renamed.

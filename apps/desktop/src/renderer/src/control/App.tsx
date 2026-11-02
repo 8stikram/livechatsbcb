@@ -24,15 +24,15 @@ export const App = () => {
   const state = useAppState();
   const files = useDraft();
   const scene = useScene();
-  const [chosenView, setChosenView] = useState<View>('party');
+  const [chosenView, setChosenView] = useState<View>('media');
   const [picking, setPicking] = useState(false);
   const [libraryCategory, setLibraryCategory] = useState<Category>('image');
   const partyId = state?.party?.partyId;
 
-  // Whoever just entered a party wants to see it.
+  // Whoever just entered a party is there to send something.
   useEffect(() => {
     if (!partyId) return;
-    setChosenView('party');
+    setChosenView('media');
     setPicking(false);
   }, [partyId]);
 
@@ -40,7 +40,7 @@ export const App = () => {
   const loggedOut = state !== null && state.account === null;
   useEffect(() => {
     if (!loggedOut) return;
-    setChosenView('party');
+    setChosenView('media');
     setPicking(false);
     files.reset();
     scene.forgetAll();
@@ -110,13 +110,7 @@ export const App = () => {
         <div className="views" hidden={showPicker}>
           <div className="view" hidden={view !== 'party'}>
             {party ? (
-              <PartyScreen
-                state={state}
-                party={party}
-                files={files}
-                active={view === 'party' && !showPicker}
-                onOpenMedia={() => setChosenView('media')}
-              />
+              <PartyScreen state={state} party={party} active={view === 'party' && !showPicker} />
             ) : (
               <p className="glass empty" data-testid="no-party">
                 {joinError ? 'Clique sur un serveur pour réessayer.' : 'Connexion au serveur…'}

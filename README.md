@@ -99,7 +99,7 @@ Donne un nom à un LiveChat réussi, et renvoie-le plus tard en un clic. Si un f
 **Et aussi :**
 
 - **Une file d'attente :** les envois passent l'un après l'autre, sans se couper. Tout le monde peut passer au suivant.
-- **Un historique :** rejoue un envoi pour tout le monde, ou revois-le juste pour toi.
+- **Un historique :** rejoue un envoi pour tout le monde, ou revois-le juste pour toi. L'étoile garde un LiveChat marrant sur ton PC, pour le ressortir même des jours après.
 - **Ton volume à toi :** chacun règle le son et peut couper le sien.
 - **Une party privée :** avec un code à 6 caractères, sans passer par un serveur.
 - **Discrète :** l'app reste près de l'horloge et peut se lancer avec Windows. Une case dans les réglages le désactive.

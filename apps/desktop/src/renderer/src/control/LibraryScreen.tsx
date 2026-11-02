@@ -72,7 +72,7 @@ const sorted = <Item extends { name: string; favorite: boolean }>(
     return byName(a, b);
   });
 
-const Star = ({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) => (
+export const Star = ({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) => (
   <button
     type="button"
     className={on ? 'round tiny star is-on' : 'round tiny star'}

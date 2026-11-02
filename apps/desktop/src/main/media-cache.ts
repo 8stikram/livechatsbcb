@@ -103,6 +103,15 @@ export class MediaCache {
     return true;
   }
 
+  // A downloaded file leaves the cache for a place of its own, instead of being deleted with the rest.
+  async moveOut(mediaId: string, fileId: string, target: string): Promise<boolean> {
+    const entry = this.entries.get(this.keyOf(mediaId, fileId));
+    if (!entry?.downloadedTo) return false;
+    await rename(entry.downloadedTo, target);
+    entry.downloadedTo = null;
+    return true;
+  }
+
   private reportIfReady(item: QueueItem): void {
     if (item.files.length === 0 || this.reported.has(item.id)) return;
     if (!item.files.every((file) => this.urlOf(item.id, file.id))) return;

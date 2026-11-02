@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { ActionResult, AppState, HistoryView } from '../../../shared/ipc';
+import type { ActionResult, AppState, FavoriteView, HistoryView } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
+import { ConfirmButton } from './ConfirmButton';
 import { IconPlay, KindIcon } from './icons';
-import { replayErrorMessage } from './messages';
+import { Star } from './LibraryScreen';
+import { errorMessage, replayErrorMessage } from './messages';
 import { mediaTitle } from './NowPlaying';
 
 const CLOCK_TICK_MS = 30_000;
@@ -15,6 +17,82 @@ const whenPlayed = (playedAt: number, now: number): string => {
   if (minutes < 60) return relativeTime.format(-minutes, 'minute');
   return relativeTime.format(-Math.floor(minutes / 60), 'hour');
 };
+
+const savedDay = new Intl.DateTimeFormat('fr', { day: 'numeric', month: 'long' });
+
+const ReplayForMeButton = ({
+  replayState,
+  busyPlaying,
+  onReplay,
+}: {
+  replayState: 'loading' | 'playing' | null;
+  busyPlaying: boolean;
+  onReplay: () => void;
+}) =>
+  replayState ? (
+    <button type="button" className="pill secondary small" onClick={() => void window.liveChat.stopLocalReplay()}>
+      {replayState === 'loading' && <span className="spinner is-small" aria-hidden="true" />}
+      {replayState === 'loading' ? 'Chargement…' : 'Arrêter'}
+    </button>
+  ) : (
+    <button type="button" className="pill quiet small" disabled={busyPlaying} onClick={onReplay}>
+      Revoir pour moi
+    </button>
+  );
+
+const FavoriteRow = ({
+  favorite,
+  busyPlaying,
+  canSend,
+  replayState,
+  onResult,
+}: {
+  favorite: FavoriteView;
+  busyPlaying: boolean;
+  canSend: boolean;
+  replayState: 'loading' | 'playing' | null;
+  onResult: (result: ActionResult) => void;
+}) => (
+  <li className="history-row" data-testid="favorite-item">
+    {favorite.thumbnailUrl ? (
+      <img className="history-picture" src={favorite.thumbnailUrl} alt="" />
+    ) : (
+      <span className="kind-tile">
+        <KindIcon kind={favorite.kind} />
+      </span>
+    )}
+    <span className="row-text">
+      <span className="row-title" title={favorite.name}>
+        {favorite.name}
+      </span>
+      <span className="row-sub">
+        <Avatar className="avatar is-tiny" name={favorite.senderName} url={favorite.senderAvatarUrl} />
+        {favorite.senderName} · gardé le {savedDay.format(favorite.savedAt)}
+      </span>
+    </span>
+    <span className="history-actions">
+      <ConfirmButton
+        label="Retirer"
+        confirmLabel="Effacer pour de bon ?"
+        onConfirm={() => void window.liveChat.deleteSaved(favorite.id)}
+      />
+      <ReplayForMeButton
+        replayState={replayState}
+        busyPlaying={busyPlaying}
+        onReplay={() => void window.liveChat.replayFavoriteForMe(favorite.id).then(onResult)}
+      />
+      <button
+        type="button"
+        className="pill secondary small"
+        disabled={!canSend}
+        onClick={() => void window.liveChat.sendSaved(favorite.id).then(onResult)}
+      >
+        <IconPlay size={16} />
+        Envoyer à tous
+      </button>
+    </span>
+  </li>
+);
 
 const HistoryRow = ({
   item,
@@ -43,21 +121,24 @@ const HistoryRow = ({
       </span>
     </span>
     <span className="history-actions">
-      {replayState ? (
-        <button type="button" className="pill secondary small" onClick={() => void window.liveChat.stopLocalReplay()}>
-          {replayState === 'loading' && <span className="spinner is-small" aria-hidden="true" />}
-          {replayState === 'loading' ? 'Chargement…' : 'Arrêter'}
-        </button>
+      {item.keeping ? (
+        <span className="round tiny star is-on" title="Copie sur ton PC…" data-testid="keeping">
+          <span className="spinner is-small" aria-hidden="true" />
+        </span>
       ) : (
-        <button
-          type="button"
-          className="pill quiet small"
-          disabled={busyPlaying}
-          onClick={() => void window.liveChat.replayForMe(item.id).then(onResult)}
-        >
-          Revoir pour moi
-        </button>
+        <Star
+          on={item.favoriteId !== null}
+          onChange={(on) => {
+            if (on) void window.liveChat.keepHistory(item.id).then(onResult);
+            else if (item.favoriteId) void window.liveChat.deleteSaved(item.favoriteId);
+          }}
+        />
       )}
+      <ReplayForMeButton
+        replayState={replayState}
+        busyPlaying={busyPlaying}
+        onReplay={() => void window.liveChat.replayForMe(item.id).then(onResult)}
+      />
       <button
         type="button"
         className="pill secondary small"
@@ -71,7 +152,8 @@ const HistoryRow = ({
 );
 
 export const HistoryScreen = ({ state, active }: { state: AppState; active: boolean }) => {
-  const { history, localReplay } = state;
+  const { history, favorites, localReplay } = state;
+  const [showFavorites, setShowFavorites] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
   const busyPlaying = state.queue.current?.startAt != null;
@@ -84,13 +166,32 @@ export const HistoryScreen = ({ state, active }: { state: AppState; active: bool
   }, [active, history]);
 
   const onResult = (result: ActionResult) => setError(result.ok ? null : replayErrorMessage(result.error));
+  const onFavoriteResult = (result: ActionResult) => {
+    if (result.ok) setError(null);
+    else setError(result.error === 'not_found' ? 'Les fichiers de ce favori ne sont plus sur ce PC.' : errorMessage(result.error));
+  };
+  const replayStateOf = (id: string) => (localReplay?.historyId === id ? (localReplay.playback ? 'playing' : 'loading') : null);
 
   return (
     <section className="glass panel history" aria-labelledby="history-title">
-      <h2 id="history-title" className="panel-title">
-        Déjà passé
-        <span className="count">{busyPlaying ? '« Revoir pour moi » revient à la fin du média en cours' : 'Gardé 1 jour'}</span>
-      </h2>
+      <div className="panel-title history-head">
+        <h2 id="history-title">Déjà passé</h2>
+        <div className="tabs" role="group" aria-label="Ce qui est affiché">
+          <button type="button" className={showFavorites ? 'tab' : 'tab is-active'} aria-pressed={!showFavorites} onClick={() => setShowFavorites(false)}>
+            Récents
+          </button>
+          <button type="button" className={showFavorites ? 'tab is-active' : 'tab'} aria-pressed={showFavorites} onClick={() => setShowFavorites(true)}>
+            Favoris
+          </button>
+        </div>
+        <span className="count">
+          {busyPlaying
+            ? '« Revoir pour moi » revient à la fin du média en cours'
+            : showFavorites
+              ? 'Gardés sur ton PC'
+              : 'Gardé 1 jour, ou plus avec l’étoile'}
+        </span>
+      </div>
 
       {error && (
         <p className="error" role="alert">
@@ -98,7 +199,27 @@ export const HistoryScreen = ({ state, active }: { state: AppState; active: bool
         </p>
       )}
 
-      {history.length === 0 ? (
+      {showFavorites ? (
+        favorites.length === 0 ? (
+          <div className="history-empty">
+            <p className="draft-empty-title">Aucun favori</p>
+            <p className="hint">Clique sur l'étoile d'un LiveChat marrant : il reste sur ton PC et tu pourras le ressortir quand tu veux.</p>
+          </div>
+        ) : (
+          <ul className="history-list scroll">
+            {favorites.map((favorite) => (
+              <FavoriteRow
+                key={favorite.id}
+                favorite={favorite}
+                busyPlaying={busyPlaying}
+                canSend={state.upload === null && state.party?.connection === 'online'}
+                replayState={replayStateOf(favorite.id)}
+                onResult={onFavoriteResult}
+              />
+            ))}
+          </ul>
+        )
+      ) : history.length === 0 ? (
         <div className="history-empty">
           <p className="draft-empty-title">Rien pour l'instant</p>
           <p className="hint">Ce qui passe dans la party s'affiche ici pendant 1 jour.</p>
@@ -111,7 +232,7 @@ export const HistoryScreen = ({ state, active }: { state: AppState; active: bool
               item={item}
               now={now}
               busyPlaying={busyPlaying}
-              replayState={localReplay?.historyId === item.id ? (localReplay.playback ? 'playing' : 'loading') : null}
+              replayState={replayStateOf(item.id)}
               onResult={onResult}
             />
           ))}

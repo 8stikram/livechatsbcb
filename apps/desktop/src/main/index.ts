@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { mkdir, rm, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell, type IpcMainInvokeEvent } from 'electron';
 import { z } from 'zod';
@@ -13,6 +13,7 @@ import {
   MediaDraftSchema,
   SceneLayerSchema,
   fileKindOf,
+  mediaKindOf,
   fileNamesOf,
   pictureOf,
   soundOf,
@@ -28,7 +29,7 @@ import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
 import { MediaCache } from './media-cache';
-import { CONTENT_TYPE_BY_EXTENSION, contentTypeOf, forgetMediaFile, registerMediaFile, serveMediaFiles } from './media-files';
+import { CONTENT_TYPE_BY_EXTENSION, contentTypeOf, extensionOf, forgetMediaFile, registerMediaFile, serveMediaFiles } from './media-files';
 import { uploadFile } from './media-upload';
 import * as partyApi from './party-api';
 import { PartyConnection } from './party-connection';
@@ -126,6 +127,7 @@ function start(): void {
   let quitting = false;
   let localReplay: { key: string; historyId: string; item: HistoryItem; startAt: number | null } | null = null;
   let localReplayTimer: NodeJS.Timeout | undefined;
+  const keeping = new Set<string>();
 
   const stageWindow = createStageWindow(settings.current.displayId);
   const controlWindow = createControlWindow(process.argv.includes(START_HIDDEN_ARG) || takeQuietRestart());
@@ -178,6 +180,8 @@ function start(): void {
     caption: item.caption,
     fileName: fileNamesOf(item.files),
     playedAt: party.toLocalTime(item.playedAt),
+    favoriteId: library.keptFrom(item.id)?.id ?? null,
+    keeping: keeping.has(item.id),
   });
 
   const localReplayView = (): AppState['localReplay'] => {
@@ -253,6 +257,7 @@ function start(): void {
             .filter((item) => connection!.toLocalTime(item.expiresAt) > Date.now())
             .map((item) => toHistoryView(item, connection!))
         : [],
+      favorites: library.favorites(),
       localReplay: localReplayView(),
       upload: upload && { name: upload.name, percent: upload.percent },
     };
@@ -927,7 +932,9 @@ function start(): void {
     ]);
     if (action !== 'delete') return { action };
 
-    if (await confirmed(`Supprimer « ${saved.name} » ?`, 'Tes fichiers ne bougent pas.', 'Supprimer')) library.deleteSaved(saved.id);
+    const detail = saved.kept ? 'La copie gardée sur ce PC sera effacée.' : 'Tes fichiers ne bougent pas.';
+    if (await confirmed(`Supprimer « ${saved.name} » ?`, detail, 'Supprimer')) library.deleteSaved(saved.id);
+    publishState();
     return { action: null, library: await library.view() };
   });
 
@@ -1113,6 +1120,7 @@ function start(): void {
 
   handle(IpcChannel.DeleteSaved, (savedId: unknown) => {
     if (typeof savedId === 'string') library.deleteSaved(savedId);
+    publishState();
     return library.view();
   });
 
@@ -1126,6 +1134,95 @@ function start(): void {
     const session = store.session;
     if (!session || typeof rawId !== 'string') return { ok: false, error: 'unauthorized' };
     return partyApi.replayMedia(session, rawId);
+  });
+
+  const playLocalReplay = (replay: NonNullable<typeof localReplay>): void => {
+    replay.startAt = Date.now() + LOCAL_REPLAY_LEAD_MS;
+    localReplayTimer = setTimeout(() => {
+      stopLocalReplay();
+      publishState();
+    }, LOCAL_REPLAY_LEAD_MS + replay.item.durationMs);
+    publishState();
+  };
+
+  // The online copy goes after 1 day, so a favourite brings its files down to this PC, which costs the service nothing.
+  const keepFromHistory = async (session: SessionResponse, item: HistoryItem): Promise<ActionResult> => {
+    const key = randomUUID();
+    const id = randomUUID();
+    const folder = library.keptFolder(id);
+    try {
+      if (!(await cache.fetchForMe(key, session, item.files))) return { ok: false, error: 'not_found' };
+
+      await mkdir(folder, { recursive: true });
+      const files: SavedFile[] = [];
+      for (const [index, { id: fileId, name, size, contentType }] of item.files.entries()) {
+        const path = join(folder, `${index}.${extensionOf(contentType)}`);
+        if (!(await cache.moveOut(key, fileId, path))) throw new Error('Not downloaded');
+        // Written by someone else, and this name can end up in a path.
+        files.push({ path, name: name.replace(/[\\/]/g, '_'), size, contentType });
+      }
+
+      const { caption, clipStartMs, durationMs, videoMuted, soundMuted, scene, senderName, senderAvatarUrl } = item;
+      const name = caption.split('\n')[0]!.trim().slice(0, 60) || item.files[0]?.name.replace(/\.[^.]*$/, '') || 'LiveChat';
+      await library.keepFromHistory(
+        id,
+        { name, caption, clipStartMs, durationMs, videoMuted, soundMuted, scene, files },
+        { historyId: item.id, senderName, senderAvatarUrl },
+      );
+      return { ok: true };
+    } catch {
+      await rm(folder, { recursive: true, force: true }).catch(() => {});
+      return { ok: false, error: 'network' };
+    } finally {
+      cache.forget(key);
+    }
+  };
+
+  handle(IpcChannel.KeepHistory, async (rawId: unknown): Promise<ActionResult> => {
+    const session = store.session;
+    const item = connection?.current().history.find(({ id }) => id === rawId);
+    if (!session || !item) return { ok: false, error: 'not_found' };
+    if (keeping.has(item.id) || library.keptFrom(item.id)) return { ok: true };
+
+    keeping.add(item.id);
+    publishState();
+    const result = await keepFromHistory(session, item);
+    keeping.delete(item.id);
+    publishState();
+    return result;
+  });
+
+  handle(IpcChannel.ReplayFavoriteForMe, async (savedId: unknown): Promise<ActionResult> => {
+    const saved = typeof savedId === 'string' ? library.savedById(savedId) : null;
+    if (!saved?.kept || !(await library.allThere(saved))) return { ok: false, error: 'not_found' };
+    if (connection?.current().queue[0]?.startAt != null) return { ok: true };
+
+    stopLocalReplay();
+    const key = randomUUID();
+    const files = saved.files.map(({ name, size, contentType }) => ({ id: randomUUID(), name, size, contentType }));
+    for (const [index, file] of saved.files.entries()) cache.adopt(key, files[index]!.id, file.path, file.contentType);
+
+    const { caption, clipStartMs, durationMs, videoMuted, soundMuted, scene, savedAt, kept } = saved;
+    const item: HistoryItem = {
+      id: saved.id,
+      files,
+      senderId: '',
+      senderName: kept.senderName,
+      senderAvatarUrl: kept.senderAvatarUrl,
+      kind: mediaKindOf(saved.files),
+      caption,
+      clipStartMs,
+      durationMs,
+      videoMuted,
+      soundMuted,
+      scene,
+      expiresAt: Number.MAX_SAFE_INTEGER,
+      playedAt: savedAt,
+    };
+    const replay = { key, historyId: saved.id, item, startAt: null as number | null };
+    localReplay = replay;
+    playLocalReplay(replay);
+    return { ok: true };
   });
 
   handle(IpcChannel.ReplayForMe, async (rawId: unknown): Promise<ActionResult> => {
@@ -1148,12 +1245,7 @@ function start(): void {
     // Stopped, or replaced by something else, while the file was on its way.
     if (localReplay !== replay) return { ok: true };
 
-    replay.startAt = Date.now() + LOCAL_REPLAY_LEAD_MS;
-    localReplayTimer = setTimeout(() => {
-      stopLocalReplay();
-      publishState();
-    }, LOCAL_REPLAY_LEAD_MS + item.durationMs);
-    publishState();
+    playLocalReplay(replay);
     return { ok: true };
   });
 

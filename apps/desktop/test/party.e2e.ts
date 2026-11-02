@@ -308,6 +308,7 @@ const pickFile = async (member: Member, path: string): Promise<void> => {
 const sendButton = (member: Member) => member.control.getByRole('button', { name: 'Envoyer à tout le monde' });
 
 const sendText = async (member: Member, text: string) => {
+  await openTab(member, 'LiveChat');
   await member.control.getByLabel('Texte à afficher').fill(text);
   await sendButton(member).click();
 };
@@ -532,6 +533,8 @@ describe.skipIf(online)('party flow in the real app', () => {
     await onlineCount(guest, 2);
     await onlineCount(host, 2);
 
+    await openTab(host, 'Party');
+    await openTab(guest, 'Party');
     await partyMember(host, 'Pote').waitFor();
     await partyMember(guest, 'Nono').waitFor();
     await pictureLoaded(guest.control, 'member-avatar');
@@ -893,11 +896,77 @@ describe.skipIf(online)('party flow in the real app', () => {
     await overlayState(guest, 'idle');
   });
 
-  it('sends a text or picks a file straight from the party', async () => {
+  it('shows the update coming down as a bar', async () => {
+    const state = await host.control.evaluate(() => window.liveChat.getState());
+    await host.app.evaluate(({ BrowserWindow }, shown) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('state:changed', shown);
+    }, { ...state, update: { state: 'downloading', version: '9.9.9', percent: 42 } });
+
+    const banner = host.control.getByTestId('update-progress');
+    await banner.filter({ hasText: '42 %' }).waitFor();
+    expect(await banner.locator('progress').evaluate((bar: HTMLProgressElement) => bar.value)).toBe(42);
+    await picture(host.control, 'update-bar.png');
+
+    await host.app.evaluate(({ BrowserWindow }, shown) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('state:changed', shown);
+    }, state);
+    await banner.waitFor({ state: 'detached' });
+  });
+
+  it('keeps a favourite on this PC, and it comes back for me or for everyone', async () => {
+    const keptFiles = () =>
+      guest.app.evaluate(({ app }) => {
+        const { existsSync, readdirSync } = process.getBuiltinModule('node:fs');
+        const { join } = process.getBuiltinModule('node:path');
+        const root = join(app.getPath('userData'), 'kept-media');
+        return existsSync(root) ? readdirSync(root).flatMap((folder) => readdirSync(join(root, folder))) : [];
+      });
+
+    await pickFile(host, join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png'));
+    await sendText(host, 'Le marrant\nDeuxième ligne');
+    await overlayState(guest, 'playing');
+    await guest.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(guest, 'idle');
+
+    await openTab(guest, 'Historique');
+    const row = guest.control.getByTestId('history-item').filter({ hasText: 'logo.png' }).first();
+    await row.getByRole('button', { name: 'Épingler en favori' }).click();
+    await row.getByRole('button', { name: 'Retirer des favoris' }).waitFor();
+    expect(await keptFiles()).toEqual(['0.png']);
+
+    await guest.control.getByRole('group', { name: 'Ce qui est affiché' }).getByRole('button', { name: 'Favoris' }).click();
+    const favorite = guest.control.getByTestId('favorite-item').filter({ hasText: 'Le marrant' });
+    await favorite.waitFor();
+    expect(await favorite.locator('.row-title').textContent()).toBe('Le marrant');
+    await picture(guest.control, 'favorites.png');
+
+    await favorite.getByRole('button', { name: 'Revoir pour moi' }).click();
+    await overlayState(guest, 'replay');
+    await guest.stage.getByTestId('overlay-image').waitFor();
+    await overlayState(host, 'idle');
+    await favorite.getByRole('button', { name: 'Arrêter' }).click();
+    await overlayState(guest, 'idle');
+
+    await favorite.getByRole('button', { name: 'Envoyer à tous' }).click();
+    await overlayState(host, 'playing');
+    await host.stage.getByTestId('overlay-text').filter({ hasText: 'Le marrant' }).waitFor();
     await openTab(host, 'Party');
+    await host.control.getByRole('button', { name: 'Passer' }).first().click();
+    await overlayState(host, 'idle');
+    await overlayState(guest, 'idle');
+
+    await favorite.getByRole('button', { name: 'Retirer' }).click();
+    await favorite.getByRole('button', { name: 'Effacer pour de bon ?' }).click();
+    await favorite.waitFor({ state: 'detached' });
+    await expect.poll(keptFiles).toEqual([]);
+    await guest.control.getByRole('group', { name: 'Ce qui est affiché' }).getByRole('button', { name: 'Récents' }).click();
+  });
+
+  it('sends from LiveChat and shows it in the party, which only says who is there', async () => {
     await openTab(guest, 'Party');
-    await host.control.getByLabel('Un texte').fill('Vite fait');
-    await host.control.getByRole('button', { name: 'Envoyer le texte' }).click();
+    await sendText(host, 'Vite fait');
+    await openTab(host, 'Party');
+    expect(await host.control.getByLabel('Un texte').count()).toBe(0);
 
     await overlayState(guest, 'playing');
     await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Vite fait' }).waitFor();
@@ -906,7 +975,6 @@ describe.skipIf(online)('party flow in the real app', () => {
     await guest.control.getByRole('button', { name: 'Passer' }).click();
     await overlayState(guest, 'idle');
     await overlayState(host, 'idle');
-    expect(await host.control.getByLabel('Un texte').inputValue()).toBe('');
 
     await pickFile(host, join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png'));
     await host.control.getByTestId('draft-name').filter({ hasText: 'logo.png' }).waitFor();
@@ -1447,6 +1515,8 @@ describe.skipIf(online)('party flow in the real app', () => {
     await connected(guest);
     await onlineCount(guest, 2);
     await onlineCount(host, 2);
+    await openTab(host, 'Party');
+    await openTab(guest, 'Party');
     await partyMember(host, 'Pote').waitFor();
     expect(await partyCode(guest)).toBe(code);
   });
@@ -1484,6 +1554,7 @@ describe.skipIf(online)('party flow in the real app', () => {
   });
 
   it('goes back to the server after leaving a private party', async () => {
+    await openTab(guest, 'Party');
     await guest.control.getByRole('button', { name: 'Quitter la party', exact: true }).click();
     await guest.control.getByRole('button', { name: 'Confirmer le départ ?' }).click();
     await inServer(guest, 'Les potes');
@@ -1514,6 +1585,7 @@ describe.skipIf(online)('party flow in the real app', () => {
   });
 
   it('removes the party when its last member leaves', async () => {
+    await openTab(host, 'Party');
     await host.control.getByRole('button', { name: 'Quitter la party', exact: true }).click();
     await host.control.getByRole('button', { name: 'Confirmer le départ ?' }).click();
     await inServer(host, 'Les potes');
@@ -1571,9 +1643,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await expect.poll(() => mainWindowVisible(other)).toBe(false);
     await onlineCount(host, 2);
 
-    await openTab(host, 'Party');
-    await host.control.getByLabel('Un texte').fill('Toujours là ?');
-    await host.control.getByRole('button', { name: 'Envoyer le texte' }).click();
+    await sendText(host, 'Toujours là ?');
     await overlayState(other, 'playing');
     await other.stage.getByTestId('overlay-text').filter({ hasText: 'Toujours là ?' }).waitFor();
     expect(await stageVisible(other)).toBe(true);

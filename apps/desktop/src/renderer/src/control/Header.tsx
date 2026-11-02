@@ -5,8 +5,8 @@ import { IconCheck, IconCopy } from './icons';
 export type View = 'party' | 'media' | 'library' | 'history' | 'settings';
 
 const TABS: Array<[View, string]> = [
-  ['party', 'Party'],
   ['media', 'LiveChat'],
+  ['party', 'Party'],
   ['library', 'Bibliothèque'],
   ['history', 'Historique'],
 ];

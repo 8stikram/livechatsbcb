@@ -1,85 +1,11 @@
-import { useState, type FormEvent } from 'react';
-import { DEFAULT_DISPLAY_MS, MAX_CAPTION_LENGTH, MAX_ONLINE_MEMBERS } from '@livechatsbcb/protocol';
+import { useState } from 'react';
+import { MAX_ONLINE_MEMBERS } from '@livechatsbcb/protocol';
 import type { ActionResult, AppState, PartyView, UpcomingView } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { ConfirmButton } from './ConfirmButton';
-import { IconSend, KindIcon } from './icons';
-import { errorMessage, mediaErrorMessage } from './messages';
+import { KindIcon } from './icons';
+import { errorMessage } from './messages';
 import { mediaTitle, NowCard } from './NowPlaying';
-import type { DraftFiles } from './use-draft';
-
-const QuickSend = ({
-  isOnline,
-  isUploading,
-  files,
-  onOpenMedia,
-}: {
-  isOnline: boolean;
-  isUploading: boolean;
-  files: DraftFiles;
-  onOpenMedia: () => void;
-}) => {
-  const [text, setText] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  const send = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!text.trim() || !isOnline) return;
-
-    setError(null);
-    const sent = text;
-    const result = await window.liveChat.sendMedia({
-      caption: sent,
-      videoMuted: false,
-      soundMuted: false,
-      withPicture: false,
-      withSound: false,
-      clipStartMs: 0,
-      durationMs: DEFAULT_DISPLAY_MS,
-    });
-    if (result.ok) setText((typed) => (typed === sent ? '' : typed));
-    else setError(mediaErrorMessage(result.error));
-  };
-
-  return (
-    <section className="glass panel" aria-labelledby="quick-send-title">
-      <h2 id="quick-send-title">Envoyer à tout le monde</h2>
-      <form className="stack" onSubmit={(event) => void send(event)}>
-        <div className="field">
-          <label htmlFor="quick-text">Un texte</label>
-          <div className="input-action">
-            <input
-              id="quick-text"
-              className="input"
-              value={text}
-              maxLength={MAX_CAPTION_LENGTH}
-              placeholder="Écris pour tout le monde"
-              autoComplete="off"
-              onChange={(event) => setText(event.target.value)}
-            />
-            <button
-              type="submit"
-              className="round tiny solid"
-              title="Envoyer le texte"
-              aria-label="Envoyer le texte"
-              disabled={!text.trim() || !isOnline}
-            >
-              <IconSend size={16} />
-            </button>
-          </div>
-        </div>
-        <button type="button" className="pill primary" disabled={isUploading} onClick={onOpenMedia}>
-          {files.hasFiles ? 'Reprendre ton LiveChat' : 'Choisir un fichier'}
-        </button>
-      </form>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-    </section>
-  );
-};
 
 const Upcoming = ({ upcoming, active }: { upcoming: UpcomingView[]; active: boolean }) => (
   <section className="glass panel is-short" aria-labelledby="upcoming-title">
@@ -173,28 +99,10 @@ const Members = ({ party }: { party: PartyView }) => {
   );
 };
 
-export const PartyScreen = ({
-  state,
-  party,
-  files,
-  active,
-  onOpenMedia,
-}: {
-  state: AppState;
-  party: PartyView;
-  files: DraftFiles;
-  active: boolean;
-  onOpenMedia: () => void;
-}) => (
+export const PartyScreen = ({ state, party, active }: { state: AppState; party: PartyView; active: boolean }) => (
   <div className="party-grid">
     <NowCard current={state.queue.current} settings={state.settings} active={active} />
     <aside className="party-side">
-      <QuickSend
-        isOnline={party.connection === 'online'}
-        isUploading={state.upload !== null}
-        files={files}
-        onOpenMedia={onOpenMedia}
-      />
       <Upcoming upcoming={state.queue.upcoming} active={active} />
       <Members party={party} />
     </aside>

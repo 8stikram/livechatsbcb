@@ -82,6 +82,17 @@ export type PlaybackView = {
 
 export type SceneLayerView = Omit<SceneLayer, 'file'> & { kind: 'image' | 'video'; url: string | null };
 
+// Starred in the history, and kept on this PC for as long as the star stays.
+export type FavoriteView = {
+  id: string;
+  name: string;
+  kind: MediaKind;
+  senderName: string;
+  senderAvatarUrl: string | null;
+  savedAt: number;
+  thumbnailUrl: string | null;
+};
+
 export type UpcomingView = {
   id: string;
   senderName: string;
@@ -102,6 +113,9 @@ export type HistoryView = {
   fileName: string | null;
   // On this PC's clock.
   playedAt: number;
+  // Null until it is starred. Keeping says its files are on their way to this PC.
+  favoriteId: string | null;
+  keeping: boolean;
 };
 
 // Played again on this PC alone. Null playback while the file is on its way.
@@ -195,6 +209,7 @@ export type AppState = {
   overlayTest: boolean;
   queue: QueueView;
   history: HistoryView[];
+  favorites: FavoriteView[];
   localReplay: LocalReplayView | null;
   upload: UploadView | null;
 };
@@ -263,6 +278,8 @@ export const IpcChannel = {
   DeleteSaved: 'library:delete-saved',
   ReplayForAll: 'history:replay-for-all',
   ReplayForMe: 'history:replay-for-me',
+  KeepHistory: 'history:keep',
+  ReplayFavoriteForMe: 'history:replay-favorite-for-me',
   StopLocalReplay: 'history:stop-local-replay',
   SetSettings: 'settings:set',
   TestOverlay: 'overlay:test',
@@ -315,6 +332,8 @@ export type LiveChatApi = {
   deleteSaved(savedId: string): Promise<LibraryView>;
   replayForAll(historyId: string): Promise<ActionResult>;
   replayForMe(historyId: string): Promise<ActionResult>;
+  keepHistory(historyId: string): Promise<ActionResult>;
+  replayFavoriteForMe(savedId: string): Promise<ActionResult>;
   stopLocalReplay(): Promise<void>;
   setSettings(change: Partial<Settings>): Promise<void>;
   testOverlay(): Promise<void>;
