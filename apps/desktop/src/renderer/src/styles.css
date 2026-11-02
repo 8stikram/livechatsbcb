@@ -2138,6 +2138,10 @@ html.mac .titlebar {
   height: 44px;
 }
 
+html.mac .app.is-login > .banner {
+  top: 44px;
+}
+
 /* How the window moves. The overlay has its own animations, further up, and they stay as they are. */
 
 :root {
