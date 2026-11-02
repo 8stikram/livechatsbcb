@@ -6,7 +6,13 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.14.0** (dernière version) : LiveChat plus clair
+**0.15.0** (dernière version) : montage
+
+- Barre du passage avec les images de la vidéo, ou la forme du son
+- Le passage se rejoue quand tu lâches un bord, se déplace d'un bloc, et se règle plus précisément avec le zoom
+- Mode avancé : jusqu'à 3 vidéos en même temps, chacune avec son passage et son bouton pour couper le son
+
+**0.14.0** : LiveChat plus clair
 
 - Mode avancé : bibliothèque en barre à gauche, repliable
 - Une ligne au-dessus d'Envoyer dit la durée et s'il y a du son
@@ -86,23 +92,18 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 - Parfois un LiveChat n'apparaît plus. Pas reproduit : regarder si une version s'affiche à côté du pote concerné dans la Party
 
-### 7. Montage
-
-- Couper un son ou une vidéo sur une barre avec des images du passage, comme dans un logiciel de montage
-- Mettre plusieurs vidéos dans un même LiveChat
-
-### 8. Raccourcis
+### 7. Raccourcis
 
 - Roue de LiveChats, comme la roue des armes dans GTA
 - Menu des raccourcis refait pour être facile à comprendre, comme celui de CS2
 
-### 9. Liens vidéo et sons
+### 8. Liens vidéo et sons
 
 - YouTube
 - TikTok
 - Un service comme SoundCloud pour ajouter des extraits sonores, à vérifier : il doit rester gratuit
 
-### 10. Vie de la party
+### 9. Vie de la party
 
 - Pendant un LiveChat, un contour vert autour de la photo de profil : il s'anime avec le son, et reste vert fixe s'il n'y a pas de son
 - Party jusqu'à 15 personnes au lieu de 10, à vérifier : ça doit rester gratuit
@@ -111,14 +112,14 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 - Historique par personne
 - Sondages éclair
 
-### 11. Finitions
+### 10. Finitions
 
 - Bandeau « Une autre app utilise déjà » : le texte est trop espacé
 - Clic droit de Windows : les entrées n'apparaissent pas encore dans le vrai menu, à reprendre
 - Tags personnels dans la bibliothèque
 - Tuto au premier lancement, à passer et à rejouer depuis les réglages
 
-### 12. Plus tard
+### 11. Plus tard
 
 - Thèmes (Wii, Persona…)
 - GIF : bouton avec recherche via Klipy (compte et clé à créer), favoris et récents
