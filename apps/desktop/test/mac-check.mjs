@@ -89,7 +89,12 @@ check(
 let version2 = version;
 for (let tries = 0; tries < 240 && version2 === version; tries++) {
   await sleep(1_000);
-  version2 = shownVersion();
+  // In the middle of the swap, for an instant, there is no app to read.
+  try {
+    version2 = shownVersion();
+  } catch {
+    continue;
+  }
 }
 check(`it replaced itself with ${newer}`, version2 === newer);
 
