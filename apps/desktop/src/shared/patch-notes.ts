@@ -3,11 +3,6 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: '0.10.1',
-    date: '2 novembre 2026',
-    items: ['Le clic droit de Windows apparaît maintenant aussi sur les images, les GIF et les vidéos, pas seulement sur les sons'],
-  },
-  {
     version: '0.10.0',
     date: '2 novembre 2026',
     items: [
