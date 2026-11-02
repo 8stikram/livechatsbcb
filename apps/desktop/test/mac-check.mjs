@@ -21,7 +21,7 @@ const check = (name, passed) => {
 const feedFolder = mkdtempSync(join(tmpdir(), 'lc-feed-'));
 execFileSync(
   'npx',
-  ['electron-builder', '--mac', 'zip', '--arm64', '--publish', 'never', `-c.extraMetadata.version=${newer}`, `-c.directories.output=${feedFolder}`],
+  ['electron-builder', '--mac', 'zip', '--universal', '--publish', 'never', `-c.extraMetadata.version=${newer}`, `-c.directories.output=${feedFolder}`],
   { cwd: desktop, stdio: 'inherit' },
 );
 const server = createServer((request, response) => {
@@ -39,10 +39,13 @@ const feed = `http://127.0.0.1:${server.address().port}`;
 // Somewhere it may replace itself, as in Applications.
 const place = mkdtempSync(join(tmpdir(), 'lc-app-'));
 const bundle = join(place, 'LiveChatSBCB.app');
-cpSync(join(desktop, 'release', 'mac-arm64', 'LiveChatSBCB.app'), bundle, { recursive: true, verbatimSymlinks: true });
+cpSync(join(desktop, 'release', 'mac-universal', 'LiveChatSBCB.app'), bundle, { recursive: true, verbatimSymlinks: true });
 const shownVersion = () =>
   execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleShortVersionString', join(bundle, 'Contents', 'Info.plist')], { encoding: 'utf8' }).trim();
 check(`the copy starts at ${version}`, shownVersion() === version);
+const chips = execFileSync('/usr/bin/lipo', ['-archs', join(bundle, 'Contents', 'MacOS', 'LiveChatSBCB')], { encoding: 'utf8' });
+check('it runs on Apple chips and on Intel', chips.includes('arm64') && chips.includes('x86_64'));
+console.log(`running on ${globalThis.process.arch}`);
 
 const app = await electron.launch({
   executablePath: join(bundle, 'Contents', 'MacOS', 'LiveChatSBCB'),

@@ -13,8 +13,12 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15
-    timeout-minutes: 30
+    # The same file is checked on a Mac of each kind.
+    strategy:
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,11 +34,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: mac-check
+          name: mac-check-${{ matrix.runner }}
           include-hidden-files: true
           path: apps/desktop/test/.artifacts/
           retention-days: 3
       - uses: actions/upload-artifact@v4
+        if: matrix.runner == 'macos-15'
         with:
           name: mac-release
           if-no-files-found: error

@@ -23,10 +23,11 @@ win:
   artifactName: LiveChatSBCB-Setup-${version}.${ext}
 mac:
   target:
+    # One file for every Mac, Apple chip or Intel: nobody has to know which one they have.
     - target: dmg
-      arch: arm64
+      arch: universal
     - target: zip
-      arch: arm64
+      arch: universal
   icon: src/renderer/src/assets/logo.png
   category: public.app-category.social-networking
   artifactName: LiveChatSBCB-Mac-${version}.${ext}

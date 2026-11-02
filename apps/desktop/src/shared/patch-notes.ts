@@ -3,6 +3,14 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.12.1',
+    date: '2 novembre 2026',
+    items: [
+      'La version Mac marche aussi sur les Mac Intel, plus besoin de savoir lequel tu as (macOS 13 ou plus récent)',
+      'Windows et Mac ont chacun leur téléchargement, avec de gros boutons sur GitHub',
+    ],
+  },
+  {
     version: '0.12.0',
     date: '2 novembre 2026',
     items: [
