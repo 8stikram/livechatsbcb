@@ -6,7 +6,18 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.16.0** (dernière version) : raccourcis
+**0.17.0** (dernière version) : liens et vie de la party
+
+- Liens YouTube, TikTok et SoundCloud, dans le lecteur de chaque site, avec début, fin et volume
+- Recherche SoundCloud, et images, vidéos et GIF à étirer en mode avancé
+- Instagram et X attendent : leurs vidéos ne se lancent pas toutes seules
+- Contour vert autour de celui qui envoie, qui bouge avec le son, dans l'app et en jeu
+- Chuchoter à un ou plusieurs potes, sans que les autres le sachent
+- Statut (en jeu, absent, panique) et quelques mots à soi, compteur du jour
+- Sondages éclair de 30 secondes, votes anonymes
+- Historique de chacun, party jusqu'à 15 personnes
+
+**0.16.0** : raccourcis
 
 - La roue : 8 LiveChats, une touche l'ouvre, la souris vise, le clic envoie
 - Menu des raccourcis rangé par groupes, avec test d'une touche et remise par défaut
@@ -105,29 +116,14 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 - Parfois un LiveChat n'apparaît plus. Pas reproduit : regarder si une version s'affiche à côté du pote concerné dans la Party
 
-### 7. Liens vidéo et sons
-
-- YouTube
-- TikTok
-- Un service comme SoundCloud pour ajouter des extraits sonores, à vérifier : il doit rester gratuit
-
-### 8. Vie de la party
-
-- Pendant un LiveChat, un contour vert autour de la photo de profil : il s'anime avec le son, et reste vert fixe s'il n'y a pas de son
-- Party jusqu'à 15 personnes au lieu de 10, à vérifier : ça doit rester gratuit
-- Statut des membres
-- Mode privé (whisper)
-- Historique par personne
-- Sondages éclair
-
-### 9. Finitions
+### 7. Finitions
 
 - Bandeau « Une autre app utilise déjà » : le texte est trop espacé
 - Clic droit de Windows : les entrées n'apparaissent pas encore dans le vrai menu, à reprendre
 - Tags personnels dans la bibliothèque
 - Tuto au premier lancement, à passer et à rejouer depuis les réglages
 
-### 10. Plus tard
+### 8. Plus tard
 
 - Thèmes (Wii, Persona…)
 - GIF : bouton avec recherche via Klipy (compte et clé à créer), favoris et récents
