@@ -1,6 +1,14 @@
-import { useState } from 'react';
-import { MAX_ONLINE_MEMBERS } from '@livechatsbcb/protocol';
-import type { ActionResult, AppState, PartyView, UpcomingView } from '../../../shared/ipc';
+import { useEffect, useState, type FormEvent } from 'react';
+import {
+  MAX_NOTE_LENGTH,
+  MAX_ONLINE_MEMBERS,
+  MAX_POLL_OPTION_LENGTH,
+  MAX_POLL_OPTIONS,
+  MAX_POLL_QUESTION_LENGTH,
+  MIN_POLL_OPTIONS,
+  type Activity,
+} from '@livechatsbcb/protocol';
+import type { ActionResult, AppState, MemberView, PartyView, PollView, UpcomingView } from '../../../shared/ipc';
 import { Avatar } from '../Avatar';
 import { FitText } from '../scene';
 import { ConfirmButton } from './ConfirmButton';
@@ -8,6 +16,16 @@ import { GlideList } from './glide';
 import { KindIcon } from './icons';
 import { errorMessage, minutesLeft } from './messages';
 import { mediaTitle, NowCard } from './NowPlaying';
+
+const ACTIVITY_LABEL: Record<Activity, string | null> = {
+  here: null,
+  playing: 'En jeu',
+  away: 'Absent',
+  panic: 'Panique',
+};
+
+// The result stays on screen this long after the end, then the panel is ready for the next one.
+const POLL_RESULT_SHOWN_MS = 15_000;
 
 const Upcoming = ({ upcoming, active }: { upcoming: UpcomingView[]; active: boolean }) => (
   <section className="glass panel is-short" aria-labelledby="upcoming-title">
@@ -32,7 +50,10 @@ const Upcoming = ({ upcoming, active }: { upcoming: UpcomingView[]; active: bool
               <span className="row-title" title={mediaTitle(item)}>
                 {mediaTitle(item)}
               </span>
-              <FitText className="row-sub" text={item.replay ? `Relancé par ${item.senderName}` : item.senderName} />
+              <FitText
+                className="row-sub"
+                text={`${item.replay ? `Relancé par ${item.senderName}` : item.senderName}${item.whisper ? ' · chuchoté' : ''}`}
+              />
             </span>
           </li>
         ))}
@@ -41,9 +62,186 @@ const Upcoming = ({ upcoming, active }: { upcoming: UpcomingView[]; active: bool
   </section>
 );
 
-const Members = ({ party, version }: { party: PartyView; version: string }) => {
+const useNow = (every: number, running: boolean): number => {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!running) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), every);
+    return () => clearInterval(timer);
+  }, [every, running]);
+  return now;
+};
+
+const PollStarter = () => {
+  const [question, setQuestion] = useState('');
+  const [options, setOptions] = useState(['', '']);
+  const filled = options.map((option) => option.trim()).filter(Boolean);
+  const ready = question.trim() !== '' && filled.length >= MIN_POLL_OPTIONS;
+
+  const start = (event: FormEvent) => {
+    event.preventDefault();
+    if (!ready) return;
+    void window.liveChat.startPoll(question.trim(), filled);
+    setQuestion('');
+    setOptions(['', '']);
+  };
+
+  return (
+    <form className="poll-form" onSubmit={start} data-testid="poll-form">
+      <input
+        className="input"
+        value={question}
+        maxLength={MAX_POLL_QUESTION_LENGTH}
+        placeholder="Ta question"
+        aria-label="Question du sondage"
+        data-testid="poll-question"
+        onChange={(event) => setQuestion(event.target.value)}
+      />
+      {options.map((option, index) => (
+        <input
+          key={index}
+          className="input is-small"
+          value={option}
+          maxLength={MAX_POLL_OPTION_LENGTH}
+          placeholder={`Choix ${index + 1}`}
+          aria-label={`Choix ${index + 1}`}
+          data-testid="poll-option"
+          onChange={(event) => setOptions(options.map((other, at) => (at === index ? event.target.value : other)))}
+        />
+      ))}
+      <div className="field-line">
+        {options.length < MAX_POLL_OPTIONS ? (
+          <button type="button" className="pill quiet small" onClick={() => setOptions([...options, ''])}>
+            Ajouter un choix
+          </button>
+        ) : (
+          <span />
+        )}
+        <button type="submit" className="pill secondary small" disabled={!ready} data-testid="poll-start">
+          Lancer, 30 s
+        </button>
+      </div>
+    </form>
+  );
+};
+
+const PollBoard = ({ poll, now }: { poll: PollView; now: number }) => {
+  const total = poll.counts.reduce((sum, count) => sum + count, 0);
+  const secondsLeft = Math.max(0, Math.ceil((poll.endsAt - now) / 1_000));
+  const open = !poll.done && secondsLeft > 0;
+  const best = Math.max(...poll.counts);
+
+  return (
+    <div className="poll" data-testid="poll">
+      <p className="poll-question">{poll.question}</p>
+      <p className="hint">
+        {open ? (
+          <>
+            Par {poll.starterName} · <span className="mono">{secondsLeft} s</span> · votes anonymes
+          </>
+        ) : (
+          `Terminé · ${total} vote${total > 1 ? 's' : ''}`
+        )}
+      </p>
+      <ul className="poll-options">
+        {poll.options.map((option, index) => {
+          const count = poll.counts[index] ?? 0;
+          const share = total === 0 ? 0 : Math.round((count / total) * 100);
+          const winner = !open && total > 0 && count === best;
+          return (
+            <li key={index}>
+              <button
+                type="button"
+                className={['poll-option', poll.myVote === index ? 'is-mine' : '', winner ? 'is-winner' : ''].filter(Boolean).join(' ')}
+                disabled={!open}
+                aria-pressed={poll.myVote === index}
+                data-testid="poll-choice"
+                onClick={() => void window.liveChat.votePoll(poll.id, index)}
+              >
+                <span className="poll-bar" style={{ width: `${share}%` }} aria-hidden="true" />
+                <span className="poll-label">{option}</span>
+                <span className="poll-count mono" data-testid="poll-count">
+                  {count}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
+
+const Polls = ({ poll, active }: { poll: PollView | null; active: boolean }) => {
+  const now = useNow(500, active && poll !== null);
+  const shown = poll && (!poll.done || now < poll.endsAt + POLL_RESULT_SHOWN_MS) ? poll : null;
+  const [starting, setStarting] = useState(false);
+  useEffect(() => {
+    if (poll && !poll.done) setStarting(false);
+  }, [poll?.id, poll?.done]);
+  const open = shown !== null && !shown.done && now < shown.endsAt;
+
+  return (
+    <section className="glass panel is-short" aria-labelledby="poll-title">
+      <h2 id="poll-title" className="panel-title">
+        Sondage éclair
+        {!open && !starting && (
+          <button type="button" className="pill quiet small" data-testid="poll-new" onClick={() => setStarting(true)}>
+            Nouveau
+          </button>
+        )}
+      </h2>
+      {starting && !open ? (
+        <PollStarter />
+      ) : shown ? (
+        <PollBoard poll={shown} now={now} />
+      ) : (
+        <p className="hint">Une question, 2 à 4 choix, 30 secondes pour voter.</p>
+      )}
+    </section>
+  );
+};
+
+const NoteField = ({ note }: { note: string }) => {
+  const [text, setText] = useState(note);
+  useEffect(() => setText(note), [note]);
+  const save = () => {
+    if (text.trim() !== note) void window.liveChat.setSettings({ note: text.trim() });
+  };
+  return (
+    <input
+      className="input is-small"
+      value={text}
+      maxLength={MAX_NOTE_LENGTH}
+      placeholder="Ton statut, en quelques mots"
+      aria-label="Ton statut"
+      data-testid="note-field"
+      onChange={(event) => setText(event.target.value)}
+      onBlur={save}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+      }}
+    />
+  );
+};
+
+const statusLine = (member: MemberView): string =>
+  [member.online ? ACTIVITY_LABEL[member.activity] : null, member.note || null].filter(Boolean).join(' · ');
+
+const Members = ({
+  state,
+  party,
+  onOpenHistory,
+}: {
+  state: AppState;
+  party: PartyView;
+  onOpenHistory: (memberId: string) => void;
+}) => {
   const [error, setError] = useState<string | null>(null);
   const online = party.members.filter((member) => member.online).length;
+  const { current } = state.queue;
+  const liveSender = current?.startAt != null && !current.hiddenForMe ? current.senderId : null;
 
   const run = async (action: () => Promise<ActionResult>) => {
     setError(null);
@@ -63,44 +261,66 @@ const Members = ({ party, version }: { party: PartyView; version: string }) => {
         </span>
       </h2>
       <GlideList className="rows scroll is-pop">
-        {party.members.map((member) => (
-          <li
-            key={member.id}
-            className={member.online ? 'row' : 'row is-offline'}
-            data-testid="member"
-            onContextMenu={() => {
-              if (member.id === party.memberId) return;
-              void window.liveChat.showMemberMenu(member.id).then((choice) => {
-                if (choice) void window.liveChat.ignoreMember(member.id, choice);
-              });
-            }}
-          >
-            <Avatar className="avatar" name={member.name} url={member.avatarUrl} testId="member-avatar" />
-            <span className="row-text">
-              <FitText className="row-title" text={member.name}>
-                {member.name}
-                {member.id === party.memberId && <span className="row-you"> (toi)</span>}
-              </FitText>
-              {member.online && member.id !== party.memberId && member.version !== version && (
-                <span className="row-sub" data-testid="member-version">
-                  {member.version ? `Version ${member.version}` : 'Ancienne version'}
+        {party.members.map((member) => {
+          const status = statusLine(member);
+          return (
+            <li
+              key={member.id}
+              className={member.online ? 'row is-clickable' : 'row is-offline is-clickable'}
+              data-testid="member"
+              title="Voir ses LiveChats"
+              onClick={() => onOpenHistory(member.id)}
+              onContextMenu={() => {
+                if (member.id === party.memberId) return;
+                void window.liveChat.showMemberMenu(member.id).then((choice) => {
+                  if (choice) void window.liveChat.ignoreMember(member.id, choice);
+                });
+              }}
+            >
+              <Avatar
+                className={member.id === liveSender ? 'avatar has-ring is-live' : 'avatar'}
+                name={member.name}
+                url={member.avatarUrl}
+                testId="member-avatar"
+              />
+              <span className="row-text">
+                <FitText className="row-title" text={member.name}>
+                  {member.name}
+                  {member.id === party.memberId && <span className="row-you"> (toi)</span>}
+                </FitText>
+                {status && (
+                  <span className={`row-sub is-${member.activity}`} data-testid="member-status">
+                    {status}
+                  </span>
+                )}
+                {member.online && member.id !== party.memberId && member.version !== state.version && (
+                  <span className="row-sub" data-testid="member-version">
+                    {member.version ? `Version ${member.version}` : 'Ancienne version'}
+                  </span>
+                )}
+                {member.bannedUntil !== null && member.bannedUntil > Date.now() && (
+                  <span className="row-sub is-banned" data-testid="member-banned">
+                    Banni encore {minutesLeft(member.bannedUntil)} min
+                  </span>
+                )}
+                {member.ignored && (
+                  <span className="row-sub" data-testid="member-ignored">
+                    Ignoré{member.ignored.until ? ` encore ${minutesLeft(member.ignored.until)} min` : ''}, clic droit pour changer
+                  </span>
+                )}
+              </span>
+              {member.sentToday > 0 && (
+                <span className="day-count mono" title="LiveChats envoyés aujourd'hui" data-testid="member-today">
+                  {member.sentToday}
                 </span>
               )}
-              {member.bannedUntil !== null && member.bannedUntil > Date.now() && (
-                <span className="row-sub is-banned" data-testid="member-banned">
-                  Banni encore {minutesLeft(member.bannedUntil)} min
-                </span>
-              )}
-              {member.ignored && (
-                <span className="row-sub" data-testid="member-ignored">
-                  Ignoré{member.ignored.until ? ` encore ${minutesLeft(member.ignored.until)} min` : ''}, clic droit pour changer
-                </span>
-              )}
-            </span>
-            {member.online && <span className="dot is-online" title="En ligne" />}
-          </li>
-        ))}
+              {member.online && <span className="dot is-online" title="En ligne" />}
+            </li>
+          );
+        })}
       </GlideList>
+
+      <NoteField note={state.settings.note} />
 
       {error && (
         <p className="error" role="alert">
@@ -126,12 +346,23 @@ const Members = ({ party, version }: { party: PartyView; version: string }) => {
   );
 };
 
-export const PartyScreen = ({ state, party, active }: { state: AppState; party: PartyView; active: boolean }) => (
+export const PartyScreen = ({
+  state,
+  party,
+  active,
+  onOpenHistory,
+}: {
+  state: AppState;
+  party: PartyView;
+  active: boolean;
+  onOpenHistory: (memberId: string) => void;
+}) => (
   <div className="party-grid">
     <NowCard current={state.queue.current} settings={state.settings} active={active} />
     <aside className="party-side">
       <Upcoming upcoming={state.queue.upcoming} active={active} />
-      <Members party={party} version={state.version} />
+      <Polls poll={state.poll} active={active} />
+      <Members state={state} party={party} onOpenHistory={onOpenHistory} />
     </aside>
   </div>
 );

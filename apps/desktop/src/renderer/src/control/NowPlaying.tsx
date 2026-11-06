@@ -162,7 +162,7 @@ export const NowCard = ({
         {startAt !== null && !current?.hiddenForMe && (
           <span className="now-pill">
             <span className="dot" aria-hidden="true" />
-            En ce moment sur tous les écrans
+            {current?.whisper ? 'Chuchoté : seulement chez quelques potes' : 'En ce moment sur tous les écrans'}
           </span>
         )}
       </div>
@@ -174,7 +174,9 @@ export const NowCard = ({
               <p className="now-title" title={mediaTitle(current)} data-testid="now-playing">
                 {mediaTitle(current)}
               </p>
-              <p className="now-by">Envoyé par {current.senderName}</p>
+              <p className="now-by">
+                {current.whisper ? 'Chuchoté par' : 'Envoyé par'} {current.senderName}
+              </p>
               {/* A hidden animation starts over when it comes back, so this one is drawn again from where things are. */}
               {active && startAt !== null && <Progress key={current.id} startAt={startAt} durationMs={current.durationMs} />}
             </>

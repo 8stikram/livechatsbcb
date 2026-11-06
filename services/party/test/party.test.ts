@@ -904,6 +904,83 @@ describe('party service', () => {
     expect(told).toMatchObject({ memberId: guest.memberId, name: 'Invite' });
   });
 
+  it('whispers to the chosen members only: the others never see it, nor count it', async () => {
+    const host = await createParty();
+    const guest = await joinParty(host.code, 'Invite');
+    const third = await joinParty(host.code, 'Troisieme');
+    const sockets = [host, guest, third].map((session) => new TestSocket(session));
+    await Promise.all(sockets.map((socket) => socket.welcome()));
+    const [hostSocket, guestSocket, thirdSocket] = sockets as [TestSocket, TestSocket, TestSocket];
+
+    const response = await post(
+      `/v1/parties/${host.partyId}/media`,
+      { caption: 'Rien que pour toi', clipStartMs: 0, durationMs: 1_000, files: [], to: [guest.memberId] },
+      authorized(host),
+    );
+    expect(response.status).toBe(201);
+    const [whispered] = await guestSocket.queueWhere((queue) => queue[0]?.startAt != null, 'whisper for the guest');
+    expect(whispered).toMatchObject({ caption: 'Rien que pour toi', to: [guest.memberId] });
+    await hostSocket.queueWhere((queue) => queue.length === 1, 'whisper for the sender');
+    await guestSocket.historyWhere((history) => history.length === 1, 'whisper remembered for the guest');
+
+    await sendText(guest, 'Pour tout le monde');
+    await thirdSocket.historyWhere((history) => history.length === 1, 'the public one');
+    expect(thirdSocket.latestHistory().map(({ caption }) => caption)).toEqual(['Pour tout le monde']);
+    expect(thirdSocket.messages.some((message) => message.t === 'queue' && message.queue.some(({ caption }) => caption === 'Rien que pour toi'))).toBe(false);
+
+    const members = await thirdSocket.membersWhere((list) => list.some(({ sentToday }) => sentToday > 0), 'the count');
+    expect(members.find(({ id }) => id === guest.memberId)?.sentToday).toBe(1);
+    expect(members.find(({ id }) => id === host.memberId)?.sentToday).toBe(0);
+    for (const socket of sockets) socket.close();
+  });
+
+  it('shows what each member is up to, with their own words', async () => {
+    const host = await createParty();
+    const guest = await joinParty(host.code, 'Invite');
+    const hostSocket = new TestSocket(host);
+    const guestSocket = new TestSocket(guest);
+    await hostSocket.welcome();
+    await guestSocket.welcome();
+
+    guestSocket.send(JSON.stringify({ t: 'status', activity: 'playing', note: '  en ranked   ' }));
+    const members = await hostSocket.membersWhere((list) => list.some(({ activity }) => activity === 'playing'), 'status');
+    expect(members.find(({ id }) => id === guest.memberId)).toMatchObject({ activity: 'playing', note: 'en ranked' });
+
+    guestSocket.close();
+    const after = await hostSocket.membersWhere((list) => list.some(({ id, online }) => id === guest.memberId && !online), 'gone');
+    expect(after.find(({ id }) => id === guest.memberId)).toMatchObject({ activity: 'here', note: 'en ranked' });
+    hostSocket.close();
+  });
+
+  it('runs one poll at a time, counts votes without names, and closes it', async () => {
+    const host = await createParty('Nono', QUICK_BASE);
+    const socket = new TestSocket(host, WS_SUBPROTOCOL, QUICK_BASE);
+    await socket.welcome();
+    const latestPoll = () => socket.messages.findLast((message) => message.t === 'poll');
+
+    socket.send(JSON.stringify({ t: 'poll', question: 'On mange quoi ?', options: ['Pizza', 'Kebab'] }));
+    const started = await socket.until(() => {
+      const message = latestPoll();
+      return message?.t === 'poll' && message.poll ? message.poll : undefined;
+    }, 'poll');
+    expect(started).toMatchObject({ question: 'On mange quoi ?', options: ['Pizza', 'Kebab'], counts: [0, 0], done: false, starterName: 'Nono' });
+
+    socket.send(JSON.stringify({ t: 'poll', question: 'Un autre', options: ['A', 'B'] }));
+    socket.send(JSON.stringify({ t: 'vote', pollId: started.id, choice: 1 }));
+    const voted = await socket.until(() => {
+      const message = latestPoll();
+      return message?.t === 'poll' && message.poll?.myVote === 1 ? message.poll : undefined;
+    }, 'vote');
+    expect(voted).toMatchObject({ id: started.id, counts: [0, 1] });
+
+    const done = await socket.until(() => {
+      const message = latestPoll();
+      return message?.t === 'poll' && message.poll?.done ? message.poll : undefined;
+    }, 'end of the poll');
+    expect(done).toMatchObject({ id: started.id, question: 'On mange quoi ?', counts: [0, 1] });
+    socket.close();
+  });
+
   it('replaces an older connection of the same member', async () => {
     const host = await createParty();
     const first = new TestSocket(host);
@@ -915,7 +992,7 @@ describe('party service', () => {
     second.close();
   });
 
-  it('refuses the eleventh online member, and an offline member can return once there is room', async () => {
+  it('refuses one online member too many, and an offline member can return once there is room', async () => {
     const host = await createParty();
     const sessions = [host];
     for (let index = 1; index < MAX_ONLINE_MEMBERS + 1; index++) {

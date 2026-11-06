@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import type { SceneLayer } from '@livechatsbcb/protocol';
 import type { OverlayLayout, PlaybackView, SceneLayerView, Zone } from '../../shared/ipc';
 import { Avatar } from './Avatar';
@@ -53,9 +53,12 @@ export const FitText = ({ text, className, children }: { text: string; className
   );
 };
 
-export const Profile = ({ name, avatarUrl, zone }: { name: string; avatarUrl: string | null; zone: Zone }) => (
+// Green around whoever sent what is playing: it moves with the sound, and stays still without one.
+export type Ring = 'none' | 'still' | 'sound' | 'pulse';
+
+export const Profile = ({ name, avatarUrl, zone, ring = 'none' }: { name: string; avatarUrl: string | null; zone: Zone; ring?: Ring }) => (
   <div className="zone zone-profile" style={zoneStyle(zone)} data-testid="overlay-profile">
-    <Avatar className="profile-avatar" name={name} url={avatarUrl} testId="overlay-avatar" />
+    <Avatar className={ring === 'none' ? 'profile-avatar' : `profile-avatar has-ring is-${ring}`} name={name} url={avatarUrl} testId="overlay-avatar" />
     <FitText className="profile-name outlined" text={name} />
   </div>
 );
@@ -208,6 +211,68 @@ const PlayingLayer = ({
   );
 };
 
+const LEVEL_EVERY_MS = 70;
+
+type Captured = HTMLMediaElement & { captureStream?: () => MediaStream };
+
+// Listens to what plays without changing how it is heard: a copy of the sound goes to the meter only.
+const useSoundRing = (box: RefObject<HTMLDivElement | null>, item: PlaybackView, onScreen: boolean, volume: number, onLevel?: (level: number) => void): Ring => {
+  const unmeasured = (item.link !== null && item.link.volume > 0) || item.speak;
+  const [ring, setRing] = useState<Ring>('still');
+  const report = useRef(onLevel);
+  report.current = onLevel;
+
+  useEffect(() => {
+    if (!onScreen) return;
+    let context: AudioContext | null = null;
+    let meter: AnalyserNode | null = null;
+    const heard = new WeakSet<HTMLMediaElement>();
+    let failed = false;
+    const samples = new Float32Array(1024);
+
+    const tick = () => {
+      const element = box.current;
+      if (!element) return;
+      const playing = [...element.querySelectorAll<Captured>('video, audio')].filter((media) => media.volume > 0 && !media.muted);
+      for (const media of playing) {
+        if (heard.has(media) || failed) continue;
+        try {
+          const stream = media.captureStream?.();
+          if (!stream || stream.getAudioTracks().length === 0) continue;
+          context ??= new AudioContext();
+          void context.resume();
+          meter ??= context.createAnalyser();
+          meter.fftSize = samples.length;
+          context.createMediaStreamSource(stream).connect(meter);
+          heard.add(media);
+        } catch {
+          failed = true;
+        }
+      }
+      const next: Ring = volume === 0 ? 'still' : playing.length > 0 ? (failed ? 'pulse' : 'sound') : unmeasured ? 'pulse' : 'still';
+      setRing(next);
+      let level = 0;
+      if (next === 'sound' && meter) {
+        meter.getFloatTimeDomainData(samples);
+        let sum = 0;
+        for (const sample of samples) sum += sample * sample;
+        level = Math.min(1, Math.sqrt(sum / samples.length) * 4);
+      }
+      element.style.setProperty('--level', level.toFixed(3));
+      report.current?.(next === 'pulse' ? -1 : level);
+    };
+    tick();
+    const timer = setInterval(tick, LEVEL_EVERY_MS);
+    return () => {
+      clearInterval(timer);
+      report.current?.(0);
+      void context?.close();
+    };
+  }, [onScreen, volume, item.id]);
+
+  return ring;
+};
+
 export type Speech = { voice: string | null; rate: number };
 
 // Someone arriving late hears nothing rather than a sentence already over for the others.
@@ -232,19 +297,24 @@ export const Playing = ({
   layout,
   volume,
   speech = null,
+  onLevel,
 }: {
   item: PlaybackView;
   startAt: number;
   layout: OverlayLayout;
   volume: number;
   speech?: Speech | null;
+  // How loud it is, from 0 to 1, or -1 for a sound that can't be measured.
+  onLevel?: (level: number) => void;
 }) => {
   const onScreen = useOnScreen(startAt, item.durationMs);
   useSpeech(item, startAt, volume, speech);
+  const box = useRef<HTMLDivElement>(null);
+  const ring = useSoundRing(box, item, onScreen, volume, onLevel);
   const withVideo = item.kind === 'video' || (item.scene?.some(({ kind }) => kind === 'video') ?? false);
 
   return (
-    <div className={onScreen ? 'scene' : 'scene is-waiting'} data-testid="overlay-scene" data-on-screen={onScreen}>
+    <div ref={box} className={onScreen ? 'scene' : 'scene is-waiting'} data-testid="overlay-scene" data-on-screen={onScreen}>
       {item.scene && (
         <div className="scene-canvas">
           {item.scene.map((layer, index) => (
@@ -252,7 +322,7 @@ export const Playing = ({
           ))}
         </div>
       )}
-      <Profile name={item.senderName} avatarUrl={item.senderAvatarUrl} zone={layout.profile} />
+      <Profile name={item.senderName} avatarUrl={item.senderAvatarUrl} zone={layout.profile} ring={onScreen ? ring : 'none'} />
       {!item.scene && item.mediaUrl && item.kind === 'image' && (
         <div className="zone zone-media" style={zoneStyle(layout.media)}>
           <img className="overlay-media" src={item.mediaUrl} alt="" data-testid="overlay-image" />

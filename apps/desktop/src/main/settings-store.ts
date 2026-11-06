@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { app } from 'electron';
 import { z } from 'zod';
+import { MAX_NOTE_LENGTH } from '@livechatsbcb/protocol';
 import { DEFAULT_SETTINGS, type Settings } from '../shared/ipc';
 
 const SAVE_DELAY_MS = 300;
@@ -29,6 +30,7 @@ export const SettingsSchema = z.object({
   maxDurationSec: z.number().positive().nullable(),
   ignored: z.record(z.string(), z.number().nullable()),
   seenVersion: z.string().nullable(),
+  note: z.string().max(MAX_NOTE_LENGTH),
 });
 
 const settingsPath = () => join(app.getPath('userData'), 'settings.json');

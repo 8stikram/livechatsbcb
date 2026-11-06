@@ -6,6 +6,7 @@ import type {
   MediaKind,
   MediaLink,
   Member,
+  Poll,
   SceneLayer,
 } from '@livechatsbcb/protocol';
 
@@ -79,6 +80,8 @@ export type Settings = {
   ignored: Record<string, number | null>;
   // The notes were offered for this version. Null for someone who never had the choice yet.
   seenVersion: string | null;
+  // A few words the others see beside this member's name.
+  note: string;
 };
 
 export const DEFAULT_LAYOUT: OverlayLayout = {
@@ -107,6 +110,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxDurationSec: 20,
   ignored: {},
   seenVersion: null,
+  note: '',
 };
 
 // The function keys of a Mac need fn as well, so it has its own keys.
@@ -132,6 +136,9 @@ export type DisplayView = { id: number; label: string };
 export type PlaybackView = {
   hiddenForMe: HiddenReason | null;
   id: string;
+  senderId: string;
+  // Only for some of the party.
+  whisper: boolean;
   senderName: string;
   senderAvatarUrl: string | null;
   kind: MediaKind;
@@ -175,12 +182,15 @@ export type UpcomingView = {
   caption: string;
   fileName: string | null;
   replay: boolean;
+  whisper: boolean;
 };
 
 export type QueueView = { current: PlaybackView | null; upcoming: UpcomingView[] };
 
 export type HistoryView = {
   id: string;
+  senderId: string;
+  whisper: boolean;
   senderName: string;
   senderAvatarUrl: string | null;
   kind: MediaKind;
@@ -196,6 +206,9 @@ export type HistoryView = {
 };
 
 // Played again on this PC alone. Null playback while the file is on its way.
+// endsAt on this PC's clock.
+export type PollView = Poll;
+
 export type LocalReplayView = { historyId: string; playback: PlaybackView | null };
 
 export type DraftMedia = { name: string; size: number; kind: FileKind; previewUrl: string };
@@ -212,6 +225,8 @@ export type SceneInput = {
   speak: boolean;
   layers: EditedLayer[];
   soundId: string | null;
+  // Who it is whispered to. Empty for everybody.
+  to: string[];
 };
 export type LoadedScene = SceneInput & { files: SceneFile[] };
 export type IncomingError = 'too_large' | 'empty' | 'unsupported' | 'too_many' | 'bad_link' | 'not_found' | 'link_waiting' | 'link_gone' | 'link_blocked';
@@ -313,6 +328,7 @@ export type AppState = {
   overlayTest: boolean;
   queue: QueueView;
   history: HistoryView[];
+  poll: PollView | null;
   favorites: FavoriteView[];
   localReplay: LocalReplayView | null;
   upload: UploadView | null;
@@ -335,6 +351,7 @@ export type SendMediaInput = {
   withPicture: boolean;
   withSound: boolean;
   link: MediaLink | null;
+  to: string[];
 };
 
 export type SaveLiveChatInput = SendMediaInput & { name: string };
@@ -420,6 +437,10 @@ export const IpcChannel = {
   StashView: 'restart:stash-view',
   StashDraft: 'restart:stash-draft',
   TakeRestartStash: 'restart:take-stash',
+  StartPoll: 'poll:start',
+  VotePoll: 'poll:vote',
+  SoundLevel: 'stage:sound-level',
+  LiveLevel: 'live:level',
 } as const;
 
 export type LiveChatApi = {
@@ -504,5 +525,10 @@ export type LiveChatApi = {
   markNotesSeen(): Promise<void>;
   stashView(view: string): Promise<void>;
   stashDraft(advanced: boolean, input: unknown): Promise<void>;
+  startPoll(question: string, options: string[]): Promise<void>;
+  votePoll(pollId: string, choice: number): Promise<void>;
+  // From the overlay: how loud what is playing is, from 0 to 1.
+  reportLevel(level: number): void;
+  onLiveLevel(listener: (level: number) => void): () => void;
   takeRestartStash(): Promise<{ view: string | null; loaded: { draft: LoadedDraft } | { scene: LoadedScene } | null }>;
 };

@@ -5,9 +5,11 @@ import {
   WS_PING,
   WS_SUBPROTOCOL,
   WS_TOKEN_PREFIX,
+  type Activity,
   type ClientMessage,
   type HistoryItem,
   type Member,
+  type Poll,
   type QueueItem,
   type ServerMessage,
   type SessionResponse,
@@ -30,6 +32,7 @@ export type ConnectionSnapshot = {
   members: Member[];
   queue: QueueItem[];
   history: HistoryItem[];
+  poll: Poll | null;
 };
 
 type Listener = {
@@ -59,7 +62,7 @@ export class PartyConnection {
     private readonly listener: Listener,
     private readonly appVersion: string,
   ) {
-    this.snapshot = { status: 'connecting', code: session.code, memberId: session.memberId, members: [], queue: [], history: [] };
+    this.snapshot = { status: 'connecting', code: session.code, memberId: session.memberId, members: [], queue: [], history: [], poll: null };
   }
 
   start(): void {
@@ -110,6 +113,23 @@ export class PartyConnection {
     this.send({ t: 'skip', mediaId });
   }
 
+  private status: { activity: Activity; note: string } | null = null;
+
+  // Said again on each connection, as the service may have forgotten it.
+  setStatus(activity: Activity, note: string): void {
+    if (this.status?.activity === activity && this.status.note === note) return;
+    this.status = { activity, note };
+    this.send({ t: 'status', activity, note });
+  }
+
+  startPoll(question: string, options: string[]): void {
+    this.send({ t: 'poll', question, options });
+  }
+
+  vote(pollId: string, choice: number): void {
+    this.send({ t: 'vote', pollId, choice });
+  }
+
   private send(message: ClientMessage): void {
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
   }
@@ -153,7 +173,9 @@ export class PartyConnection {
           members: message.members,
           queue: message.queue,
           history: message.history,
+          poll: message.poll,
         });
+        if (this.status) this.send({ t: 'status', ...this.status });
         // The service forgets nothing, but anything reported while disconnected never reached it.
         for (const mediaId of this.readyIds) this.send({ t: 'ready', mediaId });
         for (const mediaId of this.cutIds) this.send({ t: 'cut', mediaId });
@@ -177,6 +199,9 @@ export class PartyConnection {
       }
       case 'history':
         this.publish({ history: message.history });
+        break;
+      case 'poll':
+        this.publish({ poll: message.poll });
         break;
       case 'time':
         this.onClockSample(message.c, message.s);

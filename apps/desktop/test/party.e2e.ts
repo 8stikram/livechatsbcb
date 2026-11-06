@@ -246,7 +246,7 @@ const pictureLoaded = (page: Page, testId: string) =>
 const onlineCount = (member: Member, count: number) =>
   member.control
     .getByTestId('online-count')
-    .filter({ hasText: `${count} / 10 en ligne` })
+    .filter({ hasText: `${count} / 15 en ligne` })
     .waitFor({ state: 'attached', timeout: 15_000 });
 
 const connected = async (member: Member, timeout = 15_000): Promise<void> => {
@@ -2007,6 +2007,55 @@ describe.skipIf(online)('party flow in the real app', () => {
     await guest.control.getByTestId('skipped-by').filter({ hasText: 'Passé par Nono' }).waitFor();
     await expect(host.control.getByTestId('skipped-by').count()).resolves.toBe(0);
     await setRange(host, /Durée d’affichage/, 5_000);
+  });
+
+  it('whispers to one friend, rings around the sender, and shows what each one is up to', async () => {
+    await openTab(guest, 'Party');
+    await guest.control.getByTestId('note-field').fill('en ranked');
+    await guest.control.getByTestId('note-field').press('Enter');
+    await openTab(host, 'Party');
+    await host.control.getByTestId('member-status').filter({ hasText: 'en ranked' }).waitFor();
+
+    await openTab(host, 'LiveChat');
+    await host.control.getByLabel('Texte à afficher').fill('Rien que pour toi');
+    await host.control.getByTestId('whisper-open').click();
+    await host.control.getByTestId('whisper-member').filter({ hasText: 'Pote' }).click();
+    await host.control.getByRole('button', { name: 'Chuchoter à Pote' }).click();
+    await overlayState(guest, 'playing');
+    await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Rien que pour toi' }).waitFor();
+    // A text has no sound: the ring is there, and doesn't move.
+    await guest.stage.locator('.profile-avatar.has-ring.is-still').waitFor();
+    await overlayState(host, 'playing');
+    await overlayState(guest, 'idle');
+
+    await openTab(guest, 'Historique');
+    await guest.control.getByTestId('history-item').filter({ hasText: 'chuchoté' }).first().waitFor();
+    await expect(guest.control.getByTestId('history-item').filter({ hasText: 'Rien que pour toi' }).getByRole('button', { name: 'Rejouer en chuchotant' }).count()).resolves.toBe(1);
+
+    await openTab(host, 'Party');
+    await host.control.getByTestId('member').filter({ hasText: 'Nono' }).getByTestId('member-today').waitFor();
+    await host.control.getByTestId('member').filter({ hasText: 'Pote' }).click();
+    await host.control.getByTestId('history-from').waitFor();
+    await expect(host.control.getByTestId('history-from').locator('option:checked').textContent()).resolves.toBe('Pote');
+    await expect(host.control.getByTestId('history-item').filter({ hasText: 'Rien que pour toi' }).count()).resolves.toBe(0);
+    await host.control.getByTestId('history-from').selectOption({ label: 'Tout le monde' });
+    await host.control.getByTestId('history-item').filter({ hasText: 'Rien que pour toi' }).first().waitFor();
+  });
+
+  it('runs a quick poll in the app, with anonymous votes', async () => {
+    await openTab(host, 'Party');
+    await host.control.getByTestId('poll-new').click();
+    await host.control.getByTestId('poll-question').fill('On lance quoi ?');
+    await host.control.getByTestId('poll-option').nth(0).fill('Valo');
+    await host.control.getByTestId('poll-option').nth(1).fill('Rocket');
+    await host.control.getByTestId('poll-start').click();
+
+    await openTab(guest, 'Party');
+    await guest.control.getByTestId('poll').filter({ hasText: 'On lance quoi ?' }).waitFor();
+    await guest.control.getByTestId('poll-choice').filter({ hasText: 'Rocket' }).click();
+    await host.control.getByTestId('poll-choice').filter({ hasText: 'Rocket' }).getByTestId('poll-count').filter({ hasText: '1' }).waitFor();
+    await expect(host.control.getByTestId('poll').textContent()).resolves.not.toContain('Pote');
+    await picture(host.control, '7-poll.png');
   });
 
   it('reopens what played as a copy in the advanced mode', async () => {

@@ -165,9 +165,10 @@ const HistoryRow = ({
       <span className="row-title" title={mediaTitle(item)}>
         {mediaTitle(item)}
       </span>
-      <FitText className="row-sub" text={`${item.senderName} · ${whenPlayed(item.playedAt, now)}`}>
+      <FitText className="row-sub" text={`${item.senderName} · ${whenPlayed(item.playedAt, now)}${item.whisper ? ' · chuchoté' : ''}`}>
         <Avatar className="avatar is-tiny" name={item.senderName} url={item.senderAvatarUrl} />
         {item.senderName} · {whenPlayed(item.playedAt, now)}
+        {item.whisper && ' · chuchoté'}
       </FitText>
     </span>
     <span className="history-actions">
@@ -185,7 +186,7 @@ const HistoryRow = ({
         onClick={() => void window.liveChat.replayForAll(item.id).then(onResult)}
       >
         <IconPlay size={16} />
-        Rejouer pour tous
+        {item.whisper ? 'Rejouer en chuchotant' : 'Rejouer pour tous'}
       </button>
     </span>
   </li>
@@ -195,12 +196,21 @@ export const HistoryScreen = ({
   state,
   active,
   onEdit,
+  from,
+  onFrom,
 }: {
   state: AppState;
   active: boolean;
   onEdit: (loading: Promise<EditResult>) => Promise<boolean>;
+  from: string | null;
+  onFrom: (memberId: string | null) => void;
 }) => {
-  const { history, favorites, localReplay } = state;
+  const { favorites, localReplay } = state;
+  // Everyone who sent something still in the history, and whoever was picked in the party even with nothing yet.
+  const senders = new Map(state.history.map((item) => [item.senderId, item.senderName]));
+  const picked = from ? state.party?.members.find(({ id }) => id === from) : undefined;
+  if (from && picked && !senders.has(from)) senders.set(from, picked.name);
+  const history = from ? state.history.filter((item) => item.senderId === from) : state.history;
   const [showFavorites, setShowFavorites] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
@@ -236,6 +246,24 @@ export const HistoryScreen = ({
             Favoris
           </button>
         </div>
+        {!showFavorites && senders.size > 0 && (
+          <label className="history-from">
+            <span>De qui</span>
+            <select
+              className="input is-small"
+              value={from ?? ''}
+              data-testid="history-from"
+              onChange={(event) => onFrom(event.target.value || null)}
+            >
+              <option value="">Tout le monde</option>
+              {[...senders].map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <span className="count">
           {busyPlaying
             ? '« Revoir pour moi » revient à la fin du média en cours'
@@ -274,8 +302,8 @@ export const HistoryScreen = ({
         )
       ) : history.length === 0 ? (
         <div className="history-empty">
-          <p className="draft-empty-title">Rien pour l'instant</p>
-          <p className="hint">Ce qui passe dans la party s'affiche ici pendant 1 jour.</p>
+          <p className="draft-empty-title">{from ? 'Rien de sa part' : "Rien pour l'instant"}</p>
+          <p className="hint">{from ? 'Rien de cette personne dans la dernière journée.' : "Ce qui passe dans la party s'affiche ici pendant 1 jour."}</p>
         </div>
       ) : (
         <GlideList className="history-list scroll">

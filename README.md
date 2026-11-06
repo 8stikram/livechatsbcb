@@ -18,7 +18,7 @@ Une image, une vidéo, un son ou un texte : tu l'envoies, et il s'affiche chez t
 
 <img src="https://img.shields.io/badge/Fait_pour-Windows_et_Mac-2f7bff?style=flat-square" alt="Fait pour Windows et Mac" />
 <img src="https://img.shields.io/badge/Connexion-Discord-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Connexion avec Discord" />
-<img src="https://img.shields.io/badge/Party-jusqu%27%C3%A0_10_en_ligne-ff5ecb?style=flat-square" alt="Jusqu'à 10 en ligne" />
+<img src="https://img.shields.io/badge/Party-jusqu%27%C3%A0_15_en_ligne-ff5ecb?style=flat-square" alt="Jusqu'à 15 en ligne" />
 <img src="https://img.shields.io/badge/Prix-gratuit-8ee6b4?style=flat-square" alt="Gratuit" />
 <a href="LICENSE"><img src="https://img.shields.io/badge/Licence-AGPL--3.0-c9a2ff?style=flat-square" alt="Licence AGPL-3.0" /></a>
 
@@ -102,6 +102,9 @@ Donne un nom à un LiveChat réussi, et renvoie-le plus tard en un clic. Si un f
 
 - **Une file d'attente :** les envois passent l'un après l'autre, sans se couper. Tout le monde peut passer au suivant.
 - **Un historique :** rejoue un envoi pour tout le monde, ou revois-le juste pour toi. L'étoile garde un LiveChat marrant sur ton PC, pour le ressortir même des jours après.
+- **Vie de la party :** un contour vert autour de celui qui envoie, qui bouge avec le son. Un statut (en jeu, absent) et quelques mots à toi, le nombre de LiveChats du jour, et des sondages éclair de 30 secondes aux votes anonymes.
+- **Chuchoter :** envoie un LiveChat à un ou plusieurs potes seulement. Les autres ne voient rien.
+- **L'historique de chacun :** clique sur un pote dans la party pour voir ce qu'il a envoyé.
 - **Ton volume à toi :** chacun règle le son et peut couper le sien.
 - **Envoi rapide :** Ctrl+V colle une image, une vidéo, un son, un lien direct, ou un lien YouTube, TikTok ou SoundCloud. Dans Windows, le clic droit sur un fichier propose « préparer » ou « envoyer direct ».
 - **Emojis et voix robot :** des emojis façon Discord dans ton texte, et une case pour le faire lire à voix haute. Chacun peut couper la voix chez lui.
@@ -159,7 +162,7 @@ Tes dossiers, tes favoris et tes LiveChats sauvegardés restent sur ton PC. Seul
 <details>
 <summary><b>Il y a des limites ?</b></summary>
 <br />
-Oui, pour que le projet reste gratuit : 500 Mo par envoi, 10 personnes en ligne par party, et un stockage commun qui peut être plein un moment. Si c'est le cas, l'app le dit, et ça repart quand les anciens fichiers sont effacés.
+Oui, pour que le projet reste gratuit : 500 Mo par envoi, 15 personnes en ligne par party, et un stockage commun qui peut être plein un moment. Si c'est le cas, l'app le dit, et ça repart quand les anciens fichiers sont effacés.
 </details>
 
 <details>

@@ -87,6 +87,8 @@ export default async function setup() {
       'MEDIA_RETENTION_MS:1500',
       '--var',
       'DISCORD_REFRESH_MS:1000',
+      '--var',
+      'POLL_MS:1500',
     ]),
   ];
 

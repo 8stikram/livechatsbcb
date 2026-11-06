@@ -8,6 +8,7 @@ import {
 import { DEFAULT_SETTINGS, type AppState, type DraftMedia, type DraftSlot, type LinkDraft, type PlaybackView, type SceneInput } from '../../../shared/ipc';
 import { LinkFrame, type LinkControl, type LinkReport } from '../link-player';
 import { Caption, Profile, ScreenPreview, zoneStyle } from '../scene';
+import { Avatar } from '../Avatar';
 import { LayerPanel, SceneBoard } from './AdvancedEditor';
 import { ClipBar, type ClipEdge } from './ClipBar';
 import { IconCheck, IconPlay, KindIcon } from './icons';
@@ -408,6 +409,64 @@ const DraftRow = ({
   </header>
 );
 
+// A whisper: only the chosen friends see it, and the others never know.
+const WhisperPicker = ({ state, to, onChange }: { state: AppState; to: string[]; onChange: (to: string[]) => void }) => {
+  const others = (state.party?.members ?? []).filter((member) => member.online && member.id !== state.party?.memberId);
+  const [open, setOpen] = useState(to.length > 0);
+  if (others.length === 0 && to.length === 0) return null;
+  const toggle = (id: string) => onChange(to.includes(id) ? to.filter((chosen) => chosen !== id) : [...to, id]);
+
+  return (
+    <div className="whisper" data-testid="whisper">
+      <div className="field-line">
+        <span>Pour</span>
+        <div className="tabs whisper-mode" role="group" aria-label="Pour qui">
+          <button
+            type="button"
+            className={open ? 'tab' : 'tab is-active'}
+            aria-pressed={!open}
+            onClick={() => {
+              setOpen(false);
+              onChange([]);
+            }}
+          >
+            Tout le monde
+          </button>
+          <button type="button" className={open ? 'tab is-active' : 'tab'} aria-pressed={open} data-testid="whisper-open" onClick={() => setOpen(true)}>
+            Chuchoter
+          </button>
+        </div>
+      </div>
+      {open && (
+        <>
+          <div className="whisper-people">
+            {others.map((member) => (
+              <button
+                key={member.id}
+                type="button"
+                className={to.includes(member.id) ? 'chip is-on' : 'chip'}
+                aria-pressed={to.includes(member.id)}
+                data-testid="whisper-member"
+                onClick={() => toggle(member.id)}
+              >
+                <Avatar className="chip-avatar" name={member.name} url={member.avatarUrl} />
+                {member.name}
+              </button>
+            ))}
+          </div>
+          <p className="hint">Seuls ceux que tu choisis le voient. Les autres ne savent rien.</p>
+        </>
+      )}
+    </div>
+  );
+};
+
+const sendLabel = (state: AppState, to: string[]): string => {
+  if (to.length === 0) return 'Envoyer à tout le monde';
+  if (to.length > 1) return `Chuchoter à ${to.length} potes`;
+  return `Chuchoter à ${state.party?.members.find(({ id }) => id === to[0])?.name ?? '1 pote'}`;
+};
+
 export const MediaScreen = ({
   state,
   files,
@@ -431,6 +490,9 @@ export const MediaScreen = ({
   const [saved, setSaved] = useState(false);
   const [confirmingSpeech, setConfirmingSpeech] = useState(false);
   const [changingLength, setChangingLength] = useState(false);
+  const [whisperTo, setWhisperTo] = useState<string[]>([]);
+  // Someone who left can't be whispered to.
+  const to = whisperTo.filter((id) => state.party?.members.some((member) => member.id === id && member.online));
   const captionField = useRef<HTMLTextAreaElement>(null);
 
   const speak = files.speak && caption.trim() !== '';
@@ -463,6 +525,7 @@ export const MediaScreen = ({
     withPicture: picture !== null,
     withSound: sound !== null,
     link: link ? { site: link.site, id: link.id, title: link.title, volume: linkVolume } : null,
+    to,
     ...(plays && clip
       ? { clipStartMs: clip.startMs, durationMs: Math.max(MIN_DISPLAY_MS, clip.endMs - clip.startMs) }
       : { clipStartMs: 0, durationMs: shownMs }),
@@ -475,6 +538,7 @@ export const MediaScreen = ({
     speak,
     layers: scene.layers.map(({ key: _key, ...layer }) => layer),
     soundId: scene.soundId,
+    to,
     ...(scene.passage ?? { clipStartMs: 0, durationMs: shownMs }),
   });
 
@@ -508,6 +572,8 @@ export const MediaScreen = ({
       item: {
         hiddenForMe: null,
         id: 'preview',
+        senderId: state.party?.memberId ?? '',
+        whisper: false,
         senderName: state.account?.name ?? '',
         senderAvatarUrl: state.account?.avatarUrl ?? null,
         kind: scene.hasVideo ? 'video' : 'image',
@@ -577,6 +643,7 @@ export const MediaScreen = ({
       if (advanced) scene.clearStage();
       else files.reset();
       files.setSpeak(false);
+      setWhisperTo([]);
       // Keeps whatever was typed while this one was on its way.
       files.setCaption((typed) => (typed === caption ? '' : typed));
       setJustSent(true);
@@ -955,6 +1022,8 @@ export const MediaScreen = ({
           </button>
         )}
 
+        {!state.upload && <WhisperPicker state={state} to={to} onChange={setWhisperTo} />}
+
         {state.upload ? (
           <div className="upload" role="status">
             <div className="field-line">
@@ -983,7 +1052,7 @@ export const MediaScreen = ({
                 <IconCheck size={16} />
               </span>
             )}
-            Envoyer à tout le monde
+            {sendLabel(state, to)}
           </button>
         )}
 

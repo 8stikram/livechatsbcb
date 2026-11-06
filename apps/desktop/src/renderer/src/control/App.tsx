@@ -65,6 +65,19 @@ export const App = () => {
   const files = useDraft();
   const scene = useScene();
   const [chosenView, setChosenView] = useState<View>('media');
+  // Whose LiveChats the history shows. Null for everybody's.
+  const [historyFrom, setHistoryFrom] = useState<string | null>(null);
+
+  // The ring around whoever sent what plays moves with what the overlay hears, without drawing the app again.
+  useEffect(
+    () =>
+      window.liveChat.onLiveLevel((level) => {
+        const root = document.documentElement;
+        root.style.setProperty('--live-level', Math.max(0, level).toFixed(3));
+        root.classList.toggle('live-pulse', level < 0);
+      }),
+    [],
+  );
   const [picking, setPicking] = useState(false);
   const [libraryCategory, setLibraryCategory] = useState<Category>('image');
   const partyId = state?.party?.partyId;
@@ -428,7 +441,15 @@ export const App = () => {
         <div className="views" hidden={showPicker} style={{ '--slide': `${slide.current}px` } as CSSProperties}>
           <div className="view" hidden={view !== 'party'}>
             {party ? (
-              <PartyScreen state={state} party={party} active={view === 'party' && !showPicker} />
+              <PartyScreen
+                state={state}
+                party={party}
+                active={view === 'party' && !showPicker}
+                onOpenHistory={(memberId) => {
+                  setHistoryFrom(memberId);
+                  setChosenView('history');
+                }}
+              />
             ) : (
               <p className="glass empty" data-testid="no-party">
                 {joinError ? 'Clique sur un serveur pour réessayer.' : 'Connexion au serveur…'}
@@ -461,7 +482,7 @@ export const App = () => {
                 />
               </div>
               <div className="view" hidden={view !== 'history'}>
-                <HistoryScreen state={state} active={view === 'history'} onEdit={editInAdvanced} />
+                <HistoryScreen state={state} active={view === 'history'} onEdit={editInAdvanced} from={historyFrom} onFrom={setHistoryFrom} />
               </div>
             </>
           )}

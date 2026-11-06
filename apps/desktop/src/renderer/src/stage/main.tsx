@@ -40,6 +40,7 @@ const Stage = () => {
           layout={settings.layout}
           volume={volume}
           speech={settings.speechEnabled ? { voice: settings.speechVoice, rate: settings.speechRate } : null}
+          onLevel={shared ? (level) => window.liveChat.reportLevel(level) : undefined}
         />
       )}
       {!playing && overlayTest && <TestScene layout={settings.layout} account={state.account} />}

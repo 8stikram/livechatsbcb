@@ -101,6 +101,16 @@ const api: LiveChatApi = {
   },
   stashDraft: (advanced, input) => ipcRenderer.invoke(IpcChannel.StashDraft, advanced, input),
   takeRestartStash: () => ipcRenderer.invoke(IpcChannel.TakeRestartStash),
+  startPoll: (question, options) => ipcRenderer.invoke(IpcChannel.StartPoll, question, options),
+  votePoll: (pollId, choice) => ipcRenderer.invoke(IpcChannel.VotePoll, pollId, choice),
+  reportLevel: (level) => ipcRenderer.send(IpcChannel.SoundLevel, level),
+  onLiveLevel: (listener) => {
+    const onLevel = (_event: unknown, level: number) => listener(level);
+    ipcRenderer.on(IpcChannel.LiveLevel, onLevel);
+    return () => {
+      ipcRenderer.off(IpcChannel.LiveLevel, onLevel);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld('liveChat', api);

@@ -11,6 +11,13 @@ export const PATCH_NOTES: PatchNote[] = [
       'Une barre pour chercher un son sur SoundCloud, en bas de l’onglet LiveChat',
       'En mode Avancé, tire un côté d’une image ou d’une vidéo pour l’étirer',
       'Instagram et X attendent encore : leurs vidéos ne se lancent pas toutes seules',
+      'Un contour vert autour de celui qui envoie, dans l’app et en jeu : il bouge avec le son',
+      'Chuchoter : un LiveChat pour un ou plusieurs potes seulement, les autres ne voient rien',
+      'Ton statut dans la Party : en jeu, absent ou panique tout seul, plus quelques mots à toi',
+      'Sondages éclair de 30 secondes dans l’onglet Party, votes anonymes',
+      'Clique sur un pote pour voir ses LiveChats, ou choisis « De qui » dans l’historique',
+      'Le nombre de LiveChats envoyés aujourd’hui à côté de chaque nom',
+      'Party jusqu’à 15 personnes en ligne',
     ],
   },
   {

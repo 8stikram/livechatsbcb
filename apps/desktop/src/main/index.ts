@@ -10,7 +10,9 @@ import {
   DEFAULT_DISPLAY_MS,
   MAX_FILE_NAME_LENGTH,
   MAX_MEDIA_BYTES,
+  MAX_ONLINE_MEMBERS,
   MediaDraftSchema,
+  PollRequestSchema,
   MediaLinkSchema,
   SceneLayerSchema,
   fileKindOf,
@@ -18,6 +20,7 @@ import {
   fileNamesOf,
   pictureOf,
   soundOf,
+  type Activity,
   type GuildSummary,
   type HistoryItem,
   type Member,
@@ -46,6 +49,7 @@ import { AppTray } from './tray';
 import { Updater } from './updater';
 import { createControlWindow, createStageWindow, denyAllPermissions, introduceToPlayers, isOwnPage, openInBrowser, openSoundCloudSearch, placeOverlay, type StartMode } from './windows';
 import { checkLink } from './links';
+import { GameWatch } from './game-watch';
 import { findLink } from '../shared/links';
 
 // Lets one PC run several members for testing; each profile has its own folder and its own single-instance lock.
@@ -72,6 +76,7 @@ const SendMediaInputSchema = z.object({
   withPicture: z.boolean(),
   withSound: z.boolean(),
   link: MediaLinkSchema.nullable().default(null),
+  to: z.array(z.string()).max(MAX_ONLINE_MEMBERS).default([]),
 });
 
 const WheelChoiceSchema = z.discriminatedUnion('kind', [
@@ -101,7 +106,12 @@ const SceneInputSchema = z.object({
   speak: z.boolean().default(false),
   layers: z.array(SceneLayerSchema.omit({ file: true }).extend({ fileId: z.string() })),
   soundId: z.string().nullable(),
+  to: z.array(z.string()).max(MAX_ONLINE_MEMBERS).default([]),
 });
+
+// Nothing touched for this long, and the others see this member as away.
+const AWAY_AFTER_S = 5 * 60;
+const STATUS_CHECK_MS = 15_000;
 const SaveSceneInputSchema = SceneInputSchema.extend({ name: SAVE_NAME });
 
 const DISCORD_ID = z.string().regex(/^\d{17,20}$/);
@@ -247,6 +257,8 @@ function start(): void {
   const toPlayback = (item: QueueItem): PlaybackView => ({
     hiddenForMe: hiddenReason(item),
     id: item.id,
+    senderId: item.senderId,
+    whisper: item.to.length > 0,
     senderName: item.senderName,
     senderAvatarUrl: item.senderAvatarUrl,
     kind: item.kind,
@@ -262,6 +274,8 @@ function start(): void {
 
   const toHistoryView = (item: HistoryItem, party: PartyConnection): HistoryView => ({
     id: item.id,
+    senderId: item.senderId,
+    whisper: item.to.length > 0,
     senderName: item.senderName,
     senderAvatarUrl: item.senderAvatarUrl,
     kind: item.kind,
@@ -282,6 +296,8 @@ function start(): void {
       playback: {
         hiddenForMe: null,
         id: key,
+        senderId: item.senderId,
+        whisper: item.to.length > 0,
         senderName: item.senderName,
         senderAvatarUrl: item.senderAvatarUrl,
         kind: item.kind,
@@ -338,13 +354,14 @@ function start(): void {
       overlayTest,
       queue: {
         current: head ? toPlayback(head) : null,
-        upcoming: rest.map(({ id, senderName, kind, caption, files, replay }) => ({
+        upcoming: rest.map(({ id, senderName, kind, caption, files, replay, to, link }) => ({
           id,
           senderName,
           kind,
           caption,
-          fileName: fileNamesOf(files),
+          fileName: link?.title ?? fileNamesOf(files),
           replay,
+          whisper: to.length > 0,
         })),
       },
       history: connection
@@ -352,6 +369,7 @@ function start(): void {
             .filter((item) => connection!.toLocalTime(item.expiresAt) > Date.now())
             .map((item) => toHistoryView(item, connection!))
         : [],
+      poll: snapshot?.poll && connection ? { ...snapshot.poll, endsAt: connection.toLocalTime(snapshot.poll.endsAt) } : null,
       favorites: library.favorites(),
       localReplay: localReplayView(),
       skippedBy,
@@ -417,9 +435,21 @@ function start(): void {
     }
   };
 
+  // What the others see beside this member's name, found without asking anything.
+  const currentActivity = (): Activity => {
+    if (settings.current.clean) return 'panic';
+    if (powerMonitor.getSystemIdleTime() >= AWAY_AFTER_S) return 'away';
+    return gameWatch.isPlaying ? 'playing' : 'here';
+  };
+  const syncStatus = (): void => connection?.setStatus(currentActivity(), settings.current.note);
+  const gameWatch = new GameWatch(syncStatus);
+  gameWatch.start();
+  setInterval(syncStatus, STATUS_CHECK_MS);
+
   const publishState = (): void => {
     syncRestart();
     syncCut();
+    syncStatus();
     const state = getState();
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) window.webContents.send(IpcChannel.StateChanged, state);
@@ -707,6 +737,7 @@ function start(): void {
     speak?: boolean;
     scene?: SceneLayer[] | null;
     link?: MediaLink | null;
+    to?: string[];
   };
 
   // What is on the stage of the advanced mode. Kept apart, so that going back to the simple mode finds its own files.
@@ -754,6 +785,7 @@ function start(): void {
           speak: timing.speak ?? false,
           scene: timing.scene ?? null,
           link: timing.link ?? null,
+          to: timing.to ?? [],
           files: files.map(({ contentType, size, name }) => ({ contentType, size, name: name.slice(0, MAX_FILE_NAME_LENGTH) })),
         }),
       controller.signal,
@@ -1633,14 +1665,14 @@ function start(): void {
       const input = SceneInputSchema.safeParse(raw);
       const recipe = input.success ? sceneRecipe(input.data) : null;
       if (input.success && recipe) {
-        const { soundId: _soundId, layers: _layers, ...timing } = input.data;
+        const { soundId: _soundId, layers: _layers, to: _to, ...timing } = input.data;
         stashed.recipe = { ...timing, ...recipe };
       }
     } else {
       const input = SendMediaInputSchema.safeParse(raw);
       if (input.success) {
         // A link is quick to paste again, and has no file to come back with.
-        const { withPicture, withSound, link: _link, ...timing } = input.data;
+        const { withPicture, withSound, link: _link, to: _to, ...timing } = input.data;
         const chosen = [withPicture ? draft.picture : null, withSound ? draft.sound : null].filter((file) => file !== null);
         const files = chosen.map(({ path, name, size, contentType }) => ({ path, name, size, contentType }));
         stashed.recipe = { ...timing, files, scene: null };
@@ -1882,6 +1914,7 @@ function start(): void {
     const item: HistoryItem = {
       id: saved.id,
       files,
+      to: [],
       senderId: '',
       senderName: kept.senderName,
       senderAvatarUrl: kept.senderAvatarUrl,
@@ -1947,6 +1980,21 @@ function start(): void {
 
   handle(IpcChannel.TestOverlay, showOverlayTest);
 
+  handle(IpcChannel.StartPoll, (question: unknown, options: unknown) => {
+    const request = PollRequestSchema.safeParse({ question, options });
+    if (request.success) connection?.startPoll(request.data.question, request.data.options);
+  });
+
+  handle(IpcChannel.VotePoll, (pollId: unknown, choice: unknown) => {
+    if (typeof pollId === 'string' && typeof choice === 'number' && Number.isInteger(choice)) connection?.vote(pollId, choice);
+  });
+
+  // The ring around the sender's picture in the app moves with what the overlay hears.
+  ipcMain.on(IpcChannel.SoundLevel, (event, level: unknown) => {
+    if (event.sender !== stageWindow.webContents || typeof level !== 'number' || controlWindow.isDestroyed()) return;
+    controlWindow.webContents.send(IpcChannel.LiveLevel, Math.min(1, Math.max(0, level)));
+  });
+
   // Nothing should close the overlay but quitting.
   stageWindow.on('close', (event) => {
     if (!quitting) event.preventDefault();
@@ -1988,6 +2036,7 @@ function start(): void {
     globalShortcut.unregisterAll();
     login?.abort();
     connection?.stop();
+    gameWatch.stop();
     settings.flush();
     tray.destroy();
   });

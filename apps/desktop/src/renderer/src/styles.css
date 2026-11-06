@@ -3124,3 +3124,260 @@ html.overlay body {
 .zone-text p.is-long {
   font-size: min(17cqh, 3.2cqw);
 }
+
+/* Life of the party: the ring, what each member is up to, whispers and polls */
+
+.input.is-small {
+  height: 34px;
+  padding: 0 11px;
+  font-size: 13px;
+}
+
+/* Green around whoever sent what is playing. The thickness follows the sound, or breathes when it can't be measured. */
+.has-ring {
+  --ring-level: 0;
+  box-shadow:
+    0 0 0 calc(2px + var(--ring-level) * 4px) var(--online),
+    0 0 calc(var(--ring-level) * 14px) calc(var(--ring-level) * 3px) rgb(142 230 180 / 45%);
+  transition: box-shadow 80ms linear;
+}
+
+.avatar.has-ring.is-live {
+  --ring-level: var(--live-level, 0);
+}
+
+html.live-pulse .avatar.has-ring.is-live,
+.has-ring.is-pulse {
+  animation: ring-breathe 1.1s var(--ease) infinite alternate;
+}
+
+.profile-avatar.has-ring {
+  border-color: var(--online);
+  box-shadow:
+    0 0 0 calc(var(--ring-level) * 4cqh) var(--online),
+    0 0 calc(var(--ring-level) * 14cqh) calc(var(--ring-level) * 3cqh) rgb(142 230 180 / 50%);
+}
+
+.profile-avatar.has-ring.is-sound {
+  --ring-level: var(--level, 0);
+}
+
+.profile-avatar.has-ring.is-still {
+  --ring-level: 0;
+}
+
+@keyframes ring-breathe {
+  from {
+    --ring-level: 0.1;
+  }
+  to {
+    --ring-level: 0.7;
+  }
+}
+
+@property --ring-level {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.row.is-clickable {
+  margin: -4px 0;
+  padding: 4px 6px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+
+.row.is-clickable:hover {
+  background: var(--glass-hover);
+}
+
+.row-sub.is-playing {
+  color: var(--online);
+}
+
+.row-sub.is-panic {
+  color: var(--danger);
+}
+
+.day-count {
+  flex: none;
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--glass-raised);
+  color: var(--text-soft);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+.whisper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.whisper-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 30px;
+  padding: 0 10px 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--glass);
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.chip:hover {
+  background: var(--glass-hover);
+}
+
+.chip:active {
+  transform: scale(0.97);
+}
+
+.chip.is-on {
+  border-color: var(--text);
+  background: var(--glass-active);
+  color: var(--text);
+}
+
+.chip-avatar {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 14%);
+  font-size: 10px;
+  object-fit: cover;
+}
+
+.panel.is-short:has(.poll, .poll-form) {
+  max-height: none;
+}
+
+.poll,
+.poll-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.poll-question {
+  margin: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.poll .hint {
+  margin: -4px 0 0;
+}
+
+.poll-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.poll-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--glass);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.poll-option:not(:disabled):hover {
+  border-color: var(--line-bright);
+}
+
+.poll-option:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+.poll-option:disabled {
+  cursor: default;
+}
+
+.poll-option.is-mine {
+  border-color: var(--text);
+}
+
+.poll-option.is-winner {
+  border-color: var(--online);
+}
+
+.poll-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgb(255 255 255 / 10%);
+  transition: width var(--spring-time) var(--spring);
+}
+
+.poll-option.is-winner .poll-bar {
+  background: rgb(142 230 180 / 22%);
+}
+
+.poll-label {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.poll-count {
+  position: relative;
+  color: var(--text-soft);
+}
+
+.history-from {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.history-from .input {
+  width: auto;
+  max-width: 170px;
+}

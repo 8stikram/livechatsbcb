@@ -1,13 +1,13 @@
 import { z } from 'zod';
 
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 export const WS_SUBPROTOCOL = `livechatsbcb.v${PROTOCOL_VERSION}`;
 export const WS_SUBPROTOCOL_PREFIX = 'livechatsbcb.v';
 export const WS_TOKEN_PREFIX = 'token.';
 // Which version of the app is connecting, so that the others can tell when theirs is behind.
 export const WS_APP_PREFIX = 'app.';
 
-export const MAX_ONLINE_MEMBERS = 10;
+export const MAX_ONLINE_MEMBERS = 15;
 export const MAX_REGISTERED_MEMBERS = 30;
 
 export const MAX_MEDIA_BYTES = 500 * 1024 * 1024;
@@ -29,6 +29,12 @@ export const MIN_DISPLAY_MS = 1_000;
 export const DEFAULT_DISPLAY_MS = 5_000;
 export const MAX_DISPLAY_MS = 60_000;
 export const MAX_CLIP_MS = 60 * 60_000;
+export const MAX_NOTE_LENGTH = 60;
+export const POLL_MS = 30_000;
+export const MAX_POLL_QUESTION_LENGTH = 100;
+export const MAX_POLL_OPTION_LENGTH = 40;
+export const MIN_POLL_OPTIONS = 2;
+export const MAX_POLL_OPTIONS = 4;
 
 export const mediaPartCount = (size: number): number => Math.ceil(size / MEDIA_PART_BYTES);
 export const mediaPartBytes = (size: number, part: number): number =>
@@ -127,6 +133,9 @@ export const ApiErrorCodeSchema = z.enum([
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 export const ApiErrorSchema = z.object({ error: ApiErrorCodeSchema });
 
+export const ActivitySchema = z.enum(['here', 'playing', 'away', 'panic']);
+export type Activity = z.infer<typeof ActivitySchema>;
+
 export const MemberSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -136,6 +145,12 @@ export const MemberSchema = z.object({
   bannedUntil: z.number().nullable(),
   // Null when offline, or for an app too old to say.
   version: z.string().nullable().default(null),
+  // Found by the app itself: playing a game in full screen, away from the PC, or with everything hidden.
+  activity: ActivitySchema.default('here'),
+  // A few words of their own.
+  note: z.string().max(MAX_NOTE_LENGTH).default(''),
+  // LiveChats sent to everybody since midnight, in France.
+  sentToday: z.number().int().min(0).default(0),
 });
 export type Member = z.infer<typeof MemberSchema>;
 
@@ -258,6 +273,8 @@ export const MediaDraftSchema = z
     speak: z.boolean().default(false),
     scene: SceneSchema.default(null),
     link: MediaLinkSchema.nullable().default(null),
+    // Only for these members, and nobody else ever knows. Empty is for everybody.
+    to: z.array(z.string().min(1).max(64)).max(MAX_ONLINE_MEMBERS).default([]),
     files: z
       .array(
         z.object({
@@ -312,6 +329,7 @@ export const QueueItemSchema = z.object({
   speak: z.boolean().default(false),
   scene: SceneSchema,
   link: MediaLinkSchema.nullable().default(null),
+  to: z.array(z.string()).default([]),
   // When the service forgets it, and deletes its file. Playing it again doesn't push this back.
   expiresAt: z.number(),
   // On the service's clock. Null until the item may start: only the first item of the queue ever has one.
@@ -322,12 +340,36 @@ export type QueueItem = z.infer<typeof QueueItemSchema>;
 export const HistoryItemSchema = QueueItemSchema.omit({ replay: true, startAt: true }).extend({ playedAt: z.number() });
 export type HistoryItem = z.infer<typeof HistoryItemSchema>;
 
+// Votes are counted, never named. Only one at a time in a party.
+export const PollSchema = z.object({
+  id: z.string(),
+  question: z.string(),
+  options: z.array(z.string()),
+  counts: z.array(z.number().int().min(0)),
+  starterName: z.string(),
+  // On the service's clock.
+  endsAt: z.number(),
+  done: z.boolean(),
+  // What this member chose, so the app can show it. Nobody else is told.
+  myVote: z.number().int().nullable(),
+});
+export type Poll = z.infer<typeof PollSchema>;
+
+export const PollRequestSchema = z.object({
+  question: z.string().trim().min(1).max(MAX_POLL_QUESTION_LENGTH),
+  options: z.array(z.string().trim().min(1).max(MAX_POLL_OPTION_LENGTH)).min(MIN_POLL_OPTIONS).max(MAX_POLL_OPTIONS),
+});
+export type PollRequest = z.infer<typeof PollRequestSchema>;
+
 export const ClientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('ready'), mediaId: z.string() }),
   z.object({ t: z.literal('skip'), mediaId: z.string() }),
   // This PC has stopped showing it. Once nobody is watching any more, the queue moves on.
   z.object({ t: z.literal('cut'), mediaId: z.string() }),
   z.object({ t: z.literal('time'), c: z.number() }),
+  z.object({ t: z.literal('status'), activity: ActivitySchema, note: z.string().trim().max(MAX_NOTE_LENGTH) }),
+  z.object({ t: z.literal('poll') }).extend(PollRequestSchema.shape),
+  z.object({ t: z.literal('vote'), pollId: z.string(), choice: z.number().int().min(0).max(MAX_POLL_OPTIONS - 1) }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -340,7 +382,9 @@ export const ServerMessageSchema = z.discriminatedUnion('t', [
     members: z.array(MemberSchema),
     queue: z.array(QueueItemSchema),
     history: z.array(HistoryItemSchema),
+    poll: PollSchema.nullable().default(null),
   }),
+  z.object({ t: z.literal('poll'), poll: PollSchema.nullable() }),
   z.object({ t: z.literal('members'), members: z.array(MemberSchema) }),
   z.object({ t: z.literal('queue'), queue: z.array(QueueItemSchema) }),
   z.object({ t: z.literal('history'), history: z.array(HistoryItemSchema) }),

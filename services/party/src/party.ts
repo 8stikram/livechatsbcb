@@ -19,6 +19,9 @@ import {
   mediaPartBytes,
   mediaPartCount,
   type Account,
+  type Activity,
+  type Poll,
+  type PollRequest,
   type HistoryItem,
   linkKindOf,
   type MediaDraft,
@@ -56,7 +59,14 @@ const MIN_PREPARE_MS = 15_000;
 const MAX_PREPARE_MS = 120_000;
 const PREPARE_BYTES_PER_MS = 2_000;
 // Changes when what is stored in the queue and the history stops being readable by the current apps.
-const ITEM_FORMAT = '6';
+const ITEM_FORMAT = '7';
+// A finished poll still shows its result for a while to whoever comes in.
+const POLL_KEPT_MS = 60_000;
+// The day of the counter is the one of the friends who use the app.
+const DAY_OF = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+type StoredPoll = { id: string; question: string; options: string[]; starterName: string; endsAt: number; done: boolean; votes: Record<string, number> };
+type Audience = Pick<StoredItem, 'senderId' | 'to'>;
 
 export const guildPartyId = (guildId: string): string => `g-${guildId}`;
 
@@ -103,6 +113,8 @@ export class Party extends DurableObject<Env> {
       );
       CREATE TABLE IF NOT EXISTS send_log (member_id TEXT NOT NULL, fingerprint TEXT NOT NULL, sent_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS bans (member_id TEXT PRIMARY KEY, until INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS member_status (member_id TEXT PRIMARY KEY, activity TEXT NOT NULL, note TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS sent_count (member_id TEXT PRIMARY KEY, day TEXT NOT NULL, total INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS history (
         id TEXT PRIMARY KEY,
         item TEXT NOT NULL,
@@ -223,8 +235,12 @@ export class Party extends DurableObject<Env> {
     if (!this.mayNotSpam(member.id, original)) return { ok: false, error: 'banned' };
     if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
 
+    // A whisper played again stays between the same people, with whoever sent it first among them.
+    const to = original.to.length > 0 ? [...new Set([...original.to, original.senderId])].filter((id) => id !== member.id) : [];
+    if (to.length === 0 && original.to.length === 0) this.countSent(member.id);
     this.enqueueItem({
       ...original,
+      to: original.to.length > 0 && to.length === 0 ? [member.id] : to,
       id: crypto.randomUUID(),
       replay: true,
       senderId: member.id,
@@ -338,6 +354,7 @@ export class Party extends DurableObject<Env> {
 
   override async alarm(): Promise<void> {
     await this.checkGuildMembers();
+    this.closePollIfDue();
     if (this.advanceQueue()) this.broadcastQueue();
   }
 
@@ -388,8 +405,9 @@ export class Party extends DurableObject<Env> {
         code: this.getMeta('code') || null,
         memberId: member.id,
         members,
-        queue: this.queue(),
-        history: this.history(),
+        queue: this.queue(member.id),
+        history: this.history(member.id),
+        poll: this.pollFor(member.id),
       } satisfies ServerMessage),
     );
     this.broadcast({ t: 'members', members }, server);
@@ -423,6 +441,15 @@ export class Party extends DurableObject<Env> {
         break;
       case 'cut':
         this.markCut(memberId, message.data.mediaId);
+        break;
+      case 'status':
+        this.setStatus(memberId, message.data.activity, message.data.note);
+        break;
+      case 'poll':
+        this.startPoll(memberId, message.data);
+        break;
+      case 'vote':
+        this.vote(memberId, message.data.pollId, message.data.choice);
         break;
     }
   }
@@ -506,7 +533,9 @@ export class Party extends DurableObject<Env> {
   // One alarm does both jobs: moving the queue on, and checking people are still on the server while anyone is here.
   private wakeAt(queueStep: number | null, leaving?: WebSocket): void {
     const checking = this.getMeta('guildId') && this.openSockets(leaving).length > 0;
-    const steps = [queueStep, checking ? Number(this.getMeta('nextMemberCheck')) : null].filter((step) => step !== null);
+    const poll = this.storedPoll();
+    const pollEnd = poll && !poll.done ? poll.endsAt : null;
+    const steps = [queueStep, checking ? Number(this.getMeta('nextMemberCheck')) : null, pollEnd].filter((step) => step !== null);
     if (steps.length > 0) void this.ctx.storage.setAlarm(Math.min(...steps));
     else void this.ctx.storage.deleteAlarm();
   }
@@ -554,19 +583,32 @@ export class Party extends DurableObject<Env> {
     return this.ctx.storage.sql.exec<QueueRow>('SELECT * FROM queue ORDER BY seq').toArray();
   }
 
-  private queue(): QueueItem[] {
-    return this.queueRows().map((row) => ({
-      ...(JSON.parse(row.item) as Omit<QueueItem, 'startAt'>),
-      startAt: row.start_at,
-    }));
+  private queue(memberId: string): QueueItem[] {
+    return this.queueRows()
+      .map((row) => ({ ...(JSON.parse(row.item) as Omit<QueueItem, 'startAt'>), startAt: row.start_at }))
+      .filter((item) => this.sees(item, memberId));
+  }
+
+  // A whisper is for whoever sent it and whoever it was sent to. The others never hear of it.
+  private sees({ senderId, to }: Audience, memberId: string): boolean {
+    return to.length === 0 || senderId === memberId || to.includes(memberId);
+  }
+
+  private audienceOnline(item: Audience, leaving?: WebSocket): string[] {
+    return [...this.onlineIds(leaving)].filter((id) => this.sees(item, id));
   }
 
   private broadcastQueue(): void {
-    this.broadcast({ t: 'queue', queue: this.queue() });
+    this.broadcastEach((memberId) => ({ t: 'queue', queue: this.queue(memberId) }));
   }
 
   private enqueue(mediaId: string, sender: MemberRow, draft: MediaDraft, fileIds: string[]): void {
+    const to = [...new Set(draft.to)].filter((id) => id !== sender.id);
+    // Whispered to nobody else is still a whisper: only the sender sees it.
+    const whisper = draft.to.length > 0;
+    if (!whisper) this.countSent(sender.id);
     this.enqueueItem({
+      to: whisper && to.length === 0 ? [sender.id] : to,
       id: mediaId,
       files: draft.files.map((file, index) => ({ ...file, id: fileIds[index]! })),
       replay: false,
@@ -605,11 +647,12 @@ export class Party extends DurableObject<Env> {
     return { ...stored, playedAt };
   }
 
-  private history(): HistoryItem[] {
+  private history(memberId: string): HistoryItem[] {
     return this.ctx.storage.sql
       .exec<HistoryRow>('SELECT item, played_at FROM history WHERE expires_at > ? ORDER BY played_at DESC', Date.now())
       .toArray()
-      .map((row) => this.toHistoryItem(row));
+      .map((row) => this.toHistoryItem(row))
+      .filter((item) => this.sees(item, memberId));
   }
 
   // Only what is really shown counts, and only once: playing something again doesn't add a line.
@@ -629,7 +672,7 @@ export class Party extends DurableObject<Env> {
       playedAt,
       MAX_HISTORY_LENGTH,
     );
-    this.broadcast({ t: 'history', history: this.history() });
+    this.broadcastEach((memberId) => ({ t: 'history', history: this.history(memberId) }));
   }
 
   private markReady(memberId: string, mediaId: string): void {
@@ -651,9 +694,10 @@ export class Party extends DurableObject<Env> {
   // Names the media so that two people pressing at once can't skip the one after it too.
   private skip(memberId: string, mediaId: string): void {
     if (this.queueRows()[0]?.id !== mediaId) return;
+    const item = JSON.parse(this.queueRows()[0]!.item) as StoredItem;
     this.ctx.storage.sql.exec('DELETE FROM queue WHERE id = ?', mediaId);
     const [member] = this.ctx.storage.sql.exec<MemberRow>('SELECT id, name, avatar_url FROM members WHERE id = ?', memberId).toArray();
-    if (member) this.broadcast({ t: 'skipped', memberId, name: member.name });
+    if (member) this.broadcastEach((id) => (this.sees(item, id) ? { t: 'skipped', memberId, name: member.name } : null));
     this.advanceQueue();
     this.broadcastQueue();
   }
@@ -670,11 +714,13 @@ export class Party extends DurableObject<Env> {
         return changed;
       }
 
-      const { durationMs } = JSON.parse(head.item) as QueueItem;
+      const headItem = JSON.parse(head.item) as StoredItem;
+      const { durationMs } = headItem;
+      const audience = this.audienceOnline(headItem, leaving);
       if (head.start_at !== null) {
         // Nobody is watching any more: there is no point keeping the next one waiting.
         const cut = new Set(JSON.parse(head.cut) as string[]);
-        const online = [...this.onlineIds(leaving)];
+        const online = audience;
         const nobodyWatching = online.length > 0 && online.every((id) => cut.has(id));
         if (now < head.start_at + durationMs && !nobodyWatching) {
           this.wakeAt(head.start_at + durationMs, leaving);
@@ -687,10 +733,10 @@ export class Party extends DurableObject<Env> {
 
       const deadline = head.prepare_deadline ?? now + head.prepare_ms;
       const ready = new Set(JSON.parse(head.ready) as string[]);
-      const everyoneReady = [...this.onlineIds(leaving)].every((id) => ready.has(id));
+      const everyoneReady = audience.every((id) => ready.has(id));
 
       if (now >= deadline || everyoneReady) {
-        const startAt = now + ((JSON.parse(head.item) as StoredItem).link ? LINK_START_LEAD_MS : START_LEAD_MS);
+        const startAt = now + (headItem.link ? LINK_START_LEAD_MS : START_LEAD_MS);
         this.ctx.storage.sql.exec('UPDATE queue SET start_at = ? WHERE id = ?', startAt, head.id);
         this.remember(head, startAt);
         this.wakeAt(startAt + durationMs, leaving);
@@ -725,6 +771,19 @@ export class Party extends DurableObject<Env> {
         .toArray()
         .map(({ member_id: id, until }) => [id, until]),
     );
+    const statuses = new Map(
+      this.ctx.storage.sql
+        .exec<{ member_id: string; activity: Activity; note: string }>('SELECT * FROM member_status')
+        .toArray()
+        .map((row) => [row.member_id, row]),
+    );
+    const today = DAY_OF.format(Date.now());
+    const counts = new Map(
+      this.ctx.storage.sql
+        .exec<{ member_id: string; total: number }>('SELECT member_id, total FROM sent_count WHERE day = ?', today)
+        .toArray()
+        .map(({ member_id: id, total }) => [id, total]),
+    );
     const members = this.ctx.storage.sql
       .exec<MemberRow>('SELECT id, name, avatar_url FROM members ORDER BY joined_at')
       .toArray()
@@ -735,6 +794,9 @@ export class Party extends DurableObject<Env> {
         online: online.has(id),
         bannedUntil: bans.get(id) ?? null,
         version: versions.get(id) ?? null,
+        activity: online.has(id) ? (statuses.get(id)?.activity ?? 'here') : ('here' as const),
+        note: statuses.get(id)?.note ?? '',
+        sentToday: counts.get(id) ?? 0,
       }));
     // Past visitors of a Discord server's party are nobody's business: a private party is the one with a fixed list.
     return this.getMeta('guildId') ? members.filter((member) => member.online) : members;
@@ -743,6 +805,90 @@ export class Party extends DurableObject<Env> {
   private broadcast(message: ServerMessage, excluding?: WebSocket): void {
     const payload = JSON.stringify(message);
     for (const socket of this.openSockets(excluding)) socket.send(payload);
+  }
+
+  // What each member is told depends on who they are. Null tells them nothing.
+  private broadcastEach(messageFor: (memberId: string) => ServerMessage | null): void {
+    for (const socket of this.openSockets()) {
+      const message = messageFor(this.ctx.getTags(socket)[0]!);
+      if (message) socket.send(JSON.stringify(message));
+    }
+  }
+
+  private setStatus(memberId: string, activity: Activity, note: string): void {
+    const cleaned = note.replace(/\s+/g, ' ').trim();
+    const [known] = this.ctx.storage.sql
+      .exec<{ activity: string; note: string }>('SELECT activity, note FROM member_status WHERE member_id = ?', memberId)
+      .toArray();
+    if (known?.activity === activity && known.note === cleaned) return;
+    this.ctx.storage.sql.exec('INSERT OR REPLACE INTO member_status (member_id, activity, note) VALUES (?, ?, ?)', memberId, activity, cleaned);
+    this.broadcast({ t: 'members', members: this.members() });
+  }
+
+  private countSent(memberId: string): void {
+    const today = DAY_OF.format(Date.now());
+    this.ctx.storage.sql.exec(
+      `INSERT INTO sent_count (member_id, day, total) VALUES (?1, ?2, 1)
+       ON CONFLICT (member_id) DO UPDATE SET total = CASE WHEN day = ?2 THEN total + 1 ELSE 1 END, day = ?2`,
+      memberId,
+      today,
+    );
+    this.broadcast({ t: 'members', members: this.members() });
+  }
+
+  private storedPoll(): StoredPoll | null {
+    const raw = this.getMeta('poll');
+    return raw ? (JSON.parse(raw) as StoredPoll) : null;
+  }
+
+  private pollFor(memberId: string): Poll | null {
+    const poll = this.storedPoll();
+    if (!poll || (poll.done && Date.now() > poll.endsAt + POLL_KEPT_MS)) return null;
+    const counts = poll.options.map(() => 0);
+    for (const choice of Object.values(poll.votes)) counts[choice] = (counts[choice] ?? 0) + 1;
+    const { votes, ...shown } = poll;
+    return { ...shown, counts, myVote: votes[memberId] ?? null };
+  }
+
+  private broadcastPoll(): void {
+    this.broadcastEach((memberId) => ({ t: 'poll', poll: this.pollFor(memberId) }));
+  }
+
+  // One at a time: a new one waits for the last to end.
+  private startPoll(memberId: string, { question, options }: PollRequest): void {
+    const current = this.storedPoll();
+    if (current && !current.done) return;
+    const [member] = this.ctx.storage.sql.exec<MemberRow>('SELECT id, name, avatar_url FROM members WHERE id = ?', memberId).toArray();
+    if (!member) return;
+    const poll: StoredPoll = {
+      id: crypto.randomUUID(),
+      question,
+      options,
+      starterName: member.name,
+      endsAt: Date.now() + Number(this.env.POLL_MS),
+      done: false,
+      votes: {},
+    };
+    this.setMeta('poll', JSON.stringify(poll));
+    this.broadcastPoll();
+    // Arms the alarm for its end.
+    if (this.advanceQueue()) this.broadcastQueue();
+  }
+
+  private vote(memberId: string, pollId: string, choice: number): void {
+    const poll = this.storedPoll();
+    if (!poll || poll.done || poll.id !== pollId || choice >= poll.options.length || Date.now() >= poll.endsAt) return;
+    poll.votes[memberId] = choice;
+    this.setMeta('poll', JSON.stringify(poll));
+    this.broadcastPoll();
+  }
+
+  private closePollIfDue(): void {
+    const poll = this.storedPoll();
+    if (!poll || poll.done || Date.now() < poll.endsAt) return;
+    poll.done = true;
+    this.setMeta('poll', JSON.stringify(poll));
+    this.broadcastPoll();
   }
 
   // Offline members stay registered so they can come back, but a lost install must not hold a seat forever.
