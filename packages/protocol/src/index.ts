@@ -227,6 +227,25 @@ const isValidScene = (scene: SceneLayer[], files: WithType[]): boolean => {
   );
 };
 
+// A video or a sound on another site, played by that site's own player: no file, and nothing stored.
+const LINK_IDS = {
+  youtube: /^[\w-]{11}$/,
+  tiktok: /^\d{1,30}$/,
+  soundcloud: /^[\w-]{1,100}\/[\w-]{1,100}$/,
+} as const;
+
+export const MediaLinkSchema = z
+  .object({
+    site: z.enum(['youtube', 'tiktok', 'soundcloud']),
+    id: z.string(),
+    title: z.string().trim().min(1).max(MAX_FILE_NAME_LENGTH),
+    volume: z.number().int().min(0).max(100).default(100),
+  })
+  .refine(({ site, id }) => LINK_IDS[site].test(id));
+export type MediaLink = z.infer<typeof MediaLinkSchema>;
+
+export const linkKindOf = ({ site }: Pick<MediaLink, 'site'>): 'video' | 'audio' => (site === 'soundcloud' ? 'audio' : 'video');
+
 export const MediaDraftSchema = z
   .object({
     caption: z.string().trim().max(MAX_CAPTION_LENGTH),
@@ -238,6 +257,7 @@ export const MediaDraftSchema = z
     // Read aloud on each PC, in that PC's own voice.
     speak: z.boolean().default(false),
     scene: SceneSchema.default(null),
+    link: MediaLinkSchema.nullable().default(null),
     files: z
       .array(
         z.object({
@@ -248,7 +268,8 @@ export const MediaDraftSchema = z
       )
       .max(MAX_MEDIA_FILES),
   })
-  .refine((draft) => draft.files.length > 0 || draft.caption.length > 0)
+  .refine((draft) => draft.files.length > 0 || draft.caption.length > 0 || draft.link !== null)
+  .refine(({ link, files, scene }) => link === null || (files.length === 0 && scene === null))
   .refine((draft) => draft.files.reduce((total, { size }) => total + size, 0) <= MAX_MEDIA_BYTES)
   .refine(({ scene, files }) => {
     if (scene) return isValidScene(scene, files);
@@ -257,7 +278,7 @@ export const MediaDraftSchema = z
   })
   .refine((draft) => {
     const plays = draft.files.some(({ contentType }) => fileKindOf(contentType) !== 'image');
-    return plays || (draft.clipStartMs === 0 && draft.durationMs <= MAX_DISPLAY_MS);
+    return plays || draft.link !== null || (draft.clipStartMs === 0 && draft.durationMs <= MAX_DISPLAY_MS);
   });
 export type MediaDraft = z.infer<typeof MediaDraftSchema>;
 
@@ -290,6 +311,7 @@ export const QueueItemSchema = z.object({
   soundMuted: z.boolean(),
   speak: z.boolean().default(false),
   scene: SceneSchema,
+  link: MediaLinkSchema.nullable().default(null),
   // When the service forgets it, and deletes its file. Playing it again doesn't push this back.
   expiresAt: z.number(),
   // On the service's clock. Null until the item may start: only the first item of the queue ever has one.

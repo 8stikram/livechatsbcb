@@ -140,7 +140,8 @@ const launch = async (profile: string, extraArgs: string[] = []): Promise<Member
   const app = await electron.launch({
     ...(packagedExecutable ? { executablePath: packagedExecutable } : {}),
     args: launchArgs(extraArgs),
-    env: { ...process.env, LIVECHATSBCB_PROFILE: join(sandbox, profile) } as Record<string, string>,
+    // Nothing is heard while the tests play, as someone may be using this PC.
+    env: { ...process.env, LIVECHATSBCB_PROFILE: join(sandbox, profile), LIVECHATSBCB_SILENT: '1' } as Record<string, string>,
   });
 
   // An app that dies during a test should say why.
@@ -1332,8 +1333,13 @@ describe.skipIf(online)('party flow in the real app', () => {
 
       await host.app.evaluate(({ clipboard }, url) => clipboard.writeText(url), `http://127.0.0.1:${port}/page`);
       await pasteIn(host);
-      await host.control.getByTestId('incoming-note').filter({ hasText: 'YouTube' }).waitFor();
+      await host.control.getByTestId('incoming-note').filter({ hasText: 'pas une image' }).waitFor();
       expect(await host.control.getByTestId('draft-name').count()).toBe(0);
+
+      // Instagram and X start nothing without a click, and it says so.
+      await host.app.evaluate(({ clipboard }) => clipboard.writeText('https://www.instagram.com/reel/C2oGqkXNmLf/'));
+      await pasteIn(host);
+      await host.control.getByTestId('incoming-note').filter({ hasText: 'Instagram' }).waitFor();
 
       // Words simply become the text.
       await host.app.evaluate(({ clipboard }) => clipboard.writeText('Collé ici'));
@@ -1343,6 +1349,72 @@ describe.skipIf(online)('party flow in the real app', () => {
     } finally {
       server.close();
     }
+  });
+
+  // The real YouTube: what matters is that its own player agrees to play here.
+  it('plays a YouTube link on both PCs from its own player, only the chosen passage', async () => {
+    await host.app.evaluate(({ clipboard }) => clipboard.writeText('https://youtu.be/jNQXAC9IVRw?t=2'));
+    await pasteIn(host);
+    await host.control.getByTestId('draft-name').filter({ hasText: 'zoo' }).waitFor({ timeout: 20_000 });
+    await host.control.getByTestId('link-frame').waitFor();
+    await host.control.getByTestId('clip-start').filter({ hasText: '0:02,0' }).waitFor({ timeout: 30_000 });
+    await setRange(host, /^Fin$/, 9_000);
+    await host.control.getByTestId('clip-end').filter({ hasText: '0:09,0' }).waitFor();
+    await setRange(host, /^Volume$/, 50);
+    expect(await host.control.getByRole('button', { name: 'Sauvegarder dans la bibliothèque' }).count()).toBe(0);
+    await picture(host.control, 'link-youtube.png');
+    await sendButton(host).click();
+
+    await overlayState(guest, 'playing');
+    await guest.stage.getByTestId('link-frame').waitFor({ state: 'attached' });
+    await guest.stage.locator('[data-on-screen="true"]').waitFor({ state: 'attached' });
+    const position = async (member: Member) =>
+      member.app.evaluate(async ({ BrowserWindow }) => {
+        const stage = BrowserWindow.getAllWindows().find((window) => window.getTitle().includes('Scène'))!;
+        for (const frame of stage.webContents.mainFrame.framesInSubtree) {
+          if (!frame.url.startsWith('https://www.youtube.com/')) continue;
+          return frame.executeJavaScript('(() => { const v = document.querySelector("video"); return v ? { paused: v.paused, time: v.currentTime } : null; })()') as Promise<{ paused: boolean; time: number } | null>;
+        }
+        return null;
+      });
+    await expect.poll(() => position(guest).then((seen) => seen?.paused === false && seen.time > 2.3), { timeout: 15_000 }).toBe(true);
+    const seen = (await position(guest))!;
+    expect(seen.time).toBeGreaterThan(2);
+    expect(seen.time).toBeLessThan(9.5);
+    await picture(guest.stage, 'link-youtube-overlay.png');
+    await overlayState(guest, 'idle');
+    await overlayState(host, 'idle');
+  });
+
+  it('prepares TikTok and SoundCloud links, and takes a sound picked in the SoundCloud search', async () => {
+    await host.app.evaluate(({ clipboard }) => clipboard.writeText('https://www.tiktok.com/@scout2015/video/6718335390845095173'));
+    await pasteIn(host);
+    await host.control.getByText('TikTok', { exact: true }).waitFor({ timeout: 20_000 });
+    await host.control.getByTestId('clip-end').waitFor({ timeout: 30_000 });
+    await host.control.getByRole('switch', { name: 'Son de la vidéo' }).or(host.control.getByLabel('Son de la vidéo')).first().waitFor();
+    await picture(host.control, 'link-tiktok.png');
+
+    await host.app.evaluate(({ clipboard }) => clipboard.writeText('https://soundcloud.com/forss/flickermood'));
+    await pasteIn(host);
+    await host.control.getByTestId('draft-name').filter({ hasText: 'Flickermood' }).waitFor({ timeout: 20_000 });
+    await host.control.getByTestId('clip-end').waitFor({ timeout: 30_000 });
+    await host.control.locator('.draft-head').getByRole('button', { name: 'Retirer' }).click();
+
+    // The search opens the site itself; choosing a sound there brings it back here.
+    await host.control.getByLabel('Chercher sur SoundCloud').fill('flickermood');
+    await host.control.getByRole('button', { name: 'Chercher', exact: true }).click();
+    await expect
+      .poll(() => host.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((window) => window.getTitle().startsWith('SoundCloud'))))
+      .toBe(true);
+    await host.app.evaluate(({ BrowserWindow }) => {
+      const search = BrowserWindow.getAllWindows().find((window) => window.getTitle().startsWith('SoundCloud'))!;
+      void search.webContents.loadURL('https://soundcloud.com/forss/flickermood');
+    });
+    await host.control.getByTestId('draft-name').filter({ hasText: 'Flickermood' }).waitFor({ timeout: 30_000 });
+    await expect
+      .poll(() => host.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((window) => window.getTitle().startsWith('SoundCloud'))))
+      .toBe(false);
+    await host.control.locator('.draft-head').getByRole('button', { name: 'Retirer' }).click();
   });
 
   it('takes files from the Windows right click, ready or sent straight away', async () => {
@@ -1392,6 +1464,13 @@ describe.skipIf(online)('party flow in the real app', () => {
 
   it('reads a text aloud only once it was confirmed, and not for whoever turned it off', async () => {
     const speaking = (member: Member) => member.stage.evaluate(() => speechSynthesis.speaking);
+    // The voice of Windows only speaks out loud: for this one test, quietly.
+    const hearStage = (member: Member, heard: boolean) =>
+      member.app.evaluate(({ BrowserWindow }, on) => {
+        for (const window of BrowserWindow.getAllWindows()) if (window.getTitle().includes('Scène')) window.webContents.setAudioMuted(!on);
+      }, heard);
+    await hearStage(guest, true);
+    await hearStage(host, true);
     const voiceBox = host.control.locator('label.switch', { hasText: 'Lire à voix haute' });
     const voiceOn = () => voiceBox.locator('input').isChecked();
 
@@ -1439,6 +1518,8 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByRole('heading', { name: 'Voix robot' }).waitFor();
     await picture(host.control, 'settings-speech.png');
     await openTab(host, 'LiveChat');
+    await hearStage(guest, false);
+    await hearStage(host, false);
   });
 
   it('moves the window around, and calms down for whoever asks', async () => {
@@ -2072,6 +2153,17 @@ describe.skipIf(online)('party flow in the real app', () => {
     await control.mouse.move(corner.x + 18, corner.y + 18, { steps: 5 });
     await control.mouse.up();
     expect(await widthOf()).toBeGreaterThan(startWidth);
+
+    // Pulling a side stretches it: wider, and no taller.
+    const shapeOf = () => layers.first().evaluate((element) => parseFloat((element as HTMLElement).style.aspectRatio));
+    const startShape = await shapeOf();
+    const side = (await control.getByTestId('scene-stretch-e').boundingBox())!;
+    await control.mouse.move(side.x + 5, side.y + 5);
+    await control.mouse.down();
+    await control.mouse.move(side.x + 45, side.y + 5, { steps: 5 });
+    await control.mouse.up();
+    expect(await shapeOf()).toBeGreaterThan(startShape * 1.1);
+    expect(await layers.first().locator('.overlay-media').evaluate((element) => getComputedStyle(element).objectFit)).toBe('fill');
 
     const grip = (await control.getByTestId('scene-rotate').boundingBox())!;
     await control.mouse.move(grip.x + 6, grip.y + 6);

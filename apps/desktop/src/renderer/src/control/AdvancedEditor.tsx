@@ -14,7 +14,10 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 const round = (value: number) => Math.round(value * 100) / 100;
 const normalizeAngle = (degrees: number) => ((((degrees + 180) % 360) + 360) % 360) - 180;
 
-type Grip = 'move' | 'resize' | 'rotate';
+type Edge = 'n' | 'e' | 's' | 'w';
+type Grip = 'move' | 'resize' | 'rotate' | Edge;
+
+const EDGES: readonly Edge[] = ['n', 'e', 's', 'w'];
 
 const Handles = ({ onGrip }: { onGrip: (grip: Grip, event: PointerEvent) => void }) => (
   <>
@@ -24,6 +27,14 @@ const Handles = ({ onGrip }: { onGrip: (grip: Grip, event: PointerEvent) => void
         className={`scene-handle is-${corner}`}
         data-testid={`scene-resize-${corner}`}
         onPointerDown={(event) => onGrip('resize', event)}
+      />
+    ))}
+    {EDGES.map((edge) => (
+      <span
+        key={edge}
+        className={`scene-handle is-edge is-${edge}`}
+        data-testid={`scene-stretch-${edge}`}
+        onPointerDown={(event) => onGrip(edge, event)}
       />
     ))}
     <span className="scene-handle is-rotate" data-testid="scene-rotate" onPointerDown={(event) => onGrip('rotate', event)} />
@@ -77,6 +88,31 @@ const EditingStage = ({ scene, state, caption }: { scene: Scene; state: AppState
           () => ({
             x: round(clamp(layer.x + ((move.clientX - startX) / rect.width) * 100, -50, 150)),
             y: round(clamp(layer.y + ((move.clientY - startY) / rect.height) * 100, -50, 150)),
+          }),
+          id,
+        );
+      } else if (EDGES.includes(grip as Edge)) {
+        // Along the picture's own sides, whichever way it is turned, with the side across from it staying put.
+        const turned = (layer.rotation * Math.PI) / 180;
+        const across = [Math.cos(turned), Math.sin(turned)] as const;
+        const down = [-Math.sin(turned), Math.cos(turned)] as const;
+        const [pushX, pushY] = [move.clientX - startX, move.clientY - startY];
+        const startW = (layer.width / 100) * rect.width;
+        const startH = startW / layer.aspect;
+        const side = grip === 'e' || grip === 's' ? 1 : -1;
+        const wide = grip === 'e' || grip === 'w';
+        const push = wide ? pushX * across[0] + pushY * across[1] : pushX * down[0] + pushY * down[1];
+        const nextW = clamp(wide ? startW + side * push : startW, (2 / 100) * rect.width, (300 / 100) * rect.width);
+        const nextH = Math.max(4, wide ? startH : startH + side * push);
+        const moved = side * (wide ? nextW - startW : nextH - startH) * 0.5;
+        const axis = wide ? across : down;
+        scene.updateLayer(
+          layer.key,
+          () => ({
+            width: round((nextW / rect.width) * 100),
+            aspect: Math.round(clamp(nextW / nextH, 0.05, 20) * 10_000) / 10_000,
+            x: round(clamp(layer.x + ((moved * axis[0]) / rect.width) * 100, -50, 150)),
+            y: round(clamp(layer.y + ((moved * axis[1]) / rect.height) * 100, -50, 150)),
           }),
           id,
         );

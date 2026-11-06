@@ -345,6 +345,37 @@ describe('party service', () => {
     socket.close();
   });
 
+  it('carries a link to a site with no file, leaves its player time to load, and refuses a made-up one', async () => {
+    const host = await createParty();
+    const socket = new TestSocket(host);
+    await socket.welcome();
+
+    const link = { site: 'youtube', id: 'jNQXAC9IVRw', title: 'Me at the zoo', volume: 40 };
+    const sent = await post(`/v1/parties/${host.partyId}/media`, { caption: '', clipStartMs: 3_000, durationMs: 5_000, link, files: [] }, authorized(host));
+    expect(sent.status).toBe(201);
+    const before = Date.now();
+    const [item] = await socket.queueWhere((queue) => queue[0]?.startAt != null, 'link start');
+    expect(item).toMatchObject({ kind: 'video', link, files: [], clipStartMs: 3_000, durationMs: 5_000 });
+    expect(item!.startAt!).toBeGreaterThan(before + 3_000);
+
+    const bad = [
+      { site: 'youtube', id: '../../evil', title: 'x' },
+      { site: 'tiktok', id: 'abc', title: 'x' },
+      { site: 'instagram', id: '123', title: 'x' },
+    ];
+    for (const made of bad) {
+      const refused = await post(`/v1/parties/${host.partyId}/media`, { caption: '', clipStartMs: 0, durationMs: 5_000, link: made, files: [] }, authorized(host));
+      expect(refused.status).toBe(400);
+    }
+    const withFile = await post(
+      `/v1/parties/${host.partyId}/media`,
+      { caption: '', clipStartMs: 0, durationMs: 5_000, link, files: [{ contentType: 'image/png', size: 10, name: 'a.png' }] },
+      authorized(host),
+    );
+    expect(withFile.status).toBe(400);
+    socket.close();
+  });
+
   it('moves on once everyone online has cut it, and not before', async () => {
     const host = await createParty();
     const guest = await joinParty(host.code, 'Invite');

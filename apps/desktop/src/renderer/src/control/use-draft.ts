@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { DEFAULT_DISPLAY_MS } from '@livechatsbcb/protocol';
-import type { DraftMedia, DraftSlot, LoadedDraft } from '../../../shared/ipc';
+import type { DraftMedia, DraftSlot, LinkDraft, LoadedDraft } from '../../../shared/ipc';
 import { pickErrorMessage } from './messages';
 
 export type Clip = { startMs: number; endMs: number };
 
 // What is being prepared. Chosen from the party or the library as well as from the LiveChat tab, and it follows along.
 export const useDraft = () => {
+  const [link, setLinkState] = useState<LinkDraft | null>(null);
+  const [linkVolume, setLinkVolume] = useState(100);
   const [picture, setPicture] = useState<DraftMedia | null>(null);
   const [sound, setSound] = useState<DraftMedia | null>(null);
   const [clip, setClip] = useState<Clip | null>(null);
@@ -26,6 +28,7 @@ export const useDraft = () => {
     setPicture(nextPicture);
     setSound(nextSound);
     setUnreadable(false);
+    if (nextPicture || nextSound) setLinkState(null);
   };
 
   const adopt = (file: DraftMedia) => {
@@ -34,6 +37,8 @@ export const useDraft = () => {
   };
 
   const reset = () => {
+    setLinkState(null);
+    setLinkVolume(100);
     setPicture(null);
     setSound(null);
     setClip(null);
@@ -44,6 +49,24 @@ export const useDraft = () => {
   };
 
   return {
+    link,
+    linkVolume,
+    setLinkVolume,
+    // A link takes the place of the files, which go on waiting for nothing.
+    setLink: (next: LinkDraft | null) => {
+      if (next) {
+        void window.liveChat.clearDraft('picture');
+        void window.liveChat.clearDraft('sound');
+        setPicture(null);
+        setSound(null);
+        setUnreadable(false);
+        setVideoMuted(false);
+        setSoundMuted(false);
+      }
+      setClip(null);
+      setLinkVolume(100);
+      setLinkState(next);
+    },
     picture,
     sound,
     clip,
@@ -72,6 +95,7 @@ export const useDraft = () => {
     },
     reset,
     load: (loaded: LoadedDraft) => {
+      setLinkState(null);
       setPicture(loaded.picture);
       setSound(loaded.sound);
       setUnreadable(false);

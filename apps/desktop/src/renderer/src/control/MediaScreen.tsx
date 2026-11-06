@@ -5,7 +5,8 @@ import {
   MAX_DISPLAY_MS,
   MIN_DISPLAY_MS,
 } from '@livechatsbcb/protocol';
-import { DEFAULT_SETTINGS, type AppState, type DraftMedia, type DraftSlot, type PlaybackView, type SceneInput } from '../../../shared/ipc';
+import { DEFAULT_SETTINGS, type AppState, type DraftMedia, type DraftSlot, type LinkDraft, type PlaybackView, type SceneInput } from '../../../shared/ipc';
+import { LinkFrame, type LinkControl, type LinkReport } from '../link-player';
 import { Caption, Profile, ScreenPreview, zoneStyle } from '../scene';
 import { LayerPanel, SceneBoard } from './AdvancedEditor';
 import { ClipBar, type ClipEdge } from './ClipBar';
@@ -215,6 +216,171 @@ const ClipEditor = ({
   );
 };
 
+const SITE_NAMES: Record<LinkDraft['site'], string> = { youtube: 'YouTube', tiktok: 'TikTok', soundcloud: 'SoundCloud' };
+// Past this, the site has not answered: better say so than wait in silence.
+const LINK_ANSWER_MS = 20_000;
+const LINK_ASK_LENGTH_MS = 1_500;
+
+const LinkEditor = ({
+  link,
+  state,
+  caption,
+  clip,
+  onClip,
+  volume,
+  onVolume,
+  failed,
+  onFailed,
+  onRemove,
+  locked,
+}: {
+  link: LinkDraft;
+  state: AppState;
+  caption: string;
+  clip: Clip | null;
+  onClip: (clip: Clip) => void;
+  volume: number;
+  onVolume: (volume: number) => void;
+  failed: string | null;
+  onFailed: (problem: string) => void;
+  onRemove: () => void;
+  locked: boolean;
+}) => {
+  const control = useRef<LinkControl | null>(null);
+  const [lengthMs, setLengthMs] = useState<number | null>(null);
+  const known = useRef(false);
+  // Nothing is said to a player before it is ready: TikTok's breaks for good.
+  const ready = useRef(false);
+  const until = useRef<number | null>(null);
+
+  const heardVolume = Math.round((state.settings.muted ? 0 : state.settings.volume / 100) * volume);
+  const heard = useRef(heardVolume);
+  heard.current = heardVolume;
+
+  const onReport = (report: LinkReport) => {
+    if (report.failed) onFailed('Cette vidéo ne veut pas se lancer ici. Son auteur l’interdit peut-être hors du site.');
+    if (report.ready) {
+      ready.current = true;
+      control.current?.setVolume(heard.current);
+    }
+    if (report.lengthMs !== undefined && report.lengthMs > 0 && !known.current) {
+      known.current = true;
+      const length = report.lengthMs;
+      setLengthMs(length);
+      const startMs = link.startMs < length ? link.startMs : 0;
+      if (!clip) onClip({ startMs, endMs: Math.min(length, startMs + MAX_CLIP_MS) });
+    }
+    if (report.timeMs !== undefined && until.current !== null && report.timeMs >= until.current) {
+      until.current = null;
+      control.current?.pause();
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!known.current) onFailed('Le site ne répond pas, ou c’est un direct. Essaie un autre lien.');
+    }, LINK_ANSWER_MS);
+    // TikTok only tells its length when asked to go somewhere, and doesn't hear it in its first instants.
+    const asking = setInterval(() => {
+      if (ready.current && !known.current) control.current?.seek(link.startMs);
+    }, LINK_ASK_LENGTH_MS);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(asking);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (ready.current) control.current?.setVolume(heardVolume);
+  }, [heardVolume]);
+
+  const seek = (ms: number) => {
+    until.current = null;
+    control.current?.pause();
+    control.current?.seek(ms);
+  };
+
+  const setStart = (startMs: number) => {
+    if (!clip) return;
+    const start = Math.min(startMs, Math.max(0, clip.endMs - MIN_DISPLAY_MS));
+    onClip({ startMs: start, endMs: Math.min(clip.endMs, start + MAX_CLIP_MS) });
+    seek(start);
+  };
+
+  const setEnd = (endMs: number) => {
+    if (!clip) return;
+    const end = Math.max(endMs, clip.startMs + MIN_DISPLAY_MS);
+    onClip({ startMs: Math.max(clip.startMs, end - MAX_CLIP_MS), endMs: end });
+    seek(end);
+  };
+
+  const preview = () => {
+    if (!clip) return;
+    until.current = clip.endMs;
+    control.current?.seek(clip.startMs);
+    control.current?.play();
+  };
+
+  return (
+    <>
+      <header className="draft-head">
+        <span className="kind-tile is-small">
+          <KindIcon kind={link.site === 'soundcloud' ? 'audio' : 'video'} size={16} />
+        </span>
+        <span className="draft-name" title={link.title} data-testid="draft-name">
+          {link.title}
+        </span>
+        <span className="count">{SITE_NAMES[link.site]}</span>
+        {!locked && (
+          <button type="button" className="pill quiet small" onClick={onRemove}>
+            Retirer
+          </button>
+        )}
+      </header>
+      <LivePreview state={state} caption={caption}>
+        <LinkFrame link={link} controls startMs={link.startMs} control={control} onReport={onReport} />
+      </LivePreview>
+      {failed && (
+        <p className="error" role="alert" data-testid="link-problem">
+          {failed}
+        </p>
+      )}
+      {clip && lengthMs !== null && lengthMs > MIN_DISPLAY_MS && (
+        <div className="link-times">
+          <label className="field">
+            <span className="field-line">
+              Début <strong className="mono" data-testid="clip-start">{formatTime(clip.startMs)}</strong>
+            </span>
+            <Slider value={clip.startMs} min={0} max={lengthMs} step={100} label="Début" onChange={setStart} />
+          </label>
+          <label className="field">
+            <span className="field-line">
+              Fin <strong className="mono" data-testid="clip-end">{formatTime(clip.endMs)}</strong>
+            </span>
+            <Slider value={clip.endMs} min={0} max={lengthMs} step={100} label="Fin" onChange={setEnd} />
+          </label>
+          {link.site === 'tiktok' ? (
+            <Switch checked={volume > 0} onChange={(on) => onVolume(on ? 100 : 0)}>
+              Son de la vidéo
+            </Switch>
+          ) : (
+            <label className="field">
+              <span className="field-line">
+                Volume <strong className="mono" data-testid="link-volume">{volume} %</strong>
+              </span>
+              <Slider value={volume} min={0} max={100} step={5} label="Volume" onChange={onVolume} />
+            </label>
+          )}
+          <button type="button" className="pill secondary small" onClick={preview}>
+            <IconPlay size={16} />
+            Prévisualiser <span className="mono">{formatTime(clip.endMs - clip.startMs)}</span>
+          </button>
+        </div>
+      )}
+    </>
+  );
+};
+
 const DraftRow = ({
   file,
   slot,
@@ -255,7 +421,10 @@ export const MediaScreen = ({
   active: boolean;
   onOpenLibrary: (category: 'image' | 'audio') => void;
 }) => {
-  const { picture, sound, leader, hasFiles, clip, unreadable, caption, displayMs, videoMuted, soundMuted } = files;
+  const { link, linkVolume, picture, sound, leader, hasFiles, clip, unreadable, caption, displayMs, videoMuted, soundMuted } = files;
+  const [linkProblem, setLinkProblem] = useState<string | null>(null);
+  const [soundSearch, setSoundSearch] = useState('');
+  useEffect(() => setLinkProblem(null), [link]);
   const [preview, setPreview] = useState<{ item: PlaybackView; startAt: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveName, setSaveName] = useState<string | null>(null);
@@ -270,10 +439,12 @@ export const MediaScreen = ({
 
   const isUploading = state.upload !== null;
   const advanced = scene.active;
-  const plays = advanced ? scene.leader !== null : leader !== null;
+  const plays = advanced ? scene.leader !== null : link !== null || leader !== null;
   const hasContent = advanced
     ? scene.layers.length > 0 && (!plays || scene.passage !== null)
-    : hasFiles
+    : link
+      ? clip !== null && linkProblem === null
+      : hasFiles
       ? !unreadable && (!plays || clip !== null)
       : caption.trim().length > 0;
   const selectedLayer = advanced ? (scene.layers.find(({ key }) => key === scene.selected) ?? null) : null;
@@ -291,6 +462,7 @@ export const MediaScreen = ({
     speak,
     withPicture: picture !== null,
     withSound: sound !== null,
+    link: link ? { site: link.site, id: link.id, title: link.title, volume: linkVolume } : null,
     ...(plays && clip
       ? { clipStartMs: clip.startMs, durationMs: Math.max(MIN_DISPLAY_MS, clip.endMs - clip.startMs) }
       : { clipStartMs: 0, durationMs: shownMs }),
@@ -310,7 +482,7 @@ export const MediaScreen = ({
 
   const lengthSeconds = (advanced ? sceneInput() : recipe()).durationMs / 1_000;
   const hasMusic = (advanced ? scene.sound : sound) !== null && !soundMuted;
-  const hasVideoSound = advanced ? scene.hasVideoSound : picture?.kind === 'video' && !videoMuted;
+  const hasVideoSound = advanced ? scene.hasVideoSound : link ? linkVolume > 0 : picture?.kind === 'video' && !videoMuted;
   const summary = [
     `${lengthSeconds.toLocaleString('fr', { maximumFractionDigits: 1 })} s`,
     hasMusic ? 'avec musique' : hasVideoSound ? 'avec le son de la vidéo' : 'sans son',
@@ -350,6 +522,7 @@ export const MediaScreen = ({
         videoMuted: input.videoMuted,
         soundMuted,
         speak: false,
+        link: null,
         scene: input.layers.map(({ fileId, ...layer }) => {
           const file = scene.fileOf(fileId);
           return { ...layer, kind: file?.kind === 'video' ? 'video' : 'image', url: file?.previewUrl ?? null };
@@ -510,6 +683,21 @@ export const MediaScreen = ({
               />
             )}
           </>
+        ) : link ? (
+          <LinkEditor
+            key={`${link.site}-${link.id}`}
+            link={link}
+            state={state}
+            caption={caption}
+            clip={clip}
+            onClip={files.setClip}
+            volume={linkVolume}
+            onVolume={files.setLinkVolume}
+            failed={linkProblem}
+            onFailed={setLinkProblem}
+            onRemove={() => files.setLink(null)}
+            locked={isUploading}
+          />
         ) : hasFiles ? (
           <>
             {picture && <DraftRow file={picture} slot="picture" locked={isUploading} onRemove={files.remove} />}
@@ -569,7 +757,27 @@ export const MediaScreen = ({
                 Musique de mon PC
               </button>
             </div>
+            <form
+              className="link-search"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void window.liveChat.searchSoundCloud(soundSearch);
+              }}
+            >
+              <input
+                className="input"
+                type="search"
+                aria-label="Chercher sur SoundCloud"
+                placeholder="Chercher un son sur SoundCloud"
+                value={soundSearch}
+                onChange={(event) => setSoundSearch(event.target.value)}
+              />
+              <button type="submit" className="pill secondary small" disabled={!soundSearch.trim()}>
+                Chercher
+              </button>
+            </form>
             <p className="hint draft-empty-next">Tu peux mettre les deux. 500 Mo maximum. Effacé du serveur après 1 jour.</p>
+            <p className="hint">Ou colle un lien YouTube, TikTok ou SoundCloud avec Ctrl+V.</p>
           </div>
         )}
       </section>
@@ -669,7 +877,7 @@ export const MediaScreen = ({
           )
         )}
 
-        {selectedLayer ? null : saveName !== null ? (
+        {selectedLayer || link ? null : saveName !== null ? (
           <form className="save-form" onSubmit={(event) => void save(event)}>
             <label className="field">
               <span>Nom de ce LiveChat</span>
@@ -703,7 +911,7 @@ export const MediaScreen = ({
             Sauvegarder dans la bibliothèque
           </button>
         )}
-        {saved && !selectedLayer && (
+        {saved && !selectedLayer && !link && (
           <p className="hint" role="status">
             Sauvegardé sur ce PC.
           </p>

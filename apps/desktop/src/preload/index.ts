@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
-import { IpcChannel, type AppState, type LiveChatApi } from '../shared/ipc';
+import { IpcChannel, type AppState, type IncomingResult, type LiveChatApi } from '../shared/ipc';
 
 const api: LiveChatApi = {
   getState: () => ipcRenderer.invoke(IpcChannel.GetState),
@@ -91,6 +91,14 @@ const api: LiveChatApi = {
   checkForUpdates: () => ipcRenderer.invoke(IpcChannel.CheckForUpdates),
   markNotesSeen: () => ipcRenderer.invoke(IpcChannel.MarkNotesSeen),
   stashView: (view) => ipcRenderer.invoke(IpcChannel.StashView, view),
+  searchSoundCloud: (query) => ipcRenderer.invoke(IpcChannel.SearchSoundCloud, query),
+  onLinkPicked: (listener) => {
+    const onPicked = (_event: unknown, result: IncomingResult) => listener(result);
+    ipcRenderer.on(IpcChannel.LinkPicked, onPicked);
+    return () => {
+      ipcRenderer.off(IpcChannel.LinkPicked, onPicked);
+    };
+  },
   stashDraft: (advanced, input) => ipcRenderer.invoke(IpcChannel.StashDraft, advanced, input),
   takeRestartStash: () => ipcRenderer.invoke(IpcChannel.TakeRestartStash),
 };

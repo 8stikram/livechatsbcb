@@ -20,6 +20,7 @@ import {
   mediaPartCount,
   type Account,
   type HistoryItem,
+  linkKindOf,
   type MediaDraft,
   type Member,
   type QueueItem,
@@ -48,6 +49,8 @@ type Admission = { ok: true; member: Credentials } | Refusal<'party_full'>;
 
 // Long enough for every PC to load a file it already has and be ready at the same moment.
 const START_LEAD_MS = 1_500;
+// A site's player has to load on every PC, so that it can start with the others.
+const LINK_START_LEAD_MS = 4_000;
 // How long a slow connection can hold up the others. Whoever isn't ready by then joins in progress.
 const MIN_PREPARE_MS = 15_000;
 const MAX_PREPARE_MS = 120_000;
@@ -521,13 +524,13 @@ export class Party extends DurableObject<Env> {
   }
 
   // Counts every try, sent or not. What makes it "the same" is what the others would see: its text and its files.
-  private mayNotSpam(memberId: string, { caption, files }: Pick<MediaDraft, 'caption' | 'files'>): boolean {
+  private mayNotSpam(memberId: string, { caption, files, link }: Pick<MediaDraft, 'caption' | 'files' | 'link'>): boolean {
     const now = Date.now();
     this.ctx.storage.sql.exec('DELETE FROM bans WHERE until <= ?', now);
     const [banned] = this.ctx.storage.sql.exec('SELECT 1 FROM bans WHERE member_id = ?', memberId).toArray();
     if (banned) return false;
 
-    const fingerprint = JSON.stringify([caption, files.map(({ name, size }) => [name, size])]);
+    const fingerprint = JSON.stringify([caption, files.map(({ name, size }) => [name, size]), link?.id ?? null]);
     this.ctx.storage.sql.exec('DELETE FROM send_log WHERE sent_at <= ?', now - SPAM_WINDOW_MS);
     const [row] = this.ctx.storage.sql
       .exec<{ total: number }>('SELECT COUNT(*) AS total FROM send_log WHERE member_id = ? AND fingerprint = ?', memberId, fingerprint)
@@ -570,7 +573,7 @@ export class Party extends DurableObject<Env> {
       senderId: sender.id,
       senderName: sender.name,
       senderAvatarUrl: sender.avatar_url,
-      kind: mediaKindOf(draft.files),
+      kind: draft.link ? linkKindOf(draft.link) : mediaKindOf(draft.files),
       caption: draft.caption,
       clipStartMs: draft.clipStartMs,
       durationMs: draft.durationMs,
@@ -578,6 +581,7 @@ export class Party extends DurableObject<Env> {
       soundMuted: draft.soundMuted,
       speak: draft.speak,
       scene: draft.scene,
+      link: draft.link,
       expiresAt: Date.now() + Number(this.env.MEDIA_RETENTION_MS),
     });
   }
@@ -686,7 +690,7 @@ export class Party extends DurableObject<Env> {
       const everyoneReady = [...this.onlineIds(leaving)].every((id) => ready.has(id));
 
       if (now >= deadline || everyoneReady) {
-        const startAt = now + START_LEAD_MS;
+        const startAt = now + ((JSON.parse(head.item) as StoredItem).link ? LINK_START_LEAD_MS : START_LEAD_MS);
         this.ctx.storage.sql.exec('UPDATE queue SET start_at = ? WHERE id = ?', startAt, head.id);
         this.remember(head, startAt);
         this.wakeAt(startAt + durationMs, leaving);

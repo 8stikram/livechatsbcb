@@ -4,6 +4,7 @@ import type {
   FileKind,
   GuildSummary,
   MediaKind,
+  MediaLink,
   Member,
   SceneLayer,
 } from '@livechatsbcb/protocol';
@@ -150,6 +151,8 @@ export type PlaybackView = {
   speak: boolean;
   // The advanced mode: what replaces the picture, each with its file. Null url until it has reached this PC.
   scene: SceneLayerView[] | null;
+  // Played by the site's own player instead of a file.
+  link: MediaLink | null;
 };
 
 export type SceneLayerView = Omit<SceneLayer, 'file'> & { kind: 'image' | 'video'; url: string | null };
@@ -188,6 +191,8 @@ export type HistoryView = {
   // Null until it is starred. Keeping says its files are on their way to this PC.
   favoriteId: string | null;
   keeping: boolean;
+  // Nothing to keep on this PC: only the site has it.
+  isLink: boolean;
 };
 
 // Played again on this PC alone. Null playback while the file is on its way.
@@ -209,9 +214,11 @@ export type SceneInput = {
   soundId: string | null;
 };
 export type LoadedScene = SceneInput & { files: SceneFile[] };
-export type IncomingError = 'too_large' | 'empty' | 'unsupported' | 'too_many' | 'bad_link' | 'not_found';
+export type IncomingError = 'too_large' | 'empty' | 'unsupported' | 'too_many' | 'bad_link' | 'not_found' | 'link_waiting' | 'link_gone' | 'link_blocked';
+// A video or a sound from a site, checked and ready to be prepared.
+export type LinkDraft = Omit<MediaLink, 'volume'> & { startMs: number };
 // What was pasted or came from Windows, ready in whichever editor is open.
-export type IncomingResult = { ok: true; drafts: DraftMedia[] } | { ok: true; scene: SceneFile[] } | { ok: false; error: IncomingError };
+export type IncomingResult = { ok: true; drafts: DraftMedia[] } | { ok: true; scene: SceneFile[] } | { ok: true; link: LinkDraft } | { ok: false; error: IncomingError };
 export type ExternalFiles =
   | { mode: 'prepare'; result: IncomingResult }
   | { mode: 'send'; leader: { kind: DraftMedia['kind']; url: string } }
@@ -327,6 +334,7 @@ export type SendMediaInput = {
   speak: boolean;
   withPicture: boolean;
   withSound: boolean;
+  link: MediaLink | null;
 };
 
 export type SaveLiveChatInput = SendMediaInput & { name: string };
@@ -354,6 +362,8 @@ export const IpcChannel = {
   PasteFiles: 'paste:files',
   PasteImage: 'paste:image',
   PasteLink: 'paste:link',
+  SearchSoundCloud: 'links:search-soundcloud',
+  LinkPicked: 'links:picked',
   ExternalFilesWaiting: 'external:waiting',
   TakeExternalFiles: 'external:take',
   SendExternalFiles: 'external:send',
@@ -469,6 +479,8 @@ export type LiveChatApi = {
   pasteFiles(paths: string[], advanced: boolean): Promise<IncomingResult>;
   pasteImage(bytes: Uint8Array, contentType: string, name: string, advanced: boolean): Promise<IncomingResult>;
   pasteLink(url: string, advanced: boolean): Promise<IncomingResult>;
+  searchSoundCloud(query: string): Promise<void>;
+  onLinkPicked(listener: (result: IncomingResult) => void): () => void;
   onExternalFiles(listener: () => void): () => void;
   takeExternalFiles(advanced: boolean): Promise<ExternalFiles | null>;
   sendExternalFiles(durationMs: number): Promise<ActionResult>;

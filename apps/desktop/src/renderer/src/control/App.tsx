@@ -32,10 +32,13 @@ const VIEW_ORDER: View[] = ['media', 'party', 'library', 'history', 'settings', 
 const SLIDE_PX = 18;
 const LAUNCH_MS = 860;
 
+import { findLink } from '../../../shared/links';
+
 const LINK = /^https?:\/\/\S+$/i;
 const MEDIA_LINK = /\.(png|jpe?g|gif|webp|mp4|m4v|mov|webm|mp3|ogg|opus|wav|m4a|flac)$/i;
 
 const looksLikeMedia = (link: string): boolean => {
+  if (findLink(link)) return true;
   try {
     return MEDIA_LINK.test(new URL(link).pathname);
   } catch {
@@ -129,7 +132,11 @@ export const App = () => {
     }
     setPicking(false);
     setChosenView('media');
-    if ('scene' in result) void scene.addIncoming(result.scene).then(setIncomingNote);
+    if ('link' in result) {
+      // The site's player plays alone, which is what the simple mode is for.
+      if (scene.active) scene.leave();
+      files.setLink(result.link);
+    } else if ('scene' in result) void scene.addIncoming(result.scene).then(setIncomingNote);
     else files.adoptAll(result.drafts);
   };
 
@@ -236,6 +243,10 @@ export const App = () => {
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
   });
+
+  const onPicked = useRef(bringIn);
+  onPicked.current = bringIn;
+  useEffect(() => window.liveChat.onLinkPicked((result) => onPicked.current(result)), []);
 
   const takeExternal = useRef<() => Promise<void>>(async () => {});
   takeExternal.current = async () => {

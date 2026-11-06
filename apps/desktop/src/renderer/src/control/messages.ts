@@ -66,7 +66,13 @@ export const incomingErrorMessage = (error: IncomingError): string => {
     case 'not_found':
       return 'Ce fichier n’est plus là.';
     case 'unsupported':
-      return 'Ce n’est pas une image, un GIF, une vidéo ou un son. YouTube et TikTok arriveront plus tard.';
+      return 'Ce n’est pas une image, un GIF, une vidéo ou un son.';
+    case 'link_waiting':
+      return 'Instagram et X ne se lancent pas tout seuls chez les autres. Pour l’instant : YouTube, TikTok ou SoundCloud.';
+    case 'link_gone':
+      return 'Cette vidéo ou ce son n’existe pas, ou n’est plus public.';
+    case 'link_blocked':
+      return 'Son auteur interdit de la lire ailleurs que sur le site.';
     default:
       return pickErrorMessage(error);
   }

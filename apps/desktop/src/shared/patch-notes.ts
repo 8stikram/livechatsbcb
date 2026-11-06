@@ -3,6 +3,17 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.17.0',
+    date: '6 novembre 2026',
+    items: [
+      'Colle un lien YouTube, TikTok ou SoundCloud : il passe chez tout le monde, dans le lecteur du site',
+      'Avant d’envoyer, tu vois la vidéo, et tu choisis le début, la fin et le volume',
+      'Une barre pour chercher un son sur SoundCloud, en bas de l’onglet LiveChat',
+      'En mode Avancé, tire un côté d’une image ou d’une vidéo pour l’étirer',
+      'Instagram et X attendent encore : leurs vidéos ne se lancent pas toutes seules',
+    ],
+  },
+  {
     version: '0.16.0',
     date: '2 novembre 2026',
     items: [

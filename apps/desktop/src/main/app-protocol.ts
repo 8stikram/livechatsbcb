@@ -15,6 +15,8 @@ const CONTENT_SECURITY_POLICY = [
   `media-src ${MEDIA_SCHEME}:`,
   `connect-src ${MEDIA_SCHEME}:`,
   "font-src 'self'",
+  // The official players of the sites a link can come from, and nothing else.
+  'frame-src https://www.youtube.com https://www.tiktok.com https://w.soundcloud.com',
   "base-uri 'none'",
   "form-action 'none'",
   "frame-ancestors 'none'",

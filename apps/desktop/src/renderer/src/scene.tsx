@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import type { SceneLayer } from '@livechatsbcb/protocol';
 import type { OverlayLayout, PlaybackView, SceneLayerView, Zone } from '../../shared/ipc';
 import { Avatar } from './Avatar';
+import { LinkPlayback } from './link-player';
 import { say, spokenText } from './speech';
 import { useSyncedMedia } from './use-synced-media';
 
@@ -257,7 +258,19 @@ export const Playing = ({
           <img className="overlay-media" src={item.mediaUrl} alt="" data-testid="overlay-image" />
         </div>
       )}
-      {!item.scene && item.kind === 'video' && (
+      {item.link && (
+        <div className={item.link.site === 'soundcloud' ? 'zone zone-media is-sound' : 'zone zone-media'} style={zoneStyle(layout.media)}>
+          <LinkPlayback
+            link={item.link}
+            clipStartMs={item.clipStartMs}
+            durationMs={item.durationMs}
+            startAt={startAt}
+            volume={volume}
+            onFailed={() => void window.liveChat.skipMediaForMe(item.id)}
+          />
+        </div>
+      )}
+      {!item.scene && !item.link && item.kind === 'video' && (
         <div className="zone zone-media" style={zoneStyle(layout.media)}>
           <SyncedMedia
             kind="video"
@@ -269,7 +282,7 @@ export const Playing = ({
           />
         </div>
       )}
-      {(item.kind === 'audio' || item.hasSound) && (
+      {!item.link && (item.kind === 'audio' || item.hasSound) && (
         <SyncedMedia
           kind="audio"
           url={item.hasSound ? item.soundUrl : item.mediaUrl}

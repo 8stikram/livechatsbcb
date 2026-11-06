@@ -11,6 +11,7 @@ import {
   MAX_FILE_NAME_LENGTH,
   MAX_MEDIA_BYTES,
   MediaDraftSchema,
+  MediaLinkSchema,
   SceneLayerSchema,
   fileKindOf,
   mediaKindOf,
@@ -22,6 +23,7 @@ import {
   type Member,
   type MediaContentType,
   type QueueItem,
+  type MediaLink,
   type SceneLayer,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
@@ -42,10 +44,14 @@ import { SessionStore } from './session-store';
 import { SettingsSchema, SettingsStore } from './settings-store';
 import { AppTray } from './tray';
 import { Updater } from './updater';
-import { createControlWindow, createStageWindow, denyAllPermissions, isOwnPage, openInBrowser, placeOverlay, type StartMode } from './windows';
+import { createControlWindow, createStageWindow, denyAllPermissions, introduceToPlayers, isOwnPage, openInBrowser, openSoundCloudSearch, placeOverlay, type StartMode } from './windows';
+import { checkLink } from './links';
+import { findLink } from '../shared/links';
 
 // Lets one PC run several members for testing; each profile has its own folder and its own single-instance lock.
 const profile = process.env['LIVECHATSBCB_PROFILE'];
+// For the tests: everything plays as usual, and nothing comes out of the speakers.
+if (process.env['LIVECHATSBCB_SILENT'] === '1') app.on('web-contents-created', (_event, contents) => contents.setAudioMuted(true));
 if (profile) app.setPath('userData', profile);
 
 registerAppScheme();
@@ -65,6 +71,7 @@ const SendMediaInputSchema = z.object({
   speak: z.boolean().default(false),
   withPicture: z.boolean(),
   withSound: z.boolean(),
+  link: MediaLinkSchema.nullable().default(null),
 });
 
 const WheelChoiceSchema = z.discriminatedUnion('kind', [
@@ -128,6 +135,7 @@ const takeRestartMode = (): StartMode | null => {
 
 function start(): void {
   denyAllPermissions();
+  introduceToPlayers();
   serveMediaFiles();
   if (!process.env['ELECTRON_RENDERER_URL']) serveRenderer();
 
@@ -193,13 +201,14 @@ function start(): void {
   // Files stay under the media they came with, which is the replay's own key when played on this PC alone.
   const playbackFiles = (
     key: string,
-    { files, scene }: Pick<QueueItem, 'files' | 'scene'>,
-  ): Pick<PlaybackView, 'fileName' | 'mediaUrl' | 'hasSound' | 'soundUrl' | 'scene'> => {
+    { files, scene, link }: Pick<QueueItem, 'files' | 'scene' | 'link'>,
+  ): Pick<PlaybackView, 'fileName' | 'mediaUrl' | 'hasSound' | 'soundUrl' | 'scene' | 'link'> => {
     const picture = pictureOf(files);
     const sound = soundOf(files);
     const urlOf = (file: QueueItem['files'][number] | null) => (file ? cache.urlOf(key, file.id) : null);
     return {
-      fileName: fileNamesOf(files),
+      fileName: link?.title ?? fileNamesOf(files),
+      link,
       mediaUrl: urlOf(picture ?? sound),
       hasSound: picture !== null && sound !== null,
       soundUrl: picture ? urlOf(sound) : null,
@@ -257,7 +266,8 @@ function start(): void {
     senderAvatarUrl: item.senderAvatarUrl,
     kind: item.kind,
     caption: item.caption,
-    fileName: fileNamesOf(item.files),
+    fileName: item.link?.title ?? fileNamesOf(item.files),
+    isLink: item.link !== null,
     playedAt: party.toLocalTime(item.playedAt),
     favoriteId: library.keptFrom(item.id)?.id ?? null,
     keeping: keeping.has(item.id),
@@ -696,6 +706,7 @@ function start(): void {
   type Timing = Pick<z.infer<typeof SendMediaInputSchema>, 'caption' | 'clipStartMs' | 'durationMs' | 'videoMuted' | 'soundMuted'> & {
     speak?: boolean;
     scene?: SceneLayer[] | null;
+    link?: MediaLink | null;
   };
 
   // What is on the stage of the advanced mode. Kept apart, so that going back to the simple mode finds its own files.
@@ -742,6 +753,7 @@ function start(): void {
           ...timing,
           speak: timing.speak ?? false,
           scene: timing.scene ?? null,
+          link: timing.link ?? null,
           files: files.map(({ contentType, size, name }) => ({ contentType, size, name: name.slice(0, MAX_FILE_NAME_LENGTH) })),
         }),
       controller.signal,
@@ -1032,8 +1044,23 @@ function start(): void {
 
   handle(IpcChannel.PasteLink, async (url: unknown, advanced: unknown): Promise<IncomingResult> => {
     if (typeof url !== 'string') return { ok: false, error: 'bad_link' };
+    const found = findLink(url);
+    if (found) return checkLink(found);
     const saved = await downloadLink(url);
     return saved.ok ? bringIn([saved.file], advanced === true) : saved;
+  });
+
+  handle(IpcChannel.SearchSoundCloud, (query: unknown) => {
+    if (typeof query !== 'string' || !query.trim()) return;
+    openSoundCloudSearch(query.trim().slice(0, 200), (url) => {
+      const found = findLink(url);
+      if (!found) return;
+      void checkLink(found).then((result) => {
+        if (controlWindow.isDestroyed()) return;
+        showControlWindow();
+        controlWindow.webContents.send(IpcChannel.LinkPicked, result);
+      });
+    });
   });
 
   // Windows starts the app once per selected file: the ones that arrive together make one LiveChat.
@@ -1612,7 +1639,8 @@ function start(): void {
     } else {
       const input = SendMediaInputSchema.safeParse(raw);
       if (input.success) {
-        const { withPicture, withSound, ...timing } = input.data;
+        // A link is quick to paste again, and has no file to come back with.
+        const { withPicture, withSound, link: _link, ...timing } = input.data;
         const chosen = [withPicture ? draft.picture : null, withSound ? draft.sound : null].filter((file) => file !== null);
         const files = chosen.map(({ path, name, size, contentType }) => ({ path, name, size, contentType }));
         stashed.recipe = { ...timing, files, scene: null };
@@ -1865,6 +1893,7 @@ function start(): void {
       soundMuted,
       speak,
       scene,
+      link: null,
       expiresAt: Number.MAX_SAFE_INTEGER,
       playedAt: savedAt,
     };

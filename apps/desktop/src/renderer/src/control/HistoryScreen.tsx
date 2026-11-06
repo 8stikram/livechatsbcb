@@ -171,8 +171,9 @@ const HistoryRow = ({
       </FitText>
     </span>
     <span className="history-actions">
-      <KeepStar item={item} onResult={onResult} />
-      <EditButton onEdit={onEdit} />
+      {/* A link stays on its site: there is nothing here to keep or to change. */}
+      {!item.isLink && <KeepStar item={item} onResult={onResult} />}
+      {!item.isLink && <EditButton onEdit={onEdit} />}
       <ReplayForMeButton
         replayState={replayState}
         busyPlaying={busyPlaying}

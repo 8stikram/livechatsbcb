@@ -2,7 +2,12 @@ import { release } from 'node:os';
 import { join } from 'node:path';
 import { BrowserWindow, nativeImage, nativeTheme, screen, session, shell } from 'electron';
 import { APP_ORIGIN } from './app-protocol';
+import { findLink } from '../shared/links';
 import iconPath from '../renderer/src/assets/logo.png?asset';
+
+const TIKTOK_ORIGIN = 'https://www.tiktok.com/';
+const APP_IDENTITY = 'https://livechatsbcb-party.livechatsbcb-party.workers.dev/';
+const SEARCH_TITLE = 'SoundCloud : clique sur le titre d’un son pour le choisir';
 
 const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
 
@@ -42,7 +47,54 @@ const lockDown = (window: BrowserWindow): void => {
 
 export const denyAllPermissions = (): void => {
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  // TikTok's player breaks when it is told everything is refused. Being asked for anything real still goes above.
+  session.defaultSession.setPermissionCheckHandler((_contents, _permission, origin) => origin === TIKTOK_ORIGIN);
+};
+
+// YouTube's player refuses to work unless it is told who it is playing for, and a page of the app sends nothing.
+export const introduceToPlayers = (): void => {
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['https://www.youtube.com/embed/*'] }, ({ requestHeaders }, callback) =>
+    callback({ requestHeaders: { ...requestHeaders, Referer: APP_IDENTITY } }),
+  );
+};
+
+const SOUNDCLOUD_HOST = /(^|\.)soundcloud\.com$/;
+let searchWindow: BrowserWindow | null = null;
+
+// The site's own search, in a window of its own, as its results can only be had with a paid account otherwise.
+export const openSoundCloudSearch = (query: string, onSound: (url: string) => void): void => {
+  searchWindow?.destroy();
+  const window = new BrowserWindow({
+    width: 960,
+    height: 720,
+    title: SEARCH_TITLE,
+    icon: nativeImage.createFromPath(iconPath),
+    backgroundColor: '#111111',
+    webPreferences: { partition: 'persist:soundcloud', contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true },
+  });
+  searchWindow = window;
+  window.removeMenu();
+  window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  window.on('page-title-updated', (event) => event.preventDefault());
+  window.on('closed', () => {
+    if (searchWindow === window) searchWindow = null;
+  });
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    openInBrowser(url);
+    return { action: 'deny' };
+  });
+  window.webContents.on('will-navigate', (event, url) => {
+    if (!SOUNDCLOUD_HOST.test(new URL(url).hostname)) event.preventDefault();
+  });
+  window.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  const onPage = (url: string) => {
+    if (findLink(url)?.found !== 'site') return;
+    onSound(url);
+    window.destroy();
+  };
+  window.webContents.on('did-navigate', (_event, url) => onPage(url));
+  window.webContents.on('did-navigate-in-page', (_event, url) => onPage(url));
+  void window.loadURL(`https://soundcloud.com/search/sounds?q=${encodeURIComponent(query)}`);
 };
 
 const secureWebPreferences = {
