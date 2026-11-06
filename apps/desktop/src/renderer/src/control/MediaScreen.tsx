@@ -1099,6 +1099,7 @@ export const MediaScreen = ({
           <button
             type="button"
             className={justSent ? 'pill primary is-sent' : 'pill primary'}
+            data-tour="send"
             disabled={!hasContent || !isOnline}
             onClick={() => void send()}
           >

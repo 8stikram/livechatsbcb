@@ -203,7 +203,11 @@ function start(): void {
   const restartStash = takeRestartStash();
   const stashed: RestartStash = { view: null, recipe: null };
   // Someone new starts on this version. Someone already logged in came from an older one, and gets told what changed.
-  if (settings.current.seenVersion === null && !store.login) settings.update({ seenVersion: app.getVersion() });
+  if (settings.current.seenVersion === null && !store.login) {
+    // The bubbles wait for the first party. The tests turn them on only when they look at them.
+    const tutorial = process.env['LIVECHATSBCB_SILENT'] !== '1' || process.env['LIVECHATSBCB_TUTORIAL'] === '1';
+    settings.update({ seenVersion: app.getVersion(), tutorialDone: !tutorial });
+  }
 
   const cache = new MediaCache(join(app.getPath('userData'), 'media-cache'), (mediaId) => {
     connection?.reportReady(mediaId);
@@ -755,6 +759,8 @@ function start(): void {
     link?: MediaLink | null;
     to?: string[];
     jump?: boolean;
+    // Counted for the « Plus envoyés » order of the library, never sent.
+    savedId?: string;
   };
 
   // What is on the stage of the advanced mode. Kept apart, so that going back to the simple mode finds its own files.
@@ -783,7 +789,7 @@ function start(): void {
     };
   };
 
-  const sendFiles = async (session: SessionResponse, files: SavedFile[], timing: Timing): Promise<ActionResult> => {
+  const sendFiles = async (session: SessionResponse, files: SavedFile[], { savedId, ...timing }: Timing): Promise<ActionResult> => {
     const controller = new AbortController();
     const online = connection?.current().status === 'online';
     const current = { name: files.map(({ name }) => name).join(' + ') || 'Texte', percent: 0, paused: !online, controller };
@@ -841,6 +847,7 @@ function start(): void {
       publishState();
       return result;
     }
+    library.countSent(files.map(({ path }) => path), savedId);
     publishState();
     return { ok: true };
   };
@@ -1202,6 +1209,13 @@ function start(): void {
     return library.view();
   });
 
+  handle(IpcChannel.SetLibraryTags, (target: unknown, tags: unknown) => {
+    const where = typeof target === 'object' && target !== null ? (target as Record<string, unknown>) : {};
+    if (typeof where.fileId === 'string') library.setFileTags(where.fileId, tags);
+    if (typeof where.savedId === 'string') library.setSavedTags(where.savedId, tags);
+    return library.view();
+  });
+
   handle(IpcChannel.UseLibraryFile, async (fileId: unknown) => {
     const file = typeof fileId === 'string' ? library.fileById(fileId) : null;
     const info = file && (await stat(file.path).catch(() => null));
@@ -1266,7 +1280,7 @@ function start(): void {
     const jump = settings.current.keyWhilePlaying === 'replace';
     if (target.kind === 'saved') {
       const saved = library.savedById(target.id);
-      if (saved && (await library.allThere(saved))) result = await sendFiles(session, saved.files, { ...saved, jump });
+      if (saved && (await library.allThere(saved))) result = await sendFiles(session, saved.files, { ...saved, jump, savedId: saved.id });
     } else {
       const info = await stat(target.path).catch(() => null);
       const contentType = contentTypeOf(target.path);
@@ -1600,7 +1614,7 @@ function start(): void {
     if (!saved || upload) return { ok: false, error: 'invalid_request' };
     // Never half of it: the button is already off, but a file can go missing while it is on screen.
     if (!(await library.allThere(saved))) return { ok: false, error: 'not_found' };
-    return sendFiles(session, saved.files, saved);
+    return sendFiles(session, saved.files, { ...saved, savedId: saved.id });
   });
 
   const loadRecipe = (saved: StashedRecipe) => {

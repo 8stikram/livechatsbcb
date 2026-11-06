@@ -33,6 +33,7 @@ export const SettingsSchema = z.object({
   note: z.string().max(MAX_NOTE_LENGTH),
   keyWhilePlaying: z.enum(['wait', 'replace']),
   excludedApps: z.array(z.string().min(1).max(100)).max(30),
+  tutorialDone: z.boolean(),
 });
 
 const settingsPath = () => join(app.getPath('userData'), 'settings.json');

@@ -12,7 +12,11 @@ import type { DraftFiles } from './use-draft';
 import type { Scene } from './use-scene';
 
 export type Category = 'image' | 'video' | 'audio' | 'saved';
-type Sort = 'date' | 'name' | 'type';
+type Sort = 'date' | 'sent' | 'name' | 'type';
+type Tagged = { name: string; favorite: boolean; tags: string[]; sentCount: number };
+
+const MAX_TAGS = 8;
+const MAX_TAG_LENGTH = 24;
 
 const CATEGORIES: Array<[Category, string]> = [
   ['image', 'Images'],
@@ -35,7 +39,7 @@ const extensionOf = (name: string): string => name.slice(name.lastIndexOf('.') +
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
 
-const sorted = <Item extends { name: string; favorite: boolean }>(
+const sorted = <Item extends Tagged>(
   items: Item[],
   sort: Sort,
   dateOf: (item: Item) => number,
@@ -45,6 +49,7 @@ const sorted = <Item extends { name: string; favorite: boolean }>(
     // What is pinned stays on top, whatever the order.
     if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
     if (sort === 'date') return dateOf(b) - dateOf(a);
+    if (sort === 'sent') return b.sentCount - a.sentCount || dateOf(b) - dateOf(a);
     if (sort === 'type') return typeOf(a).localeCompare(typeOf(b)) || byName(a, b);
     return byName(a, b);
   });
@@ -70,6 +75,71 @@ export const Star = ({ on, landing = false, onChange }: { on: boolean; landing?:
   );
 };
 
+// Typed under each media, then a click on one shows all those that have it.
+const Tags = ({ tags, onChange, onPick }: { tags: string[]; onChange: (tags: string[]) => void; onPick: (tag: string) => void }) => {
+  const [adding, setAdding] = useState(false);
+  const [text, setText] = useState('');
+
+  const add = () => {
+    const tag = text.replace(/^#+/, '').trim();
+    setText('');
+    if (tag) onChange([...tags, tag]);
+  };
+
+  return (
+    <span className="tag-line" data-testid="tags">
+      {tags.map((tag) => (
+        <span key={tag} className="tag-chip">
+          <button type="button" className="tag-name" title={`Voir tout ce qui a « ${tag} »`} onClick={() => onPick(tag)}>
+            #{tag}
+          </button>
+          <button
+            type="button"
+            className="tag-remove"
+            aria-label={`Retirer le tag ${tag}`}
+            title="Retirer"
+            onClick={() => onChange(tags.filter((other) => other !== tag))}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      {adding ? (
+        <input
+          className="input tag-input"
+          autoFocus
+          maxLength={MAX_TAG_LENGTH}
+          aria-label="Nouveau tag"
+          placeholder="tag, puis Entrée"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              add();
+            }
+            if (event.key === 'Escape') {
+              event.stopPropagation();
+              setText('');
+              setAdding(false);
+            }
+          }}
+          onBlur={() => {
+            add();
+            setAdding(false);
+          }}
+        />
+      ) : (
+        tags.length < MAX_TAGS && (
+          <button type="button" className="tag-add" title="Ajouter un tag" onClick={() => setAdding(true)}>
+            + tag
+          </button>
+        )
+      )}
+    </span>
+  );
+};
+
 const ShortcutBadge = ({ shortcut }: { shortcut: string | null }) =>
   shortcut && (
     <span className="shortcut-badge mono" title={`Raccourci : ${keyLabel(shortcut)}`} data-testid="shortcut-badge">
@@ -77,17 +147,21 @@ const ShortcutBadge = ({ shortcut }: { shortcut: string | null }) =>
     </span>
   );
 
+type TagProps = { onTags: (tags: string[]) => void; onPickTag: (tag: string) => void };
+
 const FileCard = ({
   file,
   onUse,
   onFavorite,
   onMenu,
+  onTags,
+  onPickTag,
 }: {
   file: LibraryFileView;
   onUse: () => void;
   onFavorite: (on: boolean) => void;
   onMenu: () => void;
-}) => (
+} & TagProps) => (
   <li className="library-card" data-testid="library-file" onContextMenu={onMenu}>
     <button type="button" className="library-picture" title={`Utiliser ${file.name}`} onClick={onUse}>
       {file.kind === 'image' ? (
@@ -103,6 +177,7 @@ const FileCard = ({
       <ShortcutBadge shortcut={file.shortcut} />
       <Star on={file.favorite} onChange={onFavorite} />
     </span>
+    <Tags tags={file.tags} onChange={onTags} onPick={onPickTag} />
   </li>
 );
 
@@ -113,6 +188,8 @@ const SoundRow = ({
   onUse,
   onFavorite,
   onMenu,
+  onTags,
+  onPickTag,
 }: {
   file: LibraryFileView;
   playing: boolean;
@@ -120,7 +197,7 @@ const SoundRow = ({
   onUse: () => void;
   onFavorite: (on: boolean) => void;
   onMenu: () => void;
-}) => (
+} & TagProps) => (
   <li className="history-row" data-testid="library-file" onContextMenu={onMenu}>
     <button
       type="button"
@@ -135,6 +212,7 @@ const SoundRow = ({
       <span className="row-title" title={file.name}>
         {file.name}
       </span>
+      <Tags tags={file.tags} onChange={onTags} onPick={onPickTag} />
     </span>
     <span className="history-actions">
       <ShortcutBadge shortcut={file.shortcut} />
@@ -157,6 +235,8 @@ const SavedRow = ({
   onFavorite,
   onDelete,
   onMenu,
+  onTags,
+  onPickTag,
 }: {
   saved: SavedView;
   canSend: boolean;
@@ -166,7 +246,7 @@ const SavedRow = ({
   onFavorite: (on: boolean) => void;
   onDelete: () => void;
   onMenu: () => void;
-}) => {
+} & TagProps) => {
   const missing = saved.files.filter((file) => file.missing).length;
   const parts = saved.files.map((file) => file.name).join(' + ') || `« ${saved.caption} »`;
 
@@ -192,6 +272,7 @@ const SavedRow = ({
             {parts}
           </span>
         )}
+        <Tags tags={saved.tags} onChange={onTags} onPick={onPickTag} />
       </span>
       <span className="history-actions">
         <ShortcutBadge shortcut={saved.shortcut} />
@@ -255,6 +336,7 @@ export const LibraryScreen = ({
   const [library, setLibrary] = useState<LibraryView | null>(null);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<Sort>('date');
+  const [tag, setTag] = useState<string | null>(null);
   const [shown, setShown] = useState(PAGE_SIZE);
   const [showFolders, setShowFolders] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -293,7 +375,7 @@ export const LibraryScreen = ({
     }
   }, [active]);
 
-  useEffect(() => setShown(PAGE_SIZE), [category, search, sort]);
+  useEffect(() => setShown(PAGE_SIZE), [category, search, sort, tag]);
 
   useEffect(() => {
     if (state.settings.clean) stopListening();
@@ -301,8 +383,15 @@ export const LibraryScreen = ({
 
   if (!library) return <section className="glass panel library" aria-label="Bibliothèque" />;
 
-  const needle = search.trim().toLocaleLowerCase('fr');
+  const needle = search.trim().replace(/^#+/, '').toLocaleLowerCase('fr');
   const matches = (name: string) => name.toLocaleLowerCase('fr').includes(needle);
+  // By name or by tag, and only what has the tag picked.
+  const shows = (item: Tagged, ...texts: string[]) =>
+    (tag === null || item.tags.includes(tag)) && (matches(item.name) || texts.some(matches) || item.tags.some(matches));
+  const tagFile = (file: LibraryFileView, tags: string[]) =>
+    void window.liveChat.setLibraryTags({ fileId: file.id }, tags).then(setLibrary);
+  const tagSaved = (saved: SavedView, tags: string[]) =>
+    void window.liveChat.setLibraryTags({ savedId: saved.id }, tags).then(setLibrary);
   const isOnline = canSendIn(state.party);
   const canSend = isOnline && state.upload === null;
 
@@ -435,13 +524,13 @@ export const LibraryScreen = ({
     category === 'saved'
       ? []
       : sorted(
-          library.files.filter((file) => file.kind === category && matches(file.name)),
+          library.files.filter((file) => file.kind === category && shows(file)),
           sort,
           (file) => file.modifiedAt,
           (file) => extensionOf(file.name),
         );
   const savedItems = sorted(
-    library.saved.filter((saved) => matches(saved.name) || matches(saved.caption)),
+    library.saved.filter((saved) => shows(saved, saved.caption)),
     sort,
     (saved) => saved.savedAt,
     (saved) => saved.kind,
@@ -472,8 +561,8 @@ export const LibraryScreen = ({
         <input
           className="input library-search"
           type="search"
-          aria-label="Rechercher par nom"
-          placeholder="Rechercher"
+          aria-label="Rechercher par nom ou tag"
+          placeholder="Nom ou tag"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
@@ -484,6 +573,7 @@ export const LibraryScreen = ({
           onChange={(event) => setSort(event.target.value as Sort)}
         >
           <option value="date">Récents</option>
+          <option value="sent">Plus envoyés</option>
           <option value="name">Nom</option>
           <option value="type">Type</option>
         </select>
@@ -496,6 +586,15 @@ export const LibraryScreen = ({
           Dossiers
         </button>
       </div>
+
+      {tag && (
+        <p className="tag-filter" role="status">
+          Seulement <span className="tag-chip is-on">#{tag}</span>
+          <button type="button" className="pill quiet small" onClick={() => setTag(null)}>
+            Tout voir
+          </button>
+        </p>
+      )}
 
       {showFolders && (
         <div className="library-manage">
@@ -567,9 +666,9 @@ export const LibraryScreen = ({
         </div>
       ) : nothing ? (
         <div className="history-empty">
-          <p className="draft-empty-title">{needle ? 'Rien à ce nom' : 'Rien ici pour l’instant'}</p>
+          <p className="draft-empty-title">{needle || tag ? 'Rien à ce nom' : 'Rien ici pour l’instant'}</p>
           <p className="hint">
-            {category === 'saved' && !needle
+            {category === 'saved' && !needle && !tag
               ? 'Prépare un LiveChat, puis sauvegarde-le avec un nom pour le renvoyer quand tu veux.'
               : 'Essaie une autre catégorie, ou ajoute un dossier.'}
           </p>
@@ -589,6 +688,8 @@ export const LibraryScreen = ({
                   onFavorite={(on) => void window.liveChat.setSavedFavorite(saved.id, on).then(setLibrary)}
                   onDelete={() => void window.liveChat.deleteSaved(saved.id).then(setLibrary)}
                   onMenu={() => void showSavedMenu(saved)}
+                  onTags={(tags) => tagSaved(saved, tags)}
+                  onPickTag={setTag}
                 />
               ))}
             </GlideList>
@@ -604,6 +705,8 @@ export const LibraryScreen = ({
                   onUse={() => void use(file)}
                   onFavorite={(on) => favorite(file, on)}
                   onMenu={() => void showFileMenu(file)}
+                  onTags={(tags) => tagFile(file, tags)}
+                  onPickTag={setTag}
                 />
               ))}
             </GlideList>
@@ -617,6 +720,8 @@ export const LibraryScreen = ({
                   onUse={() => void use(file)}
                   onFavorite={(on) => favorite(file, on)}
                   onMenu={() => void showFileMenu(file)}
+                  onTags={(tags) => tagFile(file, tags)}
+                  onPickTag={setTag}
                 />
               ))}
             </GlideList>

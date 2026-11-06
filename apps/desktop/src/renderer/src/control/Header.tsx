@@ -111,6 +111,7 @@ export const Header = ({
               role="tab"
               className={id === view ? 'tab is-active' : 'tab'}
               aria-selected={id === view}
+              data-tour={`tab-${id}`}
               onClick={() => onView(id)}
             >
               {label}

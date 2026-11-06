@@ -81,7 +81,7 @@ Jusqu'à 5 images et une vidéo, posées où tu veux sur l'écran. Déplace, agr
 
 ### Ranger ta bibliothèque
 
-Montre tes dossiers, et l'app trie toute seule tes images, tes vidéos et tes sons. Recherche, tri, favoris épinglés en haut. Un clic droit sur un fichier permet de l'envoyer tout de suite, de le renommer ou de le retrouver dans l'Explorateur.
+Montre tes dossiers, et l'app trie toute seule tes images, tes vidéos et tes sons. Recherche par nom ou par tag, tri (dont « Plus envoyés »), favoris épinglés en haut. Ajoute tes propres tags sous chaque média, et clique un tag pour ne voir que lui. Un clic droit sur un fichier permet de l'envoyer tout de suite, de le renommer ou de le retrouver dans l'Explorateur.
 
 </td>
 <td width="50%"><img src="docs/readme/library.webp" alt="La bibliothèque, avec une grille d'images et des favoris" /></td>
@@ -108,7 +108,7 @@ Donne un nom à un LiveChat réussi, et renvoie-le plus tard en un clic. Si un f
 - **Apps sans LiveChat :** choisis les apps où rien ne s'affiche jamais (Windows).
 - **L'historique de chacun :** clique sur un pote dans la party pour voir ce qu'il a envoyé.
 - **Ton volume à toi :** chacun règle le son et peut couper le sien.
-- **Envoi rapide :** Ctrl+V colle une image, une vidéo, un son, un lien direct, ou un lien YouTube, TikTok ou SoundCloud. Dans Windows, le clic droit sur un fichier propose « préparer » ou « envoyer direct ».
+- **Envoi rapide :** Ctrl+V colle une image, une vidéo, un son, un lien direct, ou un lien YouTube, TikTok ou SoundCloud. Dans Windows, le clic droit sur un fichier propose « préparer » ou « envoyer direct », dans « Afficher plus d'options ».
 - **Emojis et voix robot :** des emojis façon Discord dans ton texte, et une case pour le faire lire à voix haute. Chacun peut couper la voix chez lui.
 - **En plein jeu :** donne à tes LiveChats les touches que tu veux, ouvre la roue et vise avec la souris, Shift+F11 passe au suivant.
 - **Mode clean :** Shift+F12 coupe tout chez toi, son et image, jusqu'à ce que tu réappuies. La touche se change dans les réglages.

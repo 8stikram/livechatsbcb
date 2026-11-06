@@ -13,6 +13,10 @@ export const PATCH_NOTES: PatchNote[] = [
       'Un gros bouton Arrêter / Reprendre en haut de la Party : plus rien ne s’affiche chez toi',
       'Raccourcis : choisis si ta touche attend son tour ou passe le LiveChat en cours',
       'Apps sans LiveChat : choisis les apps où rien ne s’affiche jamais (Windows, dans Réglages)',
+      'Bibliothèque : ajoute des tags sous tes médias, clique un tag pour ne voir que lui, la recherche les trouve aussi',
+      'Bibliothèque : nouveau tri « Plus envoyés »',
+      'Des bulles de découverte au premier lancement, à revoir dans Réglages',
+      'Clic droit de Windows réparé : « LiveChatSBCB » est dans « Afficher plus d’options »',
     ],
   },
   {

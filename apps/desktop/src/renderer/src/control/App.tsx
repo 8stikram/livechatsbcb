@@ -18,6 +18,7 @@ import { NowBar } from './NowPlaying';
 import { PartyScreen } from './PartyScreen';
 import { ServerRail } from './ServerRail';
 import { SettingsScreen } from './SettingsScreen';
+import { Tour } from './Tour';
 import { UpdateBanner } from './UpdateBanner';
 import { useDraft } from './use-draft';
 import { useScene } from './use-scene';
@@ -391,7 +392,10 @@ export const App = () => {
         )}
         {state.settings.cleanKey !== null && state.unavailableKeys.includes(state.settings.cleanKey) && (
           <p className="banner is-error" role="status" data-testid="clean-key-taken">
-            Une autre app utilise déjà <span className="mono">{keyLabel(state.settings.cleanKey)}</span>. Choisis une autre touche pour le mode clean dans Réglages, Raccourcis.
+            {/* One piece of text: the banner spreads its parts apart. */}
+            <span>
+              Une autre app utilise déjà <span className="mono">{keyLabel(state.settings.cleanKey)}</span>. Choisis une autre touche pour Arrêter dans Réglages, Raccourcis.
+            </span>
           </p>
         )}
         {ownBan !== null && ownBan > Date.now() && (
@@ -513,6 +517,13 @@ export const App = () => {
     <>
       {launchLogo}
       {page}
+      {party && !showPicker && !state.settings.tutorialDone && (
+        <Tour
+          settings={state.settings}
+          onView={setChosenView}
+          onDone={() => void window.liveChat.setSettings({ tutorialDone: true })}
+        />
+      )}
       {dropping && (
         <div className="drop-veil" data-testid="drop-veil">
           Lâche ici

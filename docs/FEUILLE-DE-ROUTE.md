@@ -113,6 +113,10 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 - Écran Party refait : les membres en grand, le petit aperçu sur le côté, un gros bouton Arrêter / Reprendre
 - Raccourcis : au choix, ta touche attend son tour ou passe le LiveChat en cours
 - Apps sans LiveChat : choisis les apps où rien ne s'affiche (Windows)
+- Bibliothèque : tags sous les médias, filtre par tag, recherche par tag, tri « Plus envoyés »
+- Bulles de découverte au premier lancement, à revoir dans Réglages
+- Clic droit de Windows réparé, dans « Afficher plus d'options » (le menu court demande une signature payante)
+- Bandeau « Une autre app utilise déjà » : texte resserré
 
 ### 6. À surveiller
 
@@ -120,10 +124,7 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ### 7. Finitions
 
-- Bandeau « Une autre app utilise déjà » : le texte est trop espacé
-- Clic droit de Windows : les entrées n'apparaissent pas encore dans le vrai menu, à reprendre
-- Tags personnels dans la bibliothèque
-- Tuto au premier lancement, à passer et à rejouer depuis les réglages
+- Rien pour l'instant
 
 ### 8. Plus tard
 

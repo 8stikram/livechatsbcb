@@ -1773,6 +1773,22 @@ describe.skipIf(online)('party flow in the real app', () => {
     await cards.filter({ hasText: 'cowboy.png' }).getByRole('button', { name: 'Épingler en favori' }).click();
     await cards.filter({ hasText: 'cowboy.png' }).getByRole('button', { name: 'Retirer des favoris' }).waitFor();
 
+    // Tags: typed under the media, found by the search, and a click shows only those that have it.
+    const cowboy = cards.filter({ hasText: 'cowboy.png' });
+    await cowboy.getByRole('button', { name: '+ tag' }).click();
+    await cowboy.getByLabel('Nouveau tag').fill('Western');
+    await cowboy.getByLabel('Nouveau tag').press('Enter');
+    await cowboy.getByRole('button', { name: '#western' }).waitFor();
+    await host.control.getByLabel('Rechercher par nom').fill('#west');
+    await cowboy.waitFor();
+    await host.control.getByLabel('Rechercher par nom').fill('');
+    await cowboy.getByRole('button', { name: '#western' }).click();
+    await host.control.locator('.tag-filter').filter({ hasText: 'Seulement' }).waitFor();
+    await picture(host.control, 'library-tags.png');
+    await host.control.getByRole('button', { name: 'Tout voir' }).click();
+    await host.control.getByLabel('Trier').selectOption('sent');
+    await host.control.getByLabel('Rechercher par nom').fill('COWBOY');
+
 
     await host.control.getByRole('button', { name: 'Utiliser cowboy.png' }).click();
     await host.control.getByTestId('draft-name').filter({ hasText: 'cowboy.png' }).waitFor();
@@ -1794,6 +1810,12 @@ describe.skipIf(online)('party flow in the real app', () => {
     await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Le cowboy' }).waitFor();
     await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
+
+    // Counted for the « Plus envoyés » order: the saved LiveChat, and its file.
+    const counted = await host.control.evaluate(() => window.liveChat.scanLibrary());
+    expect(counted.saved.find(({ name }) => name === 'Mon cowboy')!.sentCount).toBe(1);
+    expect(counted.files.find(({ name }) => name === 'cowboy.png')!.sentCount).toBe(1);
+    expect(counted.files.find(({ name }) => name === 'cowboy.png')!.tags).toEqual(['western']);
 
     // Moved: said so, can't be sent, and showing the file again brings it back.
     const moved = join(sandbox, 'cowboy-range.png');
@@ -2081,6 +2103,23 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByTestId('stop-button').filter({ hasText: 'Reprendre' }).waitFor();
     await host.control.getByTestId('stop-button').click();
     await host.control.getByTestId('stop-button').filter({ hasText: 'Arrêter' }).waitFor();
+  });
+
+  it('shows the bubbles of the first launch again from the settings, one after the other', async () => {
+    await host.control.getByRole('button', { name: 'Réglages', exact: true }).click();
+    await host.control.getByRole('button', { name: 'Revoir la découverte' }).click();
+    const tour = host.control.getByTestId('tour');
+    await tour.filter({ hasText: 'Prépare un LiveChat' }).waitFor();
+    await picture(host.control, 'tour.png');
+    for (const title of ['Envoie', 'Ta party', 'Panique', 'Raccourcis']) {
+      await tour.getByRole('button', { name: 'Suivant' }).click();
+      await tour.filter({ hasText: title }).waitFor();
+    }
+    await picture(host.control, 'tour-last.png');
+    await tour.getByRole('button', { name: 'C’est parti' }).click();
+    await tour.waitFor({ state: 'detached' });
+    expect((await host.control.evaluate(() => window.liveChat.getState())).settings.tutorialDone).toBe(true);
+    await openTab(host, 'LiveChat');
   });
 
   it('runs a quick poll in the app, with anonymous votes', async () => {

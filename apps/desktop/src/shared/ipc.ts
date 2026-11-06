@@ -86,6 +86,8 @@ export type Settings = {
   keyWhilePlaying: 'wait' | 'replace';
   // Apps, by their process name in lower case, over which LiveChats never show on this PC.
   excludedApps: string[];
+  // The bubbles of the first launch were seen, or skipped. Settings can show them again.
+  tutorialDone: boolean;
 };
 
 export const DEFAULT_LAYOUT: OverlayLayout = {
@@ -108,6 +110,7 @@ export const DEFAULT_SETTINGS: Settings = {
   skipKey: ON_MAC ? 'Ctrl+Alt+-' : 'Shift+F11',
   skipMineKey: ON_MAC ? 'Ctrl+Alt+Shift+-' : 'Ctrl+Shift+F11',
   wheelKey: ON_MAC ? 'Ctrl+Alt+Space' : 'Ctrl+Shift+Space',
+  tutorialDone: true,
   speechEnabled: true,
   speechVoice: null,
   speechRate: 100,
@@ -257,6 +260,8 @@ export type LibraryFileView = {
   kind: FileKind;
   modifiedAt: number;
   favorite: boolean;
+  tags: string[];
+  sentCount: number;
 };
 
 export type SavedView = {
@@ -267,6 +272,8 @@ export type SavedView = {
   favorite: boolean;
   savedAt: number;
   kind: MediaKind;
+  tags: string[];
+  sentCount: number;
   files: Array<{ name: string; kind: FileKind; missing: boolean }>;
   thumbnailUrl: string | null;
 };
@@ -415,6 +422,7 @@ export const IpcChannel = {
   AddLibraryFolder: 'library:add-folder',
   RemoveLibraryFolder: 'library:remove-folder',
   SetLibraryFavorite: 'library:set-favorite',
+  SetLibraryTags: 'library:set-tags',
   UseLibraryFile: 'library:use-file',
   ShowLibraryFileMenu: 'library:file-menu',
   StartScene: 'scene:start',
@@ -480,6 +488,8 @@ export type LiveChatApi = {
   addLibraryFolder(): Promise<LibraryView | null>;
   removeLibraryFolder(path: string): Promise<LibraryView>;
   setLibraryFavorite(fileId: string, favorite: boolean): Promise<LibraryView>;
+  // A file of the folders, or a saved LiveChat.
+  setLibraryTags(target: { fileId: string } | { savedId: string }, tags: string[]): Promise<LibraryView>;
   useLibraryFile(fileId: string): Promise<{ ok: true; draft: DraftMedia } | { ok: false }>;
   startScene(): Promise<SceneFile[]>;
   pickSceneFile(wanted: 'picture' | 'sound'): Promise<SceneResult>;

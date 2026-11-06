@@ -23,6 +23,18 @@ const THUMBNAIL_SIZE = { width: 320, height: 180 };
 // What Windows refuses in a file name.
 const FORBIDDEN_NAME = /[<>:"/\\|?*\x00-\x1f]|[. ]$|^(con|prn|aux|nul|com\d|lpt\d)$/i;
 const MAX_NAME_LENGTH = 200;
+export const MAX_TAGS = 8;
+export const MAX_TAG_LENGTH = 24;
+
+// Small and alike, so that the same tag typed twice is one.
+export const cleanTags = (tags: unknown): string[] => {
+  if (!Array.isArray(tags)) return [];
+  const clean = tags
+    .filter((tag): tag is string => typeof tag === 'string')
+    .map((tag) => tag.replace(/^#+/, '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr').slice(0, MAX_TAG_LENGTH))
+    .filter(Boolean);
+  return [...new Set(clean)].slice(0, MAX_TAGS);
+};
 
 export const SavedFileSchema = z.object({ path: z.string(), name: z.string(), size: z.number(), contentType: MediaContentTypeSchema });
 export type SavedFile = z.infer<typeof SavedFileSchema>;
@@ -38,6 +50,8 @@ const SavedSchema = z.object({
   speak: z.boolean().default(false),
   favorite: z.boolean(),
   savedAt: z.number(),
+  tags: z.array(z.string()).default([]),
+  sentCount: z.number().default(0),
   files: z.array(SavedFileSchema),
   // Saved before the advanced mode existed: no scene.
   scene: z.array(SceneLayerSchema).nullable().default(null),
@@ -45,7 +59,7 @@ const SavedSchema = z.object({
   kept: z.object({ historyId: z.string(), senderName: z.string(), senderAvatarUrl: z.string().nullable() }).nullable().default(null),
 });
 export type SavedLiveChat = z.infer<typeof SavedSchema>;
-type NewSaved = Omit<SavedLiveChat, 'id' | 'favorite' | 'savedAt' | 'kept'>;
+type NewSaved = Omit<SavedLiveChat, 'id' | 'favorite' | 'savedAt' | 'kept' | 'tags' | 'sentCount'>;
 
 const ShortcutTargetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('saved'), id: z.string() }),
@@ -60,6 +74,9 @@ const StoredSchema = z.object({
   saved: z.array(SavedSchema),
   shortcuts: z.record(z.string(), ShortcutTargetSchema).default({}),
   wheel: z.array(ShortcutTargetSchema.nullable()).default([]),
+  // By path, like the favourites.
+  tags: z.record(z.string(), z.array(z.string())).default({}),
+  sent: z.record(z.string(), z.number()).default({}),
 });
 type Stored = z.infer<typeof StoredSchema>;
 
@@ -95,7 +112,7 @@ export class Library {
     try {
       return StoredSchema.parse(JSON.parse(readFileSync(this.storePath, 'utf8')));
     } catch {
-      return { folders: [], favorites: [], saved: [], shortcuts: {}, wheel: [] };
+      return { folders: [], favorites: [], saved: [], shortcuts: {}, wheel: [], tags: {}, sent: {} };
     }
   }
 
@@ -167,6 +184,8 @@ export class Library {
       modifiedAt,
       kind: fileKindOf(contentType),
       favorite: favorites.has(path),
+      tags: this.data.tags[path] ?? [],
+      sentCount: this.data.sent[path] ?? 0,
     }));
     return {
       folders,
@@ -196,6 +215,8 @@ export class Library {
       favorite: saved.favorite,
       savedAt: saved.savedAt,
       kind: mediaKindOf(saved.files),
+      tags: saved.tags,
+      sentCount: saved.sentCount,
       files,
       thumbnailUrl: this.thumbnailUrl(saved.id),
     };
@@ -346,6 +367,11 @@ export class Library {
       return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'not_found' : 'busy';
     }
     this.data.favorites = this.data.favorites.map((favorite) => (favorite === file.path ? path : favorite));
+    for (const record of [this.data.tags, this.data.sent] as Array<Record<string, unknown>>) {
+      if (!(file.path in record)) continue;
+      record[path] = record[file.path];
+      delete record[file.path];
+    }
     for (const target of Object.values(this.data.shortcuts)) {
       if (target.kind === 'file' && target.path === file.path) target.path = path;
     }
@@ -379,8 +405,32 @@ export class Library {
     this.save();
   }
 
+  setFileTags(id: string, tags: unknown): void {
+    const file = this.found.get(id);
+    if (!file) return;
+    const clean = cleanTags(tags);
+    if (clean.length > 0) this.data.tags[file.path] = clean;
+    else delete this.data.tags[file.path];
+    this.save();
+  }
+
+  setSavedTags(id: string, tags: unknown): void {
+    const saved = this.savedById(id);
+    if (!saved) return;
+    saved.tags = cleanTags(tags);
+    this.save();
+  }
+
+  // For the « Plus envoyés » order: files by their place, and a saved LiveChat as a whole.
+  countSent(paths: string[], savedId?: string): void {
+    for (const path of new Set(paths)) this.data.sent[path] = (this.data.sent[path] ?? 0) + 1;
+    const saved = savedId ? this.savedById(savedId) : null;
+    if (saved) saved.sentCount += 1;
+    this.save();
+  }
+
   async saveLiveChat(saved: NewSaved): Promise<void> {
-    await this.add({ ...saved, id: randomUUID(), favorite: false, savedAt: Date.now(), kept: null });
+    await this.add({ ...saved, id: randomUUID(), favorite: false, savedAt: Date.now(), kept: null, tags: [], sentCount: 0 });
   }
 
   private async add(saved: SavedLiveChat): Promise<void> {
@@ -396,7 +446,7 @@ export class Library {
   }
 
   async keepFromHistory(id: string, saved: NewSaved, kept: NonNullable<SavedLiveChat['kept']>): Promise<void> {
-    await this.add({ ...saved, id, favorite: true, savedAt: Date.now(), kept });
+    await this.add({ ...saved, id, favorite: true, savedAt: Date.now(), kept, tags: [], sentCount: 0 });
   }
 
   keptFrom(historyId: string): SavedLiveChat | null {

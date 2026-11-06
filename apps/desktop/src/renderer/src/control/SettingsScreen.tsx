@@ -215,6 +215,7 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
             type="button"
             className={id === section ? 'tab is-active' : 'tab'}
             aria-current={id === section ? 'page' : undefined}
+            data-tour={`settings-${id}`}
             onClick={() => setSection(id)}
           >
             {label}
@@ -250,6 +251,14 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
               Réduire les animations
             </Switch>
             <p className="hint">L'app devient plus calme. Ce qui s'affiche en jeu ne change pas.</p>
+          </section>
+
+          <section className="glass panel" aria-labelledby="tour-title">
+            <h2 id="tour-title">Découverte</h2>
+            <p className="hint">Les bulles du premier lancement, qui montrent les boutons principaux.</p>
+            <button type="button" className="pill secondary small" onClick={() => set({ tutorialDone: false })}>
+              Revoir la découverte
+            </button>
           </section>
 
           <section className="glass panel" aria-labelledby="startup-title">
