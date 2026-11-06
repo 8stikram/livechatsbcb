@@ -129,6 +129,58 @@ const useVoices = () => {
 
 const MAX_DURATION_CHOICES = [10, 15, 20, 30, 45, 60];
 
+// Over these apps, nothing shows and nothing plays on this PC. The others see it as usual.
+const ExcludedApps = ({ excluded }: { excluded: string[] }) => {
+  const [apps, setApps] = useState<Array<{ name: string; title: string }> | null>(null);
+  const [chosen, setChosen] = useState('');
+  const set = (excludedApps: string[]) => void window.liveChat.setSettings({ excludedApps });
+  const choices = (apps ?? []).filter(({ name }) => !excluded.includes(name));
+
+  return (
+    <section className="glass panel" aria-labelledby="excluded-title">
+      <h2 id="excluded-title">Apps sans LiveChat</h2>
+      {excluded.length > 0 && (
+        <div className="whisper-people" data-testid="excluded-apps">
+          {excluded.map((name) => (
+            <button key={name} type="button" className="chip is-on" title="Retirer" onClick={() => set(excluded.filter((other) => other !== name))}>
+              {name} ✕
+            </button>
+          ))}
+        </div>
+      )}
+      {apps === null ? (
+        <button type="button" className="pill secondary" data-testid="excluded-add" onClick={() => void window.liveChat.listApps().then(setApps)}>
+          Choisir une app
+        </button>
+      ) : (
+        <div className="field-line">
+          <select className="input" value={chosen} aria-label="App ouverte" data-testid="excluded-choice" onChange={(event) => setChosen(event.target.value)}>
+            <option value="">{choices.length > 0 ? 'Une app ouverte…' : 'Aucune autre app ouverte'}</option>
+            {choices.map(({ name, title }) => (
+              <option key={name} value={name}>
+                {name} · {title.slice(0, 50)}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="pill primary small"
+            disabled={!chosen}
+            onClick={() => {
+              set([...excluded, chosen]);
+              setChosen('');
+              setApps(null);
+            }}
+          >
+            Ajouter
+          </button>
+        </div>
+      )}
+      <p className="hint">Quand une de ces apps est devant, rien ne s’affiche ni ne s’entend chez toi. Ouvre l’app d’abord pour la voir dans la liste.</p>
+    </section>
+  );
+};
+
 const SECTIONS = [
   ['general', 'Général'],
   ['display', 'Affichage en jeu'],
@@ -237,6 +289,8 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
             </button>
             <p className="hint">Affiche une image et un texte de test sur ton écran. Les autres ne voient rien.</p>
           </section>
+
+          {!ON_MAC && <ExcludedApps excluded={settings.excludedApps} />}
 
           <section className="glass panel" aria-labelledby="limit-title">
             <h2 id="limit-title">Durée max</h2>

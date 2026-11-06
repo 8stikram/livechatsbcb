@@ -625,14 +625,27 @@ export class Party extends DurableObject<Env> {
       scene: draft.scene,
       link: draft.link,
       expiresAt: Date.now() + Number(this.env.MEDIA_RETENTION_MS),
-    });
+    }, draft.jump);
   }
 
-  private enqueueItem(item: StoredItem): void {
+  private enqueueItem(item: StoredItem, jump = false): void {
     const size = item.files.reduce((total, file) => total + file.size, 0);
     const prepareMs = size > 0 ? Math.min(MAX_PREPARE_MS, Math.max(MIN_PREPARE_MS, size / PREPARE_BYTES_PER_MS)) : 0;
+    let seq: number | null = null;
+    if (jump) {
+      // What plays stops, as when someone skips it, and this one takes the first place.
+      const head = this.queueRows()[0];
+      if (head?.start_at != null) {
+        const playing = JSON.parse(head.item) as StoredItem;
+        this.ctx.storage.sql.exec('DELETE FROM queue WHERE id = ?', head.id);
+        this.broadcastEach((id) => (this.sees(playing, id) ? { t: 'skipped', memberId: item.senderId, name: item.senderName } : null));
+      }
+      const [low] = this.ctx.storage.sql.exec<{ low: number | null }>('SELECT MIN(seq) AS low FROM queue').toArray();
+      if (low?.low != null) seq = low.low - 1;
+    }
     this.ctx.storage.sql.exec(
-      'INSERT INTO queue (id, item, prepare_ms, ready) VALUES (?, ?, ?, ?)',
+      'INSERT INTO queue (seq, id, item, prepare_ms, ready) VALUES (?, ?, ?, ?, ?)',
+      seq,
       item.id,
       JSON.stringify(item),
       Math.round(prepareMs),

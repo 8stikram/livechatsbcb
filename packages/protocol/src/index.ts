@@ -216,18 +216,24 @@ export const SceneLayerSchema = z.object({
   clipStartMs: z.number().int().min(0).max(24 * MAX_CLIP_MS).optional(),
   clipMs: z.number().int().min(MIN_DISPLAY_MS).max(MAX_CLIP_MS).optional(),
   muted: z.boolean().default(false),
+  // The player of the link, placed like a picture. Its file is then meaningless.
+  link: z.literal(true).optional(),
 });
 export type SceneLayer = z.infer<typeof SceneLayerSchema>;
 
 // From the back to the front. The same file can be there twice, and is only sent once.
 const SceneSchema = z.array(SceneLayerSchema).min(1).max(MAX_SCENE_PICTURES + MAX_SCENE_VIDEOS).nullable();
 
-const isValidScene = (scene: SceneLayer[], files: WithType[]): boolean => {
+const isValidScene = (all: SceneLayer[], files: WithType[], withLink: boolean): boolean => {
+  const links = all.filter((layer) => layer.link).length;
+  const scene = all.filter((layer) => !layer.link);
   const kindOfLayer = (layer: SceneLayer) => {
     const file = files[layer.file];
     return file ? fileKindOf(file.contentType) : null;
   };
   const kinds = scene.map(kindOfLayer);
+  // A link has its own sound and its own passage: only pictures go around it.
+  if (withLink ? links !== 1 || files.some(({ contentType }) => fileKindOf(contentType) !== 'image') : links !== 0) return false;
   const used = new Set(scene.map((layer) => layer.file));
   const unused = files.filter((file, index) => !used.has(index) && fileKindOf(file.contentType) !== 'audio');
   return (
@@ -238,7 +244,7 @@ const isValidScene = (scene: SceneLayer[], files: WithType[]): boolean => {
     kinds.filter((kind) => kind === 'video').length <= MAX_SCENE_VIDEOS &&
     files.filter(({ contentType }) => fileKindOf(contentType) === 'audio').length <= 1 &&
     // Blur is what costs the most on a PC that is playing.
-    scene.filter(({ blur }) => blur > 0).length <= 1
+    all.filter(({ blur }) => blur > 0).length <= 1
   );
 };
 
@@ -275,6 +281,8 @@ export const MediaDraftSchema = z
     link: MediaLinkSchema.nullable().default(null),
     // Only for these members, and nobody else ever knows. Empty is for everybody.
     to: z.array(z.string().min(1).max(64)).max(MAX_ONLINE_MEMBERS).default([]),
+    // Sent with a key during another one: that one stops for everybody, and this one plays at once.
+    jump: z.boolean().default(false),
     files: z
       .array(
         z.object({
@@ -286,10 +294,10 @@ export const MediaDraftSchema = z
       .max(MAX_MEDIA_FILES),
   })
   .refine((draft) => draft.files.length > 0 || draft.caption.length > 0 || draft.link !== null)
-  .refine(({ link, files, scene }) => link === null || (files.length === 0 && scene === null))
+  .refine(({ link, files, scene }) => link === null || scene !== null || files.length === 0)
   .refine((draft) => draft.files.reduce((total, { size }) => total + size, 0) <= MAX_MEDIA_BYTES)
-  .refine(({ scene, files }) => {
-    if (scene) return isValidScene(scene, files);
+  .refine(({ scene, files, ...draft }) => {
+    if (scene) return isValidScene(scene, files, draft.link !== null);
     // Two files are one to look at and one to listen to, never two of the same.
     return files.length <= 2 && (files.length < 2 || (pictureOf(files) !== null && soundOf(files) !== null));
   })

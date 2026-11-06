@@ -1457,7 +1457,7 @@ select.input {
 
 .scene-workspace {
   flex: 1;
-  min-height: 0;
+  min-height: 280px;
   display: flex;
   gap: 12px;
 }
@@ -3030,6 +3030,69 @@ html.overlay body {
   object-fit: fill;
 }
 
+.layer-link {
+  overflow: hidden;
+  border-radius: 8px;
+  background: #000;
+}
+
+.layer-link .link-frame.is-sound {
+  height: 100%;
+}
+
+/* Stands for the site's player while it is being placed: nothing plays on the board. */
+.scene-link-box {
+  display: grid;
+  place-content: center;
+  gap: 4px;
+  padding: 8px;
+  text-align: center;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  background: rgba(10, 10, 12, 0.82);
+  color: #fff;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.scene-link-box strong {
+  font-size: 12px;
+}
+
+.scene-link-box span {
+  font-size: 11px;
+  opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* One line under the board, so that the board keeps its room. */
+.link-editor-compact {
+  flex: none;
+  display: grid;
+  grid-template-columns: 168px 1fr;
+  gap: 6px 14px;
+  align-items: center;
+}
+
+.link-editor-compact > .error {
+  grid-column: 1 / -1;
+}
+
+.link-editor-compact .link-times {
+  gap: 4px;
+  padding: 0;
+}
+
+.link-editor-compact .link-frame-box {
+  width: 168px;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+}
+
 .link-frame {
   display: block;
   width: 100%;
@@ -3380,4 +3443,166 @@ html.live-pulse .avatar.has-ring.is-live,
 .history-from .input {
   width: auto;
   max-width: 170px;
+}
+
+/* The simple mode: what is seen and what is heard, in one frame */
+
+.draft-stack {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-inner);
+  background: var(--glass);
+  overflow: hidden;
+}
+
+.draft-stack > * {
+  min-height: 56px;
+  padding: 10px 14px;
+}
+
+.draft-stack > * + * {
+  border-top: 1px solid var(--line);
+}
+
+.draft-stack .draft-head {
+  padding: 10px 14px;
+}
+
+.draft-slot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.draft-slot-title {
+  flex: 1;
+  min-width: 90px;
+  color: var(--text-soft);
+}
+
+.draft-slot .link-search {
+  flex-basis: 100%;
+  width: 100%;
+  margin: 2px 0 0;
+}
+
+.draft-stack-hint {
+  margin: 4px 4px 0;
+}
+
+/* The party: the people first, what plays in small beside them */
+
+.party-grid {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+.party-main {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.party-main .rows {
+  gap: 12px;
+}
+
+.party-main .row.is-clickable {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 16px;
+}
+
+.party-main .row .pill.small {
+  flex: none;
+}
+
+.party-side {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.party-side > * {
+  flex: none;
+}
+
+.party-side .now {
+  gap: 10px;
+  padding: 10px;
+}
+
+.party-side .now-stage {
+  flex: none;
+  aspect-ratio: 16 / 9;
+}
+
+.party-side .now-empty {
+  padding: 12px;
+  font-size: 12.5px;
+}
+
+.party-side .now-empty-title {
+  font-size: 15px;
+}
+
+.party-side .now-pill {
+  top: 8px;
+  left: 8px;
+  height: 24px;
+  padding: 0 9px;
+  font-size: 11.5px;
+}
+
+.party-side .now-foot {
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.party-side .now-info {
+  flex-basis: 100%;
+}
+
+.party-side .now-controls {
+  flex-wrap: wrap;
+}
+
+.stop-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: var(--radius-panel);
+  transition: background-color var(--enter) var(--ease);
+}
+
+.stop-bar.is-stopped {
+  background: rgb(255 168 168 / 10%);
+}
+
+.stop-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.stop-title {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.stop-text .hint {
+  margin: 2px 0 0;
+}
+
+.stop-bar .pill {
+  flex: none;
+  min-width: 120px;
+}
+
+/* Its name is on the board, and the element's panel removes it. */
+.link-editor-compact .draft-head {
+  display: none;
 }

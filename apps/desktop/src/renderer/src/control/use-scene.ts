@@ -4,6 +4,10 @@ import type { EditedLayer, LoadedScene, SceneFile, SceneResult } from '../../../
 import { playLengthMs } from './play-length';
 
 export type Layer = EditedLayer & { key: string };
+
+// Stands for the player of the link: it has no file of its own.
+export const LINK_LAYER = 'link';
+const LINK_ASPECTS = { youtube: 16 / 9, tiktok: 9 / 16, soundcloud: 3 } as const;
 export type Clip = { startMs: number; endMs: number };
 
 type Stage = { layers: Layer[]; soundId: string | null };
@@ -73,6 +77,7 @@ export const useScene = () => {
       ? { clipStartMs: shownClip.startMs, durationMs: Math.max(MIN_DISPLAY_MS, shownClip.endMs - shownClip.startMs) }
       : null;
   const pictureCount = layers.filter((layer) => fileOf(layer.fileId)?.kind === 'image').length;
+  const hasLink = layers.some((layer) => layer.link);
 
   // A gesture counts as one step back, however many small changes it is made of.
   const change = (update: (current: Stage) => Stage, gesture: string | null = null) =>
@@ -91,6 +96,8 @@ export const useScene = () => {
   // Answers with what stands in the way, if anything.
   const add = async (file: SceneFile, known: SceneFile[], at?: { x: number; y: number }): Promise<string | null> => {
     if (totalSize(file, known) > MAX_MEDIA_BYTES) return 'Ça dépasse 500 Mo au total.';
+    // The link has its own sound and passage: only pictures go with it.
+    if (file.kind !== 'image' && stageNow.current.layers.some((layer) => layer.link)) return 'Avec un lien, ajoute seulement des images.';
     if (file.kind === 'audio') {
       change((current) => ({ ...current, soundId: file.id }));
       return null;
@@ -179,6 +186,39 @@ export const useScene = () => {
     sound: fileOf(soundId),
     pictureCount,
     hasVideo: videoLayers.length > 0,
+    hasLink,
+    // Placed like a picture, the first time. A link from another site keeps the place of the one before.
+    ensureLink: (site: keyof typeof LINK_ASPECTS): string | null => {
+      const existing = stageNow.current.layers.find((layer) => layer.link);
+      if (existing) {
+        if (existing.aspect !== LINK_ASPECTS[site]) updateLayer(existing.key, () => ({ aspect: LINK_ASPECTS[site] }));
+        return null;
+      }
+      if (videoLayers.length > 0 || soundId) return 'Retire d’abord les vidéos et le son : le lien a les siens.';
+      const key = crypto.randomUUID();
+      const layer: Layer = {
+        key,
+        fileId: LINK_LAYER,
+        link: true,
+        x: 50,
+        y: 45,
+        width: site === 'tiktok' ? 22 : 48,
+        aspect: LINK_ASPECTS[site],
+        rotation: 0,
+        flip: false,
+        grayscale: false,
+        blur: 0,
+        spinRpm: 0,
+        enter: 'none',
+        exit: 'none',
+        muted: false,
+      };
+      stageNow.current = { ...stageNow.current, layers: [...stageNow.current.layers, layer] };
+      change((current) => ({ ...current, layers: [...current.layers, layer] }));
+      setSelected(key);
+      return null;
+    },
+    dropLink: () => change((current) => ({ ...current, layers: current.layers.filter((layer) => !layer.link) })),
     hasVideoSound: videoLayers.some(({ muted }) => !muted),
     canUndo: timeline.past.length > 0,
     canRedo: timeline.future.length > 0,

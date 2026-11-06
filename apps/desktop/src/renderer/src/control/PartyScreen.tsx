@@ -233,10 +233,12 @@ const Members = ({
   state,
   party,
   onOpenHistory,
+  onWhisper,
 }: {
   state: AppState;
   party: PartyView;
   onOpenHistory: (memberId: string) => void;
+  onWhisper: (memberId: string) => void;
 }) => {
   const [error, setError] = useState<string | null>(null);
   const online = party.members.filter((member) => member.online).length;
@@ -278,7 +280,7 @@ const Members = ({
               }}
             >
               <Avatar
-                className={member.id === liveSender ? 'avatar has-ring is-live' : 'avatar'}
+                className={member.id === liveSender ? 'avatar is-large has-ring is-live' : 'avatar is-large'}
                 name={member.name}
                 url={member.avatarUrl}
                 testId="member-avatar"
@@ -309,11 +311,36 @@ const Members = ({
                   </span>
                 )}
               </span>
+              {member.online && member.id !== party.memberId && (
+                <button
+                  type="button"
+                  className="pill quiet small whisper-button"
+                  title={`Chuchoter un LiveChat à ${member.name}`}
+                  data-testid="member-whisper"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onWhisper(member.id);
+                  }}
+                >
+                  Chuchoter
+                </button>
+              )}
               {member.sentToday > 0 && (
-                <span className="day-count mono" title="LiveChats envoyés aujourd'hui" data-testid="member-today">
-                  {member.sentToday}
+                <span className="day-count" title="LiveChats envoyés aujourd'hui" data-testid="member-today">
+                  <span className="mono">{member.sentToday}</span> aujourd’hui
                 </span>
               )}
+              <button
+                type="button"
+                className="pill quiet small"
+                data-testid="member-history"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenHistory(member.id);
+                }}
+              >
+                Ses LiveChats
+              </button>
               {member.online && <span className="dot is-online" title="En ligne" />}
             </li>
           );
@@ -346,23 +373,46 @@ const Members = ({
   );
 };
 
+// Nothing shows and nothing is heard on this PC until it is pressed again. The same as the clean key, in plain sight.
+const StopBar = ({ stopped }: { stopped: boolean }) => (
+  <section className={stopped ? 'glass stop-bar is-stopped' : 'glass stop-bar'} aria-label="Arrêter" data-testid="stop-bar">
+    <div className="stop-text">
+      <p className="stop-title">{stopped ? 'Arrêté chez toi' : 'Les LiveChats s’affichent chez toi'}</p>
+      <p className="hint">{stopped ? 'Plus rien ne s’affiche ni ne s’entend sur ce PC. Les autres ne voient rien.' : 'Arrêter coupe tout sur ce PC seulement, jusqu’à Reprendre.'}</p>
+    </div>
+    <button
+      type="button"
+      className={stopped ? 'pill primary' : 'pill secondary'}
+      data-testid="stop-button"
+      onClick={() => void window.liveChat.setClean(!stopped)}
+    >
+      {stopped ? 'Reprendre' : 'Arrêter'}
+    </button>
+  </section>
+);
+
 export const PartyScreen = ({
   state,
   party,
   active,
   onOpenHistory,
+  onWhisper,
 }: {
   state: AppState;
   party: PartyView;
   active: boolean;
   onOpenHistory: (memberId: string) => void;
+  onWhisper: (memberId: string) => void;
 }) => (
   <div className="party-grid">
-    <NowCard current={state.queue.current} settings={state.settings} active={active} />
-    <aside className="party-side">
+    <div className="party-main">
+      <StopBar stopped={state.settings.clean} />
+      <Members state={state} party={party} onOpenHistory={onOpenHistory} onWhisper={onWhisper} />
+    </div>
+    <aside className="party-side scroll">
+      <NowCard current={state.queue.current} settings={state.settings} active={active} />
       <Upcoming upcoming={state.queue.upcoming} active={active} />
       <Polls poll={state.poll} active={active} />
-      <Members state={state} party={party} onOpenHistory={onOpenHistory} />
     </aside>
   </div>
 );

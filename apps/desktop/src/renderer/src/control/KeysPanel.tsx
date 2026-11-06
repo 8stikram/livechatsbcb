@@ -102,7 +102,29 @@ export const KeysPanel = ({ state }: { state: AppState }) => {
             ))}
           </div>
         )}
-        <p className="hint">Un petit son confirme l’envoi. Il faut attendre 3 secondes entre deux envois par touche.</p>
+        <div className="key-row">
+          <span className="key-row-name">Pendant un autre LiveChat, ma touche</span>
+          <div className="tabs" role="group" aria-label="Pendant un autre LiveChat">
+            <button
+              type="button"
+              className={settings.keyWhilePlaying === 'wait' ? 'tab is-active' : 'tab'}
+              aria-pressed={settings.keyWhilePlaying === 'wait'}
+              onClick={() => void window.liveChat.setSettings({ keyWhilePlaying: 'wait' })}
+            >
+              Attend son tour
+            </button>
+            <button
+              type="button"
+              className={settings.keyWhilePlaying === 'replace' ? 'tab is-active' : 'tab'}
+              aria-pressed={settings.keyWhilePlaying === 'replace'}
+              data-testid="key-replace"
+              onClick={() => void window.liveChat.setSettings({ keyWhilePlaying: 'replace' })}
+            >
+              Passe celui en cours
+            </button>
+          </div>
+        </div>
+        <p className="hint">« Passe celui en cours » l’arrête pour tout le monde, et le tien part tout de suite. La roue fait pareil. Un petit son confirme l’envoi. Il faut attendre 3 secondes entre deux envois par touche.</p>
       </section>
 
       <section className="glass panel" aria-labelledby="keys-tools-title">

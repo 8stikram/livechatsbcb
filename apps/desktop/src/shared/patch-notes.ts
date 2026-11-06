@@ -3,6 +3,19 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.18.0',
+    date: '6 novembre 2026',
+    items: [
+      'Mode simple plus clair : l’image et la musique dans un seul cadre',
+      'Mode avancé : un lien YouTube, TikTok ou SoundCloud se place et se redimensionne comme une image, avec du texte et des images autour',
+      'Un bouton Chuchoter à côté de chaque pote, dans la Party',
+      'Écran Party refait : les membres en grand, le petit aperçu sur le côté',
+      'Un gros bouton Arrêter / Reprendre en haut de la Party : plus rien ne s’affiche chez toi',
+      'Raccourcis : choisis si ta touche attend son tour ou passe le LiveChat en cours',
+      'Apps sans LiveChat : choisis les apps où rien ne s’affiche jamais (Windows, dans Réglages)',
+    ],
+  },
+  {
     version: '0.17.0',
     date: '6 novembre 2026',
     items: [

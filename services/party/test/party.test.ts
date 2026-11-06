@@ -373,6 +373,19 @@ describe('party service', () => {
       authorized(host),
     );
     expect(withFile.status).toBe(400);
+
+    // Placed like a picture in the advanced mode, with pictures around it, and nothing else that plays.
+    const place = { x: 50, y: 50, width: 40, aspect: 16 / 9, rotation: 0, flip: false, grayscale: false, blur: 0, spinRpm: 0, enter: 'none', exit: 'none' };
+    const image = { contentType: 'image/png', size: 10, name: 'a.png' };
+    const video = { contentType: 'video/mp4', size: 30, name: 'clip.mp4' };
+    const placed = (files: unknown[], scene: unknown[], withLink = true) =>
+      post(`/v1/parties/${host.partyId}/media`, { caption: '', clipStartMs: 0, durationMs: 5_000, link: withLink ? link : null, files, scene }, authorized(host));
+    expect((await placed([image], [{ ...place, file: 0 }, { ...place, file: 0, link: true }])).status).toBe(201);
+    expect((await placed([], [{ ...place, file: 0, link: true }])).status).toBe(201);
+    expect((await placed([image], [{ ...place, file: 0 }])).status).toBe(400);
+    expect((await placed([image], [{ ...place, file: 0 }, { ...place, file: 0, link: true }], false)).status).toBe(400);
+    expect((await placed([video], [{ ...place, file: 0, clipMs: 1_000 }, { ...place, file: 0, link: true }])).status).toBe(400);
+    expect((await placed([], [{ ...place, file: 0, link: true }, { ...place, file: 0, link: true }])).status).toBe(400);
     socket.close();
   });
 
@@ -932,6 +945,32 @@ describe('party service', () => {
     expect(members.find(({ id }) => id === guest.memberId)?.sentToday).toBe(1);
     expect(members.find(({ id }) => id === host.memberId)?.sentToday).toBe(0);
     for (const socket of sockets) socket.close();
+  });
+
+  it('lets a LiveChat sent with a key take the place of the one playing, ahead of the queue', async () => {
+    const host = await createParty();
+    const guest = await joinParty(host.code, 'Invite');
+    const hostSocket = new TestSocket(host);
+    const guestSocket = new TestSocket(guest);
+    await hostSocket.welcome();
+    await guestSocket.welcome();
+
+    await sendText(host, 'Long', 20_000);
+    await guestSocket.queueWhere((queue) => queue[0]?.caption === 'Long' && queue[0].startAt != null, 'the long one plays');
+    await sendText(host, 'Ensuite', 1_000);
+    const response = await post(
+      `/v1/parties/${guest.partyId}/media`,
+      { caption: 'Par touche', clipStartMs: 0, durationMs: 1_000, files: [], jump: true },
+      authorized(guest),
+    );
+    expect(response.status).toBe(201);
+
+    const queue = await hostSocket.queueWhere((list) => list[0]?.caption === 'Par touche', 'the key one first');
+    expect(queue.map(({ caption }) => caption)).toEqual(['Par touche', 'Ensuite']);
+    const told = await hostSocket.until(() => hostSocket.messages.find((message) => message.t === 'skipped'), 'who cut it');
+    expect(told).toMatchObject({ memberId: guest.memberId, name: 'Invite' });
+    hostSocket.close();
+    guestSocket.close();
   });
 
   it('shows what each member is up to, with their own words', async () => {

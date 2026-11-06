@@ -82,6 +82,10 @@ export type Settings = {
   seenVersion: string | null;
   // A few words the others see beside this member's name.
   note: string;
+  // A LiveChat key pressed while another one plays: it waits its turn, or takes the place of the one playing.
+  keyWhilePlaying: 'wait' | 'replace';
+  // Apps, by their process name in lower case, over which LiveChats never show on this PC.
+  excludedApps: string[];
 };
 
 export const DEFAULT_LAYOUT: OverlayLayout = {
@@ -111,6 +115,8 @@ export const DEFAULT_SETTINGS: Settings = {
   ignored: {},
   seenVersion: null,
   note: '',
+  keyWhilePlaying: 'wait',
+  excludedApps: [],
 };
 
 // The function keys of a Mac need fn as well, so it has its own keys.
@@ -162,7 +168,7 @@ export type PlaybackView = {
   link: MediaLink | null;
 };
 
-export type SceneLayerView = Omit<SceneLayer, 'file'> & { kind: 'image' | 'video'; url: string | null };
+export type SceneLayerView = Omit<SceneLayer, 'file'> & { kind: 'image' | 'video' | 'link'; url: string | null };
 
 // Starred in the history, and kept on this PC for as long as the star stays.
 export type FavoriteView = {
@@ -227,6 +233,7 @@ export type SceneInput = {
   soundId: string | null;
   // Who it is whispered to. Empty for everybody.
   to: string[];
+  link: MediaLink | null;
 };
 export type LoadedScene = SceneInput & { files: SceneFile[] };
 export type IncomingError = 'too_large' | 'empty' | 'unsupported' | 'too_many' | 'bad_link' | 'not_found' | 'link_waiting' | 'link_gone' | 'link_blocked';
@@ -329,6 +336,8 @@ export type AppState = {
   queue: QueueView;
   history: HistoryView[];
   poll: PollView | null;
+  // One of the excluded apps is in front: nothing shows or plays here until it isn't.
+  excludedNow: boolean;
   favorites: FavoriteView[];
   localReplay: LocalReplayView | null;
   upload: UploadView | null;
@@ -438,6 +447,7 @@ export const IpcChannel = {
   StashDraft: 'restart:stash-draft',
   TakeRestartStash: 'restart:take-stash',
   StartPoll: 'poll:start',
+  ListApps: 'apps:list',
   VotePoll: 'poll:vote',
   SoundLevel: 'stage:sound-level',
   LiveLevel: 'live:level',
@@ -526,6 +536,7 @@ export type LiveChatApi = {
   stashView(view: string): Promise<void>;
   stashDraft(advanced: boolean, input: unknown): Promise<void>;
   startPoll(question: string, options: string[]): Promise<void>;
+  listApps(): Promise<Array<{ name: string; title: string }>>;
   votePoll(pollId: string, choice: number): Promise<void>;
   // From the overlay: how loud what is playing is, from 0 to 1.
   reportLevel(level: number): void;

@@ -329,7 +329,7 @@ const answerDialogWith = (member: Member, path: string) =>
 const pickFile = async (member: Member, path: string): Promise<void> => {
   await openTab(member, 'LiveChat');
   await answerDialogWith(member, path);
-  await member.control.getByRole('button', { name: 'Depuis mon PC' }).click();
+  await member.control.getByRole('button', { name: 'Depuis mon PC' }).first().click();
 };
 
 const sendButton = (member: Member) => member.control.getByRole('button', { name: 'Envoyer à tout le monde' });
@@ -1386,6 +1386,31 @@ describe.skipIf(online)('party flow in the real app', () => {
     await overlayState(host, 'idle');
   });
 
+  it('places a YouTube link like a picture in the advanced mode, with a text around it', async () => {
+    await host.app.evaluate(({ clipboard }) => clipboard.writeText('https://youtu.be/jNQXAC9IVRw'));
+    await pasteIn(host);
+    await host.control.getByTestId('draft-name').filter({ hasText: 'zoo' }).waitFor({ timeout: 20_000 });
+    await host.control.getByRole('button', { name: 'Avancé', exact: true }).click();
+    await host.control.getByTestId('scene-link').filter({ hasText: 'YouTube' }).waitFor();
+    await host.control.getByTestId('link-compact').waitFor();
+    await host.control.getByTestId('clip-start').waitFor({ timeout: 30_000 });
+    await setRange(host, /^Fin$/, 4_000);
+    await host.control.getByTestId('clip-end').filter({ hasText: '0:04,0' }).waitFor();
+    await host.control.getByTestId('scene-layer').first().click();
+    await host.control.getByTestId('layer-panel').filter({ hasText: 'zoo' }).waitFor();
+    await host.control.getByRole('button', { name: 'Terminé' }).click();
+    await host.control.getByLabel('Texte à afficher (facultatif)').fill('Regarde ça');
+    await picture(host.control, 'link-advanced.png');
+    await sendButton(host).click();
+
+    await overlayState(guest, 'playing');
+    await guest.stage.getByTestId('overlay-link-layer').getByTestId('link-frame').waitFor({ state: 'attached' });
+    await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Regarde ça' }).waitFor();
+    await overlayState(guest, 'idle');
+    await overlayState(host, 'idle');
+    await host.control.getByRole('button', { name: 'Simple', exact: true }).click();
+  });
+
   it('prepares TikTok and SoundCloud links, and takes a sound picked in the SoundCloud search', async () => {
     await host.app.evaluate(({ clipboard }) => clipboard.writeText('https://www.tiktok.com/@scout2015/video/6718335390845095173'));
     await pasteIn(host);
@@ -1952,7 +1977,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     // The LiveChat tab sends you to the right shelf, and brings you back.
     await openTab(host, 'LiveChat');
     await picture(host.control, '17-livechat-choice.png');
-    await host.control.getByRole('button', { name: 'Depuis ma bibliothèque' }).click();
+    await host.control.getByRole('button', { name: 'Depuis ma bibliothèque' }).first().click();
     await expect(host.control.getByRole('button', { name: /^Images/ }).getAttribute('aria-pressed')).resolves.toBe('true');
     await host.control.getByRole('button', { name: 'Utiliser menu-image.png' }).click();
     await host.control.getByTestId('draft-name').filter({ hasText: 'menu-image.png' }).waitFor();
@@ -1963,7 +1988,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(2);
     await host.control.getByRole('button', { name: 'Retirer', exact: true }).first().click();
     await host.control.getByRole('button', { name: 'Retirer', exact: true }).first().click();
-    await host.control.getByRole('button', { name: 'Depuis mon PC' }).waitFor();
+    await host.control.getByRole('button', { name: 'Depuis mon PC' }).first().waitFor();
   });
 
   it('takes a music the same way as a picture, even with nothing else chosen', async () => {
@@ -1972,7 +1997,7 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await openTab(host, 'LiveChat');
     await picture(host.control, 'music-choice.png');
-    await host.control.getByRole('button', { name: 'Musique de ma bibliothèque' }).click();
+    await host.control.getByRole('group', { name: 'Ajouter une musique' }).getByRole('button', { name: 'Depuis ma bibliothèque' }).click();
     await expect(host.control.getByRole('button', { name: /^Sons/ }).getAttribute('aria-pressed')).resolves.toBe('true');
     await expect
       .poll(() => host.control.getByRole('button', { name: /^Sons/ }).evaluate((tab) => getComputedStyle(tab).backgroundColor))
@@ -1980,12 +2005,12 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await openTab(host, 'LiveChat');
     await answerDialogWith(host, music);
-    await host.control.getByRole('button', { name: 'Musique de mon PC' }).click();
+    await host.control.getByRole('group', { name: 'Ajouter une musique' }).getByRole('button', { name: 'Depuis mon PC' }).click();
     await host.control.getByTestId('draft-name').filter({ hasText: 'ma-musique.wav' }).waitFor();
     await host.control.getByRole('group', { name: 'Ajouter une image ou une vidéo' }).waitFor();
     await picture(host.control, 'music-only.png');
     await host.control.getByRole('button', { name: 'Retirer', exact: true }).first().click();
-    await host.control.getByRole('button', { name: 'Musique de mon PC' }).waitFor();
+    await host.control.getByRole('group', { name: 'Ajouter une musique' }).getByRole('button', { name: 'Depuis mon PC' }).waitFor();
   });
 
   it('skips for me or for everybody, and says who did', async () => {
@@ -2034,12 +2059,28 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await openTab(host, 'Party');
     await host.control.getByTestId('member').filter({ hasText: 'Nono' }).getByTestId('member-today').waitFor();
-    await host.control.getByTestId('member').filter({ hasText: 'Pote' }).click();
+    await host.control.getByTestId('member').filter({ hasText: 'Pote' }).getByTestId('member-history').click();
     await host.control.getByTestId('history-from').waitFor();
     await expect(host.control.getByTestId('history-from').locator('option:checked').textContent()).resolves.toBe('Pote');
     await expect(host.control.getByTestId('history-item').filter({ hasText: 'Rien que pour toi' }).count()).resolves.toBe(0);
     await host.control.getByTestId('history-from').selectOption({ label: 'Tout le monde' });
     await host.control.getByTestId('history-item').filter({ hasText: 'Rien que pour toi' }).first().waitFor();
+  });
+
+  it('whispers from the party in one click, and stops everything from its big button', async () => {
+    await openTab(host, 'Party');
+    await host.control.getByTestId('member').filter({ hasText: 'Pote' }).getByTestId('member-whisper').click();
+    await host.control.getByRole('button', { name: 'Chuchoter à Pote' }).waitFor();
+    await host.control.getByLabel('Texte à afficher').fill('Juste toi');
+    await host.control.getByRole('button', { name: 'Chuchoter à Pote' }).click();
+    await overlayState(guest, 'playing');
+    await overlayState(guest, 'idle');
+
+    await openTab(host, 'Party');
+    await host.control.getByTestId('stop-button').filter({ hasText: 'Arrêter' }).click();
+    await host.control.getByTestId('stop-button').filter({ hasText: 'Reprendre' }).waitFor();
+    await host.control.getByTestId('stop-button').click();
+    await host.control.getByTestId('stop-button').filter({ hasText: 'Arrêter' }).waitFor();
   });
 
   it('runs a quick poll in the app, with anonymous votes', async () => {

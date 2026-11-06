@@ -192,7 +192,20 @@ const PlayingLayer = ({
       {/* Three levels, as moving in, spinning and being placed each need a transform of their own. */}
       <div className="scene-motion" style={onScreen ? motionStyle(layer, shownMs) : undefined}>
         <div className="scene-motion" style={onScreen ? spinStyle(layer) : undefined}>
-          {layer.kind === 'image' ? (
+          {layer.kind === 'link' ? (
+            item.link && (
+              <div className="overlay-media layer-link" style={layerLook(layer)} data-testid="overlay-link-layer">
+                <LinkPlayback
+                  link={item.link}
+                  clipStartMs={item.clipStartMs}
+                  durationMs={item.durationMs}
+                  startAt={startAt}
+                  volume={volume}
+                  onFailed={() => void window.liveChat.skipMediaForMe(item.id)}
+                />
+              </div>
+            )
+          ) : layer.kind === 'image' ? (
             <img className="overlay-media" style={layerLook(layer)} src={layer.url ?? undefined} alt="" data-testid="overlay-image" />
           ) : (
             <SyncedMedia
@@ -328,7 +341,7 @@ export const Playing = ({
           <img className="overlay-media" src={item.mediaUrl} alt="" data-testid="overlay-image" />
         </div>
       )}
-      {item.link && (
+      {item.link && !item.scene && (
         <div className={item.link.site === 'soundcloud' ? 'zone zone-media is-sound' : 'zone zone-media'} style={zoneStyle(layout.media)}>
           <LinkPlayback
             link={item.link}

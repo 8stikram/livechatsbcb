@@ -102,6 +102,7 @@ const api: LiveChatApi = {
   stashDraft: (advanced, input) => ipcRenderer.invoke(IpcChannel.StashDraft, advanced, input),
   takeRestartStash: () => ipcRenderer.invoke(IpcChannel.TakeRestartStash),
   startPoll: (question, options) => ipcRenderer.invoke(IpcChannel.StartPoll, question, options),
+  listApps: () => ipcRenderer.invoke(IpcChannel.ListApps),
   votePoll: (pollId, choice) => ipcRenderer.invoke(IpcChannel.VotePoll, pollId, choice),
   reportLevel: (level) => ipcRenderer.send(IpcChannel.SoundLevel, level),
   onLiveLevel: (listener) => {

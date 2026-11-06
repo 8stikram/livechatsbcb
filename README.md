@@ -103,7 +103,9 @@ Donne un nom à un LiveChat réussi, et renvoie-le plus tard en un clic. Si un f
 - **Une file d'attente :** les envois passent l'un après l'autre, sans se couper. Tout le monde peut passer au suivant.
 - **Un historique :** rejoue un envoi pour tout le monde, ou revois-le juste pour toi. L'étoile garde un LiveChat marrant sur ton PC, pour le ressortir même des jours après.
 - **Vie de la party :** un contour vert autour de celui qui envoie, qui bouge avec le son. Un statut (en jeu, absent) et quelques mots à toi, le nombre de LiveChats du jour, et des sondages éclair de 30 secondes aux votes anonymes.
-- **Chuchoter :** envoie un LiveChat à un ou plusieurs potes seulement. Les autres ne voient rien.
+- **Chuchoter :** envoie un LiveChat à un ou plusieurs potes seulement. Les autres ne voient rien. Le bouton est aussi à côté de chaque pote, dans la party.
+- **Arrêter :** un gros bouton dans la party, et plus rien ne s'affiche chez toi jusqu'à Reprendre.
+- **Apps sans LiveChat :** choisis les apps où rien ne s'affiche jamais (Windows).
 - **L'historique de chacun :** clique sur un pote dans la party pour voir ce qu'il a envoyé.
 - **Ton volume à toi :** chacun règle le son et peut couper le sien.
 - **Envoi rapide :** Ctrl+V colle une image, une vidéo, un son, un lien direct, ou un lien YouTube, TikTok ou SoundCloud. Dans Windows, le clic droit sur un fichier propose « préparer » ou « envoyer direct ».

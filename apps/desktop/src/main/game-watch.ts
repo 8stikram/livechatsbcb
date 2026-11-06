@@ -32,15 +32,15 @@ while ($true) {
       [void][LcWin]::GetWindowRect($window, [ref]$rect)
       $info = New-Object LcWin+MonitorInfo
       $info.Size = [Runtime.InteropServices.Marshal]::SizeOf($info)
+      $full = 0
       if ([LcWin]::GetMonitorInfo([LcWin]::MonitorFromWindow($window, 2), [ref]$info)) {
         $screen = $info.Monitor
-        if ($rect.Left -le $screen.Left -and $rect.Top -le $screen.Top -and $rect.Right -ge $screen.Right -and $rect.Bottom -ge $screen.Bottom) {
-          $id = 0
-          [void][LcWin]::GetWindowThreadProcessId($window, [ref]$id)
-          $process = Get-Process -Id $id -ErrorAction SilentlyContinue
-          if ($process) { $out = $process.ProcessName }
-        }
+        if ($rect.Left -le $screen.Left -and $rect.Top -le $screen.Top -and $rect.Right -ge $screen.Right -and $rect.Bottom -ge $screen.Bottom) { $full = 1 }
       }
+      $id = 0
+      [void][LcWin]::GetWindowThreadProcessId($window, [ref]$id)
+      $process = Get-Process -Id $id -ErrorAction SilentlyContinue
+      if ($process) { $out = $process.ProcessName + [char]9 + $full }
     }
   } catch {}
   [Console]::Out.WriteLine($out)
@@ -49,9 +49,36 @@ while ($true) {
 }
 `;
 
+// The apps with a window open now, for choosing where LiveChats never show.
+export const openApps = (): Promise<Array<{ name: string; title: string }>> =>
+  new Promise((done) => {
+    if (process.platform !== 'win32') return done([]);
+    const script = "Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } | ForEach-Object { $_.ProcessName + [char]9 + $_.MainWindowTitle }";
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+    let out = '';
+    child.stdout?.setEncoding('utf8');
+    child.stdout?.on('data', (chunk: string) => (out += chunk));
+    child.on('error', () => done([]));
+    child.on('close', () => {
+      const seen = new Map<string, string>();
+      for (const line of out.split(/\r?\n/)) {
+        const [name, ...title] = line.split('\t');
+        const key = name?.trim().toLowerCase();
+        if (key && !seen.has(key) && key !== 'livechatsbcb' && key !== 'electron') seen.set(key, title.join('\t').trim());
+      }
+      done([...seen].map(([name, title]) => ({ name, title })).sort((a, b) => a.name.localeCompare(b.name)));
+    });
+  });
+
 export class GameWatch {
   private child: ChildProcess | null = null;
   private playing = false;
+  private front: string | null = null;
+
+  // The app in front, in lower case. Null when unknown.
+  get foreground(): string | null {
+    return this.front;
+  }
 
   constructor(private readonly onChange: () => void) {}
 
@@ -75,12 +102,15 @@ export class GameWatch {
       const lines = pending.split(/\r?\n/);
       pending = lines.pop() ?? '';
       const last = lines.at(-1)?.trim();
-      if (last !== undefined) this.set(last !== '-' && last !== '' && !NOT_GAMES.has(last.toLowerCase()));
+      if (last === undefined) return;
+      const [name, full] = last.split('\t');
+      const front = name && name !== '-' ? name.toLowerCase() : null;
+      this.set(front !== null && full === '1' && !NOT_GAMES.has(front), front);
     });
     child.on('error', () => this.stop());
     child.on('exit', () => {
       if (this.child === child) this.child = null;
-      this.set(false);
+      this.set(false, null);
     });
   }
 
@@ -88,12 +118,13 @@ export class GameWatch {
     const child = this.child;
     this.child = null;
     child?.kill();
-    this.set(false);
+    this.set(false, null);
   }
 
-  private set(playing: boolean): void {
-    if (playing === this.playing) return;
+  private set(playing: boolean, front: string | null): void {
+    if (playing === this.playing && front === this.front) return;
     this.playing = playing;
+    this.front = front;
     this.onChange();
   }
 }

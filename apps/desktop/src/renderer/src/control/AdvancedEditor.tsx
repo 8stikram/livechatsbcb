@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent } from 'react';
 import { MAX_SCENE_PICTURES, type SceneLayer } from '@livechatsbcb/protocol';
-import type { AppState, LibraryFileView, PlaybackView } from '../../../shared/ipc';
+import type { AppState, LibraryFileView, LinkDraft, PlaybackView } from '../../../shared/ipc';
 import { Caption, Playing, Profile, ScreenPreview, layerLook, layerPlace } from '../scene';
 import { KindIcon } from './icons';
 import { Slider } from './NowPlaying';
@@ -42,7 +42,9 @@ const Handles = ({ onGrip }: { onGrip: (grip: Grip, event: PointerEvent) => void
 );
 
 // Where you place things, at the proportions of the screen. Everything is in percent of it, as on the overlay.
-const EditingStage = ({ scene, state, caption }: { scene: Scene; state: AppState; caption: string }) => {
+const SITE_NAMES: Record<LinkDraft['site'], string> = { youtube: 'YouTube', tiktok: 'TikTok', soundcloud: 'SoundCloud' };
+
+const EditingStage = ({ scene, state, caption, link }: { scene: Scene; state: AppState; caption: string; link: LinkDraft | null }) => {
   const box = useRef<HTMLDivElement>(null);
   const gesture = useRef(0);
   const [error, setError] = useState<string | null>(null);
@@ -168,10 +170,15 @@ const EditingStage = ({ scene, state, caption }: { scene: Scene; state: AppState
                 className={isSelected ? 'scene-layer is-selected' : 'scene-layer'}
                 style={layerPlace(layer)}
                 data-testid="scene-layer"
-                data-name={file?.name}
+                data-name={layer.link ? link?.title : file?.name}
                 onPointerDown={(event) => startGrip(layer, 'move', event)}
               >
-                {file?.kind === 'video' ? (
+                {layer.link ? (
+                  <div className="overlay-media scene-link-box" style={layerLook(layer)} data-testid="scene-link">
+                    <strong>{link ? SITE_NAMES[link.site] : 'Lien'}</strong>
+                    <span>{link?.title}</span>
+                  </div>
+                ) : file?.kind === 'video' ? (
                   <video
                     ref={(element) => scene.registerVideo(layer.key, element)}
                     className="overlay-media"
@@ -286,6 +293,7 @@ export const SceneBoard = ({
   preview,
   onError,
   onStopPreview,
+  link,
 }: {
   scene: Scene;
   state: AppState;
@@ -293,6 +301,7 @@ export const SceneBoard = ({
   preview: { item: PlaybackView; startAt: number } | null;
   onError: (message: string | null) => void;
   onStopPreview: () => void;
+  link: LinkDraft | null;
 }) => {
   const [showLibrary, setShowLibrary] = useState(true);
 
@@ -333,11 +342,11 @@ export const SceneBoard = ({
               </button>
             </>
           ) : (
-            <EditingStage scene={scene} state={state} caption={caption} />
+            <EditingStage scene={scene} state={state} caption={caption} link={link} />
           )}
         </ScreenPreview>
 
-        {!scene.sound && (
+        {!scene.sound && !scene.hasLink && (
           <div className="draft-add" role="group" aria-label="Ajouter un son">
             <span className="hint">Ajouter un son</span>
             <button type="button" className="pill quiet small" onClick={() => setShowLibrary(true)}>
@@ -371,8 +380,9 @@ const SPINS: Array<[number, string]> = [
 const nameOf = <Value,>(options: Array<[Value, string]>, value: Value) => options.find(([option]) => option === value)?.[1] ?? '';
 
 // Follows what is selected: nothing is on screen that doesn't concern it.
-export const LayerPanel = ({ scene, layer }: { scene: Scene; layer: Layer }) => {
+export const LayerPanel = ({ scene, layer, link, onRemoveLink }: { scene: Scene; layer: Layer; link: LinkDraft | null; onRemoveLink: () => void }) => {
   const file = scene.fileOf(layer.fileId);
+  const name = layer.link ? link?.title : file?.name;
   const index = scene.layers.findIndex(({ key }) => key === layer.key);
   const blurTaken = scene.layers.some(({ key, blur }) => key !== layer.key && blur > 0);
   const canCopy = file?.kind === 'image' && scene.pictureCount < MAX_SCENE_PICTURES;
@@ -389,8 +399,8 @@ export const LayerPanel = ({ scene, layer }: { scene: Scene; layer: Layer }) => 
 
   return (
     <div className="layer-panel scroll" data-testid="layer-panel">
-      <p className="row-title" title={file?.name}>
-        {file?.name}
+      <p className="row-title" title={name}>
+        {name}
       </p>
       <div className="layer-actions">
         <button type="button" className="pill quiet small" aria-pressed={layer.flip} onClick={() => set({ flip: !layer.flip })}>
@@ -472,7 +482,14 @@ export const LayerPanel = ({ scene, layer }: { scene: Scene; layer: Layer }) => 
       </details>
 
       <div className="field-line">
-        <button type="button" className="pill quiet small" onClick={() => scene.removeLayer(layer.key)}>
+        <button
+          type="button"
+          className="pill quiet small"
+          onClick={() => {
+            scene.removeLayer(layer.key);
+            if (layer.link) onRemoveLink();
+          }}
+        >
           Retirer
         </button>
         <button type="button" className="pill secondary small" onClick={() => scene.setSelected(null)}>

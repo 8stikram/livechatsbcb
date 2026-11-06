@@ -67,6 +67,7 @@ export const App = () => {
   const [chosenView, setChosenView] = useState<View>('media');
   // Whose LiveChats the history shows. Null for everybody's.
   const [historyFrom, setHistoryFrom] = useState<string | null>(null);
+  const [whisperTo, setWhisperTo] = useState<string[]>([]);
 
   // The ring around whoever sent what plays moves with what the overlay hears, without drawing the app again.
   useEffect(
@@ -146,9 +147,10 @@ export const App = () => {
     setPicking(false);
     setChosenView('media');
     if ('link' in result) {
-      // The site's player plays alone, which is what the simple mode is for.
-      if (scene.active) scene.leave();
-      files.setLink(result.link);
+      // In the advanced mode, its player becomes an element to place like a picture.
+      const problem = scene.active ? scene.ensureLink(result.link.site) : null;
+      if (problem) setIncomingNote(problem);
+      else files.setLink(result.link);
     } else if ('scene' in result) void scene.addIncoming(result.scene).then(setIncomingNote);
     else files.adoptAll(result.drafts);
   };
@@ -449,6 +451,10 @@ export const App = () => {
                   setHistoryFrom(memberId);
                   setChosenView('history');
                 }}
+                onWhisper={(memberId) => {
+                  setWhisperTo([memberId]);
+                  setChosenView('media');
+                }}
               />
             ) : (
               <p className="glass empty" data-testid="no-party">
@@ -464,6 +470,8 @@ export const App = () => {
                   files={files}
                   scene={scene}
                   active={view === 'media' && !showPicker}
+                  whisperTo={whisperTo}
+                  onWhisperTo={setWhisperTo}
                   onOpenLibrary={(category) => {
                     setLibraryCategory(category);
                     setChosenView('library');

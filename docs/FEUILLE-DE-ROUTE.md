@@ -105,12 +105,14 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
-### Retours notés le 6 novembre (place à choisir)
+### Prête, pas encore publiée : 0.18.0 (plus clair)
 
-- **Fenêtre d'exclusion :** pouvoir aussi la choisir, si possible (à préciser)
-- **Raccourcis :** ils ne marchent pas bien. Quand un LiveChat passe, le raccourci doit prendre l'avantage (la suite est à préciser)
-- **Mode clean :** le remplacer par un mode « Arrêter » sur l'accueil, pour que plus rien ne s'affiche
-- **Écran Party à revoir :** le grand écran ne sert à rien. Mettre la party en priorité, avec le petit aperçu sur le côté, le mode clean, la liste des gens connectés et ce qu'on peut faire avec eux
+- Mode simple : image et musique dans un seul cadre
+- Mode avancé : un lien YouTube, TikTok ou SoundCloud se place et se redimensionne comme une image, avec texte et images autour
+- Bouton Chuchoter à côté de chaque pote dans la Party
+- Écran Party refait : les membres en grand, le petit aperçu sur le côté, un gros bouton Arrêter / Reprendre
+- Raccourcis : au choix, ta touche attend son tour ou passe le LiveChat en cours
+- Apps sans LiveChat : choisis les apps où rien ne s'affiche (Windows)
 
 ### 6. À surveiller
 

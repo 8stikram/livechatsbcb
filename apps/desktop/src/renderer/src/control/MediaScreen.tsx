@@ -234,7 +234,9 @@ const LinkEditor = ({
   onFailed,
   onRemove,
   locked,
+  compact = false,
 }: {
+  compact?: boolean;
   link: LinkDraft;
   state: AppState;
   caption: string;
@@ -338,9 +340,16 @@ const LinkEditor = ({
           </button>
         )}
       </header>
-      <LivePreview state={state} caption={caption}>
-        <LinkFrame link={link} controls startMs={link.startMs} control={control} onReport={onReport} />
-      </LivePreview>
+      {compact ? (
+        // The board shows where it goes: this small player is for choosing the passage.
+        <div className="link-frame-box" data-testid="link-compact">
+          <LinkFrame link={link} controls startMs={link.startMs} control={control} onReport={onReport} />
+        </div>
+      ) : (
+        <LivePreview state={state} caption={caption}>
+          <LinkFrame link={link} controls startMs={link.startMs} control={control} onReport={onReport} />
+        </LivePreview>
+      )}
       {failed && (
         <p className="error" role="alert" data-testid="link-problem">
           {failed}
@@ -412,7 +421,8 @@ const DraftRow = ({
 // A whisper: only the chosen friends see it, and the others never know.
 const WhisperPicker = ({ state, to, onChange }: { state: AppState; to: string[]; onChange: (to: string[]) => void }) => {
   const others = (state.party?.members ?? []).filter((member) => member.online && member.id !== state.party?.memberId);
-  const [open, setOpen] = useState(to.length > 0);
+  const [chosen, setOpen] = useState(false);
+  const open = chosen || to.length > 0;
   if (others.length === 0 && to.length === 0) return null;
   const toggle = (id: string) => onChange(to.includes(id) ? to.filter((chosen) => chosen !== id) : [...to, id]);
 
@@ -473,12 +483,17 @@ export const MediaScreen = ({
   scene,
   active,
   onOpenLibrary,
+  whisperTo,
+  onWhisperTo: setWhisperTo,
 }: {
   state: AppState;
   files: DraftFiles;
   scene: Scene;
   active: boolean;
   onOpenLibrary: (category: 'image' | 'audio') => void;
+  // Kept by the window, so that the party can open this tab already whispering to someone.
+  whisperTo: string[];
+  onWhisperTo: (to: string[]) => void;
 }) => {
   const { link, linkVolume, picture, sound, leader, hasFiles, clip, unreadable, caption, displayMs, videoMuted, soundMuted } = files;
   const [linkProblem, setLinkProblem] = useState<string | null>(null);
@@ -490,7 +505,6 @@ export const MediaScreen = ({
   const [saved, setSaved] = useState(false);
   const [confirmingSpeech, setConfirmingSpeech] = useState(false);
   const [changingLength, setChangingLength] = useState(false);
-  const [whisperTo, setWhisperTo] = useState<string[]>([]);
   // Someone who left can't be whispered to.
   const to = whisperTo.filter((id) => state.party?.members.some((member) => member.id === id && member.online));
   const captionField = useRef<HTMLTextAreaElement>(null);
@@ -501,9 +515,11 @@ export const MediaScreen = ({
 
   const isUploading = state.upload !== null;
   const advanced = scene.active;
-  const plays = advanced ? scene.leader !== null : link !== null || leader !== null;
+  // In the advanced mode, the link is there only as long as its player is on the board.
+  const sceneLink = advanced && scene.hasLink ? link : null;
+  const plays = advanced ? scene.leader !== null || sceneLink !== null : link !== null || leader !== null;
   const hasContent = advanced
-    ? scene.layers.length > 0 && (!plays || scene.passage !== null)
+    ? scene.layers.length > 0 && (sceneLink ? clip !== null && linkProblem === null : !plays || scene.passage !== null)
     : link
       ? clip !== null && linkProblem === null
       : hasFiles
@@ -536,17 +552,24 @@ export const MediaScreen = ({
     videoMuted: scene.hasVideo && !scene.hasVideoSound,
     soundMuted,
     speak,
-    layers: scene.layers.map(({ key: _key, ...layer }) => layer),
+    layers: scene.layers.filter((layer) => sceneLink || !layer.link).map(({ key: _key, ...layer }) => layer),
     soundId: scene.soundId,
     to,
-    ...(scene.passage ?? { clipStartMs: 0, durationMs: shownMs }),
+    link: sceneLink ? { site: sceneLink.site, id: sceneLink.id, title: sceneLink.title, volume: linkVolume } : null,
+    ...(sceneLink && clip
+      ? { clipStartMs: clip.startMs, durationMs: Math.max(MIN_DISPLAY_MS, clip.endMs - clip.startMs) }
+      : (scene.passage ?? { clipStartMs: 0, durationMs: shownMs })),
   });
+
+  useEffect(() => {
+    if (advanced && !link && scene.hasLink) scene.dropLink();
+  }, [advanced, link, scene.hasLink]);
 
   const stopPreview = () => setPreview(null);
 
   const lengthSeconds = (advanced ? sceneInput() : recipe()).durationMs / 1_000;
   const hasMusic = (advanced ? scene.sound : sound) !== null && !soundMuted;
-  const hasVideoSound = advanced ? scene.hasVideoSound : link ? linkVolume > 0 : picture?.kind === 'video' && !videoMuted;
+  const hasVideoSound = advanced ? (sceneLink ? linkVolume > 0 : scene.hasVideoSound) : link ? linkVolume > 0 : picture?.kind === 'video' && !videoMuted;
   const summary = [
     `${lengthSeconds.toLocaleString('fr', { maximumFractionDigits: 1 })} s`,
     hasMusic ? 'avec musique' : hasVideoSound ? 'avec le son de la vidéo' : 'sans son',
@@ -588,8 +611,9 @@ export const MediaScreen = ({
         videoMuted: input.videoMuted,
         soundMuted,
         speak: false,
-        link: null,
+        link: input.link,
         scene: input.layers.map(({ fileId, ...layer }) => {
+          if (layer.link) return { ...layer, kind: 'link', url: null };
           const file = scene.fileOf(fileId);
           return { ...layer, kind: file?.kind === 'video' ? 'video' : 'image', url: file?.previewUrl ?? null };
         }),
@@ -612,7 +636,11 @@ export const MediaScreen = ({
     setSaved(false);
     stopPreview();
     if (!toAdvanced) scene.leave();
-    else setError(await scene.enter(picture?.kind === 'video' ? clip : null, picture?.kind === 'video' && videoMuted));
+    else {
+      // The link comes along as an element to place, with texts and pictures around it.
+      const linkProblem = link ? scene.ensureLink(link.site) : null;
+      setError((await scene.enter(picture?.kind === 'video' ? clip : null, picture?.kind === 'video' && videoMuted)) ?? linkProblem);
+    }
   };
 
   const save = async (event: FormEvent) => {
@@ -640,8 +668,10 @@ export const MediaScreen = ({
     stopPreview();
     const result = advanced ? await window.liveChat.sendScene(sceneInput()) : await window.liveChat.sendMedia(recipe());
     if (result.ok) {
-      if (advanced) scene.clearStage();
-      else files.reset();
+      if (advanced) {
+        scene.clearStage();
+        if (sceneLink) files.setLink(null);
+      } else files.reset();
       files.setSpeak(false);
       setWhisperTo([]);
       // Keeps whatever was typed while this one was on its way.
@@ -682,6 +712,7 @@ export const MediaScreen = ({
         event.preventDefault();
         scene.redo();
       } else if (event.key === 'Delete' && scene.selected) {
+        if (scene.layers.find(({ key }) => key === scene.selected)?.link) files.setLink(null);
         scene.removeLayer(scene.selected);
       }
     };
@@ -706,7 +737,26 @@ export const MediaScreen = ({
         {modeSwitch}
         {advanced ? (
           <>
-            <SceneBoard scene={scene} state={state} caption={caption} preview={preview} onError={setError} onStopPreview={stopPreview} />
+            <SceneBoard scene={scene} state={state} caption={caption} preview={preview} onError={setError} onStopPreview={stopPreview} link={sceneLink} />
+            {sceneLink && (
+              <div className="link-editor-compact">
+                <LinkEditor
+                  key={`${sceneLink.site}-${sceneLink.id}`}
+                  compact
+                  link={sceneLink}
+                  state={state}
+                  caption={caption}
+                  clip={clip}
+                  onClip={files.setClip}
+                  volume={linkVolume}
+                  onVolume={files.setLinkVolume}
+                  failed={linkProblem}
+                  onFailed={setLinkProblem}
+                  onRemove={() => files.setLink(null)}
+                  locked={isUploading}
+                />
+              </div>
+            )}
             {scene.sound && <DraftRow file={scene.sound} slot="sound" locked={isUploading} onRemove={scene.removeSound} />}
             {scene.hasVideo && (
               <div className="clip-videos" role="group" aria-label="Vidéos">
@@ -765,25 +815,68 @@ export const MediaScreen = ({
             onRemove={() => files.setLink(null)}
             locked={isUploading}
           />
-        ) : hasFiles ? (
+        ) : (
           <>
-            {picture && <DraftRow file={picture} slot="picture" locked={isUploading} onRemove={files.remove} />}
-            {sound && <DraftRow file={sound} slot="sound" locked={isUploading} onRemove={files.remove} />}
-            {!isUploading && (!picture || !sound) && (
-              <div className="draft-add" role="group" aria-label={picture ? 'Ajouter une musique' : 'Ajouter une image ou une vidéo'}>
-                <span className="draft-add-title">{picture ? 'Ajouter une musique' : 'Ajouter une image ou une vidéo'}</span>
-                <button type="button" className="pill secondary small" onClick={() => onOpenLibrary(picture ? 'audio' : 'image')}>
-                  Depuis ma bibliothèque
-                </button>
-                <button type="button" className="pill secondary small" onClick={() => void pick(picture ? 'sound' : 'picture')}>
-                  Depuis mon PC
-                </button>
-              </div>
-            )}
-            {picture?.kind === 'image' && (
+            {/* One frame for both: what is seen, and what is heard. */}
+            <div className="draft-stack" data-testid="draft-stack">
+              {picture ? (
+                <DraftRow file={picture} slot="picture" locked={isUploading} onRemove={files.remove} />
+              ) : (
+                <div className="draft-slot" role="group" aria-label="Ajouter une image ou une vidéo">
+                  <span className="kind-tile is-small">
+                    <KindIcon kind="image" size={16} />
+                  </span>
+                  <span className="draft-slot-title">Image ou vidéo</span>
+                  <button type="button" className="pill secondary small" disabled={isUploading} onClick={() => onOpenLibrary('image')}>
+                    Depuis ma bibliothèque
+                  </button>
+                  <button type="button" className="pill secondary small" disabled={isUploading} onClick={() => void pick(hasFiles ? 'picture' : undefined)}>
+                    Depuis mon PC
+                  </button>
+                </div>
+              )}
+              {sound ? (
+                <DraftRow file={sound} slot="sound" locked={isUploading} onRemove={files.remove} />
+              ) : (
+                <div className="draft-slot" role="group" aria-label="Ajouter une musique">
+                  <span className="kind-tile is-small">
+                    <KindIcon kind="audio" size={16} />
+                  </span>
+                  <span className="draft-slot-title">Musique</span>
+                  <button type="button" className="pill secondary small" disabled={isUploading} onClick={() => onOpenLibrary('audio')}>
+                    Depuis ma bibliothèque
+                  </button>
+                  <button type="button" className="pill secondary small" disabled={isUploading} onClick={() => void pick('sound')}>
+                    Depuis mon PC
+                  </button>
+                  <form
+                    className="link-search"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void window.liveChat.searchSoundCloud(soundSearch);
+                    }}
+                  >
+                    <input
+                      className="input is-small"
+                      type="search"
+                      aria-label="Chercher sur SoundCloud"
+                      placeholder="Ou cherche un son sur SoundCloud"
+                      value={soundSearch}
+                      onChange={(event) => setSoundSearch(event.target.value)}
+                    />
+                    <button type="submit" className="pill secondary small" disabled={!soundSearch.trim()}>
+                      Chercher
+                    </button>
+                  </form>
+                </div>
+              )}
+            </div>
+            {picture?.kind === 'image' ? (
               <LivePreview state={state} caption={caption}>
                 <img className="overlay-media" src={picture.previewUrl} alt="" onError={() => files.setUnreadable(true)} />
               </LivePreview>
+            ) : (
+              !hasFiles && caption.trim() && <LivePreview state={state} caption={caption} />
             )}
             {leader && (
               <ClipEditor
@@ -802,57 +895,19 @@ export const MediaScreen = ({
                 Ce fichier ne peut pas être lu. Essaie un autre format.
               </p>
             )}
+            {!hasFiles && (
+              <p className="hint draft-stack-hint">
+                Mets les deux si tu veux. 500 Mo maximum, effacé du serveur après 1 jour. Ou colle un lien YouTube, TikTok ou SoundCloud avec Ctrl+V.
+              </p>
+            )}
           </>
-        ) : (
-          <div className="draft-empty">
-            {caption.trim() && <LivePreview state={state} caption={caption} />}
-            <p className="draft-empty-title">Une image ou une vidéo</p>
-            <div className="draft-choice">
-              <button type="button" className="pill primary" disabled={isUploading} onClick={() => onOpenLibrary('image')}>
-                Depuis ma bibliothèque
-              </button>
-              <button type="button" className="pill secondary" disabled={isUploading} onClick={() => void pick()}>
-                Depuis mon PC
-              </button>
-            </div>
-            <p className="draft-empty-title draft-empty-next">Une musique</p>
-            <div className="draft-choice">
-              <button type="button" className="pill primary" disabled={isUploading} onClick={() => onOpenLibrary('audio')}>
-                Musique de ma bibliothèque
-              </button>
-              <button type="button" className="pill secondary" disabled={isUploading} onClick={() => void pick('sound')}>
-                Musique de mon PC
-              </button>
-            </div>
-            <form
-              className="link-search"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void window.liveChat.searchSoundCloud(soundSearch);
-              }}
-            >
-              <input
-                className="input"
-                type="search"
-                aria-label="Chercher sur SoundCloud"
-                placeholder="Chercher un son sur SoundCloud"
-                value={soundSearch}
-                onChange={(event) => setSoundSearch(event.target.value)}
-              />
-              <button type="submit" className="pill secondary small" disabled={!soundSearch.trim()}>
-                Chercher
-              </button>
-            </form>
-            <p className="hint draft-empty-next">Tu peux mettre les deux. 500 Mo maximum. Effacé du serveur après 1 jour.</p>
-            <p className="hint">Ou colle un lien YouTube, TikTok ou SoundCloud avec Ctrl+V.</p>
-          </div>
         )}
       </section>
 
       <section className="glass panel media-side" aria-label="Envoyer ton LiveChat">
         <h2>{selectedLayer ? 'Cet élément' : 'Envoyer à la party'}</h2>
 
-        {selectedLayer && <LayerPanel scene={scene} layer={selectedLayer} />}
+        {selectedLayer && <LayerPanel scene={scene} layer={selectedLayer} link={sceneLink} onRemoveLink={() => files.setLink(null)} />}
 
         <label className="field caption-field" hidden={selectedLayer !== null}>
           <span>{hasFiles || advanced ? 'Texte à afficher (facultatif)' : 'Texte à afficher'}</span>

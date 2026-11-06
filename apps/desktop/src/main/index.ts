@@ -49,7 +49,7 @@ import { AppTray } from './tray';
 import { Updater } from './updater';
 import { createControlWindow, createStageWindow, denyAllPermissions, introduceToPlayers, isOwnPage, openInBrowser, openSoundCloudSearch, placeOverlay, type StartMode } from './windows';
 import { checkLink } from './links';
-import { GameWatch } from './game-watch';
+import { GameWatch, openApps } from './game-watch';
 import { findLink } from '../shared/links';
 
 // Lets one PC run several members for testing; each profile has its own folder and its own single-instance lock.
@@ -107,6 +107,8 @@ const SceneInputSchema = z.object({
   layers: z.array(SceneLayerSchema.omit({ file: true }).extend({ fileId: z.string() })),
   soundId: z.string().nullable(),
   to: z.array(z.string()).max(MAX_ONLINE_MEMBERS).default([]),
+  // Its player is the layer marked as the link.
+  link: MediaLinkSchema.nullable().default(null),
 });
 
 // Nothing touched for this long, and the others see this member as away.
@@ -224,6 +226,7 @@ function start(): void {
       soundUrl: picture ? urlOf(sound) : null,
       scene:
         scene?.map(({ file: index, ...layer }) => {
+          if (layer.link) return { ...layer, kind: 'link' as const, url: null };
           const file = files[index]!;
           return { ...layer, kind: fileKindOf(file.contentType) === 'video' ? ('video' as const) : ('image' as const), url: urlOf(file) };
         }) ?? null,
@@ -369,6 +372,7 @@ function start(): void {
             .filter((item) => connection!.toLocalTime(item.expiresAt) > Date.now())
             .map((item) => toHistoryView(item, connection!))
         : [],
+      excludedNow: excludedNow(),
       poll: snapshot?.poll && connection ? { ...snapshot.poll, endsAt: connection.toLocalTime(snapshot.poll.endsAt) } : null,
       favorites: library.favorites(),
       localReplay: localReplayView(),
@@ -385,7 +389,7 @@ function start(): void {
     if (stageWindow.isDestroyed()) return;
 
     const head = connection?.current().queue[0];
-    const playing = head?.startAt != null && hiddenReason(head) === null;
+    const playing = head?.startAt != null && hiddenReason(head) === null && !excludedNow();
     // Asked for on this PC, like the test: it shows even for someone who keeps the overlay off.
     const wanted = wheelOpen !== null || overlayTest || localReplay?.startAt != null || (playing && settings.current.overlayEnabled);
 
@@ -442,7 +446,19 @@ function start(): void {
     return gameWatch.isPlaying ? 'playing' : 'here';
   };
   const syncStatus = (): void => connection?.setStatus(currentActivity(), settings.current.note);
-  const gameWatch = new GameWatch(syncStatus);
+  const excludedNow = (): boolean => {
+    const front = gameWatch.foreground;
+    return front !== null && settings.current.excludedApps.includes(front);
+  };
+  let wasExcluded = false;
+  const gameWatch = new GameWatch(() => {
+    syncStatus();
+    // Coming in front of an excluded app, or leaving it, changes what the overlay may show.
+    if (excludedNow() !== wasExcluded) {
+      wasExcluded = excludedNow();
+      publishState();
+    }
+  });
   gameWatch.start();
   setInterval(syncStatus, STATUS_CHECK_MS);
 
@@ -738,6 +754,7 @@ function start(): void {
     scene?: SceneLayer[] | null;
     link?: MediaLink | null;
     to?: string[];
+    jump?: boolean;
   };
 
   // What is on the stage of the advanced mode. Kept apart, so that going back to the simple mode finds its own files.
@@ -756,12 +773,13 @@ function start(): void {
 
   // The same file used twice is only sent once, and what is on the stage points at its place in the list.
   const sceneRecipe = (input: z.infer<typeof SceneInputSchema>): { files: SavedFile[]; scene: SceneLayer[] } | null => {
-    const ids = [...new Set(input.layers.map(({ fileId }) => fileId)), ...(input.soundId ? [input.soundId] : [])];
+    const placed = input.layers.filter((layer) => !layer.link);
+    const ids = [...new Set(placed.map(({ fileId }) => fileId)), ...(input.soundId ? [input.soundId] : [])];
     const files = ids.map((id) => sceneFiles.get(id));
     if (files.includes(undefined)) return null;
     return {
       files: (files as SavedFile[]).map(({ path, name, size, contentType }) => ({ path, name, size, contentType })),
-      scene: input.layers.map(({ fileId, ...layer }) => ({ ...layer, file: ids.indexOf(fileId) })),
+      scene: input.layers.map(({ fileId, ...layer }) => ({ ...layer, file: layer.link ? 0 : ids.indexOf(fileId) })),
     };
   };
 
@@ -786,6 +804,7 @@ function start(): void {
           scene: timing.scene ?? null,
           link: timing.link ?? null,
           to: timing.to ?? [],
+          jump: timing.jump ?? false,
           files: files.map(({ contentType, size, name }) => ({ contentType, size, name: name.slice(0, MAX_FILE_NAME_LENGTH) })),
         }),
       controller.signal,
@@ -1244,16 +1263,17 @@ function start(): void {
     }
 
     let result: ActionResult = { ok: false, error: 'not_found' };
+    const jump = settings.current.keyWhilePlaying === 'replace';
     if (target.kind === 'saved') {
       const saved = library.savedById(target.id);
-      if (saved && (await library.allThere(saved))) result = await sendFiles(session, saved.files, saved);
+      if (saved && (await library.allThere(saved))) result = await sendFiles(session, saved.files, { ...saved, jump });
     } else {
       const info = await stat(target.path).catch(() => null);
       const contentType = contentTypeOf(target.path);
       if (info && contentType) {
         const file = { path: target.path, name: basename(target.path), size: info.size, contentType };
         const { durationMs } = target;
-        result = await sendFiles(session, [file], { caption: '', clipStartMs: 0, durationMs, videoMuted: false, soundMuted: false });
+        result = await sendFiles(session, [file], { caption: '', clipStartMs: 0, durationMs, videoMuted: false, soundMuted: false, jump });
       }
     }
     shortcutFeedback(result.ok);
@@ -1553,7 +1573,8 @@ function start(): void {
   handle(IpcChannel.SaveScene, async (raw: unknown): Promise<ActionResult> => {
     const input = SaveSceneInputSchema.safeParse(raw);
     const recipe = input.success ? sceneRecipe(input.data) : null;
-    if (!input.success || !recipe) return { ok: false, error: 'invalid_request' };
+    // A link is not kept in the library.
+    if (!input.success || !recipe || input.data.link) return { ok: false, error: 'invalid_request' };
     const { name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak } = input.data;
     await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, ...recipe });
     return { ok: true };
@@ -1665,8 +1686,9 @@ function start(): void {
       const input = SceneInputSchema.safeParse(raw);
       const recipe = input.success ? sceneRecipe(input.data) : null;
       if (input.success && recipe) {
-        const { soundId: _soundId, layers: _layers, to: _to, ...timing } = input.data;
-        stashed.recipe = { ...timing, ...recipe };
+        const { soundId: _soundId, layers: _layers, to: _to, link: _link, ...timing } = input.data;
+        stashed.recipe = { ...timing, files: recipe.files, scene: recipe.scene.filter((layer) => !layer.link) };
+        if (stashed.recipe.scene?.length === 0) stashed.recipe.scene = null;
       }
     } else {
       const input = SendMediaInputSchema.safeParse(raw);
@@ -1984,6 +2006,8 @@ function start(): void {
     const request = PollRequestSchema.safeParse({ question, options });
     if (request.success) connection?.startPoll(request.data.question, request.data.options);
   });
+
+  handle(IpcChannel.ListApps, () => openApps());
 
   handle(IpcChannel.VotePoll, (pollId: unknown, choice: unknown) => {
     if (typeof pollId === 'string' && typeof choice === 'number' && Number.isInteger(choice)) connection?.vote(pollId, choice);
