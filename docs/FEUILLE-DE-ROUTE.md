@@ -6,7 +6,9 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.17.0** (dernière version) : liens et vie de la party
+**0.18.0** (dernière version, 8 novembre 2026) : plus clair et onglet Jeux (détail plus bas)
+
+**0.17.0** : liens et vie de la party
 
 - Liens YouTube, TikTok et SoundCloud, dans le lecteur de chaque site, avec début, fin et volume
 - Recherche SoundCloud, et images, vidéos et GIF à étirer en mode avancé
@@ -105,7 +107,7 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
-### Prête, pas encore publiée : 0.18.0 (plus clair)
+### Publiée : 0.18.0 (plus clair)
 
 - Mode simple : image et musique dans un seul cadre
 - Mode avancé : un lien YouTube, TikTok ou SoundCloud se place et se redimensionne comme une image, avec texte et images autour
