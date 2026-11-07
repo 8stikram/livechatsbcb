@@ -19,7 +19,8 @@
     "DISCORD_API_URL": "https://discord.com/api/v10",
     "DISCORD_CLIENT_ID": "1566555946820571397",
     "DISCORD_REFRESH_MS": "300000",
-    "POLL_MS": "30000"
+    "POLL_MS": "30000",
+    "GAME_SCALE": "1"
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Directory", "Party"] }

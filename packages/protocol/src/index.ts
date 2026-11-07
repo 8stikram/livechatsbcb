@@ -283,6 +283,8 @@ export const MediaDraftSchema = z
     to: z.array(z.string().min(1).max(64)).max(MAX_ONLINE_MEMBERS).default([]),
     // Sent with a key during another one: that one stops for everybody, and this one plays at once.
     jump: z.boolean().default(false),
+    // Sent for a party game: it goes to the game, never in the queue.
+    game: z.string().min(1).max(64).nullable().default(null),
     files: z
       .array(
         z.object({
@@ -295,6 +297,7 @@ export const MediaDraftSchema = z
   })
   .refine((draft) => draft.files.length > 0 || draft.caption.length > 0 || draft.link !== null)
   .refine(({ link, files, scene }) => link === null || scene !== null || files.length === 0)
+  .refine(({ game, link, scene, to, jump }) => game === null || (link === null && scene === null && to.length === 0 && !jump))
   .refine((draft) => draft.files.reduce((total, { size }) => total + size, 0) <= MAX_MEDIA_BYTES)
   .refine(({ scene, files, ...draft }) => {
     if (scene) return isValidScene(scene, files, draft.link !== null);
@@ -369,7 +372,65 @@ export const PollRequestSchema = z.object({
 });
 export type PollRequest = z.infer<typeof PollRequestSchema>;
 
+// Party games. One at a time, played in the app's window, never over a game.
+export const GameKindSchema = z.enum(['joke', 'question', 'who', 'undercover']);
+export type GameKind = z.infer<typeof GameKindSchema>;
+export const GamePhaseSchema = z.enum(['collect', 'write', 'vote', 'reveal', 'done']);
+export type GamePhase = z.infer<typeof GamePhaseSchema>;
+export const MAX_GAME_TEXT_LENGTH = 80;
+// Who has to be there to start: guessing among two people, or hiding among them, is no game.
+export const GAME_MIN_PLAYERS: Record<GameKind, number> = { joke: 2, question: 3, who: 3, undercover: 3 };
+// What each player sends at the start: pictures for the jokes, one LiveChat for the others.
+export const GAME_ENTRIES_PER_PLAYER: Record<GameKind, number> = { joke: 5, question: 1, who: 1, undercover: 1 };
+
+const GameFileSchema = z.object({ id: z.uuid(), name: z.string(), contentType: MediaContentTypeSchema, size: z.number() });
+export type GameFile = z.infer<typeof GameFileSchema>;
+
+export const GameEntrySchema = z.object({
+  // A player's id when the entry is what they wrote, otherwise the id of what was sent.
+  id: z.string(),
+  // Null while it is still a secret.
+  ownerId: z.string().nullable(),
+  files: z.array(GameFileSchema),
+  caption: z.string(),
+  // Only told at the reveal.
+  votes: z.number().int().nullable(),
+  mine: z.boolean(),
+});
+export type GameEntry = z.infer<typeof GameEntrySchema>;
+
+export const GameSchema = z.object({
+  id: z.string(),
+  kind: GameKindSchema,
+  starterName: z.string(),
+  players: z.array(z.string()),
+  scores: z.record(z.string(), z.number()),
+  phase: GamePhaseSchema,
+  round: z.number().int(),
+  rounds: z.number().int(),
+  // On the service's clock.
+  endsAt: z.number(),
+  // The question of the round, for the question game.
+  prompt: z.string(),
+  entries: z.array(GameEntrySchema),
+  // The picture this player got: the one to joke about, or the one to describe.
+  myPicture: z.array(GameFileSchema),
+  mySent: z.number().int(),
+  // Who has done their part of this phase.
+  acted: z.array(z.string()),
+  myChoice: z.string().nullable(),
+  // At the reveal: who sent it, or who the impostor was.
+  answer: z.string().nullable(),
+  // Why it ended early: not enough sent.
+  reason: z.enum(['few', 'stopped']).nullable(),
+});
+export type Game = z.infer<typeof GameSchema>;
+
 export const ClientMessageSchema = z.discriminatedUnion('t', [
+  z.object({ t: z.literal('game-start'), kind: GameKindSchema }),
+  z.object({ t: z.literal('game-say'), gameId: z.string(), text: z.string().trim().min(1).max(MAX_GAME_TEXT_LENGTH) }),
+  z.object({ t: z.literal('game-vote'), gameId: z.string(), choice: z.string().min(1).max(64) }),
+  z.object({ t: z.literal('game-stop'), gameId: z.string() }),
   z.object({ t: z.literal('ready'), mediaId: z.string() }),
   z.object({ t: z.literal('skip'), mediaId: z.string() }),
   // This PC has stopped showing it. Once nobody is watching any more, the queue moves on.
@@ -391,8 +452,10 @@ export const ServerMessageSchema = z.discriminatedUnion('t', [
     queue: z.array(QueueItemSchema),
     history: z.array(HistoryItemSchema),
     poll: PollSchema.nullable().default(null),
+    game: GameSchema.nullable().default(null),
   }),
   z.object({ t: z.literal('poll'), poll: PollSchema.nullable() }),
+  z.object({ t: z.literal('game'), game: GameSchema.nullable() }),
   z.object({ t: z.literal('members'), members: z.array(MemberSchema) }),
   z.object({ t: z.literal('queue'), queue: z.array(QueueItemSchema) }),
   z.object({ t: z.literal('history'), history: z.array(HistoryItemSchema) }),

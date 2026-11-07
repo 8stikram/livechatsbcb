@@ -3767,3 +3767,380 @@ html.live-pulse .avatar.has-ring.is-live,
   transition: none;
   animation: none;
 }
+
+/* Party games */
+
+.tab-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--online);
+  animation: game-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes game-pulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
+.game-picker {
+  height: 100%;
+}
+
+.game-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  overflow: auto;
+}
+
+.game-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-inner);
+  background: var(--glass);
+  animation: view-in var(--spring-time) var(--spring) backwards;
+}
+
+.game-card:nth-child(2) { animation-delay: 40ms; }
+.game-card:nth-child(3) { animation-delay: 80ms; }
+.game-card:nth-child(4) { animation-delay: 120ms; }
+
+.game-card h3 {
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.game-card .hint {
+  flex: 1;
+}
+
+.game-card footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.game-board {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 16px;
+}
+
+.game-main,
+.game-side {
+  min-height: 0;
+}
+
+.game-body {
+  flex: 1;
+  min-height: 0;
+  animation: game-in var(--spring-time) var(--spring) backwards;
+}
+
+@keyframes game-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+
+.game-timer {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.game-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 0 12px;
+  text-align: center;
+}
+
+.game-prompt {
+  max-width: 34em;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.game-ask {
+  font-size: 16px;
+  color: var(--text-soft);
+}
+
+.game-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.game-form {
+  display: flex;
+  gap: 8px;
+  width: min(460px, 100%);
+}
+
+.game-form .input {
+  flex: 1;
+}
+
+.game-media {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.game-file {
+  display: block;
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 14px;
+  object-fit: contain;
+  background: var(--well);
+}
+
+.game-media.is-big .game-file {
+  max-height: 300px;
+}
+
+.game-file.is-loading {
+  display: grid;
+  place-items: center;
+  width: 200px;
+  height: 140px;
+}
+
+.game-audio {
+  width: min(320px, 100%);
+}
+
+.game-caption {
+  max-width: 28em;
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.game-caption.is-alone {
+  padding: 18px 22px;
+  border-radius: 14px;
+  background: var(--glass-raised);
+  font-size: 18px;
+}
+
+.game-mine {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.game-mine .game-file {
+  max-height: 90px;
+}
+
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.game-duel {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.game-duel-side {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.game-vs {
+  flex: none;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  animation: game-vs 700ms var(--bounce) backwards;
+}
+
+@keyframes game-vs {
+  from {
+    opacity: 0;
+    transform: scale(2.4) rotate(-12deg);
+  }
+}
+
+.game-entry,
+.game-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-inner);
+  background: var(--glass);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color var(--fast) var(--ease),
+    background var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.game-entry:not(:disabled):hover,
+.game-choice:not(:disabled):hover {
+  border-color: var(--line-bright);
+  background: var(--glass-hover);
+}
+
+.game-entry:not(:disabled):active,
+.game-choice:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.game-entry:disabled,
+.game-choice:disabled {
+  cursor: default;
+}
+
+.game-entry.is-mine,
+.game-choice.is-mine {
+  border-color: var(--text);
+}
+
+.game-entry.is-winner,
+.game-choice.is-winner {
+  border-color: var(--online);
+  background: rgb(142 230 180 / 12%);
+  animation: game-win var(--bounce-time) var(--bounce);
+}
+
+@keyframes game-win {
+  from {
+    transform: scale(0.9);
+  }
+}
+
+.game-entry-foot {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.game-choices {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.game-choice {
+  min-width: 120px;
+  padding: 10px 16px;
+}
+
+.game-choice span {
+  color: var(--text-soft);
+}
+
+.game-votes {
+  font-size: 12px;
+}
+
+.game-scores,
+.game-ranking {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: auto;
+}
+
+.game-scores li,
+.game-ranking li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.game-ranking {
+  width: min(360px, 100%);
+}
+
+.game-ranking li {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--glass);
+  animation: game-in var(--spring-time) var(--spring) backwards;
+  animation-delay: calc(var(--rank) * 90ms);
+}
+
+.game-ranking li:first-child {
+  background: var(--glass-active);
+  font-size: 16px;
+}
+
+.game-medal {
+  width: 24px;
+  text-align: center;
+}
+
+.game-score-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.game-done {
+  color: var(--online);
+}
+
+.game-points {
+  font-size: 15px;
+}
+
+@media (max-width: 900px) {
+  .game-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .game-side {
+    display: none;
+  }
+}
+
+/* At the reveal everything is shown in full, not as buttons that can't be pressed. */
+[data-phase='reveal'] .game-entry:disabled,
+[data-phase='reveal'] .game-choice:disabled {
+  opacity: 1;
+}

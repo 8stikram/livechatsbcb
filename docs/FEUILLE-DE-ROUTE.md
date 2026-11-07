@@ -117,6 +117,7 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 - Bulles de découverte au premier lancement, à revoir dans Réglages
 - Clic droit de Windows réparé, dans « Afficher plus d'options » (le menu court demande une signature payante)
 - Bandeau « Une autre app utilise déjà » : texte resserré
+- Onglet Jeux avec 4 jeux : Meilleure blague, Question débile (duels en « VS »), Qui l'a envoyé ?, Undercover. Points et classement à la fin
 
 ### 6. À surveiller
 
@@ -132,24 +133,14 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 - GIF : bouton avec recherche via Klipy (compte et clé à créer), favoris et récents
 - Emojis perso des serveurs, avec un bot peut-être
 
-## Jeux (place à choisir)
+## Jeux
 
-Un onglet Jeux dans l'app.
+Faits dans la 0.18.0, dans l'onglet Jeux. Un jeu à la fois, avec ceux qui sont là quand il démarre.
 
-**Premier jeu jouable : la meilleure blague**
-- Chacun envoie 5 images de son PC
-- Chacun reçoit 1 image au hasard et fait la meilleure blague dessus
-- Tout le monde vote, puis on recommence jusqu'à ce qu'il n'y ait plus d'images
-- Classement à la fin
-
-**Deuxième jeu : 1 contre 1, façon Quiplash**
-- Une question débile, on répond avec un LiveChat
-- Des duels : les deux réponses avec un grand « VS » au milieu
-- Vote avec une animation
-
-**Idées à creuser**
-- **Qui l'a envoyé ?** Un meme arrive anonymement, la party devine qui l'a envoyé d'après son humour. Des points si on ne te devine pas.
-- **Undercover :** tout le monde a la même image sauf l'imposteur. Chacun donne un mot en lien, puis on vote pour le démasquer.
+- **Meilleure blague** (2 joueurs ou plus) : 5 images chacun, une blague sur l'image d'un autre, vote. Jusqu'à 3 manches
+- **Question débile** (3 ou plus) : 3 questions, une réponse en LiveChat, des duels « VS », vote
+- **Qui l'a envoyé ?** (3 ou plus) : un meme chacun en secret, la party devine. Un point si tu trouves, un point à l'envoyeur pour chaque erreur
+- **Undercover** (3 ou plus) : une image chacun, l'imposteur en a une autre, un mot chacun, vote. 3 manches
 
 ## Déjà décidé
 

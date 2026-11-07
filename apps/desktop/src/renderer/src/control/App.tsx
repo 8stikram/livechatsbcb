@@ -16,6 +16,7 @@ import { MediaScreen } from './MediaScreen';
 import { errorMessage } from './messages';
 import { NowBar } from './NowPlaying';
 import { PartyScreen } from './PartyScreen';
+import { GamesScreen, gameIsLive } from './GamesScreen';
 import { ServerRail } from './ServerRail';
 import { SettingsScreen } from './SettingsScreen';
 import { Tour } from './Tour';
@@ -29,7 +30,7 @@ const NOTICES = {
 } as const;
 
 // The order they sit in, so that a tab further along comes in from the right.
-const VIEW_ORDER: View[] = ['media', 'party', 'library', 'history', 'settings', 'notes'];
+const VIEW_ORDER: View[] = ['media', 'party', 'library', 'history', 'games', 'settings', 'notes'];
 const SLIDE_PX = 18;
 const LAUNCH_MS = 860;
 
@@ -362,7 +363,7 @@ export const App = () => {
       />
 
       <div className="workspace">
-        {!showPicker && <Header party={party} view={view} joinError={joinError} onView={setChosenView} />}
+        {!showPicker && <Header party={party} view={view} joinError={joinError} gameLive={gameIsLive(state)} onView={setChosenView} />}
 
         <UpdateBanner update={state.update} restartIn={restartIn} />
         {incomingBusy && (
@@ -495,6 +496,9 @@ export const App = () => {
               </div>
               <div className="view" hidden={view !== 'history'}>
                 <HistoryScreen state={state} active={view === 'history'} onEdit={editInAdvanced} from={historyFrom} onFrom={setHistoryFrom} />
+              </div>
+              <div className="view" hidden={view !== 'games'}>
+                <GamesScreen state={state} party={party} active={view === 'games' && !showPicker} />
               </div>
             </>
           )}

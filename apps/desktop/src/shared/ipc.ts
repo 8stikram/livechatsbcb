@@ -6,6 +6,8 @@ import type {
   MediaKind,
   MediaLink,
   Member,
+  Game,
+  GameKind,
   Poll,
   SceneLayer,
 } from '@livechatsbcb/protocol';
@@ -218,6 +220,16 @@ export type HistoryView = {
 // endsAt on this PC's clock.
 export type PollView = Poll;
 
+// A file of a game, once it is on this PC. Null url while it is on its way.
+export type GameFileView = { id: string; name: string; kind: FileKind; url: string | null };
+// endsAt on this PC's clock.
+export type GameView = Omit<Game, 'entries' | 'myPicture'> & {
+  entries: Array<Omit<Game['entries'][number], 'files'> & { files: GameFileView[] }>;
+  myPicture: GameFileView[];
+  // The files picked and still on their way to the game.
+  sending: number;
+};
+
 export type LocalReplayView = { historyId: string; playback: PlaybackView | null };
 
 export type DraftMedia = { name: string; size: number; kind: FileKind; previewUrl: string };
@@ -343,6 +355,7 @@ export type AppState = {
   queue: QueueView;
   history: HistoryView[];
   poll: PollView | null;
+  game: GameView | null;
   // One of the excluded apps is in front: nothing shows or plays here until it isn't.
   excludedNow: boolean;
   favorites: FavoriteView[];
@@ -352,6 +365,8 @@ export type AppState = {
 
 export type ActionError = ApiErrorCode | 'network' | 'gave_up' | 'cancelled' | 'login_denied' | 'login_timeout';
 export type ActionResult = { ok: true } | { ok: false; error: ActionError };
+
+export type GameSendResult = ActionResult | { ok: false; error: 'too_large' | 'empty' | 'unsupported' };
 
 export type PickResult =
   | { ok: true; draft: DraftMedia }
@@ -457,6 +472,12 @@ export const IpcChannel = {
   StartPoll: 'poll:start',
   ListApps: 'apps:list',
   VotePoll: 'poll:vote',
+  StartGame: 'game:start',
+  GameSay: 'game:say',
+  GameVote: 'game:vote',
+  StopGame: 'game:stop',
+  SendGameFiles: 'game:send-files',
+  SendGameText: 'game:send-text',
   SoundLevel: 'stage:sound-level',
   LiveLevel: 'live:level',
 } as const;
@@ -548,6 +569,13 @@ export type LiveChatApi = {
   startPoll(question: string, options: string[]): Promise<void>;
   listApps(): Promise<Array<{ name: string; title: string }>>;
   votePoll(pollId: string, choice: number): Promise<void>;
+  startGame(kind: GameKind): Promise<void>;
+  gameSay(gameId: string, text: string): Promise<void>;
+  gameVote(gameId: string, choice: string): Promise<void>;
+  stopGame(gameId: string): Promise<void>;
+  // Opens the file picker: pictures for the jokes and the impostor, any LiveChat otherwise.
+  sendGameFiles(gameId: string): Promise<GameSendResult>;
+  sendGameText(gameId: string, text: string): Promise<ActionResult>;
   // From the overlay: how loud what is playing is, from 0 to 1.
   reportLevel(level: number): void;
   onLiveLevel(listener: (level: number) => void): () => void;

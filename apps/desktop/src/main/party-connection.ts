@@ -7,6 +7,8 @@ import {
   WS_TOKEN_PREFIX,
   type Activity,
   type ClientMessage,
+  type Game,
+  type GameKind,
   type HistoryItem,
   type Member,
   type Poll,
@@ -33,6 +35,7 @@ export type ConnectionSnapshot = {
   queue: QueueItem[];
   history: HistoryItem[];
   poll: Poll | null;
+  game: Game | null;
 };
 
 type Listener = {
@@ -62,7 +65,7 @@ export class PartyConnection {
     private readonly listener: Listener,
     private readonly appVersion: string,
   ) {
-    this.snapshot = { status: 'connecting', code: session.code, memberId: session.memberId, members: [], queue: [], history: [], poll: null };
+    this.snapshot = { status: 'connecting', code: session.code, memberId: session.memberId, members: [], queue: [], history: [], poll: null, game: null };
   }
 
   start(): void {
@@ -130,6 +133,22 @@ export class PartyConnection {
     this.send({ t: 'vote', pollId, choice });
   }
 
+  startGame(kind: GameKind): void {
+    this.send({ t: 'game-start', kind });
+  }
+
+  gameSay(gameId: string, text: string): void {
+    this.send({ t: 'game-say', gameId, text });
+  }
+
+  gameVote(gameId: string, choice: string): void {
+    this.send({ t: 'game-vote', gameId, choice });
+  }
+
+  stopGame(gameId: string): void {
+    this.send({ t: 'game-stop', gameId });
+  }
+
   private send(message: ClientMessage): void {
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
   }
@@ -174,6 +193,7 @@ export class PartyConnection {
           queue: message.queue,
           history: message.history,
           poll: message.poll,
+          game: message.game,
         });
         if (this.status) this.send({ t: 'status', ...this.status });
         // The service forgets nothing, but anything reported while disconnected never reached it.
@@ -202,6 +222,9 @@ export class PartyConnection {
         break;
       case 'poll':
         this.publish({ poll: message.poll });
+        break;
+      case 'game':
+        this.publish({ game: message.game });
         break;
       case 'time':
         this.onClockSample(message.c, message.s);

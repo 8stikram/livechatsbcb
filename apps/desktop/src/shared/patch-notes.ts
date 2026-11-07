@@ -17,6 +17,7 @@ export const PATCH_NOTES: PatchNote[] = [
       'Bibliothèque : nouveau tri « Plus envoyés »',
       'Des bulles de découverte au premier lancement, à revoir dans Réglages',
       'Clic droit de Windows réparé : « LiveChatSBCB » est dans « Afficher plus d’options »',
+      'Nouvel onglet Jeux, avec 4 jeux de party : Meilleure blague, Question débile, Qui l’a envoyé ? et Undercover',
     ],
   },
   {

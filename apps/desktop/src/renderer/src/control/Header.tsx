@@ -3,13 +3,14 @@ import type { ActionError, ConnectionStatus, PartyView } from '../../../shared/i
 import { useTabMarker } from './glide';
 import { IconCheck, IconCopy } from './icons';
 
-export type View = 'party' | 'media' | 'library' | 'history' | 'settings' | 'notes';
+export type View = 'party' | 'media' | 'library' | 'history' | 'games' | 'settings' | 'notes';
 
 const TABS: Array<[View, string]> = [
   ['media', 'LiveChat'],
   ['party', 'Party'],
   ['library', 'Bibliothèque'],
   ['history', 'Historique'],
+  ['games', 'Jeux'],
 ];
 
 const STATUS_TEXT: Record<ConnectionStatus, string> = {
@@ -60,11 +61,14 @@ export const Header = ({
   party,
   view,
   joinError,
+  gameLive,
   onView,
 }: {
   party: PartyView | null;
   view: View;
   joinError: ActionError | null;
+  // A game is running: its tab says so from anywhere.
+  gameLive: boolean;
   onView: (view: View) => void;
 }) => {
   const inSettings = view === 'settings' || view === 'notes';
@@ -115,6 +119,7 @@ export const Header = ({
               onClick={() => onView(id)}
             >
               {label}
+              {id === 'games' && gameLive && view !== 'games' && <span className="tab-dot" data-testid="game-live" aria-label="Partie en cours" />}
             </button>
           ))}
         </div>

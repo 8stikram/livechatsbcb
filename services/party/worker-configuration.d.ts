@@ -9,6 +9,7 @@ interface __BaseEnv_Env {
 	DISCORD_CLIENT_ID: "1566555946820571397";
 	DISCORD_REFRESH_MS: "300000";
 	POLL_MS: "30000";
+	GAME_SCALE: "1";
 	DIRECTORY: DurableObjectNamespace<import("./src/index").Directory>;
 	PARTY: DurableObjectNamespace<import("./src/index").Party>;
 }
@@ -24,7 +25,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "MEDIA_RETENTION_MS" | "DISCORD_API_URL" | "DISCORD_CLIENT_ID" | "DISCORD_REFRESH_MS" | "POLL_MS">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "MEDIA_RETENTION_MS" | "DISCORD_API_URL" | "DISCORD_CLIENT_ID" | "DISCORD_REFRESH_MS" | "POLL_MS" | "GAME_SCALE">> {}
 }
 declare module "*.txt" {
 	const value: string;

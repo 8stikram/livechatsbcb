@@ -105,6 +105,12 @@ const api: LiveChatApi = {
   startPoll: (question, options) => ipcRenderer.invoke(IpcChannel.StartPoll, question, options),
   listApps: () => ipcRenderer.invoke(IpcChannel.ListApps),
   votePoll: (pollId, choice) => ipcRenderer.invoke(IpcChannel.VotePoll, pollId, choice),
+  startGame: (kind) => ipcRenderer.invoke(IpcChannel.StartGame, kind),
+  gameSay: (gameId, text) => ipcRenderer.invoke(IpcChannel.GameSay, gameId, text),
+  gameVote: (gameId, choice) => ipcRenderer.invoke(IpcChannel.GameVote, gameId, choice),
+  stopGame: (gameId) => ipcRenderer.invoke(IpcChannel.StopGame, gameId),
+  sendGameFiles: (gameId) => ipcRenderer.invoke(IpcChannel.SendGameFiles, gameId),
+  sendGameText: (gameId, text) => ipcRenderer.invoke(IpcChannel.SendGameText, gameId, text),
   reportLevel: (level) => ipcRenderer.send(IpcChannel.SoundLevel, level),
   onLiveLevel: (listener) => {
     const onLevel = (_event: unknown, level: number) => listener(level);

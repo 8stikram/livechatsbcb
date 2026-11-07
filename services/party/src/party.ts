@@ -18,8 +18,11 @@ import {
   mediaKindOf,
   mediaPartBytes,
   mediaPartCount,
+  GAME_MIN_PLAYERS,
   type Account,
   type Activity,
+  type Game,
+  type GameKind,
   type Poll,
   type PollRequest,
   type HistoryItem,
@@ -30,6 +33,7 @@ import {
   type ServerMessage,
 } from '@livechatsbcb/protocol';
 import { randomToken, sha256 } from './tokens';
+import * as games from './games';
 
 type MemberRow = { id: string; name: string; avatar_url: string | null };
 type Credentials = { memberId: string; token: string };
@@ -215,6 +219,12 @@ export class Party extends DurableObject<Env> {
   ): Promise<{ ok: true } | Refusal<'unauthorized' | 'queue_full' | 'banned'>> {
     const member = await this.memberForToken(token);
     if (!member || !(await this.mayStay(member))) return { ok: false, error: 'unauthorized' };
+    if (draft.game !== null) {
+      const game = this.storedGame();
+      if (game?.id !== draft.game || !games.acceptsEntry(game, member.id, [], draft.caption)) return { ok: false, error: 'queue_full' };
+      this.addGameEntry(member.id, mediaId, draft, []);
+      return { ok: true };
+    }
     if (!this.mayNotSpam(member.id, draft)) return { ok: false, error: 'banned' };
     if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
     this.enqueue(mediaId, member, draft, []);
@@ -256,6 +266,13 @@ export class Party extends DurableObject<Env> {
   ): Promise<{ ok: true; memberId: string } | Refusal<'unauthorized' | 'queue_full' | 'banned'>> {
     const member = await this.memberForToken(token);
     if (!member || !(await this.mayStay(member))) return { ok: false, error: 'unauthorized' };
+    // What a game no longer waits for isn't worth storing.
+    if (draft.game !== null) {
+      const game = this.storedGame();
+      return game?.id === draft.game && games.acceptsEntry(game, member.id, draft.files, draft.caption)
+        ? { ok: true, memberId: member.id }
+        : { ok: false, error: 'queue_full' };
+    }
     if (!this.mayNotSpam(member.id, draft)) return { ok: false, error: 'banned' };
     if (this.queueIsFull()) return { ok: false, error: 'queue_full' };
     return { ok: true, memberId: member.id };
@@ -347,7 +364,9 @@ export class Party extends DurableObject<Env> {
     const [member] = this.ctx.storage.sql
       .exec<MemberRow>('SELECT id, name, avatar_url FROM members WHERE id = ?', row.member_id)
       .toArray();
-    if (pending && member) {
+    if (pending && member && (JSON.parse(pending.draft) as MediaDraft).game) {
+      this.addGameEntry(member.id, mediaId, JSON.parse(pending.draft) as MediaDraft, JSON.parse(pending.file_ids) as string[]);
+    } else if (pending && member) {
       this.enqueue(mediaId, member, JSON.parse(pending.draft) as MediaDraft, JSON.parse(pending.file_ids) as string[]);
     }
   }
@@ -355,6 +374,7 @@ export class Party extends DurableObject<Env> {
   override async alarm(): Promise<void> {
     await this.checkGuildMembers();
     this.closePollIfDue();
+    this.stepGame();
     if (this.advanceQueue()) this.broadcastQueue();
   }
 
@@ -408,6 +428,7 @@ export class Party extends DurableObject<Env> {
         queue: this.queue(member.id),
         history: this.history(member.id),
         poll: this.pollFor(member.id),
+        game: this.gameFor(member.id),
       } satisfies ServerMessage),
     );
     this.broadcast({ t: 'members', members }, server);
@@ -450,6 +471,26 @@ export class Party extends DurableObject<Env> {
         break;
       case 'vote':
         this.vote(memberId, message.data.pollId, message.data.choice);
+        break;
+      case 'game-start':
+        this.startGame(memberId, message.data.kind);
+        break;
+      case 'game-say': {
+        const { gameId, text } = message.data;
+        this.playGame(gameId, (game) => games.say(game, memberId, text));
+        break;
+      }
+      case 'game-vote': {
+        const { gameId, choice } = message.data;
+        this.playGame(gameId, (game) => games.vote(game, memberId, choice));
+        break;
+      }
+      case 'game-stop':
+        this.playGame(message.data.gameId, (game) => {
+          if (game.phase === 'done' || !game.players.includes(memberId)) return false;
+          games.stop(game, Date.now());
+          return true;
+        });
         break;
     }
   }
@@ -535,7 +576,9 @@ export class Party extends DurableObject<Env> {
     const checking = this.getMeta('guildId') && this.openSockets(leaving).length > 0;
     const poll = this.storedPoll();
     const pollEnd = poll && !poll.done ? poll.endsAt : null;
-    const steps = [queueStep, checking ? Number(this.getMeta('nextMemberCheck')) : null, pollEnd].filter((step) => step !== null);
+    const game = this.storedGame();
+    const gameStep = game && game.phase !== 'done' ? game.endsAt : null;
+    const steps = [queueStep, checking ? Number(this.getMeta('nextMemberCheck')) : null, pollEnd, gameStep].filter((step) => step !== null);
     if (steps.length > 0) void this.ctx.storage.setAlarm(Math.min(...steps));
     else void this.ctx.storage.deleteAlarm();
   }
@@ -902,6 +945,70 @@ export class Party extends DurableObject<Env> {
     poll.done = true;
     this.setMeta('poll', JSON.stringify(poll));
     this.broadcastPoll();
+  }
+
+  private storedGame(): games.StoredGame | null {
+    const raw = this.getMeta('game');
+    return raw ? (JSON.parse(raw) as games.StoredGame) : null;
+  }
+
+  private gameFor(memberId: string): Game | null {
+    const game = this.storedGame();
+    if (!game || (game.phase === 'done' && Date.now() > game.endsAt)) return null;
+    return games.gameView(game, memberId);
+  }
+
+  private gameScale(): number {
+    return Number(this.env.GAME_SCALE) || 1;
+  }
+
+  // Moves on as far as it can, tells everyone, and arms the alarm for the next step.
+  private saveGame(game: games.StoredGame): void {
+    const now = Date.now();
+    for (let steps = 0; steps < 20 && game.phase !== 'done'; steps += 1) {
+      const online = [...this.onlineIds()].filter((id) => game.players.includes(id));
+      const done = games.acted(game);
+      const everyone = game.phase !== 'reveal' && online.length > 0 && online.every((id) => done.includes(id));
+      if (now < game.endsAt && !everyone) break;
+      games.advance(game, now, this.gameScale());
+    }
+    this.setMeta('game', JSON.stringify(game));
+    this.broadcastEach((memberId) => ({ t: 'game', game: this.gameFor(memberId) }));
+    if (this.advanceQueue()) this.broadcastQueue();
+  }
+
+  private stepGame(): void {
+    const game = this.storedGame();
+    if (!game || game.phase === 'done') return;
+    if (Date.now() >= game.endsAt) this.saveGame(game);
+  }
+
+  private playGame(gameId: string, act: (game: games.StoredGame) => boolean): void {
+    const game = this.storedGame();
+    if (game?.id !== gameId || !act(game)) return;
+    this.saveGame(game);
+  }
+
+  // One at a time, with whoever is there when it starts.
+  private startGame(memberId: string, kind: GameKind): void {
+    const current = this.storedGame();
+    if (current && current.phase !== 'done') return;
+    const players = [...this.onlineIds()];
+    if (players.length < GAME_MIN_PLAYERS[kind] || !players.includes(memberId)) return;
+    const [member] = this.ctx.storage.sql.exec<MemberRow>('SELECT id, name, avatar_url FROM members WHERE id = ?', memberId).toArray();
+    if (!member) return;
+    this.saveGame(games.createGame(kind, member.name, players, Date.now(), this.gameScale()));
+  }
+
+  private addGameEntry(memberId: string, mediaId: string, draft: MediaDraft, fileIds: string[]): void {
+    this.playGame(draft.game ?? '', (game) =>
+      games.addEntry(game, {
+        id: mediaId,
+        ownerId: memberId,
+        files: draft.files.map((file, index) => ({ ...file, id: fileIds[index]! })),
+        caption: draft.caption,
+      }),
+    );
   }
 
   // Offline members stay registered so they can come back, but a lost install must not hold a seat forever.

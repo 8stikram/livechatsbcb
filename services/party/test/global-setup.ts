@@ -89,6 +89,8 @@ export default async function setup() {
       'DISCORD_REFRESH_MS:1000',
       '--var',
       'POLL_MS:1500',
+      '--var',
+      'GAME_SCALE:0.05',
     ]),
   ];
 

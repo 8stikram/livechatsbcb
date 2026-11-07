@@ -13,6 +13,12 @@ import {
   MAX_ONLINE_MEMBERS,
   MediaDraftSchema,
   PollRequestSchema,
+  GameKindSchema,
+  MAX_GAME_TEXT_LENGTH,
+  MAX_CAPTION_LENGTH,
+  GAME_ENTRIES_PER_PLAYER,
+  type Game,
+  type GameFile,
   MediaLinkSchema,
   SceneLayerSchema,
   fileKindOf,
@@ -30,7 +36,7 @@ import {
   type SceneLayer,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, isNewerVersion, keyLabel, DEFAULT_SETTINGS, WHEEL_SIZE, type ActionKey, type KeyChange, type ExternalFiles, type IncomingError, type IncomingResult, type ActionResult, type HiddenReason, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
+import { IpcChannel, isNewerVersion, keyLabel, DEFAULT_SETTINGS, WHEEL_SIZE, type ActionKey, type KeyChange, type ExternalFiles, type IncomingError, type IncomingResult, type ActionResult, type GameSendResult, type HiddenReason, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
@@ -215,6 +221,43 @@ function start(): void {
   });
 
   // Files stay under the media they came with, which is the replay's own key when played on this PC alone.
+  // The pictures and LiveChats of a game, fetched as they are shown, and forgotten with the game.
+  const gameFiles = new Set<string>();
+  let gameFilesOf: string | null = null;
+  let gameSending = 0;
+  // Also the name of the file on disk, so nothing Windows refuses in a name.
+  const gameKey = (fileId: string) => `game-${fileId}`;
+
+  const syncGameFiles = (session: SessionResponse, game: Game | null): void => {
+    if (gameFilesOf !== (game?.id ?? null)) {
+      for (const id of gameFiles) cache.forget(gameKey(id));
+      gameFiles.clear();
+      gameFilesOf = game?.id ?? null;
+    }
+    if (!game) return;
+    const files = [...game.myPicture, ...game.entries.flatMap(({ files: entryFiles }) => entryFiles)];
+    for (const file of files) {
+      if (gameFiles.has(file.id)) continue;
+      gameFiles.add(file.id);
+      void cache.fetchForMe(gameKey(file.id), session, [file]).then(() => publishState());
+    }
+  };
+
+  const toGameFile = (file: GameFile) => ({
+    id: file.id,
+    name: file.name,
+    kind: fileKindOf(file.contentType),
+    url: cache.urlOf(gameKey(file.id), file.id),
+  });
+
+  const gameView = (game: Game, party: PartyConnection): AppState['game'] => ({
+    ...game,
+    endsAt: party.toLocalTime(game.endsAt),
+    entries: game.entries.map((entry) => ({ ...entry, files: entry.files.map(toGameFile) })),
+    myPicture: game.myPicture.map(toGameFile),
+    sending: gameSending,
+  });
+
   const playbackFiles = (
     key: string,
     { files, scene, link }: Pick<QueueItem, 'files' | 'scene' | 'link'>,
@@ -378,6 +421,7 @@ function start(): void {
         : [],
       excludedNow: excludedNow(),
       poll: snapshot?.poll && connection ? { ...snapshot.poll, endsAt: connection.toLocalTime(snapshot.poll.endsAt) } : null,
+      game: snapshot?.game && connection ? gameView(snapshot.game, connection) : null,
       favorites: library.favorites(),
       localReplay: localReplayView(),
       skippedBy,
@@ -536,6 +580,8 @@ function start(): void {
     stopLocalReplay();
     connection?.stop();
     connection = null;
+    gameFiles.clear();
+    gameFilesOf = null;
     cache.clear();
   };
 
@@ -624,6 +670,7 @@ function start(): void {
           });
         }
         cache.sync(session, snapshot.queue);
+        syncGameFiles(session, snapshot.game);
         // What is for everyone comes first, and the moment it starts is already decided.
         if (snapshot.queue[0]?.startAt != null) stopLocalReplay();
         publishState();
@@ -759,6 +806,7 @@ function start(): void {
     link?: MediaLink | null;
     to?: string[];
     jump?: boolean;
+    game?: string;
     // Counted for the « Plus envoyés » order of the library, never sent.
     savedId?: string;
   };
@@ -811,6 +859,7 @@ function start(): void {
           link: timing.link ?? null,
           to: timing.to ?? [],
           jump: timing.jump ?? false,
+          game: timing.game ?? null,
           files: files.map(({ contentType, size, name }) => ({ contentType, size, name: name.slice(0, MAX_FILE_NAME_LENGTH) })),
         }),
       controller.signal,
@@ -826,7 +875,14 @@ function start(): void {
     current.paused = false;
 
     // Before the last step: the service can announce the media before it answers that step.
-    for (const [index, file] of files.entries()) cache.adopt(mediaId, fileIds[index]!, file.path, file.contentType);
+    for (const [index, file] of files.entries()) {
+      const fileId = fileIds[index]!;
+      // A file sent for a game is shown from where it is, with the key the game looks it up by.
+      if (timing.game) {
+        gameFiles.add(fileId);
+        cache.adopt(gameKey(fileId), fileId, file.path, file.contentType);
+      } else cache.adopt(mediaId, fileId, file.path, file.contentType);
+    }
 
     const totalBytes = files.reduce((total, { size }) => total + size, 0);
     let sentBytes = 0;
@@ -847,7 +903,7 @@ function start(): void {
       publishState();
       return result;
     }
-    library.countSent(files.map(({ path }) => path), savedId);
+    if (!timing.game) library.countSent(files.map(({ path }) => path), savedId);
     publishState();
     return { ok: true };
   };
@@ -2025,6 +2081,80 @@ function start(): void {
 
   handle(IpcChannel.VotePoll, (pollId: unknown, choice: unknown) => {
     if (typeof pollId === 'string' && typeof choice === 'number' && Number.isInteger(choice)) connection?.vote(pollId, choice);
+  });
+
+  handle(IpcChannel.StartGame, (kind: unknown) => {
+    const parsed = GameKindSchema.safeParse(kind);
+    if (parsed.success) connection?.startGame(parsed.data);
+  });
+
+  handle(IpcChannel.GameSay, (gameId: unknown, text: unknown) => {
+    if (typeof gameId !== 'string' || typeof text !== 'string') return;
+    const cleaned = text.replace(/\s+/g, ' ').trim().slice(0, MAX_GAME_TEXT_LENGTH);
+    if (cleaned) connection?.gameSay(gameId, cleaned);
+  });
+
+  handle(IpcChannel.GameVote, (gameId: unknown, choice: unknown) => {
+    if (typeof gameId === 'string' && typeof choice === 'string') connection?.gameVote(gameId, choice);
+  });
+
+  handle(IpcChannel.StopGame, (gameId: unknown) => {
+    if (typeof gameId === 'string') connection?.stopGame(gameId);
+  });
+
+  const sendForGame = async (gameId: string, files: SavedFile[], caption: string): Promise<ActionResult> => {
+    const session = store.session;
+    if (!session) return { ok: false, error: 'unauthorized' };
+    gameSending += Math.max(1, files.length);
+    publishState();
+    const result = await sendFiles(session, files, {
+      caption,
+      clipStartMs: 0,
+      durationMs: DEFAULT_DISPLAY_MS,
+      videoMuted: false,
+      soundMuted: false,
+      game: gameId,
+    });
+    gameSending -= Math.max(1, files.length);
+    publishState();
+    return result;
+  };
+
+  handle(IpcChannel.SendGameFiles, async (gameId: unknown): Promise<GameSendResult> => {
+    const game = connection?.current().game;
+    if (typeof gameId !== 'string' || game?.id !== gameId || game.phase !== 'collect') return { ok: false, error: 'invalid_request' };
+    const picturesOnly = game.kind === 'joke' || game.kind === 'undercover';
+    const left = GAME_ENTRIES_PER_PLAYER[game.kind] - game.mySent - gameSending;
+    if (left <= 0) return { ok: true };
+    const extensions = Object.entries(CONTENT_TYPE_BY_EXTENSION)
+      .filter(([, contentType]) => (picturesOnly ? fileKindOf(contentType) === 'image' : true))
+      .map(([extension]) => extension);
+    const picked = await dialog.showOpenDialog(controlWindow, {
+      title: picturesOnly ? 'Choisir des images' : 'Choisir un LiveChat',
+      properties: left > 1 ? ['openFile', 'multiSelections'] : ['openFile'],
+      filters: [{ name: picturesOnly ? 'Images' : 'Images, vidéos et sons', extensions }],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) return { ok: false, error: 'cancelled' };
+
+    const chosen: SavedFile[] = [];
+    for (const path of picked.filePaths.slice(0, left)) {
+      const contentType = contentTypeOf(path);
+      if (!contentType || (picturesOnly && fileKindOf(contentType) !== 'image')) return { ok: false, error: 'unsupported' };
+      const { size } = await stat(path);
+      if (size === 0) return { ok: false, error: 'empty' };
+      if (size > MAX_MEDIA_BYTES) return { ok: false, error: 'too_large' };
+      chosen.push({ path, name: basename(path), size, contentType });
+    }
+    // One entry per picture, sent side by side.
+    const results = await Promise.all(chosen.map((file) => sendForGame(gameId, [file], '')));
+    return results.find((result) => !result.ok) ?? { ok: true };
+  });
+
+  handle(IpcChannel.SendGameText, (gameId: unknown, text: unknown): Promise<ActionResult> | ActionResult => {
+    if (typeof gameId !== 'string' || typeof text !== 'string') return { ok: false, error: 'invalid_request' };
+    const caption = text.trim().slice(0, MAX_CAPTION_LENGTH);
+    if (!caption) return { ok: false, error: 'invalid_request' };
+    return sendForGame(gameId, [], caption);
   });
 
   // The ring around the sender's picture in the app moves with what the overlay hears.
