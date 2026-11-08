@@ -6,7 +6,9 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.18.0** (dernière version, 8 novembre 2026) : plus clair et onglet Jeux (détail plus bas)
+**0.19.0** (dernière version, 8 novembre 2026) : retours après la 0.18.0, raccourcis simplifiés (détail plus bas)
+
+**0.18.0** (8 novembre 2026) : plus clair et onglet Jeux
 
 **0.17.0** : liens et vie de la party
 
@@ -107,7 +109,7 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
-### En cours : 0.19.0 (retours après la 0.18.0)
+### Publiée : 0.19.0 (retours après la 0.18.0)
 
 - Mode simple : retour du grand cadre (glisser, ou Depuis ma bibliothèque : Image / Vidéo / Son). « Ajouter un son ? » reste
 - Mode avancé : recherche par nom et tag, plus de barre « Ajouter un son » en bas
