@@ -115,7 +115,7 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 - Historique : vignette du LiveChat, la vidéo joue au survol
 - Jeux : cartes verticales dessinées et animées
 - App plus transparente, teinte violette du logo
-- Raccourcis simplifiés : maquette montrée, attend ton OK
+- Raccourcis simplifiés : 2 cadres, ajout d'un LiveChat sur place, option attente dans le menu ⋯
 
 ### Publiée : 0.18.0 (plus clair)
 

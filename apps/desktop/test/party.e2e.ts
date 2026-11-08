@@ -1185,12 +1185,14 @@ describe.skipIf(online)('party flow in the real app', () => {
     await expect.poll(async () => (await host.control.evaluate(() => window.liveChat.scanLibrary())).saved.some(({ name }) => name === 'Mon raccourci')).toBe(true);
     await host.control.getByLabel('Texte à afficher').fill('');
 
-    const library = await host.control.evaluate(() => window.liveChat.scanLibrary());
-    const saved = library.saved.find(({ name }) => name === 'Mon raccourci')!;
-    await host.control.evaluate((id) => window.liveChat.assignSavedShortcut(id, 'Shift+F3'), saved.id);
-    await expect.poll(() => host.app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Shift+F3'))).toBe(true);
-
+    // Given right here: pick it, then press the key.
     await openSettings(host, 'Raccourcis');
+    await host.control.getByRole('button', { name: '+ Ajouter un LiveChat' }).click();
+    await host.control.getByLabel('Chercher un LiveChat').fill('Mon raccourci');
+    await host.control.getByTestId('key-choice').filter({ hasText: 'Mon raccourci' }).click();
+    await host.control.getByTestId('give-key').waitFor();
+    await host.control.keyboard.press('Shift+F3');
+    await expect.poll(() => host.app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('Shift+F3'))).toBe(true);
     await host.control.getByTestId('shortcut-list').filter({ hasText: 'Mon raccourci' }).waitFor();
     await picture(host.control, 'settings-shortcuts.png');
 
@@ -1216,6 +1218,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await control.evaluate(() => window.liveChat.setActionKey('wheelKey', 'Ctrl+Shift+F8'));
     await control.evaluate(() => window.liveChat.setActionKey('skipMineKey', 'Ctrl+Shift+F11'));
 
+    await control.getByRole('button', { name: 'Remplir la roue ›' }).click();
     await control.getByTestId('wheel-place-0').click();
     await control.getByLabel('Chercher pour cette place').fill('Mon raccourci');
     await control.getByTestId('wheel-choice').filter({ hasText: 'Mon raccourci' }).click();

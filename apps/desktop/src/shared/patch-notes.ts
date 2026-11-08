@@ -12,6 +12,7 @@ export const PATCH_NOTES: PatchNote[] = [
       'Historique : une petite image de chaque LiveChat, les vidéos bougent au survol',
       'Jeux : de grandes cartes dessinées et animées',
       'L’app est plus transparente, teintée du violet du logo',
+      'Raccourcis plus simples : tes touches, puis tes LiveChats en un appui. « + Ajouter un LiveChat » se fait directement là',
     ],
   },
   {

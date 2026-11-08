@@ -4335,3 +4335,78 @@ html.live-pulse .avatar.has-ring.is-live,
   background: var(--glass-active);
   border-color: var(--line-bright);
 }
+
+/* Raccourcis: two frames and one line of tools. */
+.key-clear {
+  flex: none;
+  width: 30px;
+  padding: 0;
+  font-size: 16px;
+}
+
+.keys-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.keys-more {
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: 1px;
+}
+
+.keys-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px;
+  border-radius: var(--radius-field);
+  background: var(--well);
+  animation: view-in var(--enter) var(--ease) backwards;
+}
+
+.keys-options .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.keys-wheel {
+  display: grid;
+  gap: 8px;
+  animation: view-in var(--enter) var(--ease) backwards;
+}
+
+.keys-add {
+  width: 100%;
+  min-height: 44px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-field);
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+
+.keys-add:hover {
+  border-color: var(--line-bright);
+  background: var(--glass);
+  color: var(--text);
+}
+
+.keys-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px;
+}
+
+.keys-tools .hint {
+  flex: 1;
+  min-width: 160px;
+  margin: 0;
+}
