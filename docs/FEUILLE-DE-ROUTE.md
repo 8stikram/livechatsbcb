@@ -6,7 +6,9 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.20.0** (dernière version, 8 novembre 2026) : sondage à l'écran, fenêtre bibliothèque, moins de freezes (détail plus bas)
+**0.21.0** (dernière version, 8 novembre 2026) : motion design, fond vivant (détail plus bas)
+
+**0.20.0** (8 novembre 2026) : sondage à l'écran, fenêtre bibliothèque, moins de freezes
 
 **0.19.0** (8 novembre 2026) : retours après la 0.18.0, raccourcis simplifiés
 
@@ -111,7 +113,7 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
-### En cours : 0.21.0 (motion design)
+### Publiée : 0.21.0 (motion design)
 
 - Changement d'onglet : grand cadre qui se transforme, cadres de côté qui partent par leur côté, sens des onglets
 - Envoi qui s'envole, Simple ↔ Avancé en douceur, boutons qui rebondissent, cartes qui se soulèvent
