@@ -11,6 +11,9 @@ export const PATCH_NOTES: PatchNote[] = [
       'Sondage : le gagnant s’affiche à l’écran avec des confettis et un petit son de victoire',
       'Party : le bouton Arrêter est rouge, Reprendre est vert',
       'Le violet ne clignote plus quand tu changes d’onglet',
+      'Moins lourd : les vidéos de l’Historique et de la Bibliothèque ne se chargent que quand tu les vois (ça pouvait faire ramer le PC)',
+      'Détection du jeu plus légère, et l’app ne redémarre plus pour une mise à jour pendant que tu joues',
+      'Si une mise à jour n’arrive pas à s’installer, l’app ne se ferme plus en boucle : un bouton Réessayer apparaît',
     ],
   },
   {

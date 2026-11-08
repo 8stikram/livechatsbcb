@@ -7,6 +7,7 @@ import { GlideList } from './glide';
 import { IconPlay, KindIcon } from './icons';
 import { Star } from './LibraryScreen';
 import { canSendIn, errorMessage, replayErrorMessage } from './messages';
+import { LazyVideo } from './LazyVideo';
 import { mediaTitle } from './NowPlaying';
 
 const CLOCK_TICK_MS = 30_000;
@@ -151,18 +152,8 @@ const HistoryPreview = ({ item }: { item: HistoryView }) => {
       </span>
     );
   }
-  if (!item.preview.video) return <img className="history-picture" src={item.preview.url} alt="" data-testid="history-preview" />;
-  return (
-    <video
-      className="history-picture"
-      src={item.preview.url}
-      muted
-      loop
-      playsInline
-      preload="metadata"
-      data-testid="history-preview"
-    />
-  );
+  if (!item.preview.video) return <img className="history-picture" src={item.preview.url} alt="" loading="lazy" decoding="async" data-testid="history-preview" />;
+  return <LazyVideo className="history-picture" src={item.preview.url} testId="history-preview" />;
 };
 
 const HistoryRow = ({

@@ -3,6 +3,7 @@ import { MAX_SCENE_PICTURES, type SceneLayer } from '@livechatsbcb/protocol';
 import type { AppState, LibraryFileView, LinkDraft, PlaybackView } from '../../../shared/ipc';
 import { Caption, Playing, Profile, ScreenPreview, layerLook, layerPlace } from '../scene';
 import { KindIcon } from './icons';
+import { LazyVideo } from './LazyVideo';
 import { Slider } from './NowPlaying';
 import { Switch } from './SettingsScreen';
 import type { Layer, Scene } from './use-scene';
@@ -276,7 +277,7 @@ const LibraryStrip = ({ scene }: { scene: Scene }) => {
                 onClick={() => void scene.addFromLibrary(file.id).then(setError)}
               >
                 {file.kind === 'image' && <img src={file.url} alt="" loading="lazy" draggable={false} />}
-                {file.kind === 'video' && <video src={`${file.url}#t=0.1`} preload="metadata" muted playsInline />}
+                {file.kind === 'video' && <LazyVideo className="lazy-thumb" src={file.url} />}
                 {file.kind === 'audio' && <KindIcon kind="audio" size={20} />}
                 <span className="scene-strip-name">{file.name}</span>
               </button>

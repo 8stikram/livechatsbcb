@@ -116,6 +116,8 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 - Sondage : gagnant à l'écran comme un LiveChat, confettis et son de victoire
 - Party : Arrêter en rouge, Reprendre en vert
 - Le violet ne clignote plus en changeant d'onglet
+- Freezes : vidéos chargées seulement quand visibles (Historique, Bibliothèque, fenêtre), détection du jeu plus légère, pas de redémarrage de mise à jour en jeu
+- Mise à jour qui échoue : plus de boucle fermeture/relance, bouton Réessayer
 
 ### Publiée : 0.19.0 (retours après la 0.18.0)
 

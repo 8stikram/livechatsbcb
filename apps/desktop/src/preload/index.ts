@@ -90,6 +90,7 @@ const api: LiveChatApi = {
   closeWheel: () => ipcRenderer.invoke(IpcChannel.CloseWheel),
   wheelActivity: () => ipcRenderer.invoke(IpcChannel.WheelActivity),
   checkForUpdates: () => ipcRenderer.invoke(IpcChannel.CheckForUpdates),
+  installUpdate: () => ipcRenderer.invoke(IpcChannel.InstallUpdate),
   markNotesSeen: () => ipcRenderer.invoke(IpcChannel.MarkNotesSeen),
   stashView: (view) => ipcRenderer.invoke(IpcChannel.StashView, view),
   searchSoundCloud: (query) => ipcRenderer.invoke(IpcChannel.SearchSoundCloud, query),

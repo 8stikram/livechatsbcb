@@ -337,6 +337,8 @@ export type AppState = {
   unavailableKeys: string[];
   // Seconds before the app restarts to install an update. Null when it isn't about to.
   restartIn: number | null;
+  // The last restart did not install the update: only the button tries again.
+  updateFailed: boolean;
   whatsNew: boolean;
   account: Account | null;
   // Waiting for the browser to come back from Discord.
@@ -470,6 +472,7 @@ export const IpcChannel = {
   SetSettings: 'settings:set',
   TestOverlay: 'overlay:test',
   CheckForUpdates: 'update:check',
+  InstallUpdate: 'update:install',
   MarkNotesSeen: 'update:notes-seen',
   StashView: 'restart:stash-view',
   StashDraft: 'restart:stash-draft',
@@ -568,6 +571,7 @@ export type LiveChatApi = {
   wheelActivity(): Promise<void>;
   clearShortcut(key: string): Promise<void>;
   checkForUpdates(): Promise<UpdateCheckOutcome>;
+  installUpdate(): Promise<void>;
   markNotesSeen(): Promise<void>;
   stashView(view: string): Promise<void>;
   stashDraft(advanced: boolean, input: unknown): Promise<void>;

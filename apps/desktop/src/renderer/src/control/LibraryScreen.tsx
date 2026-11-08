@@ -5,6 +5,7 @@ import { GlideList } from './glide';
 import { IconPlay, IconStar, KindIcon } from './icons';
 import { useKeyCapture } from './KeyButton';
 import { keyChangeNote } from './KeysPanel';
+import { LazyVideo } from './LazyVideo';
 import { loadInEditor } from './load-editor';
 import { playLengthMs } from './play-length';
 import { canSendIn, mediaErrorMessage } from './messages';
@@ -167,7 +168,7 @@ const FileCard = ({
       {file.kind === 'image' ? (
         <img src={file.url} alt="" loading="lazy" />
       ) : (
-        <video src={`${file.url}#t=0.1`} preload="metadata" muted playsInline />
+        <LazyVideo className="lazy-thumb" src={file.url} />
       )}
     </button>
     <span className="library-card-foot">

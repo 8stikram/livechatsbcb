@@ -141,6 +141,17 @@ const SKIPPED_BY_SHOWN_MS = 6_000;
 
 // An update installed unnoticed should come back the same way, and an installer can't pass an argument along.
 const quietRestartFlag = () => join(app.getPath('userData'), 'restart-quietly');
+// Which version a restart tried to install, from which. Still on the old one afterwards means the install failed:
+// restarting again by itself would close and reopen the app forever, so then only the button does it.
+const updateAttemptFile = () => join(app.getPath('userData'), 'update-attempt.json');
+const failedUpdate = (): string | null => {
+  try {
+    const { version, from } = JSON.parse(readFileSync(updateAttemptFile(), 'utf8')) as { version: string; from: string };
+    return from === app.getVersion() ? version : null;
+  } catch {
+    return null;
+  }
+};
 
 // Says how the window was. A flag written by an older version is empty, and it only ever restarted hidden.
 const takeRestartMode = (): StartMode | null => {
@@ -383,6 +394,10 @@ function start(): void {
       shortcuts: library.shortcutKeys().map((key) => ({ key, name: library.shortcutName(key) })),
       unavailableKeys,
       restartIn: restartCountdown.seconds,
+      updateFailed: (() => {
+        const status = updater.current();
+        return status.state === 'ready' && failedUpdate() === status.version;
+      })(),
       whatsNew: settings.current.seenVersion !== app.getVersion(),
       account: store.login?.account ?? null,
       loggingIn: login !== null,
@@ -484,6 +499,8 @@ function start(): void {
   const installUpdate = (): void => {
     const mode: StartMode = !controlWindow.isVisible() ? 'hidden' : controlWindow.isFocused() ? 'shown' : 'inactive';
     writeFileSync(quietRestartFlag(), mode);
+    const status = updater.current();
+    if (status.state === 'ready') writeFileSync(updateAttemptFile(), JSON.stringify({ version: status.version, from: app.getVersion() }));
     // The updater closes every window before it emits before-quit, so the stage must already allow closing.
     quitting = true;
     updater.installNow();
@@ -497,8 +514,11 @@ function start(): void {
 
   // An old version ends up shut out of the party, so nobody has to think of it. Never in the middle of anything.
   const syncRestart = (): void => {
-    const busy = upload || localReplay || login || keeping.size > 0 || connection?.current().queue.length;
-    restartCountdown.sync(!quitting && updater.current().state === 'ready' && !busy);
+    // Nor in game: closing and opening the app there can make the game stutter or lose the front.
+    const busy = upload || localReplay || login || keeping.size > 0 || connection?.current().queue.length || gameWatch.isPlaying;
+    const status = updater.current();
+    const triedAlready = status.state === 'ready' && failedUpdate() === status.version;
+    restartCountdown.sync(!quitting && status.state === 'ready' && !triedAlready && !busy);
   };
 
   // Tells the service once this PC has stopped showing something, and comes back at the moment the limit says it stops.
@@ -534,6 +554,7 @@ function start(): void {
   let wasExcluded = false;
   const gameWatch = new GameWatch(() => {
     syncStatus();
+    syncRestart();
     // Coming in front of an excluded app, or leaving it, changes what the overlay may show.
     if (excludedNow() !== wasExcluded) {
       wasExcluded = excludedNow();
@@ -1923,6 +1944,9 @@ function start(): void {
   });
 
   handle(IpcChannel.CheckForUpdates, () => updater.checkNow());
+  handle(IpcChannel.InstallUpdate, () => {
+    if (updater.current().state === 'ready') installUpdate();
+  });
 
   handle(IpcChannel.MarkNotesSeen, () => {
     settings.update({ seenVersion: app.getVersion() });

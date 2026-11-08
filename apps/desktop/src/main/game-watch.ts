@@ -44,8 +44,20 @@ public static class LcWin {
   [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr window, uint flags);
   [DllImport("user32.dll")] public static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr window, System.Text.StringBuilder text, int size);
+  [DllImport("kernel32.dll")] public static extern IntPtr OpenProcess(uint access, bool inherit, uint id);
+  [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr handle);
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern bool QueryFullProcessImageName(IntPtr process, int flags, System.Text.StringBuilder path, ref int size);
+  public static string PathOf(uint id) {
+    IntPtr handle = OpenProcess(0x1000, false, id);
+    if (handle == IntPtr.Zero) return "";
+    try { var path = new System.Text.StringBuilder(1024); int size = path.Capacity; return QueryFullProcessImageName(handle, 0, path, ref size) ? path.ToString() : ""; }
+    finally { CloseHandle(handle); }
+  }
+  public static string TitleOf(IntPtr window) { var text = new System.Text.StringBuilder(256); GetWindowText(window, text, text.Capacity); return text.ToString(); }
 }
 "@
+$described = @{}
 while ($true) {
   $out = '-'
   try {
@@ -62,13 +74,17 @@ while ($true) {
       }
       $id = 0
       [void][LcWin]::GetWindowThreadProcessId($window, [ref]$id)
-      $process = Get-Process -Id $id -ErrorAction SilentlyContinue
-      if ($process) {
-        $title = ''
-        $about = ''
-        try { $title = $process.MainWindowTitle } catch {}
-        try { $about = $process.MainModule.FileVersionInfo.FileDescription } catch {}
-        $out = $process.ProcessName + [char]9 + $full + [char]9 + $title + [char]9 + $about
+      # Asked with the least rights there are, so a game's anti-cheat has nothing to object to.
+      $path = [LcWin]::PathOf($id)
+      if ($path) {
+        $name = [IO.Path]::GetFileNameWithoutExtension($path)
+        if (-not $described.ContainsKey($path)) {
+          $about = ''
+          try { $about = [Diagnostics.FileVersionInfo]::GetVersionInfo($path).FileDescription } catch {}
+          $described[$path] = $about
+        }
+        $title = [LcWin]::TitleOf($window)
+        $out = $name + [char]9 + $full + [char]9 + $title + [char]9 + $described[$path]
       }
     }
   } catch {}
@@ -141,7 +157,8 @@ export class GameWatch {
       const [name, full, title = '', about = ''] = last.split('\t');
       const front = name && name !== '-' ? name.toLowerCase() : null;
       const playing = front !== null && full === '1' && !NOT_GAMES.has(front);
-      const called = playing && name ? gameNameOf(name, title, about) : null;
+      // Named once per game: a title that keeps changing (a timer, a score) must not tell the party every 5 seconds.
+      const called = playing && name ? (front === this.front && this.name ? this.name : gameNameOf(name, title, about)) : null;
       if (called !== this.name) {
         this.name = called;
         // Another game in the same full screen: nothing else changed, so say it here.

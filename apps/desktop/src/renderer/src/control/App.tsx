@@ -325,7 +325,7 @@ export const App = () => {
       <>
         {launchLogo}
         <div className="app is-login">
-          <UpdateBanner update={state.update} restartIn={restartIn} />
+          <UpdateBanner update={state.update} restartIn={restartIn} failed={state.updateFailed} />
           <LoginScreen state={state} />
         </div>
       </>
@@ -365,7 +365,7 @@ export const App = () => {
       <div className="workspace">
         {!showPicker && <Header party={party} view={view} joinError={joinError} gameLive={gameIsLive(state)} onView={setChosenView} />}
 
-        <UpdateBanner update={state.update} restartIn={restartIn} />
+        <UpdateBanner update={state.update} restartIn={restartIn} failed={state.updateFailed} />
         {incomingBusy && (
           <p className="banner" role="status" data-testid="incoming-busy">
             Récupération du média…

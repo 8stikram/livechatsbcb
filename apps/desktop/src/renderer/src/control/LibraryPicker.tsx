@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { LibraryFileView } from '../../../shared/ipc';
 import { KindIcon } from './icons';
+import { LazyVideo } from './LazyVideo';
 
 export type Shelf = 'image' | 'video' | 'audio';
 
@@ -59,8 +60,8 @@ export const LibraryPicker = ({ shelf, onShelf, onPick, onClose }: { shelf: Shel
             {shown.map((file) => (
               <li key={file.id}>
                 <button type="button" className="shelf-file" title={file.name} data-testid="picker-file" onClick={() => onPick(file)}>
-                  {file.kind === 'image' && <img src={file.url} alt="" loading="lazy" />}
-                  {file.kind === 'video' && <video src={`${file.url}#t=0.1`} preload="metadata" muted playsInline />}
+                  {file.kind === 'image' && <img src={file.url} alt="" loading="lazy" decoding="async" />}
+                  {file.kind === 'video' && <LazyVideo className="shelf-thumb" src={file.url} />}
                   {file.kind === 'audio' && (
                     <span className="shelf-sound">
                       <KindIcon kind="audio" size={24} />
