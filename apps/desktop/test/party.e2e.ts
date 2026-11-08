@@ -1618,7 +1618,7 @@ describe.skipIf(online)('party flow in the real app', () => {
         const box = document.createElement('div');
         box.id = 'bar-check';
         box.className = 'upload';
-        box.style.cssText = 'position:fixed;left:20px;right:20px;top:20px;z-index:99';
+        box.style.cssText = 'position:fixed;left:20px;right:20px;top:20px;z-index:99;background:#000';
         box.innerHTML = `<progress max="100" value="60" class="${isPaused ? 'is-paused' : ''}"></progress>`;
         document.body.append(box);
       }, paused);
@@ -2129,6 +2129,17 @@ describe.skipIf(online)('party flow in the real app', () => {
     await tour.getByRole('button', { name: 'C’est parti' }).click();
     await tour.waitFor({ state: 'detached' });
     expect((await host.control.evaluate(() => window.liveChat.getState())).settings.tutorialDone).toBe(true);
+    await openTab(host, 'LiveChat');
+  });
+
+  it('changes tab in one movement: the big frame changes shape, the side ones go by their side', async () => {
+    await openTab(host, 'LiveChat');
+    await host.control.waitForTimeout(600);
+    await host.control.getByRole('tab', { name: 'Bibliothèque' }).click();
+    await host.control.waitForTimeout(140);
+    await picture(host.control, 'tab-move.png');
+    await host.control.waitForTimeout(600);
+    await expect.poll(() => host.control.evaluate(() => document.getAnimations().filter((animation) => String((animation.effect as KeyframeEffect | null)?.pseudoElement ?? '').startsWith('::view-transition')).length)).toBe(0);
     await openTab(host, 'LiveChat');
   });
 

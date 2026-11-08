@@ -27,9 +27,9 @@
   --line-bright: rgb(255 255 255 / 30%);
   --well: rgb(0 0 0 / 25%);
 
-  --radius-panel: 34px;
-  --radius-inner: 22px;
-  --radius-field: 16px;
+  --radius-panel: 28px;
+  --radius-inner: 18px;
+  --radius-field: 14px;
 
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --fast: 140ms;
@@ -4669,4 +4669,198 @@ html.live-pulse .avatar.has-ring.is-live,
   height: 34px;
   padding: 0;
   font-size: 20px;
+}
+
+/* Changing tab, the way a motion designer would: one shared axis, one movement.
+   - The big frame both pages have changes shape into the next one (container transform).
+   - Side frames only one page has leave and come in by their own side, a beat after.
+   - Everything drifts a little along the tabs: forward to the left, back to the right.
+   Snapshots do the moving, so the page itself never repaints mid-way. */
+@supports (view-transition-name: none) {
+  .view,
+  .view :where(.glass:not(.glass .glass)) {
+    animation: none;
+  }
+
+  .media-main,
+  .party-main,
+  .library,
+  .history,
+  .game-picker,
+  .game-main,
+  .settings-grid {
+    view-transition-name: main-frame;
+  }
+
+  .media-side,
+  .party-side,
+  .game-side {
+    view-transition-name: side-right;
+  }
+
+  .settings-nav {
+    view-transition-name: side-left;
+  }
+}
+
+:root {
+  --vt-time: 420ms;
+  --vt-move: cubic-bezier(0.2, 0, 0, 1);
+  --vt-in: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --vt-out: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --vt-shift: 36px;
+}
+
+::view-transition-group(*) {
+  animation-duration: var(--vt-time);
+  animation-timing-function: var(--vt-move);
+}
+
+/* The header and the window stay put: only what changes cross-fades, quickly. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+}
+
+/* The shape changes smoothly; the content inside fades through, never stretched. */
+::view-transition-old(main-frame),
+::view-transition-new(main-frame) {
+  height: 100%;
+  object-fit: cover;
+  object-position: top left;
+  overflow: clip;
+}
+
+::view-transition-old(main-frame) {
+  animation: vt-fade-out 160ms var(--vt-out) both;
+}
+
+::view-transition-new(main-frame) {
+  animation: vt-fade-in 300ms var(--vt-in) 90ms both;
+}
+
+/* Along the tabs: forward, the old page leaves to the left and the new one comes from the right. */
+html:active-view-transition-type(forward)::view-transition-old(main-frame) {
+  animation: vt-fade-out 160ms var(--vt-out) both, vt-to-left 220ms var(--vt-out) both;
+}
+
+html:active-view-transition-type(forward)::view-transition-new(main-frame) {
+  animation: vt-fade-in 300ms var(--vt-in) 90ms both, vt-from-right var(--vt-time) var(--vt-in) both;
+}
+
+html:active-view-transition-type(back)::view-transition-old(main-frame) {
+  animation: vt-fade-out 160ms var(--vt-out) both, vt-to-right 220ms var(--vt-out) both;
+}
+
+html:active-view-transition-type(back)::view-transition-new(main-frame) {
+  animation: vt-fade-in 300ms var(--vt-in) 90ms both, vt-from-left var(--vt-time) var(--vt-in) both;
+}
+
+/* A side frame only one page has goes out by its side, and comes in by it a beat later. */
+::view-transition-old(side-right):only-child {
+  animation: vt-fade-out 200ms var(--vt-out) both, vt-to-right 240ms var(--vt-out) both;
+}
+
+::view-transition-new(side-right):only-child {
+  animation: vt-fade-in 320ms var(--vt-in) 120ms both, vt-from-right var(--vt-time) var(--vt-in) 80ms both;
+}
+
+::view-transition-old(side-left):only-child {
+  animation: vt-fade-out 200ms var(--vt-out) both, vt-to-left 240ms var(--vt-out) both;
+}
+
+::view-transition-new(side-left):only-child {
+  animation: vt-fade-in 320ms var(--vt-in) 120ms both, vt-from-left var(--vt-time) var(--vt-in) 80ms both;
+}
+
+@keyframes vt-fade-out { to { opacity: 0; } }
+@keyframes vt-fade-in { from { opacity: 0; } }
+@keyframes vt-to-left { to { transform: translateX(calc(var(--vt-shift) * -1)); } }
+@keyframes vt-to-right { to { transform: translateX(var(--vt-shift)); } }
+@keyframes vt-from-right { from { transform: translateX(var(--vt-shift)); } }
+@keyframes vt-from-left { from { transform: translateX(calc(var(--vt-shift) * -1)); } }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* Simple and advanced are the same frame: what is inside comes in softly instead of jumping. */
+.media-main > :not(.media-mode) {
+  animation: mode-in 380ms var(--vt-in) backwards;
+}
+
+@keyframes mode-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+}
+
+/* Sent: the frame flies up to the party, the empty one settles in after. */
+html:active-view-transition-type(sent)::view-transition-old(main-frame) {
+  animation: vt-fly-up 460ms cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+
+html:active-view-transition-type(sent)::view-transition-new(main-frame) {
+  animation: vt-settle 420ms var(--vt-in) 200ms both;
+}
+
+@keyframes vt-fly-up {
+  30% { transform: translateY(6px) scale(0.98); opacity: 1; }
+  to { transform: translateY(-70vh) scale(0.7) rotate(-3deg); opacity: 0; }
+}
+
+@keyframes vt-settle {
+  from { opacity: 0; transform: scale(0.96); }
+}
+
+/* Buttons sink when pressed and spring back on release. */
+.pill:active:not(:disabled),
+.tab:active:not(:disabled),
+.draft-shelf:active,
+.keys-add:active {
+  transform: scale(0.95);
+  transition-duration: 90ms;
+}
+
+/* Library cards lift a little under the mouse. */
+.library-card {
+  transition: transform 260ms var(--spring), filter 260ms var(--ease);
+}
+
+.library-card:hover {
+  transform: translateY(-4px);
+  filter: drop-shadow(0 10px 18px rgb(0 0 0 / 35%));
+}
+
+/* A living background: one soft violet glow drifting very slowly behind everything.
+   It only moves while the app is in front, so it costs nothing in game. */
+html:not(.overlay) body::before {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  background:
+    radial-gradient(40% 35% at 30% 40%, rgb(170 80 240 / 16%), transparent 70%),
+    radial-gradient(35% 30% at 70% 65%, rgb(230 110 240 / 10%), transparent 70%);
+  pointer-events: none;
+  animation: ground-drift 38s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+html.is-away body::before,
+html.calm body::before {
+  animation-play-state: paused;
+}
+
+@keyframes ground-drift {
+  0% { transform: translate(-4%, -3%) rotate(0deg) scale(1); }
+  50% { transform: translate(5%, 2%) rotate(8deg) scale(1.08); }
+  100% { transform: translate(-2%, 5%) rotate(-6deg) scale(1.02); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not(.overlay) body::before { animation: none; }
+  .library-card:hover { transform: none; }
 }

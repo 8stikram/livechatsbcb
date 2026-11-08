@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import {
   MAX_CAPTION_LENGTH,
   MAX_CLIP_MS,
@@ -677,15 +677,27 @@ export const MediaScreen = ({
     stopPreview();
     const result = advanced ? await window.liveChat.sendScene(sceneInput()) : await window.liveChat.sendMedia(recipe());
     if (result.ok) {
-      if (advanced) {
-        scene.clearStage();
-        if (sceneLink) files.setLink(null);
-      } else files.reset();
-      files.setSpeak(false);
-      setWhisperTo([]);
-      // Keeps whatever was typed while this one was on its way.
-      files.setCaption((typed) => (typed === caption ? '' : typed));
-      setJustSent(true);
+      const clear = () => {
+        if (advanced) {
+          scene.clearStage();
+          if (sceneLink) files.setLink(null);
+        } else files.reset();
+        files.setSpeak(false);
+        setWhisperTo([]);
+        // Keeps whatever was typed while this one was on its way.
+        files.setCaption((typed) => (typed === caption ? '' : typed));
+        setJustSent(true);
+      };
+      // What was sent flies off to the party, and an empty frame settles in its place.
+      const calm = document.documentElement.classList.contains('calm') || matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (calm || !document.startViewTransition) clear();
+      else {
+        try {
+          document.startViewTransition({ update: () => flushSync(clear), types: ['sent'] });
+        } catch {
+          clear();
+        }
+      }
       window.clearTimeout(sentTimer.current);
       sentTimer.current = window.setTimeout(() => setJustSent(false), SENT_SHOWN_MS);
     } else if (result.error !== 'cancelled') {

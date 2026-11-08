@@ -5,7 +5,7 @@ export const PATCH_NOTES: PatchNote[] = [
   {
     version: '0.20.1',
     date: '8 novembre 2026',
-    items: ['Fond de l’app plus clair, plus transparent et un peu plus flou', 'Bords plus arrondis'],
+    items: ['Fond de l’app plus clair, plus transparent et un peu plus flou'],
   },
   {
     version: '0.20.0',

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { flushSync } from 'react-dom';
 import { DEFAULT_DISPLAY_MS, MAX_CAPTION_LENGTH } from '@livechatsbcb/protocol';
 import { keyLabel, type EditResult, type IncomingResult } from '../../../shared/ipc';
 import logo from '../assets/logo.png';
@@ -66,7 +67,26 @@ export const App = () => {
   const state = useAppState();
   const files = useDraft();
   const scene = useScene();
-  const [chosenView, setChosenView] = useState<View>('media');
+  const [chosenView, setShownView] = useState<View>('media');
+  const shownView = useRef<View>('media');
+  shownView.current = chosenView;
+  // Changing tab is one movement: the frames both pages have change shape into each other, the others leave and come
+  // in by their side, all on the axis of the tabs. Pages are snapshots meanwhile, so it stays smooth on any PC.
+  const setChosenView = (next: View) => {
+    const from = shownView.current;
+    if (next === from) return;
+    const calm = document.documentElement.classList.contains('calm') || matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (calm || !document.startViewTransition) {
+      setShownView(next);
+      return;
+    }
+    const forward = VIEW_ORDER.indexOf(next) > VIEW_ORDER.indexOf(from);
+    try {
+      document.startViewTransition({ update: () => flushSync(() => setShownView(next)), types: [forward ? 'forward' : 'back'] });
+    } catch {
+      setShownView(next);
+    }
+  };
   // Whose LiveChats the history shows. Null for everybody's.
   const [historyFrom, setHistoryFrom] = useState<string | null>(null);
   const [whisperTo, setWhisperTo] = useState<string[]>([]);
@@ -94,6 +114,20 @@ export const App = () => {
   useLayoutEffect(() => {
     document.documentElement.classList.toggle('calm', reduceMotion);
   }, [reduceMotion]);
+
+  // The living background rests whenever the app isn't in front: nothing moves for nobody, and games keep the GPU.
+  useEffect(() => {
+    const sync = () => document.documentElement.classList.toggle('is-away', document.hidden || !document.hasFocus());
+    sync();
+    window.addEventListener('focus', sync);
+    window.addEventListener('blur', sync);
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      window.removeEventListener('focus', sync);
+      window.removeEventListener('blur', sync);
+      document.removeEventListener('visibilitychange', sync);
+    };
+  }, []);
 
   useEffect(() => {
     if (launch !== 'playing') return;
