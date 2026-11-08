@@ -111,6 +111,13 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
+### En cours : 0.21.0 (motion design)
+
+- Changement d'onglet : grand cadre qui se transforme, cadres de côté qui partent par leur côté, sens des onglets
+- Envoi qui s'envole, Simple ↔ Avancé en douceur, boutons qui rebondissent, cartes qui se soulèvent
+- Fond vivant (en pause quand l'app n'est pas devant), fond plus clair et plus flou
+- Overlay en jeu inchangé
+
 ### Publiée : 0.20.0 (retours après la 0.19.0)
 
 - LiveChat : Image / Vidéo / Son ouvre une petite fenêtre bibliothèque avec recherche (nom + tag)
