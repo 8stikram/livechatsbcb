@@ -245,6 +245,14 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
             </section>
           )}
 
+          <section className="glass panel" aria-labelledby="game-shown-title">
+            <h2 id="game-shown-title">Mon jeu</h2>
+            <Switch checked={settings.showGame} onChange={(showGame) => set({ showGame })}>
+              Montrer à la party à quoi je joue
+            </Switch>
+            <p className="hint">Sinon, ils voient juste « En jeu ».</p>
+          </section>
+
           <section className="glass panel" aria-labelledby="motion-title">
             <h2 id="motion-title">Animations</h2>
             <Switch checked={settings.reduceMotion} onChange={(reduceMotion) => set({ reduceMotion })}>

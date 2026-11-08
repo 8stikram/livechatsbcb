@@ -271,7 +271,7 @@ export const useScene = () => {
       setClipState(sound && chosen ? { leader: sound.id, clip: chosen } : null);
       return null;
     },
-    pick: async (wanted: 'picture' | 'sound') => accept(await window.liveChat.pickSceneFile(wanted)),
+    pick: async (wanted?: 'picture' | 'sound') => accept(await window.liveChat.pickSceneFile(wanted)),
     addIncoming: async (incoming: SceneFile[]): Promise<string | null> => {
       const everything = [...files, ...incoming];
       setFiles(everything);

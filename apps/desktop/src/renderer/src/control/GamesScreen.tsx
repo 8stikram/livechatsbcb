@@ -15,6 +15,7 @@ import type {
 } from "../../../shared/ipc";
 import { Avatar } from "../Avatar";
 import { ConfirmButton } from "./ConfirmButton";
+import { GameArt } from "./game-art";
 import { errorMessage } from "./messages";
 
 const GAMES: Array<{ kind: GameKind; title: string; rule: string }> = [
@@ -139,8 +140,11 @@ const Picker = ({ party }: { party: PartyView }) => {
               className="game-card"
               data-testid={`game-card-${kind}`}
             >
+              <div className="game-card-art">
+                <GameArt kind={kind} />
+              </div>
               <h3>{title}</h3>
-              <p className="hint">{rule}</p>
+              <p className="game-card-rule">{rule}</p>
               <footer>
                 <span className="count">
                   {GAME_MIN_PLAYERS[kind]} joueurs ou plus

@@ -116,13 +116,13 @@ export class PartyConnection {
     this.send({ t: 'skip', mediaId });
   }
 
-  private status: { activity: Activity; note: string } | null = null;
+  private status: { activity: Activity; note: string; game: string | null } | null = null;
 
   // Said again on each connection, as the service may have forgotten it.
-  setStatus(activity: Activity, note: string): void {
-    if (this.status?.activity === activity && this.status.note === note) return;
-    this.status = { activity, note };
-    this.send({ t: 'status', activity, note });
+  setStatus(activity: Activity, note: string, game: string | null): void {
+    if (this.status?.activity === activity && this.status.note === note && this.status.game === game) return;
+    this.status = { activity, note, game };
+    this.send({ t: 'status', activity, note, game });
   }
 
   startPoll(question: string, options: string[]): void {

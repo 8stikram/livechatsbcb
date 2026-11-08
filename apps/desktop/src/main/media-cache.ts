@@ -78,17 +78,18 @@ export class MediaCache {
     for (const { mediaId } of [...this.entries.values()]) this.forget(mediaId);
   }
 
-  sync(session: SessionResponse, queue: QueueItem[]): void {
+  // What was played stays while it is in the history, so the history can show it.
+  sync(session: SessionResponse, queue: QueueItem[], kept: ReadonlySet<string> = new Set()): void {
     this.session = session;
     this.queue = queue;
 
     const queued = new Set(queue.map((item) => item.id));
     for (const id of queued) this.seenInQueue.add(id);
     for (const { mediaId } of [...this.entries.values()]) {
-      if (!queued.has(mediaId) && this.seenInQueue.has(mediaId)) this.forget(mediaId);
+      if (!queued.has(mediaId) && this.seenInQueue.has(mediaId) && !kept.has(mediaId)) this.forget(mediaId);
     }
     for (const mediaId of this.seenInQueue) {
-      if (!queued.has(mediaId)) this.seenInQueue.delete(mediaId);
+      if (!queued.has(mediaId) && !kept.has(mediaId)) this.seenInQueue.delete(mediaId);
     }
 
     for (const item of queue) this.reportIfReady(item);

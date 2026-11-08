@@ -30,6 +30,7 @@ export const DEFAULT_DISPLAY_MS = 5_000;
 export const MAX_DISPLAY_MS = 60_000;
 export const MAX_CLIP_MS = 60 * 60_000;
 export const MAX_NOTE_LENGTH = 60;
+export const MAX_GAME_NAME_LENGTH = 40;
 export const POLL_MS = 30_000;
 export const MAX_POLL_QUESTION_LENGTH = 100;
 export const MAX_POLL_OPTION_LENGTH = 40;
@@ -151,6 +152,10 @@ export const MemberSchema = z.object({
   note: z.string().max(MAX_NOTE_LENGTH).default(''),
   // LiveChats sent to everybody since midnight, in France.
   sentToday: z.number().int().min(0).default(0),
+  // The game they play, when they let it show. Null otherwise, or from an app too old to say.
+  game: z.string().nullable().default(null),
+  // When they started that game, on the service's clock.
+  playingSince: z.number().nullable().default(null),
 });
 export type Member = z.infer<typeof MemberSchema>;
 
@@ -436,7 +441,12 @@ export const ClientMessageSchema = z.discriminatedUnion('t', [
   // This PC has stopped showing it. Once nobody is watching any more, the queue moves on.
   z.object({ t: z.literal('cut'), mediaId: z.string() }),
   z.object({ t: z.literal('time'), c: z.number() }),
-  z.object({ t: z.literal('status'), activity: ActivitySchema, note: z.string().trim().max(MAX_NOTE_LENGTH) }),
+  z.object({
+    t: z.literal('status'),
+    activity: ActivitySchema,
+    note: z.string().trim().max(MAX_NOTE_LENGTH),
+    game: z.string().trim().min(1).max(MAX_GAME_NAME_LENGTH).nullable().default(null),
+  }),
   z.object({ t: z.literal('poll') }).extend(PollRequestSchema.shape),
   z.object({ t: z.literal('vote'), pollId: z.string(), choice: z.number().int().min(0).max(MAX_POLL_OPTIONS - 1) }),
 ]);

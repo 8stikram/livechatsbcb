@@ -9,7 +9,8 @@
 :root {
   color-scheme: dark;
 
-  --ground: #0a0a0d;
+  /* The violet of the logo, very dark. */
+  --ground: #100919;
   --text: #f4f4f5;
   --text-soft: #d9d9df;
   --text-muted: #b8b8c1;
@@ -70,18 +71,20 @@ body,
 html:not(.overlay) body {
   overflow: hidden;
   background:
-    radial-gradient(620px 460px at 18% 12%, rgb(255 255 255 / 13%), transparent 70%),
-    radial-gradient(760px 560px at 88% 92%, rgb(168 150 190 / 20%), transparent 70%),
-    radial-gradient(420px 320px at 62% 38%, rgb(120 120 135 / 16%), transparent 70%),
+    radial-gradient(620px 460px at 18% 12%, rgb(255 255 255 / 11%), transparent 70%),
+    radial-gradient(760px 560px at 88% 92%, rgb(160 70 220 / 26%), transparent 70%),
+    radial-gradient(420px 320px at 62% 38%, rgb(200 90 230 / 12%), transparent 70%),
     var(--ground);
 }
 
-/* Windows draws the blurred desktop behind the page: the tint is what keeps text readable on a bright wallpaper. */
+/* Windows draws the blurred desktop behind the page: the tint is what keeps text readable on a bright wallpaper.
+   Lighter than before, and the violet of the logo. */
 html.see-through body {
   background:
-    radial-gradient(620px 460px at 18% 12%, rgb(255 255 255 / 7%), transparent 70%),
-    radial-gradient(760px 560px at 88% 92%, rgb(168 150 190 / 12%), transparent 70%),
-    rgb(10 10 13 / 62%);
+    radial-gradient(620px 460px at 18% 12%, rgb(255 255 255 / 6%), transparent 70%),
+    radial-gradient(760px 560px at 88% 92%, rgb(160 70 220 / 22%), transparent 70%),
+    radial-gradient(420px 320px at 62% 38%, rgb(200 90 230 / 10%), transparent 70%),
+    rgb(22 10 36 / 40%);
 }
 
 h1,
@@ -1857,10 +1860,16 @@ select.input {
 
 .history-picture {
   flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-inner);
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   object-fit: cover;
+  background: rgb(255 255 255 / 6%);
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.history-row:hover .history-picture {
+  transform: scale(1.12);
 }
 
 .history-empty {
@@ -3794,36 +3803,155 @@ html.live-pulse .avatar.has-ring.is-live,
 
 .game-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+  gap: 14px;
   overflow: auto;
+  padding: 6px 4px 10px;
 }
 
+/* Tall cards, like picking a character: each game its own colour and drawing. */
 .game-card {
+  --accent: #9b6bff;
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-inner);
-  background: var(--glass);
-  animation: view-in var(--spring-time) var(--spring) backwards;
+  gap: 8px;
+  min-height: 360px;
+  padding: 14px 14px 16px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 70% at 50% 18%, color-mix(in srgb, var(--accent) 38%, transparent), transparent 70%),
+    linear-gradient(180deg, rgb(255 255 255 / 4%), rgb(0 0 0 / 30%));
+  box-shadow: 0 10px 28px -18px var(--accent);
+  animation: game-card-in 420ms cubic-bezier(0.05, 0.7, 0.1, 1) backwards;
+  transition:
+    transform 220ms cubic-bezier(0.2, 0, 0, 1),
+    box-shadow 220ms cubic-bezier(0.2, 0, 0, 1),
+    border-color 220ms;
 }
 
-.game-card:nth-child(2) { animation-delay: 40ms; }
-.game-card:nth-child(3) { animation-delay: 80ms; }
-.game-card:nth-child(4) { animation-delay: 120ms; }
+.game-card[data-testid='game-card-joke'] { --accent: #ffb547; }
+.game-card[data-testid='game-card-question'] { --accent: #ff5fa2; animation-delay: 60ms; }
+.game-card[data-testid='game-card-who'] { --accent: #4cc9f0; animation-delay: 120ms; }
+.game-card[data-testid='game-card-undercover'] { --accent: #9b6bff; animation-delay: 180ms; }
+
+/* A light sweeping across on hover. */
+.game-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 14%) 50%, transparent 65%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+
+.game-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--accent);
+  box-shadow: 0 18px 40px -16px var(--accent);
+}
+
+.game-card:hover::after {
+  transform: translateX(120%);
+  transition: transform 700ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes game-card-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+}
+
+.game-card-art {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 150px;
+}
+
+.game-art {
+  width: 100%;
+  max-width: 170px;
+  overflow: visible;
+  color: var(--accent);
+  filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--accent) 45%, transparent));
+  transition: transform 260ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.game-card:hover .game-art {
+  transform: scale(1.08) rotate(-2deg);
+}
+
+.game-art .art-fill { fill: color-mix(in srgb, var(--accent) 85%, white); }
+.game-art .art-line { fill: none; stroke: #1a0f26; stroke-width: 5; stroke-linecap: round; }
+.game-art .art-mouth { fill: #1a0f26; stroke: #1a0f26; stroke-width: 4; stroke-linejoin: round; }
+.game-art .art-cheek { fill: #ff7a7a; opacity: 0.6; }
+.game-art .art-word { fill: white; font: 800 22px var(--font, sans-serif); }
+.game-art .art-big { fill: color-mix(in srgb, var(--accent) 85%, white); font: 900 120px var(--font, sans-serif); }
+.game-art .art-small { fill: white; opacity: 0.7; font: 800 26px var(--font, sans-serif); }
+.game-art .art-lens { fill: rgb(255 255 255 / 18%); stroke: white; stroke-width: 7; }
+.game-art .art-handle { stroke: white; stroke-width: 9; stroke-linecap: round; }
+.game-art .art-hat { fill: #1a0f26; }
+.game-art .art-glasses { fill: #1a0f26; }
+.game-art.is-undercover .art-handle { stroke: #1a0f26; stroke-width: 4; }
+.game-art.is-who .art-dim { opacity: 0.55; }
+
+.art-bob, .art-wobble, .art-float, .art-pop, .art-sweep, .art-glance {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.art-bob { animation: art-bob 2.6s ease-in-out infinite; }
+.art-wobble { transform-origin: 50% 90%; animation: art-wobble 2.4s ease-in-out infinite; }
+.art-float { animation: art-float 3s ease-in-out infinite; }
+.art-pop { animation: art-pop 1.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) infinite; }
+.art-sweep { animation: art-sweep 3.2s ease-in-out infinite; }
+.art-glance { animation: art-glance 3.6s ease-in-out infinite; }
+.is-late { animation-delay: 0.4s; }
+.is-later { animation-delay: 0.8s; }
+
+.game-card:hover .game-art * { animation-duration: 1.2s; }
+
+@keyframes art-bob { 50% { transform: translateY(-6px); } }
+@keyframes art-wobble { 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+@keyframes art-float { 50% { transform: translateY(-10px) rotate(10deg); opacity: 1; } }
+@keyframes art-pop {
+  0%, 100% { transform: scale(0.6); opacity: 0; }
+  30%, 70% { transform: scale(1); opacity: 1; }
+}
+@keyframes art-sweep {
+  0%, 100% { transform: translate(-8px, 6px) rotate(-6deg); }
+  50% { transform: translate(18px, -4px) rotate(6deg); }
+}
+@keyframes art-glance {
+  0%, 30%, 100% { transform: translateX(0); }
+  40%, 55% { transform: translateX(-4px); }
+  65%, 80% { transform: translateX(4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-art *, .game-card { animation: none !important; }
+}
 
 .game-card h3 {
-  font-size: 17px;
-  font-weight: 500;
+  position: relative;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
 }
 
-.game-card .hint {
-  flex: 1;
+.game-card-rule {
+  position: relative;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  min-height: calc(1.45em * 4);
+  color: var(--text-soft);
 }
 
 .game-card footer {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4143,4 +4271,67 @@ html.live-pulse .avatar.has-ring.is-live,
 [data-phase='reveal'] .game-entry:disabled,
 [data-phase='reveal'] .game-choice:disabled {
   opacity: 1;
+}
+
+/* Simple mode, nothing chosen yet: one big square to drop anything on. */
+.draft-drop {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  border-radius: var(--radius-inner);
+  border: 1.5px dashed var(--line-bright);
+  background: rgb(0 0 0 / 14%);
+  text-align: center;
+  transition: border-color var(--fast) var(--ease), background-color var(--fast) var(--ease);
+}
+
+.is-dropping .draft-drop {
+  border-color: var(--text);
+  background: rgb(160 70 220 / 14%);
+}
+
+.draft-drop-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--glass-raised);
+  color: var(--text-soft);
+}
+
+.draft-drop .link-search {
+  margin-top: 14px;
+}
+
+.draft-shelves {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+  animation: rise var(--enter) var(--ease);
+}
+
+.draft-shelf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 96px;
+  padding: 14px 8px 12px;
+  border-radius: var(--radius-inner);
+  border: 1px solid var(--line-strong);
+  background: var(--glass-raised);
+  font-size: 13px;
+}
+
+.draft-shelf:hover:not(:disabled) {
+  background: var(--glass-active);
+  border-color: var(--line-bright);
 }

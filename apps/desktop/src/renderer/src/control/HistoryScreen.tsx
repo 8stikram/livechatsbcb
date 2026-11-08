@@ -142,6 +142,29 @@ const EditButton = ({ onEdit }: { onEdit: () => Promise<void> }) => {
   );
 };
 
+// What was sent, when still on this PC, so it can be found again at a glance. A video plays, silent, while its row is hovered.
+const HistoryPreview = ({ item }: { item: HistoryView }) => {
+  if (!item.preview) {
+    return (
+      <span className="kind-tile">
+        <KindIcon kind={item.kind} />
+      </span>
+    );
+  }
+  if (!item.preview.video) return <img className="history-picture" src={item.preview.url} alt="" data-testid="history-preview" />;
+  return (
+    <video
+      className="history-picture"
+      src={item.preview.url}
+      muted
+      loop
+      playsInline
+      preload="metadata"
+      data-testid="history-preview"
+    />
+  );
+};
+
 const HistoryRow = ({
   item,
   now,
@@ -157,10 +180,18 @@ const HistoryRow = ({
   replayState: 'loading' | 'playing' | null;
   onResult: (result: ActionResult) => void;
 }) => (
-  <li className="history-row" data-testid="history-item">
-    <span className="kind-tile">
-      <KindIcon kind={item.kind} />
-    </span>
+  <li
+    className="history-row"
+    data-testid="history-item"
+    onMouseEnter={(event) => void event.currentTarget.querySelector('video')?.play().catch(() => {})}
+    onMouseLeave={(event) => {
+      const video = event.currentTarget.querySelector('video');
+      if (!video) return;
+      video.pause();
+      video.currentTime = 0;
+    }}
+  >
+    <HistoryPreview item={item} />
     <span className="row-text">
       <span className="row-title" title={mediaTitle(item)}>
         {mediaTitle(item)}

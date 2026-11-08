@@ -226,8 +226,25 @@ const NoteField = ({ note }: { note: string }) => {
   );
 };
 
-const statusLine = (member: MemberView): string =>
-  [member.online ? ACTIVITY_LABEL[member.activity] : null, member.note || null].filter(Boolean).join(' · ');
+// "depuis 5 min", "depuis 1 h 20". Never less than a minute: the clocks of two PCs are never quite the same.
+const playingFor = (since: number): string => {
+  const minutes = Math.max(1, Math.floor((Date.now() - since) / 60_000));
+  if (minutes < 60) return `depuis ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return `depuis ${hours} h${rest > 0 ? ` ${String(rest).padStart(2, '0')}` : ''}`;
+};
+
+// "Joue à VALORANT depuis 1 h" rather than "En jeu", when they let it show.
+const activityText = (member: MemberView): string | null => {
+  if (!member.online) return null;
+  if (member.activity === 'playing' && member.game) {
+    return `Joue à ${member.game}${member.playingSince !== null ? ` ${playingFor(member.playingSince)}` : ''}`;
+  }
+  return ACTIVITY_LABEL[member.activity];
+};
+
+const statusLine = (member: MemberView): string => [activityText(member), member.note || null].filter(Boolean).join(' · ');
 
 const Members = ({
   state,

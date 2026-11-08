@@ -3,6 +3,18 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.19.0',
+    date: '8 novembre 2026',
+    items: [
+      'Mode simple : le grand cadre revient. Glisse une image, une vidéo ou un son, ou choisis dans ta bibliothèque',
+      'Mode avancé : la recherche trouve les noms et les tags, la barre « Ajouter un son » en bas est partie',
+      'Party : on voit à quel jeu joue chaque pote, et depuis combien de temps. Tu peux le cacher dans Réglages',
+      'Historique : une petite image de chaque LiveChat, les vidéos bougent au survol',
+      'Jeux : de grandes cartes dessinées et animées',
+      'L’app est plus transparente, teintée du violet du logo',
+    ],
+  },
+  {
     version: '0.18.0',
     date: '6 novembre 2026',
     items: [

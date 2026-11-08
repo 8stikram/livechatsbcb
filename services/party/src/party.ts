@@ -118,6 +118,7 @@ export class Party extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS send_log (member_id TEXT NOT NULL, fingerprint TEXT NOT NULL, sent_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS bans (member_id TEXT PRIMARY KEY, until INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS member_status (member_id TEXT PRIMARY KEY, activity TEXT NOT NULL, note TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS member_game (member_id TEXT PRIMARY KEY, game TEXT NOT NULL, since INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS sent_count (member_id TEXT PRIMARY KEY, day TEXT NOT NULL, total INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS history (
         id TEXT PRIMARY KEY,
@@ -464,7 +465,7 @@ export class Party extends DurableObject<Env> {
         this.markCut(memberId, message.data.mediaId);
         break;
       case 'status':
-        this.setStatus(memberId, message.data.activity, message.data.note);
+        this.setStatus(memberId, message.data.activity, message.data.note, message.data.game);
         break;
       case 'poll':
         this.startPoll(memberId, message.data);
@@ -833,6 +834,12 @@ export class Party extends DurableObject<Env> {
         .toArray()
         .map((row) => [row.member_id, row]),
     );
+    const games = new Map(
+      this.ctx.storage.sql
+        .exec<{ member_id: string; game: string; since: number }>('SELECT * FROM member_game')
+        .toArray()
+        .map((row) => [row.member_id, row]),
+    );
     const today = DAY_OF.format(Date.now());
     const counts = new Map(
       this.ctx.storage.sql
@@ -853,6 +860,8 @@ export class Party extends DurableObject<Env> {
         activity: online.has(id) ? (statuses.get(id)?.activity ?? 'here') : ('here' as const),
         note: statuses.get(id)?.note ?? '',
         sentToday: counts.get(id) ?? 0,
+        game: online.has(id) && statuses.get(id)?.activity === 'playing' ? (games.get(id)?.game ?? null) : null,
+        playingSince: online.has(id) && statuses.get(id)?.activity === 'playing' ? (games.get(id)?.since ?? null) : null,
       }));
     // Past visitors of a Discord server's party are nobody's business: a private party is the one with a fixed list.
     return this.getMeta('guildId') ? members.filter((member) => member.online) : members;
@@ -871,13 +880,21 @@ export class Party extends DurableObject<Env> {
     }
   }
 
-  private setStatus(memberId: string, activity: Activity, note: string): void {
+  private setStatus(memberId: string, activity: Activity, note: string, game: string | null): void {
     const cleaned = note.replace(/\s+/g, ' ').trim();
+    // A game only counts while playing. The clock starts again with another game, not with every status.
+    const playing = activity === 'playing' ? game?.replace(/\s+/g, ' ').trim() || null : null;
     const [known] = this.ctx.storage.sql
       .exec<{ activity: string; note: string }>('SELECT activity, note FROM member_status WHERE member_id = ?', memberId)
       .toArray();
-    if (known?.activity === activity && known.note === cleaned) return;
+    const [knownGame] = this.ctx.storage.sql
+      .exec<{ game: string }>('SELECT game FROM member_game WHERE member_id = ?', memberId)
+      .toArray();
+    if (known?.activity === activity && known.note === cleaned && (knownGame?.game ?? null) === playing) return;
     this.ctx.storage.sql.exec('INSERT OR REPLACE INTO member_status (member_id, activity, note) VALUES (?, ?, ?)', memberId, activity, cleaned);
+    if (playing === null) this.ctx.storage.sql.exec('DELETE FROM member_game WHERE member_id = ?', memberId);
+    else if (knownGame?.game !== playing)
+      this.ctx.storage.sql.exec('INSERT OR REPLACE INTO member_game (member_id, game, since) VALUES (?, ?, ?)', memberId, playing, Date.now());
     this.broadcast({ t: 'members', members: this.members() });
   }
 

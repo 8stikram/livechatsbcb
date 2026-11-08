@@ -107,6 +107,16 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
+### En cours : 0.19.0 (retours après la 0.18.0)
+
+- Mode simple : retour du grand cadre (glisser, ou Depuis ma bibliothèque : Image / Vidéo / Son). « Ajouter un son ? » reste
+- Mode avancé : recherche par nom et tag, plus de barre « Ajouter un son » en bas
+- Party : nom du jeu et depuis combien de temps, réglage pour le cacher
+- Historique : vignette du LiveChat, la vidéo joue au survol
+- Jeux : cartes verticales dessinées et animées
+- App plus transparente, teinte violette du logo
+- Raccourcis simplifiés : maquette montrée, attend ton OK
+
 ### Publiée : 0.18.0 (plus clair)
 
 - Mode simple : image et musique dans un seul cadre

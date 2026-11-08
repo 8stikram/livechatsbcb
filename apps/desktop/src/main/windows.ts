@@ -124,7 +124,7 @@ export const createControlWindow = (startMode: StartMode): BrowserWindow => {
     show: false,
     title: 'LiveChatSBCB',
     icon: nativeImage.createFromPath(iconPath),
-    backgroundColor: seeThrough ? '#00000000' : '#0a0a0d',
+    backgroundColor: seeThrough ? '#00000000' : '#100919',
     ...(seeThrough ? { backgroundMaterial: 'acrylic' as const } : {}),
     // The page goes all the way up, and Windows keeps drawing its own buttons on top of it.
     titleBarStyle: 'hidden',

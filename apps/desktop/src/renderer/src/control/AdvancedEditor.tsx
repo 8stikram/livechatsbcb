@@ -223,9 +223,11 @@ const LibraryStrip = ({ scene }: { scene: Scene }) => {
   }, []);
 
   if (!files) return <div className="scene-strip" />;
-  const needle = search.trim().toLocaleLowerCase('fr');
+  // By name or by tag, as in the Library tab: "#drôle" and "drôle" find the same.
+  const needle = search.trim().replace(/^#+/, '').toLocaleLowerCase('fr');
+  const matches = (text: string) => text.toLocaleLowerCase('fr').includes(needle);
   const shown = files
-    .filter((file) => file.kind === kind && file.name.toLocaleLowerCase('fr').includes(needle))
+    .filter((file) => file.kind === kind && (matches(file.name) || file.tags.some(matches)))
     .toSorted((a, b) => Number(b.favorite) - Number(a.favorite) || b.modifiedAt - a.modifiedAt)
     .slice(0, PICKER_SIZE);
 
@@ -249,7 +251,7 @@ const LibraryStrip = ({ scene }: { scene: Scene }) => {
           className="input library-search"
           type="search"
           aria-label="Chercher un fichier"
-          placeholder="Rechercher"
+          placeholder="Nom ou tag"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
@@ -305,7 +307,7 @@ export const SceneBoard = ({
 }) => {
   const [showLibrary, setShowLibrary] = useState(true);
 
-  const pick = async (wanted: 'picture' | 'sound') => onError(await scene.pick(wanted));
+  const pick = async () => onError(await scene.pick());
 
   return (
     <div className="scene-workspace">
@@ -315,7 +317,7 @@ export const SceneBoard = ({
           <button type="button" className={showLibrary ? 'pill secondary small' : 'pill quiet small'} aria-expanded={showLibrary} onClick={() => setShowLibrary(!showLibrary)}>
             Bibliothèque
           </button>
-          <button type="button" className="pill quiet small" onClick={() => void pick('picture')}>
+          <button type="button" className="pill quiet small" onClick={() => void pick()}>
             Depuis mon PC
           </button>
           <span className="spacer" />
@@ -346,17 +348,6 @@ export const SceneBoard = ({
           )}
         </ScreenPreview>
 
-        {!scene.sound && !scene.hasLink && (
-          <div className="draft-add" role="group" aria-label="Ajouter un son">
-            <span className="hint">Ajouter un son</span>
-            <button type="button" className="pill quiet small" onClick={() => setShowLibrary(true)}>
-              Depuis ma bibliothèque
-            </button>
-            <button type="button" className="pill quiet small" onClick={() => void pick('sound')}>
-              Depuis mon PC
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

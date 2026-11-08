@@ -34,6 +34,7 @@ export const SettingsSchema = z.object({
   keyWhilePlaying: z.enum(['wait', 'replace']),
   excludedApps: z.array(z.string().min(1).max(100)).max(30),
   tutorialDone: z.boolean(),
+  showGame: z.boolean(),
 });
 
 const settingsPath = () => join(app.getPath('userData'), 'settings.json');

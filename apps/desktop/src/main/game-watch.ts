@@ -7,8 +7,31 @@ const NOT_GAMES = new Set(
 );
 
 const CHECK_EVERY_S = 5;
+const MAX_NAME = 40;
 
-// Asked of Windows itself, by a small helper that stays open: nothing to install, and nothing leaves the PC.
+// What a person would call the game: the window's title most often says it best ("VALORANT", "Overwatch"),
+// then what the program says it is, and last its file name made readable.
+export const gameNameOf = (process: string, title: string, about: string): string => {
+  const tidy = (text: string) =>
+    text
+      .replace(/[™®©]/g, '')
+      .replace(/\s*\([^)]*\)\s*$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  for (const candidate of [tidy(title), tidy(about)]) {
+    if (candidate.length >= 2 && candidate.length <= MAX_NAME) return candidate;
+  }
+  const readable = process
+    .replace(/[-_.]+/g, ' ')
+    .replace(/\b(win64|win32|x64|shipping|dx11|dx12|vulkan|client)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const name = readable ? readable.charAt(0).toUpperCase() + readable.slice(1) : process;
+  return name.slice(0, MAX_NAME);
+};
+
+// Asked of Windows itself, by a small helper that stays open: nothing to install. Only the game's name may leave the PC,
+// and only for whoever lets it show.
 const SCRIPT = `
 Add-Type @"
 using System; using System.Runtime.InteropServices;
@@ -40,7 +63,13 @@ while ($true) {
       $id = 0
       [void][LcWin]::GetWindowThreadProcessId($window, [ref]$id)
       $process = Get-Process -Id $id -ErrorAction SilentlyContinue
-      if ($process) { $out = $process.ProcessName + [char]9 + $full }
+      if ($process) {
+        $title = ''
+        $about = ''
+        try { $title = $process.MainWindowTitle } catch {}
+        try { $about = $process.MainModule.FileVersionInfo.FileDescription } catch {}
+        $out = $process.ProcessName + [char]9 + $full + [char]9 + $title + [char]9 + $about
+      }
     }
   } catch {}
   [Console]::Out.WriteLine($out)
@@ -74,6 +103,12 @@ export class GameWatch {
   private child: ChildProcess | null = null;
   private playing = false;
   private front: string | null = null;
+  private name: string | null = null;
+
+  // What the game in front is called, while playing. Null otherwise.
+  get gameName(): string | null {
+    return this.playing ? this.name : null;
+  }
 
   // The app in front, in lower case. Null when unknown.
   get foreground(): string | null {
@@ -103,9 +138,16 @@ export class GameWatch {
       pending = lines.pop() ?? '';
       const last = lines.at(-1)?.trim();
       if (last === undefined) return;
-      const [name, full] = last.split('\t');
+      const [name, full, title = '', about = ''] = last.split('\t');
       const front = name && name !== '-' ? name.toLowerCase() : null;
-      this.set(front !== null && full === '1' && !NOT_GAMES.has(front), front);
+      const playing = front !== null && full === '1' && !NOT_GAMES.has(front);
+      const called = playing && name ? gameNameOf(name, title, about) : null;
+      if (called !== this.name) {
+        this.name = called;
+        // Another game in the same full screen: nothing else changed, so say it here.
+        if (playing === this.playing && front === this.front) this.onChange();
+      }
+      this.set(playing, front);
     });
     child.on('error', () => this.stop());
     child.on('exit', () => {

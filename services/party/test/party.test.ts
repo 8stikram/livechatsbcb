@@ -1134,6 +1134,33 @@ describe('party service', () => {
     hostSocket.close();
   });
 
+  it('names the game being played and since when, and forgets it once they stop', async () => {
+    const host = await createParty();
+    const guest = await joinParty(host.code, 'Invite');
+    const hostSocket = new TestSocket(host);
+    const guestSocket = new TestSocket(guest);
+    await hostSocket.welcome();
+    await guestSocket.welcome();
+    const guestIn = (list: Member[]) => list.find(({ id }) => id === guest.memberId);
+
+    const before = Date.now();
+    guestSocket.send(JSON.stringify({ t: 'status', activity: 'playing', note: '', game: '  VALORANT ' }));
+    const playing = await hostSocket.membersWhere((list) => guestIn(list)?.game === 'VALORANT', 'game');
+    const since = guestIn(playing)!.playingSince!;
+    expect(since).toBeGreaterThanOrEqual(before);
+
+    // The same game said again keeps its clock.
+    guestSocket.send(JSON.stringify({ t: 'status', activity: 'playing', note: 'ranked', game: 'VALORANT' }));
+    const again = await hostSocket.membersWhere((list) => guestIn(list)?.note === 'ranked', 'note');
+    expect(guestIn(again)).toMatchObject({ game: 'VALORANT', playingSince: since });
+
+    guestSocket.send(JSON.stringify({ t: 'status', activity: 'here', note: 'ranked', game: 'VALORANT' }));
+    const stopped = await hostSocket.membersWhere((list) => guestIn(list)?.activity === 'here', 'stopped');
+    expect(guestIn(stopped)).toMatchObject({ game: null, playingSince: null });
+    hostSocket.close();
+    guestSocket.close();
+  });
+
   it('runs one poll at a time, counts votes without names, and closes it', async () => {
     const host = await createParty('Nono', QUICK_BASE);
     const socket = new TestSocket(host, WS_SUBPROTOCOL, QUICK_BASE);

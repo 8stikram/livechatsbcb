@@ -322,6 +322,14 @@ function start(): void {
     ...playbackFiles(item.id, item),
   });
 
+  // A look at what was sent, when it is still on this PC.
+  const previewOf = (item: HistoryItem): HistoryView['preview'] => {
+    const picture = pictureOf(item.files);
+    if (!picture) return null;
+    const url = cache.urlOf(item.id, picture.id);
+    return url ? { url, video: fileKindOf(picture.contentType) === 'video' } : null;
+  };
+
   const toHistoryView = (item: HistoryItem, party: PartyConnection): HistoryView => ({
     id: item.id,
     senderId: item.senderId,
@@ -332,6 +340,7 @@ function start(): void {
     caption: item.caption,
     fileName: item.link?.title ?? fileNamesOf(item.files),
     isLink: item.link !== null,
+    preview: previewOf(item),
     playedAt: party.toLocalTime(item.playedAt),
     favoriteId: library.keptFrom(item.id)?.id ?? null,
     keeping: keeping.has(item.id),
@@ -493,7 +502,11 @@ function start(): void {
     if (powerMonitor.getSystemIdleTime() >= AWAY_AFTER_S) return 'away';
     return gameWatch.isPlaying ? 'playing' : 'here';
   };
-  const syncStatus = (): void => connection?.setStatus(currentActivity(), settings.current.note);
+  // The game's name goes out only while playing, and only for whoever lets it show.
+  const syncStatus = (): void => {
+    const activity = currentActivity();
+    connection?.setStatus(activity, settings.current.note, activity === 'playing' && settings.current.showGame ? gameWatch.gameName : null);
+  };
   const excludedNow = (): boolean => {
     const front = gameWatch.foreground;
     return front !== null && settings.current.excludedApps.includes(front);
@@ -669,7 +682,7 @@ function start(): void {
             privateSession: store.privateSession?.partyId === saved.partyId ? updated : store.privateSession,
           });
         }
-        cache.sync(session, snapshot.queue);
+        cache.sync(session, snapshot.queue, new Set(snapshot.history.map(({ id }) => id)));
         syncGameFiles(session, snapshot.game);
         // What is for everyone comes first, and the moment it starts is already decided.
         if (snapshot.queue[0]?.startAt != null) stopLocalReplay();
@@ -1587,16 +1600,17 @@ function start(): void {
 
   handle(IpcChannel.StartScene, () => [draft.picture, draft.sound].filter((file) => file !== null).map((file) => putInScene(file)));
 
+  // Nothing asked for: a picture, a video or a sound, whatever is chosen goes where it belongs.
   handle(IpcChannel.PickSceneFile, async (wanted: unknown): Promise<SceneResult> => {
-    const slot: DraftSlot = wanted === 'sound' ? 'sound' : 'picture';
+    const slot: DraftSlot | null = wanted === 'sound' || wanted === 'picture' ? wanted : null;
     const picked = await dialog.showOpenDialog(controlWindow, {
       title: 'Choisir un média',
       properties: ['openFile'],
       filters: [
         {
-          name: slot === 'sound' ? 'Sons' : 'Images et vidéos',
+          name: slot === 'sound' ? 'Sons' : slot ? 'Images et vidéos' : 'Images, vidéos et sons',
           extensions: Object.entries(CONTENT_TYPE_BY_EXTENSION)
-            .filter(([, contentType]) => slotOf(contentType) === slot)
+            .filter(([, contentType]) => !slot || slotOf(contentType) === slot)
             .map(([extension]) => extension),
         },
       ],
@@ -1604,7 +1618,7 @@ function start(): void {
     const path = picked.filePaths[0];
     if (picked.canceled || !path) return { ok: false, error: 'cancelled' };
     const contentType = contentTypeOf(path);
-    if (!contentType || slotOf(contentType) !== slot) return { ok: false, error: 'unsupported' };
+    if (!contentType || (slot && slotOf(contentType) !== slot)) return { ok: false, error: 'unsupported' };
     const { size } = await stat(path);
     if (size === 0) return { ok: false, error: 'empty' };
     return { ok: true, file: putInScene({ path, name: basename(path), size, contentType }) };

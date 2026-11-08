@@ -2003,6 +2003,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await openTab(host, 'LiveChat');
     await picture(host.control, '17-livechat-choice.png');
     await host.control.getByRole('button', { name: 'Depuis ma bibliothèque' }).first().click();
+    await host.control.getByRole('group', { name: 'Quoi de ta bibliothèque' }).getByRole('button', { name: 'Image' }).click();
     await expect(host.control.getByRole('button', { name: /^Images/ }).getAttribute('aria-pressed')).resolves.toBe('true');
     await host.control.getByRole('button', { name: 'Utiliser menu-image.png' }).click();
     await host.control.getByTestId('draft-name').filter({ hasText: 'menu-image.png' }).waitFor();
@@ -2022,7 +2023,9 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await openTab(host, 'LiveChat');
     await picture(host.control, 'music-choice.png');
-    await host.control.getByRole('group', { name: 'Ajouter une musique' }).getByRole('button', { name: 'Depuis ma bibliothèque' }).click();
+    await host.control.getByRole('button', { name: 'Depuis ma bibliothèque' }).first().click();
+    await picture(host.control, 'shelf-choice.png');
+    await host.control.getByRole('group', { name: 'Quoi de ta bibliothèque' }).getByRole('button', { name: 'Son' }).click();
     await expect(host.control.getByRole('button', { name: /^Sons/ }).getAttribute('aria-pressed')).resolves.toBe('true');
     await expect
       .poll(() => host.control.getByRole('button', { name: /^Sons/ }).evaluate((tab) => getComputedStyle(tab).backgroundColor))
@@ -2030,12 +2033,12 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     await openTab(host, 'LiveChat');
     await answerDialogWith(host, music);
-    await host.control.getByRole('group', { name: 'Ajouter une musique' }).getByRole('button', { name: 'Depuis mon PC' }).click();
+    await host.control.getByTestId('draft-drop').getByRole('button', { name: 'Depuis mon PC' }).click();
     await host.control.getByTestId('draft-name').filter({ hasText: 'ma-musique.wav' }).waitFor();
     await host.control.getByRole('group', { name: 'Ajouter une image ou une vidéo' }).waitFor();
     await picture(host.control, 'music-only.png');
     await host.control.getByRole('button', { name: 'Retirer', exact: true }).first().click();
-    await host.control.getByRole('group', { name: 'Ajouter une musique' }).getByRole('button', { name: 'Depuis mon PC' }).waitFor();
+    await host.control.getByTestId('draft-drop').waitFor();
   });
 
   it('skips for me or for everybody, and says who did', async () => {
@@ -2367,7 +2370,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     const sound = join(sandbox, 'son-avance.wav');
     writeFileSync(sound, silentWav(3));
     await answerDialogWith(host, sound);
-    await control.getByRole('group', { name: 'Ajouter un son' }).getByRole('button', { name: 'Depuis mon PC' }).click();
+    await control.getByRole('button', { name: 'Depuis mon PC' }).first().click();
     await control.getByTestId('clip-start').waitFor({ timeout: 15_000 });
     await control.locator('[data-testid="clip-wave"][data-ready="true"]').waitFor();
     await picture(control, '20-advanced.png');

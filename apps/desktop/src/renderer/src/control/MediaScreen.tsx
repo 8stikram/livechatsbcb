@@ -11,7 +11,7 @@ import { Caption, Profile, ScreenPreview, zoneStyle } from '../scene';
 import { Avatar } from '../Avatar';
 import { LayerPanel, SceneBoard } from './AdvancedEditor';
 import { ClipBar, type ClipEdge } from './ClipBar';
-import { IconCheck, IconPlay, KindIcon } from './icons';
+import { IconCheck, IconPlay, IconPlus, KindIcon } from './icons';
 import { isLongerThanSpoken, readingMs } from '../speech';
 import { EmojiButton } from './EmojiPicker';
 import { canSendIn, mediaErrorMessage } from './messages';
@@ -477,6 +477,12 @@ const sendLabel = (state: AppState, to: string[]): string => {
   return `Chuchoter à ${state.party?.members.find(({ id }) => id === to[0])?.name ?? '1 pote'}`;
 };
 
+const SHELVES: Array<['image' | 'video' | 'audio', string]> = [
+  ['image', 'Image'],
+  ['video', 'Vidéo'],
+  ['audio', 'Son'],
+];
+
 export const MediaScreen = ({
   state,
   files,
@@ -490,7 +496,7 @@ export const MediaScreen = ({
   files: DraftFiles;
   scene: Scene;
   active: boolean;
-  onOpenLibrary: (category: 'image' | 'audio') => void;
+  onOpenLibrary: (category: 'image' | 'video' | 'audio') => void;
   // Kept by the window, so that the party can open this tab already whispering to someone.
   whisperTo: string[];
   onWhisperTo: (to: string[]) => void;
@@ -498,6 +504,8 @@ export const MediaScreen = ({
   const { link, linkVolume, picture, sound, leader, hasFiles, clip, unreadable, caption, displayMs, videoMuted, soundMuted } = files;
   const [linkProblem, setLinkProblem] = useState<string | null>(null);
   const [soundSearch, setSoundSearch] = useState('');
+  // "Depuis ma bibliothèque" first asks which shelf: images, videos or sounds.
+  const [choosingShelf, setChoosingShelf] = useState(false);
   useEffect(() => setLinkProblem(null), [link]);
   const [preview, setPreview] = useState<{ item: PlaybackView; startAt: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -817,60 +825,83 @@ export const MediaScreen = ({
           />
         ) : (
           <>
-            {/* One frame for both: what is seen, and what is heard. */}
-            <div className="draft-stack" data-testid="draft-stack">
-              {picture ? (
-                <DraftRow file={picture} slot="picture" locked={isUploading} onRemove={files.remove} />
-              ) : (
-                <div className="draft-slot" role="group" aria-label="Ajouter une image ou une vidéo">
-                  <span className="kind-tile is-small">
-                    <KindIcon kind="image" size={16} />
-                  </span>
-                  <span className="draft-slot-title">Image ou vidéo</span>
-                  <button type="button" className="pill secondary small" disabled={isUploading} onClick={() => onOpenLibrary('image')}>
-                    Depuis ma bibliothèque
-                  </button>
-                  <button type="button" className="pill secondary small" disabled={isUploading} onClick={() => void pick(hasFiles ? 'picture' : undefined)}>
-                    Depuis mon PC
-                  </button>
-                </div>
-              )}
-              {sound ? (
-                <DraftRow file={sound} slot="sound" locked={isUploading} onRemove={files.remove} />
-              ) : (
-                <div className="draft-slot" role="group" aria-label="Ajouter une musique">
-                  <span className="kind-tile is-small">
-                    <KindIcon kind="audio" size={16} />
-                  </span>
-                  <span className="draft-slot-title">Musique</span>
-                  <button type="button" className="pill secondary small" disabled={isUploading} onClick={() => onOpenLibrary('audio')}>
-                    Depuis ma bibliothèque
-                  </button>
-                  <button type="button" className="pill secondary small" disabled={isUploading} onClick={() => void pick('sound')}>
-                    Depuis mon PC
-                  </button>
-                  <form
-                    className="link-search"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void window.liveChat.searchSoundCloud(soundSearch);
-                    }}
+            {!hasFiles ? (
+              /* One big square: drop anything on it, or say where it comes from. */
+              <div className="draft-drop" data-testid="draft-drop">
+                <span className="draft-drop-icon" aria-hidden="true">
+                  <IconPlus size={28} />
+                </span>
+                <p className="draft-empty-title">Glisse une image, une vidéo ou un son</p>
+                <div className="draft-choice">
+                  <button
+                    type="button"
+                    className="pill primary"
+                    disabled={isUploading}
+                    aria-expanded={choosingShelf}
+                    onClick={() => setChoosingShelf(!choosingShelf)}
                   >
-                    <input
-                      className="input is-small"
-                      type="search"
-                      aria-label="Chercher sur SoundCloud"
-                      placeholder="Ou cherche un son sur SoundCloud"
-                      value={soundSearch}
-                      onChange={(event) => setSoundSearch(event.target.value)}
-                    />
-                    <button type="submit" className="pill secondary small" disabled={!soundSearch.trim()}>
-                      Chercher
-                    </button>
-                  </form>
+                    Depuis ma bibliothèque
+                  </button>
+                  <button type="button" className="pill secondary" disabled={isUploading} onClick={() => void pick()}>
+                    Depuis mon PC
+                  </button>
                 </div>
-              )}
-            </div>
+                {choosingShelf && (
+                  <div className="draft-shelves" role="group" aria-label="Quoi de ta bibliothèque">
+                    {SHELVES.map(([category, label]) => (
+                      <button
+                        key={category}
+                        type="button"
+                        className="draft-shelf"
+                        onClick={() => {
+                          setChoosingShelf(false);
+                          onOpenLibrary(category);
+                        }}
+                      >
+                        <KindIcon kind={category} size={22} />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <form
+                  className="link-search"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void window.liveChat.searchSoundCloud(soundSearch);
+                  }}
+                >
+                  <input
+                    className="input is-small"
+                    type="search"
+                    aria-label="Chercher sur SoundCloud"
+                    placeholder="Chercher un son sur SoundCloud"
+                    value={soundSearch}
+                    onChange={(event) => setSoundSearch(event.target.value)}
+                  />
+                  <button type="submit" className="pill secondary small" disabled={!soundSearch.trim()}>
+                    Chercher
+                  </button>
+                </form>
+                <p className="hint">Ou colle un lien YouTube, TikTok ou SoundCloud avec Ctrl+V.</p>
+              </div>
+            ) : (
+              <>
+                {picture && <DraftRow file={picture} slot="picture" locked={isUploading} onRemove={files.remove} />}
+                {sound && <DraftRow file={sound} slot="sound" locked={isUploading} onRemove={files.remove} />}
+                {!isUploading && (!picture || !sound) && (
+                  <div className="draft-add" role="group" aria-label={picture ? 'Ajouter une musique' : 'Ajouter une image ou une vidéo'}>
+                    <span className="draft-add-title">{picture ? 'Ajouter un son ?' : 'Ajouter une image ou une vidéo ?'}</span>
+                    <button type="button" className="pill secondary small" onClick={() => onOpenLibrary(picture ? 'audio' : 'image')}>
+                      Depuis ma bibliothèque
+                    </button>
+                    <button type="button" className="pill secondary small" onClick={() => void pick(picture ? 'sound' : 'picture')}>
+                      Depuis mon PC
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
             {picture?.kind === 'image' ? (
               <LivePreview state={state} caption={caption}>
                 <img className="overlay-media" src={picture.previewUrl} alt="" onError={() => files.setUnreadable(true)} />
@@ -893,11 +924,6 @@ export const MediaScreen = ({
             {unreadable && (
               <p className="error" role="alert">
                 Ce fichier ne peut pas être lu. Essaie un autre format.
-              </p>
-            )}
-            {!hasFiles && (
-              <p className="hint draft-stack-hint">
-                Mets les deux si tu veux. 500 Mo maximum, effacé du serveur après 1 jour. Ou colle un lien YouTube, TikTok ou SoundCloud avec Ctrl+V.
               </p>
             )}
           </>

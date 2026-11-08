@@ -90,6 +90,8 @@ export type Settings = {
   excludedApps: string[];
   // The bubbles of the first launch were seen, or skipped. Settings can show them again.
   tutorialDone: boolean;
+  // The others see the name of the game being played, not just "En jeu".
+  showGame: boolean;
 };
 
 export const DEFAULT_LAYOUT: OverlayLayout = {
@@ -113,6 +115,7 @@ export const DEFAULT_SETTINGS: Settings = {
   skipMineKey: ON_MAC ? 'Ctrl+Alt+Shift+-' : 'Ctrl+Shift+F11',
   wheelKey: ON_MAC ? 'Ctrl+Alt+Space' : 'Ctrl+Shift+Space',
   tutorialDone: true,
+  showGame: true,
   speechEnabled: true,
   speechVoice: null,
   speechRate: 100,
@@ -214,6 +217,8 @@ export type HistoryView = {
   keeping: boolean;
   // Nothing to keep on this PC: only the site has it.
   isLink: boolean;
+  // The picture or video sent, while it is still on this PC.
+  preview: { url: string; video: boolean } | null;
 };
 
 // Played again on this PC alone. Null playback while the file is on its way.
@@ -513,7 +518,7 @@ export type LiveChatApi = {
   setLibraryTags(target: { fileId: string } | { savedId: string }, tags: string[]): Promise<LibraryView>;
   useLibraryFile(fileId: string): Promise<{ ok: true; draft: DraftMedia } | { ok: false }>;
   startScene(): Promise<SceneFile[]>;
-  pickSceneFile(wanted: 'picture' | 'sound'): Promise<SceneResult>;
+  pickSceneFile(wanted?: 'picture' | 'sound'): Promise<SceneResult>;
   useLibraryFileInScene(fileId: string): Promise<SceneResult>;
   forgetSceneFile(id: string): Promise<void>;
   sendScene(input: SceneInput): Promise<ActionResult>;
