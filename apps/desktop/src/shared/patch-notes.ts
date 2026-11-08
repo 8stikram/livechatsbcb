@@ -3,6 +3,11 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.20.1',
+    date: '8 novembre 2026',
+    items: ['Fond de l’app plus clair, plus transparent et un peu plus flou'],
+  },
+  {
     version: '0.20.0',
     date: '8 novembre 2026',
     items: [

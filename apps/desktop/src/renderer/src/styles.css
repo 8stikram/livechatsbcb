@@ -81,10 +81,10 @@ html:not(.overlay) body {
    Lighter than before, and the violet of the logo. */
 html.see-through body {
   background:
-    radial-gradient(620px 460px at 18% 12%, rgb(255 255 255 / 6%), transparent 70%),
+    radial-gradient(620px 460px at 18% 12%, rgb(255 255 255 / 8%), transparent 70%),
     radial-gradient(760px 560px at 88% 92%, rgb(160 70 220 / 22%), transparent 70%),
     radial-gradient(420px 320px at 62% 38%, rgb(200 90 230 / 10%), transparent 70%),
-    rgb(22 10 36 / 40%);
+    rgb(38 24 56 / 28%);
 }
 
 h1,
@@ -243,7 +243,7 @@ label {
   background: var(--glass);
   border: 1px solid var(--line);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%);
-  backdrop-filter: blur(28px) saturate(140%);
+  backdrop-filter: blur(32px) saturate(140%);
 }
 
 /* Buttons */
