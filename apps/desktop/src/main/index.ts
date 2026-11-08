@@ -440,6 +440,25 @@ function start(): void {
     };
   };
 
+  // A poll is on everyone's screen while it runs, then its winner for a moment. The overlay counts the same time.
+  const POLL_RESULT_MS = 8_000;
+  let pollRunning: string | null = null;
+  let pollResultUntil = 0;
+  const pollOnScreen = (): boolean => {
+    const poll = connection?.current().poll ?? null;
+    if (!poll) return false;
+    if (!poll.done) {
+      pollRunning = poll.id;
+      return true;
+    }
+    if (pollRunning === poll.id) {
+      pollRunning = null;
+      pollResultUntil = Date.now() + POLL_RESULT_MS;
+      setTimeout(syncOverlay, POLL_RESULT_MS + 100);
+    }
+    return Date.now() < pollResultUntil;
+  };
+
   // The overlay is only on screen while it has something to show: over a borderless game, a window that is always
   // there would cost the game its direct path to the display, and with it some speed.
   const syncOverlay = (): void => {
@@ -448,7 +467,8 @@ function start(): void {
     const head = connection?.current().queue[0];
     const playing = head?.startAt != null && hiddenReason(head) === null && !excludedNow();
     // Asked for on this PC, like the test: it shows even for someone who keeps the overlay off.
-    const wanted = wheelOpen !== null || overlayTest || localReplay?.startAt != null || (playing && settings.current.overlayEnabled);
+    const showsPoll = settings.current.overlayEnabled && !settings.current.clean && !excludedNow() && pollOnScreen();
+    const wanted = wheelOpen !== null || overlayTest || localReplay?.startAt != null || (playing && settings.current.overlayEnabled) || showsPoll;
 
     if (wanted && !stageWindow.isVisible()) {
       placeOverlay(stageWindow, settings.current.displayId);

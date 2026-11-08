@@ -109,6 +109,14 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
+### En cours : 0.20.0 (retours après la 0.19.0)
+
+- LiveChat : Image / Vidéo / Son ouvre une petite fenêtre bibliothèque avec recherche (nom + tag)
+- Sondage : bandeau en haut de l'écran (même en jeu), petit son, barre de temps
+- Sondage : gagnant à l'écran comme un LiveChat, confettis et son de victoire
+- Party : Arrêter en rouge, Reprendre en vert
+- Le violet ne clignote plus en changeant d'onglet
+
 ### Publiée : 0.19.0 (retours après la 0.18.0)
 
 - Mode simple : retour du grand cadre (glisser, ou Depuis ma bibliothèque : Image / Vidéo / Son). « Ajouter un son ? » reste

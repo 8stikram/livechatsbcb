@@ -2002,18 +2002,21 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();
     await overlayState(guest, 'idle');
 
-    // The LiveChat tab sends you to the right shelf, and brings you back.
+    // The LiveChat tab opens a small window on the right shelf, and stays where it is.
     await openTab(host, 'LiveChat');
     await picture(host.control, '17-livechat-choice.png');
     await host.control.getByRole('button', { name: 'Depuis ma bibliothèque' }).first().click();
     await host.control.getByRole('group', { name: 'Quoi de ta bibliothèque' }).getByRole('button', { name: 'Image' }).click();
-    await expect(host.control.getByRole('button', { name: /^Images/ }).getAttribute('aria-pressed')).resolves.toBe('true');
-    await host.control.getByRole('button', { name: 'Utiliser menu-image.png' }).click();
+    const picker = host.control.getByTestId('library-picker');
+    await picker.getByLabel('Chercher dans ma bibliothèque').fill('menu-image');
+    await picture(host.control, 'library-picker.png');
+    await picker.getByTestId('picker-file').filter({ hasText: 'menu-image.png' }).click();
+    await picker.waitFor({ state: 'detached' });
     await host.control.getByTestId('draft-name').filter({ hasText: 'menu-image.png' }).waitFor();
     await picture(host.control, '16-livechat-add-sound.png');
     await host.control.getByRole('group', { name: 'Ajouter une musique' }).getByRole('button', { name: 'Depuis ma bibliothèque' }).click();
-    await expect(host.control.getByRole('button', { name: /^Sons/ }).getAttribute('aria-pressed')).resolves.toBe('true');
-    await card('menu-son.wav').getByRole('button', { name: 'Utiliser' }).click();
+    await expect(picker.getByRole('button', { name: 'Sons' }).getAttribute('aria-pressed')).resolves.toBe('true');
+    await picker.getByTestId('picker-file').filter({ hasText: 'menu-son.wav' }).click();
     await expect.poll(() => host.control.getByTestId('draft-name').count()).toBe(2);
     await host.control.getByRole('button', { name: 'Retirer', exact: true }).first().click();
     await host.control.getByRole('button', { name: 'Retirer', exact: true }).first().click();
@@ -2029,12 +2032,10 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByRole('button', { name: 'Depuis ma bibliothèque' }).first().click();
     await picture(host.control, 'shelf-choice.png');
     await host.control.getByRole('group', { name: 'Quoi de ta bibliothèque' }).getByRole('button', { name: 'Son' }).click();
-    await expect(host.control.getByRole('button', { name: /^Sons/ }).getAttribute('aria-pressed')).resolves.toBe('true');
-    await expect
-      .poll(() => host.control.getByRole('button', { name: /^Sons/ }).evaluate((tab) => getComputedStyle(tab).backgroundColor))
-      .not.toBe('rgba(0, 0, 0, 0)');
+    await expect(host.control.getByTestId('library-picker').getByRole('button', { name: 'Sons' }).getAttribute('aria-pressed')).resolves.toBe('true');
+    await host.control.keyboard.press('Escape');
+    await host.control.getByTestId('library-picker').waitFor({ state: 'detached' });
 
-    await openTab(host, 'LiveChat');
     await answerDialogWith(host, music);
     await host.control.getByTestId('draft-drop').getByRole('button', { name: 'Depuis mon PC' }).click();
     await host.control.getByTestId('draft-name').filter({ hasText: 'ma-musique.wav' }).waitFor();
@@ -2145,7 +2146,14 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByTestId('poll-choice').filter({ hasText: 'Rocket' }).getByTestId('poll-count').filter({ hasText: '1' }).waitFor();
     await expect(host.control.getByTestId('poll').textContent()).resolves.not.toContain('Pote');
     await picture(host.control, '7-poll.png');
-  });
+
+    // Everyone sees it at the top of the screen, then the winner, with a party.
+    await guest.stage.getByTestId('poll-banner').filter({ hasText: 'On lance quoi ?' }).waitFor();
+    await picture(guest.stage, 'poll-banner.png');
+    await guest.stage.getByTestId('poll-result').filter({ hasText: 'Rocket' }).waitFor({ timeout: 45_000 });
+    await picture(guest.stage, 'poll-result.png');
+    await guest.stage.getByTestId('poll-result').waitFor({ state: 'detached', timeout: 15_000 });
+  }, 120_000);
 
   it('plays the best joke: pictures from the PC, a joke on a friend’s, votes, then the ranking', async () => {
     const logo = join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png');

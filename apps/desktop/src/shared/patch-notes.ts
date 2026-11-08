@@ -3,6 +3,17 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.20.0',
+    date: '8 novembre 2026',
+    items: [
+      'LiveChat : Image, Vidéo ou Son ouvre une petite fenêtre avec ta bibliothèque et une recherche, sans quitter l’onglet',
+      'Sondage : un bandeau en haut de l’écran de tout le monde, même en jeu, avec le temps qui reste',
+      'Sondage : le gagnant s’affiche à l’écran avec des confettis et un petit son de victoire',
+      'Party : le bouton Arrêter est rouge, Reprendre est vert',
+      'Le violet ne clignote plus quand tu changes d’onglet',
+    ],
+  },
+  {
     version: '0.19.0',
     date: '8 novembre 2026',
     items: [

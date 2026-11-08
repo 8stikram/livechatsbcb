@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
   MAX_CAPTION_LENGTH,
   MAX_CLIP_MS,
@@ -15,6 +16,7 @@ import { IconCheck, IconPlay, IconPlus, KindIcon } from './icons';
 import { isLongerThanSpoken, readingMs } from '../speech';
 import { EmojiButton } from './EmojiPicker';
 import { canSendIn, mediaErrorMessage } from './messages';
+import { LibraryPicker, type Shelf } from './LibraryPicker';
 import { Slider } from './NowPlaying';
 import { Switch } from './SettingsScreen';
 import type { Clip, DraftFiles } from './use-draft';
@@ -488,7 +490,6 @@ export const MediaScreen = ({
   files,
   scene,
   active,
-  onOpenLibrary,
   whisperTo,
   onWhisperTo: setWhisperTo,
 }: {
@@ -496,7 +497,6 @@ export const MediaScreen = ({
   files: DraftFiles;
   scene: Scene;
   active: boolean;
-  onOpenLibrary: (category: 'image' | 'video' | 'audio') => void;
   // Kept by the window, so that the party can open this tab already whispering to someone.
   whisperTo: string[];
   onWhisperTo: (to: string[]) => void;
@@ -506,6 +506,7 @@ export const MediaScreen = ({
   const [soundSearch, setSoundSearch] = useState('');
   // "Depuis ma bibliothèque" first asks which shelf: images, videos or sounds.
   const [choosingShelf, setChoosingShelf] = useState(false);
+  const [picking, setPicking] = useState<Shelf | null>(null);
   useEffect(() => setLinkProblem(null), [link]);
   const [preview, setPreview] = useState<{ item: PlaybackView; startAt: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -741,6 +742,22 @@ export const MediaScreen = ({
 
   return (
     <div className="media-grid">
+      {picking &&
+        createPortal(
+          <LibraryPicker
+            shelf={picking}
+            onShelf={setPicking}
+            onClose={() => setPicking(null)}
+            onPick={(file) => {
+              setPicking(null);
+              void window.liveChat.useLibraryFile(file.id).then((result) => {
+                if (result.ok) files.adopt(result.draft);
+                else setError('Ce fichier n’est plus là.');
+              });
+            }}
+          />,
+          document.body,
+        )}
       <section className="glass media-main" aria-label="Ton LiveChat">
         {modeSwitch}
         {advanced ? (
@@ -855,7 +872,7 @@ export const MediaScreen = ({
                         className="draft-shelf"
                         onClick={() => {
                           setChoosingShelf(false);
-                          onOpenLibrary(category);
+                          setPicking(category);
                         }}
                       >
                         <KindIcon kind={category} size={22} />
@@ -892,7 +909,7 @@ export const MediaScreen = ({
                 {!isUploading && (!picture || !sound) && (
                   <div className="draft-add" role="group" aria-label={picture ? 'Ajouter une musique' : 'Ajouter une image ou une vidéo'}>
                     <span className="draft-add-title">{picture ? 'Ajouter un son ?' : 'Ajouter une image ou une vidéo ?'}</span>
-                    <button type="button" className="pill secondary small" onClick={() => onOpenLibrary(picture ? 'audio' : 'image')}>
+                    <button type="button" className="pill secondary small" onClick={() => setPicking(picture ? 'audio' : 'image')}>
                       Depuis ma bibliothèque
                     </button>
                     <button type="button" className="pill secondary small" onClick={() => void pick(picture ? 'sound' : 'picture')}>

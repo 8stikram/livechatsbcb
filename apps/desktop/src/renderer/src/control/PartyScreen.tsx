@@ -399,7 +399,7 @@ const StopBar = ({ stopped }: { stopped: boolean }) => (
     </div>
     <button
       type="button"
-      className={stopped ? 'pill primary' : 'pill secondary'}
+      className={stopped ? 'pill stop-button is-resume' : 'pill stop-button is-stop'}
       data-testid="stop-button"
       data-tour="stop"
       onClick={() => void window.liveChat.setClean(!stopped)}

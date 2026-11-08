@@ -477,10 +477,6 @@ export const App = () => {
                   active={view === 'media' && !showPicker}
                   whisperTo={whisperTo}
                   onWhisperTo={setWhisperTo}
-                  onOpenLibrary={(category) => {
-                    setLibraryCategory(category);
-                    setChosenView('library');
-                  }}
                 />
               </div>
               <div className="view" hidden={view !== 'library'}>

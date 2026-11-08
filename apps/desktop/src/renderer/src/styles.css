@@ -892,8 +892,26 @@ select.input {
   flex-direction: column;
 }
 
+/* The page slides in, and its frames fade in one by one. Fading the whole page would switch off the frosted glass
+   of every frame until the end, and the violet would blink. */
 .view {
-  animation: view-in var(--spring-time) var(--spring) backwards;
+  animation: view-slide var(--spring-time) var(--spring) backwards;
+}
+
+.view :where(.glass:not(.glass .glass)) {
+  animation: glass-in var(--enter) var(--ease) backwards;
+}
+
+@keyframes view-slide {
+  from {
+    transform: translateX(var(--slide, 0));
+  }
+}
+
+@keyframes glass-in {
+  from {
+    opacity: 0;
+  }
 }
 
 .empty {
@@ -4409,4 +4427,243 @@ html.live-pulse .avatar.has-ring.is-live,
   flex: 1;
   min-width: 160px;
   margin: 0;
+}
+
+/* Poll on everyone's screen, dressed like the app: the same dark violet glass, soft white text, a thin line of time. */
+.poll-banner,
+.poll-result {
+  position: fixed;
+  top: 4vh;
+  left: 50%;
+  z-index: 5;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: 340px;
+  max-width: min(620px, 80vw);
+  padding: 16px 28px 20px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-panel);
+  background:
+    radial-gradient(420px 220px at 15% 0%, rgb(255 255 255 / 9%), transparent 70%),
+    radial-gradient(460px 260px at 90% 110%, rgb(160 70 220 / 34%), transparent 70%),
+    rgb(22 10 36 / 88%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 14%),
+    0 18px 50px -18px rgb(0 0 0 / 70%);
+  color: var(--text);
+  font-family: var(--font);
+  text-align: center;
+  translate: -50% 0;
+  animation: poll-drop var(--spring-time) var(--spring) backwards;
+}
+
+.poll-banner-tag {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.poll-banner-question {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.poll-banner-from {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.poll-banner-time {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 8px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--text-soft);
+  opacity: 0.7;
+  transform-origin: left;
+  transition: transform 250ms linear;
+}
+
+.poll-result {
+  animation:
+    poll-drop var(--spring-time) var(--spring) backwards,
+    poll-leave 360ms cubic-bezier(0.3, 0, 1, 1) 6.6s forwards;
+}
+
+.poll-result-winner {
+  position: relative;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+  animation: poll-pop var(--bounce-time) var(--bounce) 160ms backwards;
+}
+
+.poll-confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.poll-confetti i {
+  position: absolute;
+  top: -12px;
+  width: 6px;
+  height: 10px;
+  border-radius: 2px;
+  opacity: 0.9;
+  animation: poll-fall 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes poll-drop {
+  from { opacity: 0; transform: translateY(-28px) scale(0.96); }
+}
+
+@keyframes poll-leave {
+  to { opacity: 0; transform: translateY(-20px) scale(0.97); }
+}
+
+@keyframes poll-pop {
+  from { opacity: 0; transform: scale(0.6); }
+}
+
+@keyframes poll-fall {
+  0% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  100% { transform: translate(var(--drift), 140px) rotate(var(--spin)); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poll-banner, .poll-result, .poll-result-winner, .poll-confetti i { animation: none !important; }
+}
+
+/* Arrêter is red while LiveChats show, Reprendre is green once stopped. */
+.pill.stop-button {
+  border: 1px solid transparent;
+  font-weight: 600;
+  color: white;
+  transition: background var(--fast) var(--ease), box-shadow var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+
+.pill.stop-button.is-stop {
+  background: #e5484d;
+  box-shadow: 0 6px 20px -8px rgb(229 72 77 / 80%);
+}
+
+.pill.stop-button.is-stop:hover {
+  background: #f2555a;
+}
+
+.pill.stop-button.is-resume {
+  background: #2fa86b;
+  box-shadow: 0 6px 20px -8px rgb(47 168 107 / 80%);
+}
+
+.pill.stop-button.is-resume:hover {
+  background: #37bd79;
+}
+
+.pill.stop-button:active {
+  transform: scale(0.97);
+}
+
+/* Library picker: a small window over the LiveChat tab. */
+.shelf-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(10 4 18 / 45%);
+  -webkit-app-region: no-drag;
+  animation: glass-in var(--fast) var(--ease) backwards;
+}
+
+.shelf-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(620px, 100%);
+  max-height: min(560px, 100%);
+  padding: 16px;
+  background: rgb(30 14 48 / 88%);
+  box-shadow: 0 30px 80px -20px rgb(0 0 0 / 70%);
+  animation: shelf-in 320ms cubic-bezier(0.05, 0.7, 0.1, 1) backwards;
+}
+
+@keyframes shelf-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+}
+
+.shelf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.shelf-list {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  align-content: start;
+  gap: 10px;
+  margin: 0;
+  padding: 2px;
+  overflow: hidden auto;
+  list-style: none;
+}
+
+.shelf-file {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--glass);
+  text-align: left;
+}
+
+.shelf-file:hover {
+  background: var(--glass-hover);
+}
+
+.shelf-file img,
+.shelf-file video,
+.shelf-sound {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 10px;
+  object-fit: cover;
+  background: rgb(0 0 0 / 25%);
+  pointer-events: none;
+}
+
+.shelf-sound {
+  display: grid;
+  place-items: center;
+  color: var(--text-soft);
+}
+
+.shelf-name {
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.shelf-close {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-size: 20px;
 }
