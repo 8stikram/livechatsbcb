@@ -3,9 +3,16 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: '0.20.1',
+    version: '0.21.0',
     date: '8 novembre 2026',
-    items: ['Fond de l’app plus clair, plus transparent et un peu plus flou'],
+    items: [
+      'Changer d’onglet en un seul mouvement : le grand cadre se transforme, les cadres sur les côtés partent par leur côté',
+      'Ton LiveChat s’envole quand tu l’envoies',
+      'Simple et Avancé passent de l’un à l’autre en douceur',
+      'Les boutons s’enfoncent au clic, les cartes de la Bibliothèque se soulèvent au survol',
+      'Un fond vivant : une lueur violette dérive doucement, et s’arrête quand l’app n’est pas devant',
+      'Fond de l’app plus clair, plus transparent et un peu plus flou',
+    ],
   },
   {
     version: '0.20.0',
