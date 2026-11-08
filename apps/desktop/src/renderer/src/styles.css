@@ -27,9 +27,9 @@
   --line-bright: rgb(255 255 255 / 30%);
   --well: rgb(0 0 0 / 25%);
 
-  --radius-panel: 28px;
-  --radius-inner: 18px;
-  --radius-field: 14px;
+  --radius-panel: 34px;
+  --radius-inner: 22px;
+  --radius-field: 16px;
 
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --fast: 140ms;
