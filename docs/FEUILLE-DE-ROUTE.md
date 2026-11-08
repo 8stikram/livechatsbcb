@@ -6,7 +6,9 @@ On avance une mise à jour à la fois : les questions de chacune sont posées ju
 
 ## Publiée
 
-**0.21.0** (dernière version, 8 novembre 2026) : motion design, fond vivant (détail plus bas)
+**0.22.0** (dernière version, 8 novembre 2026) : jeux avec salon, look cartoon, podium (détail plus bas)
+
+**0.21.0** (8 novembre 2026) : motion design, fond vivant
 
 **0.20.0** (8 novembre 2026) : sondage à l'écran, fenêtre bibliothèque, moins de freezes
 
@@ -113,7 +115,7 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
-### En cours : 0.22.0 (jeux)
+### Publiée : 0.22.0 (jeux)
 
 - Salon : Rejoindre, Prêt, l'ouvreur lance ; départ tout seul 5 s après « tous prêts » ou 1 min après assez de joueurs
 - Bandeau d'invitation à l'écran + point sur l'onglet Jeux
