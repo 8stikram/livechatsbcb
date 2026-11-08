@@ -3,6 +3,21 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.22.0',
+    date: '8 novembre 2026',
+    items: [
+      'Jeux : ouvrir un jeu crée un salon. Les potes cliquent sur Rejoindre, chacun peut dire Prêt',
+      'Celui qui ouvre lance quand il veut. Tout le monde prêt : ça part en 5 s, sinon tout seul au bout d’une minute',
+      'Un bandeau sur l’écran de tout le monde quand un salon s’ouvre, et un point sur l’onglet Jeux',
+      'Si celui qui a ouvert part, le suivant prend la main. Bouton Quitter pendant la partie',
+      'Arrivé en retard ? Rejoindre aussi : tu joues dès la manche suivante',
+      'Nouveau look cartoon : couleurs vives, gros boutons, avatars qui sautillent en arrivant',
+      'En partie : les avatars de tous avec une coche quand ils ont joué, et « Manche 2 ! » en grand',
+      'Réactions 😂🔥😮 qui flottent chez tout le monde',
+      'Fin de partie : un podium avec confettis, et un bouton Revanche dans le même salon',
+    ],
+  },
+  {
     version: '0.21.0',
     date: '8 novembre 2026',
     items: [

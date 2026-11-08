@@ -4,6 +4,7 @@ import type { Account } from '@livechatsbcb/protocol';
 import type { OverlayLayout } from '../../../shared/ipc';
 import { Caption, Playing, Profile, zoneStyle } from '../scene';
 import { PollOverlay } from './PollOverlay';
+import { GameInvite } from './GameInvite';
 import { Wheel } from './Wheel';
 import { useAppState } from '../use-app-state';
 import logo from '../assets/logo.png';
@@ -46,6 +47,7 @@ const Stage = () => {
       )}
       {!playing && overlayTest && <TestScene layout={settings.layout} account={state.account} />}
       {settings.overlayEnabled && !settings.clean && !state.excludedNow && <PollOverlay poll={state.poll} volume={volume} />}
+      {settings.overlayEnabled && !settings.clean && !state.excludedNow && <GameInvite invite={state.gameInvite} />}
       {state.wheel.open && <Wheel wheel={state.wheel} />}
     </main>
   );

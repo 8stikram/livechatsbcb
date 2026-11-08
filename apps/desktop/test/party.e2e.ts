@@ -2175,7 +2175,15 @@ describe.skipIf(online)('party flow in the real app', () => {
     });
     for (const member of [host, guest]) await openTab(member, 'Jeux');
     await picture(host.control, 'games.png');
-    await host.control.getByTestId('game-card-joke').getByRole('button', { name: 'Lancer' }).click();
+    await host.control.getByTestId('game-card-joke').getByRole('button', { name: 'Ouvrir' }).click();
+    // A lobby: the others see it on screen and click to join, the opener launches.
+    await guest.stage.getByTestId('game-invite').filter({ hasText: 'Meilleure blague' }).waitFor();
+    await picture(guest.stage, 'game-invite.png');
+    await guest.control.getByTestId('game-lobby').getByRole('button', { name: 'Rejoindre' }).click();
+    await host.control.getByTestId('game-lobby').getByText('Toi').waitFor();
+    await host.control.locator('.lobby-faces .toy-face:not(.is-empty)').nth(1).waitFor();
+    await picture(host.control, 'game-lobby.png');
+    await host.control.getByTestId('game-lobby').getByRole('button', { name: 'Lancer' }).click();
 
     for (const member of [host, guest]) {
       await member.control.getByTestId('game').filter({ hasText: 'Envoie 5 images' }).waitFor();
@@ -2204,6 +2212,9 @@ describe.skipIf(online)('party flow in the real app', () => {
       await member.control.getByTestId('game-entry').filter({ hasNotText: 'La tienne' }).click();
     }
     await host.control.locator('[data-testid="game"][data-phase="reveal"]').waitFor();
+    // Reactions float on everyone's game.
+    await guest.control.getByRole('button', { name: '😂' }).click();
+    await host.control.locator('.reaction-float').filter({ hasText: '😂' }).first().waitFor();
     await picture(host.control, 'game-reveal.png');
     expect(await host.control.getByTestId('game-entry').filter({ hasText: 'Blague 1' }).textContent()).toContain('Pote');
 
@@ -2211,7 +2222,11 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByRole('button', { name: 'Arrêter pour tous ?' }).click();
     await guest.control.getByTestId('game-ranking').waitFor();
     await picture(guest.control, 'game-ranking.png');
-    await guest.control.getByRole('button', { name: 'Autre jeu' }).click();
+    // Revanche: the same lobby again.
+    await guest.control.getByRole('button', { name: 'Revanche' }).click();
+    await host.control.getByTestId('game-lobby').waitFor();
+    await host.control.getByTestId('game-lobby').getByRole('button', { name: 'Quitter' }).click();
+    await guest.control.getByTestId('game-lobby').getByRole('button', { name: 'Quitter' }).click();
     await guest.control.getByTestId('game-card-joke').waitFor();
     for (const member of [host, guest]) await openTab(member, 'LiveChat');
   });

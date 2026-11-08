@@ -8,6 +8,7 @@ import type {
   Member,
   Game,
   GameKind,
+  GameReaction,
   Poll,
   SceneLayer,
 } from '@livechatsbcb/protocol';
@@ -235,6 +236,12 @@ export type GameView = Omit<Game, 'entries' | 'myPicture'> & {
   sending: number;
 };
 
+export type GameAction = 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch';
+// A reaction floating by for a few seconds.
+export type GameReactionView = { id: number; memberId: string; emoji: GameReaction };
+// A lobby someone opened, that this member has not joined: on screen, even in game, for a few seconds.
+export type GameInviteView = { gameId: string; kind: GameKind; starterName: string };
+
 export type LocalReplayView = { historyId: string; playback: PlaybackView | null };
 
 export type DraftMedia = { name: string; size: number; kind: FileKind; previewUrl: string };
@@ -363,6 +370,8 @@ export type AppState = {
   history: HistoryView[];
   poll: PollView | null;
   game: GameView | null;
+  gameReactions: GameReactionView[];
+  gameInvite: GameInviteView | null;
   // One of the excluded apps is in front: nothing shows or plays here until it isn't.
   excludedNow: boolean;
   favorites: FavoriteView[];
@@ -484,6 +493,8 @@ export const IpcChannel = {
   GameSay: 'game:say',
   GameVote: 'game:vote',
   StopGame: 'game:stop',
+  GameAction: 'game:action',
+  GameReact: 'game:react',
   SendGameFiles: 'game:send-files',
   SendGameText: 'game:send-text',
   SoundLevel: 'stage:sound-level',
@@ -582,6 +593,8 @@ export type LiveChatApi = {
   gameSay(gameId: string, text: string): Promise<void>;
   gameVote(gameId: string, choice: string): Promise<void>;
   stopGame(gameId: string): Promise<void>;
+  gameAction(gameId: string, action: GameAction): Promise<void>;
+  gameReact(gameId: string, emoji: GameReaction): Promise<void>;
   // Opens the file picker: pictures for the jokes and the impostor, any LiveChat otherwise.
   sendGameFiles(gameId: string): Promise<GameSendResult>;
   sendGameText(gameId: string, text: string): Promise<ActionResult>;

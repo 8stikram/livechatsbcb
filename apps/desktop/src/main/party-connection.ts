@@ -2,6 +2,7 @@ import {
   CloseCode,
   ServerMessageSchema,
   WS_APP_PREFIX,
+  WS_LOBBY,
   WS_PING,
   WS_SUBPROTOCOL,
   WS_TOKEN_PREFIX,
@@ -9,6 +10,7 @@ import {
   type ClientMessage,
   type Game,
   type GameKind,
+  type GameReaction,
   type HistoryItem,
   type Member,
   type Poll,
@@ -43,6 +45,7 @@ type Listener = {
   onSessionRevoked(closeCode: number): void;
   onUnreadable(): void;
   onSkipped(memberId: string, name: string): void;
+  onReaction(memberId: string, emoji: GameReaction): void;
 };
 
 // Lives in the main process so the member token never reaches a window, and so both windows share one connection.
@@ -149,13 +152,22 @@ export class PartyConnection {
     this.send({ t: 'game-stop', gameId });
   }
 
+  gameAction(gameId: string, action: 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch'): void {
+    if (action === 'ready' || action === 'unready') this.send({ t: 'game-ready', gameId, ready: action === 'ready' });
+    else this.send({ t: `game-${action}`, gameId });
+  }
+
+  gameReact(gameId: string, emoji: GameReaction): void {
+    this.send({ t: 'game-react', gameId, emoji });
+  }
+
   private send(message: ClientMessage): void {
     if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message));
   }
 
   private open(): void {
     const url = `${SERVER_URL.replace(/^http/, 'ws')}/v1/parties/${this.session.partyId}/ws`;
-    const socket = new WebSocket(url, [WS_SUBPROTOCOL, `${WS_APP_PREFIX}${this.appVersion}`, `${WS_TOKEN_PREFIX}${this.session.token}`]);
+    const socket = new WebSocket(url, [WS_SUBPROTOCOL, `${WS_APP_PREFIX}${this.appVersion}`, WS_LOBBY, `${WS_TOKEN_PREFIX}${this.session.token}`]);
     this.socket = socket;
     this.lastHeardAt = Date.now();
 
@@ -234,6 +246,9 @@ export class PartyConnection {
         break;
       case 'skipped':
         this.listener.onSkipped(message.memberId, message.name);
+        break;
+      case 'game-react':
+        this.listener.onReaction(message.memberId, message.emoji);
         break;
       case 'pong':
         break;

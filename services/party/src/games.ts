@@ -1,5 +1,6 @@
 import {
   GAME_ENTRIES_PER_PLAYER,
+  GAME_MIN_PLAYERS,
   fileKindOf,
   type Game,
   type GameEntry,
@@ -42,12 +43,21 @@ export type StoredGame = {
   votes: Record<string, string>;
   answer: string | null;
   reason: "few" | "stopped" | null;
+  // Whoever runs the lobby: the opener, then the first one left.
+  chefId: string;
+  // Who clicked « Prêt » in the lobby.
+  ready: string[];
+  // Who joined while it was running: they play from the next round.
+  waiting: string[];
+  // When the lobby first had enough players, and when everyone was ready.
+  enoughSince: number | null;
+  readySince: number | null;
 };
 
 // A finished game still shows its ranking for a while.
 export const GAME_KEPT_MS = 60_000;
 
-const SECONDS: Record<Exclude<GamePhase, "done">, Record<GameKind, number>> = {
+const SECONDS: Record<Exclude<GamePhase, "done" | "lobby">, Record<GameKind, number>> = {
   collect: { joke: 90, question: 60, who: 60, undercover: 45 },
   write: { joke: 60, question: 0, who: 0, undercover: 40 },
   vote: { joke: 30, question: 15, who: 20, undercover: 30 },
@@ -108,6 +118,143 @@ const sentBy = (game: StoredGame, memberId: string): StoredEntry[] =>
 const isPictureGame = (kind: GameKind): boolean =>
   kind === "joke" || kind === "undercover";
 
+// Lobby: starts by itself a minute after there are enough players, or 5 s after everyone is ready.
+export const LOBBY_AUTO_MS = 60_000;
+export const LOBBY_READY_MS = 5_000;
+// A lobby nobody joins closes by itself.
+export const LOBBY_IDLE_MS = 10 * 60_000;
+
+export const openLobby = (
+  kind: GameKind,
+  chefId: string,
+  chefName: string,
+  now: number,
+  scale: number,
+): StoredGame => {
+  const game: StoredGame = {
+    ...createGame(kind, chefName, [chefId], now, scale),
+    phase: "lobby",
+    chefId,
+  };
+  armLobby(game, now, scale);
+  return game;
+};
+
+// When the lobby starts by itself, from who is in and who is ready.
+export const armLobby = (game: StoredGame, now: number, scale: number): void => {
+  // Clicking takes human time, even when tests speed the game up.
+  scale = Math.max(scale, 0.5);
+  const enough = game.players.length >= GAME_MIN_PLAYERS[game.kind];
+  if (!enough) {
+    game.enoughSince = null;
+    game.readySince = null;
+    game.endsAt = now + LOBBY_IDLE_MS;
+    return;
+  }
+  game.enoughSince ??= now;
+  const allReady = game.players.every((id) => game.ready.includes(id));
+  game.readySince = allReady ? (game.readySince ?? now) : null;
+  const auto = game.enoughSince + LOBBY_AUTO_MS * scale;
+  game.endsAt =
+    game.readySince === null
+      ? auto
+      : Math.min(auto, game.readySince + LOBBY_READY_MS * scale);
+};
+
+export const join = (
+  game: StoredGame,
+  memberId: string,
+  now: number,
+  scale: number,
+): boolean => {
+  if (game.players.includes(memberId) || game.waiting.includes(memberId))
+    return false;
+  if (game.phase === "done") return false;
+  if (game.phase !== "lobby") {
+    game.waiting.push(memberId);
+    return true;
+  }
+  game.players.push(memberId);
+  game.scores[memberId] = 0;
+  armLobby(game, now, scale);
+  return true;
+};
+
+export const setReady = (
+  game: StoredGame,
+  memberId: string,
+  ready: boolean,
+  now: number,
+  scale: number,
+): boolean => {
+  if (game.phase !== "lobby" || !game.players.includes(memberId)) return false;
+  game.ready = game.ready.filter((id) => id !== memberId);
+  if (ready) game.ready.push(memberId);
+  armLobby(game, now, scale);
+  return true;
+};
+
+// Returns false when nobody is left, so the lobby can close.
+export const leave = (
+  game: StoredGame,
+  memberId: string,
+  now: number,
+  scale: number,
+): boolean => {
+  game.waiting = game.waiting.filter((id) => id !== memberId);
+  if (!game.players.includes(memberId)) return true;
+  game.players = game.players.filter((id) => id !== memberId);
+  game.ready = game.ready.filter((id) => id !== memberId);
+  delete game.scores[memberId];
+  if (game.chefId === memberId) game.chefId = game.players[0] ?? "";
+  if (game.phase === "lobby") {
+    if (game.players.length === 0) return false;
+    armLobby(game, now, scale);
+    return true;
+  }
+  if (game.phase !== "done" && game.players.length < 2)
+    finish(game, now, "stopped");
+  return true;
+};
+
+// The lobby becomes the game, with whoever is in it.
+export const launch = (game: StoredGame, now: number, scale: number): void => {
+  const fresh = createGame(game.kind, game.starterName, game.players, now, scale);
+  Object.assign(game, { ...fresh, id: game.id, chefId: game.chefId });
+};
+
+// Same lobby again: everyone who played, plus whoever was waiting.
+export const rematch = (
+  game: StoredGame,
+  memberId: string,
+  online: Set<string>,
+  now: number,
+  scale: number,
+): StoredGame => {
+  const players = [
+    ...new Set([...game.players, ...game.waiting, memberId]),
+  ].filter((id) => online.has(id));
+  const chefId = players.includes(game.chefId) ? game.chefId : memberId;
+  const next: StoredGame = {
+    ...createGame(game.kind, game.starterName, players, now, scale),
+    phase: "lobby",
+    chefId,
+    ready: [memberId],
+  };
+  armLobby(next, now, scale);
+  return next;
+};
+
+// Late arrivals come in at the start of a round.
+const admit = (game: StoredGame): void => {
+  for (const id of game.waiting) {
+    if (game.players.includes(id)) continue;
+    game.players.push(id);
+    game.scores[id] = 0;
+  }
+  game.waiting = [];
+};
+
 export const createGame = (
   kind: GameKind,
   starterName: string,
@@ -137,6 +284,11 @@ export const createGame = (
     votes: {},
     answer: null,
     reason: null,
+    chefId: "",
+    ready: [],
+    waiting: [],
+    enoughSince: null,
+    readySince: null,
   };
 };
 
@@ -234,6 +386,7 @@ const enter = (
     game.endsAt = now + GAME_KEPT_MS;
     return;
   }
+  if (phase === "lobby") return;
   game.endsAt = now + SECONDS[phase][game.kind] * 1_000 * scale;
   if (phase === "vote") game.votes = {};
   if (phase === "write") game.said = {};
@@ -290,6 +443,7 @@ const startDuel = (game: StoredGame, now: number, scale: number): void => {
   game.order = [];
   if (game.round >= game.rounds) return finish(game, now);
   game.round += 1;
+  admit(game);
   game.prompt = pickQuestion(game.asked);
   game.asked.push(game.prompt);
   game.pool = [];
@@ -367,6 +521,7 @@ export const advance = (game: StoredGame, now: number, scale: number): void => {
       if (Object.keys(game.said).length === 0) {
         if (game.kind === "joke" && game.round < game.rounds) {
           game.round += 1;
+          admit(game);
           return startJokeRound(game, now, scale);
         }
         if (game.kind === "joke") return finish(game, now);
@@ -385,10 +540,12 @@ export const advance = (game: StoredGame, now: number, scale: number): void => {
       }
       if (game.round >= game.rounds) return finish(game, now);
       game.round += 1;
+      admit(game);
       return game.kind === "joke"
         ? startJokeRound(game, now, scale)
         : startUndercoverRound(game, now, scale);
     case "done":
+    case "lobby":
       return;
   }
 };
@@ -415,7 +572,7 @@ export const gameView = (game: StoredGame, memberId: string): Game => {
       votes: null,
       mine: true,
     }));
-  } else if (game.phase !== "done") {
+  } else if (game.phase !== "done" && game.phase !== "lobby") {
     if (isPictureGame(game.kind)) myPicture = picture(game.assign[memberId]);
     if (game.kind === "joke" && game.phase !== "write") {
       entries = Object.entries(game.said).map(([id, caption]) => ({
@@ -480,5 +637,8 @@ export const gameView = (game: StoredGame, memberId: string): Game => {
     myChoice: game.votes[memberId] ?? null,
     answer: shown ? game.answer : null,
     reason: game.reason,
+    chefId: game.chefId,
+    ready: game.ready,
+    waiting: game.waiting,
   };
 };

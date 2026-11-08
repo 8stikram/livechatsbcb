@@ -12,6 +12,7 @@ import {
   WS_PING,
   WS_PONG,
   WS_APP_PREFIX,
+  WS_LOBBY,
   WS_SUBPROTOCOL,
   WS_SUBPROTOCOL_PREFIX,
   WS_TOKEN_PREFIX,
@@ -23,6 +24,7 @@ import {
   type Activity,
   type Game,
   type GameKind,
+  type GameReaction,
   type Poll,
   type PollRequest,
   type HistoryItem,
@@ -34,6 +36,11 @@ import {
 } from '@livechatsbcb/protocol';
 import { randomToken, sha256 } from './tokens';
 import * as games from './games';
+
+const REACTION_GAP_MS = 500;
+
+// The lobby came with 0.22.0, which says so. Clients without an app version are tests.
+const knowsLobby = (tags: string[]): boolean => tags.length < 2 || tags.includes(WS_LOBBY);
 
 type MemberRow = { id: string; name: string; avatar_url: string | null };
 type Credentials = { memberId: string; token: string };
@@ -414,7 +421,9 @@ export class Party extends DurableObject<Env> {
 
     for (const socket of this.ctx.getWebSockets(member.id)) this.dismiss(socket, CloseCode.Replaced);
 
-    this.ctx.acceptWebSocket(server, /^\d+\.\d+\.\d+$/.test(app) ? [member.id, app] : [member.id]);
+    const tags = /^\d+\.\d+\.\d+$/.test(app) ? [member.id, app] : [member.id];
+    if (offered.includes(WS_LOBBY)) tags.push(WS_LOBBY);
+    this.ctx.acceptWebSocket(server, tags);
     this.touch(member.id);
     if (this.getMeta('guildId') && Number(this.getMeta('nextMemberCheck')) <= Date.now()) this.planMemberCheck();
 
@@ -429,7 +438,7 @@ export class Party extends DurableObject<Env> {
         queue: this.queue(member.id),
         history: this.history(member.id),
         poll: this.pollFor(member.id),
-        game: this.gameFor(member.id),
+        game: this.gameFor(member.id, knowsLobby(tags)),
       } satisfies ServerMessage),
     );
     this.broadcast({ t: 'members', members }, server);
@@ -486,12 +495,38 @@ export class Party extends DurableObject<Env> {
         this.playGame(gameId, (game) => games.vote(game, memberId, choice));
         break;
       }
-      case 'game-stop':
+      case 'game-stop': {
+        const game = this.storedGame();
+        if (game?.phase === 'lobby') {
+          if (game.id === message.data.gameId && game.chefId === memberId) this.closeGame();
+          break;
+        }
         this.playGame(message.data.gameId, (game) => {
           if (game.phase === 'done' || !game.players.includes(memberId)) return false;
           games.stop(game, Date.now());
           return true;
         });
+        break;
+      }
+      case 'game-join':
+        this.playGame(message.data.gameId, (game) => games.join(game, memberId, Date.now(), this.gameScale()));
+        break;
+      case 'game-ready': {
+        const { gameId, ready } = message.data;
+        this.playGame(gameId, (game) => games.setReady(game, memberId, ready, Date.now(), this.gameScale()));
+        break;
+      }
+      case 'game-launch':
+        this.launchGame(message.data.gameId, memberId);
+        break;
+      case 'game-leave':
+        this.leaveGame(message.data.gameId, memberId);
+        break;
+      case 'game-rematch':
+        this.rematchGame(message.data.gameId, memberId);
+        break;
+      case 'game-react':
+        this.react(message.data.gameId, memberId, message.data.emoji);
         break;
     }
   }
@@ -873,9 +908,10 @@ export class Party extends DurableObject<Env> {
   }
 
   // What each member is told depends on who they are. Null tells them nothing.
-  private broadcastEach(messageFor: (memberId: string) => ServerMessage | null): void {
+  private broadcastEach(messageFor: (memberId: string, lobby: boolean) => ServerMessage | null): void {
     for (const socket of this.openSockets()) {
-      const message = messageFor(this.ctx.getTags(socket)[0]!);
+      const tags = this.ctx.getTags(socket);
+      const message = messageFor(tags[0]!, knowsLobby(tags));
       if (message) socket.send(JSON.stringify(message));
     }
   }
@@ -966,12 +1002,16 @@ export class Party extends DurableObject<Env> {
 
   private storedGame(): games.StoredGame | null {
     const raw = this.getMeta('game');
-    return raw ? (JSON.parse(raw) as games.StoredGame) : null;
+    if (!raw) return null;
+    // A game saved before the lobby existed lacks its fields.
+    return { chefId: '', ready: [], waiting: [], enoughSince: null, readySince: null, ...(JSON.parse(raw) as object) } as unknown as games.StoredGame;
   }
 
-  private gameFor(memberId: string): Game | null {
+  // Apps older than the lobby can't read it: they just don't see it.
+  private gameFor(memberId: string, lobby: boolean): Game | null {
     const game = this.storedGame();
     if (!game || (game.phase === 'done' && Date.now() > game.endsAt)) return null;
+    if (game.phase === 'lobby' && !lobby) return null;
     return games.gameView(game, memberId);
   }
 
@@ -982,6 +1022,17 @@ export class Party extends DurableObject<Env> {
   // Moves on as far as it can, tells everyone, and arms the alarm for the next step.
   private saveGame(game: games.StoredGame): void {
     const now = Date.now();
+    if (game.phase === 'lobby' && now >= game.endsAt) {
+      // Whoever went away is out; with too few, the lobby waits again, and empty or idle, it closes.
+      const online = this.onlineIds();
+      game.players = game.players.filter((id) => online.has(id));
+      game.ready = game.ready.filter((id) => online.has(id));
+      if (!game.players.includes(game.chefId)) game.chefId = game.players[0] ?? '';
+      const enough = game.players.length >= GAME_MIN_PLAYERS[game.kind];
+      if (enough && game.enoughSince !== null) games.launch(game, now, this.gameScale());
+      else if (game.players.length === 0 || game.enoughSince === null) return this.closeGame();
+      else games.armLobby(game, now, this.gameScale());
+    }
     for (let steps = 0; steps < 20 && game.phase !== 'done'; steps += 1) {
       const online = [...this.onlineIds()].filter((id) => game.players.includes(id));
       const done = games.acted(game);
@@ -990,13 +1041,19 @@ export class Party extends DurableObject<Env> {
       games.advance(game, now, this.gameScale());
     }
     this.setMeta('game', JSON.stringify(game));
-    this.broadcastEach((memberId) => ({ t: 'game', game: this.gameFor(memberId) }));
+    this.broadcastEach((memberId, lobby) => ({ t: 'game', game: this.gameFor(memberId, lobby) }));
     if (this.advanceQueue()) this.broadcastQueue();
+  }
+
+  private closeGame(): void {
+    this.setMeta('game', '');
+    this.broadcastEach(() => ({ t: 'game', game: null }));
   }
 
   private stepGame(): void {
     const game = this.storedGame();
     if (!game || game.phase === 'done') return;
+    if (game.phase === 'lobby' && game.enoughSince === null && Date.now() >= game.endsAt) return this.closeGame();
     if (Date.now() >= game.endsAt) this.saveGame(game);
   }
 
@@ -1006,15 +1063,55 @@ export class Party extends DurableObject<Env> {
     this.saveGame(game);
   }
 
-  // One at a time, with whoever is there when it starts.
+  // One at a time. It opens a lobby: the others click to join.
   private startGame(memberId: string, kind: GameKind): void {
     const current = this.storedGame();
     if (current && current.phase !== 'done') return;
-    const players = [...this.onlineIds()];
-    if (players.length < GAME_MIN_PLAYERS[kind] || !players.includes(memberId)) return;
     const [member] = this.ctx.storage.sql.exec<MemberRow>('SELECT id, name, avatar_url FROM members WHERE id = ?', memberId).toArray();
     if (!member) return;
-    this.saveGame(games.createGame(kind, member.name, players, Date.now(), this.gameScale()));
+    this.saveGame(games.openLobby(kind, memberId, member.name, Date.now(), this.gameScale()));
+  }
+
+  // Whoever runs the lobby can start it as soon as there are enough players.
+  private launchGame(gameId: string, memberId: string): void {
+    this.playGame(gameId, (game) => {
+      if (game.phase !== 'lobby' || game.chefId !== memberId) return false;
+      const online = this.onlineIds();
+      game.players = game.players.filter((id) => online.has(id));
+      game.ready = game.ready.filter((id) => online.has(id));
+      if (game.players.length < GAME_MIN_PLAYERS[game.kind]) {
+        games.armLobby(game, Date.now(), this.gameScale());
+        return true;
+      }
+      games.launch(game, Date.now(), this.gameScale());
+      return true;
+    });
+  }
+
+  private leaveGame(gameId: string, memberId: string): void {
+    const game = this.storedGame();
+    if (game?.id !== gameId) return;
+    if (!games.leave(game, memberId, Date.now(), this.gameScale())) return this.closeGame();
+    this.saveGame(game);
+  }
+
+  private rematchGame(gameId: string, memberId: string): void {
+    const game = this.storedGame();
+    if (game?.id !== gameId || game.phase !== 'done') return;
+    if (!game.players.includes(memberId) && !game.waiting.includes(memberId)) return;
+    this.saveGame(games.rematch(game, memberId, this.onlineIds(), Date.now(), this.gameScale()));
+  }
+
+  // Reactions are not kept: they float by and are gone. One every half second at most.
+  private lastReaction = new Map<string, number>();
+  private react(gameId: string, memberId: string, emoji: GameReaction): void {
+    const game = this.storedGame();
+    if (game?.id !== gameId || game.phase === 'lobby') return;
+    if (!game.players.includes(memberId) && !game.waiting.includes(memberId)) return;
+    const now = Date.now();
+    if (now - (this.lastReaction.get(memberId) ?? 0) < REACTION_GAP_MS) return;
+    this.lastReaction.set(memberId, now);
+    this.broadcastEach((_id, lobby) => (lobby ? { t: 'game-react', memberId, emoji } : null));
   }
 
   private addGameEntry(memberId: string, mediaId: string, draft: MediaDraft, fileIds: string[]): void {

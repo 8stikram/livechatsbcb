@@ -6,6 +6,8 @@ export const WS_SUBPROTOCOL_PREFIX = 'livechatsbcb.v';
 export const WS_TOKEN_PREFIX = 'token.';
 // Which version of the app is connecting, so that the others can tell when theirs is behind.
 export const WS_APP_PREFIX = 'app.';
+// Offered by apps that know the game lobby (0.22.0 and later). Older ones are not shown it.
+export const WS_LOBBY = 'feature.lobby';
 
 export const MAX_ONLINE_MEMBERS = 15;
 export const MAX_REGISTERED_MEMBERS = 30;
@@ -380,7 +382,8 @@ export type PollRequest = z.infer<typeof PollRequestSchema>;
 // Party games. One at a time, played in the app's window, never over a game.
 export const GameKindSchema = z.enum(['joke', 'question', 'who', 'undercover']);
 export type GameKind = z.infer<typeof GameKindSchema>;
-export const GamePhaseSchema = z.enum(['collect', 'write', 'vote', 'reveal', 'done']);
+// The lobby comes first: players click to join, then it starts.
+export const GamePhaseSchema = z.enum(['lobby', 'collect', 'write', 'vote', 'reveal', 'done']);
 export type GamePhase = z.infer<typeof GamePhaseSchema>;
 export const MAX_GAME_TEXT_LENGTH = 80;
 // Who has to be there to start: guessing among two people, or hiding among them, is no game.
@@ -428,14 +431,29 @@ export const GameSchema = z.object({
   answer: z.string().nullable(),
   // Why it ended early: not enough sent.
   reason: z.enum(['few', 'stopped']).nullable(),
+  // Who runs the lobby, who is ready, and who joined late and plays from the next round.
+  chefId: z.string().default(''),
+  ready: z.array(z.string()).default([]),
+  waiting: z.array(z.string()).default([]),
 });
 export type Game = z.infer<typeof GameSchema>;
+
+// Quick reactions that float on everyone's screen during a game.
+export const GAME_REACTIONS = ['😂', '🔥', '😮', '👏', '💀', '❤️'] as const;
+export const GameReactionSchema = z.enum(GAME_REACTIONS);
+export type GameReaction = z.infer<typeof GameReactionSchema>;
 
 export const ClientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('game-start'), kind: GameKindSchema }),
   z.object({ t: z.literal('game-say'), gameId: z.string(), text: z.string().trim().min(1).max(MAX_GAME_TEXT_LENGTH) }),
   z.object({ t: z.literal('game-vote'), gameId: z.string(), choice: z.string().min(1).max(64) }),
   z.object({ t: z.literal('game-stop'), gameId: z.string() }),
+  z.object({ t: z.literal('game-join'), gameId: z.string() }),
+  z.object({ t: z.literal('game-ready'), gameId: z.string(), ready: z.boolean() }),
+  z.object({ t: z.literal('game-launch'), gameId: z.string() }),
+  z.object({ t: z.literal('game-leave'), gameId: z.string() }),
+  z.object({ t: z.literal('game-rematch'), gameId: z.string() }),
+  z.object({ t: z.literal('game-react'), gameId: z.string(), emoji: GameReactionSchema }),
   z.object({ t: z.literal('ready'), mediaId: z.string() }),
   z.object({ t: z.literal('skip'), mediaId: z.string() }),
   // This PC has stopped showing it. Once nobody is watching any more, the queue moves on.
@@ -466,6 +484,7 @@ export const ServerMessageSchema = z.discriminatedUnion('t', [
   }),
   z.object({ t: z.literal('poll'), poll: PollSchema.nullable() }),
   z.object({ t: z.literal('game'), game: GameSchema.nullable() }),
+  z.object({ t: z.literal('game-react'), memberId: z.string(), emoji: GameReactionSchema }),
   z.object({ t: z.literal('members'), members: z.array(MemberSchema) }),
   z.object({ t: z.literal('queue'), queue: z.array(QueueItemSchema) }),
   z.object({ t: z.literal('history'), history: z.array(HistoryItemSchema) }),

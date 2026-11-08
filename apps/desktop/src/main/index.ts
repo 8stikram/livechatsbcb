@@ -14,6 +14,8 @@ import {
   MediaDraftSchema,
   PollRequestSchema,
   GameKindSchema,
+  GameReactionSchema,
+  type GameReaction,
   MAX_GAME_TEXT_LENGTH,
   MAX_CAPTION_LENGTH,
   GAME_ENTRIES_PER_PLAYER,
@@ -36,7 +38,7 @@ import {
   type SceneLayer,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, isNewerVersion, keyLabel, DEFAULT_SETTINGS, WHEEL_SIZE, type ActionKey, type KeyChange, type ExternalFiles, type IncomingError, type IncomingResult, type ActionResult, type GameSendResult, type HiddenReason, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
+import { IpcChannel, isNewerVersion, keyLabel, DEFAULT_SETTINGS, WHEEL_SIZE, type ActionKey, type KeyChange, type ExternalFiles, type IncomingError, type IncomingResult, type ActionResult, type GameSendResult, type GameInviteView, type GameReactionView, type HiddenReason, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
@@ -446,6 +448,8 @@ function start(): void {
       excludedNow: excludedNow(),
       poll: snapshot?.poll && connection ? { ...snapshot.poll, endsAt: connection.toLocalTime(snapshot.poll.endsAt) } : null,
       game: snapshot?.game && connection ? gameView(snapshot.game, connection) : null,
+      gameReactions,
+      gameInvite: gameInvite(),
       favorites: library.favorites(),
       localReplay: localReplayView(),
       skippedBy,
@@ -453,6 +457,37 @@ function start(): void {
       keyTest,
       upload: upload && { name: upload.name, percent: upload.percent, paused: upload.paused },
     };
+  };
+
+  // Reactions float by for a few seconds, then go.
+  const REACTION_SHOWN_MS = 3_000;
+  let gameReactions: GameReactionView[] = [];
+  let reactionCount = 0;
+  const addReaction = (memberId: string, emoji: GameReaction): void => {
+    const id = (reactionCount += 1);
+    gameReactions = [...gameReactions.slice(-11), { id, memberId, emoji }];
+    publishState();
+    setTimeout(() => {
+      gameReactions = gameReactions.filter((reaction) => reaction.id !== id);
+      publishState();
+    }, REACTION_SHOWN_MS);
+  };
+
+  // Someone opened a lobby: the others see it on screen for a moment, like a poll, until they join.
+  const INVITE_MS = 10_000;
+  let inviteSeen: { id: string; until: number } | null = null;
+  const gameInvite = (): GameInviteView | null => {
+    const current = connection?.current();
+    const game = current?.game;
+    if (!current || !game || game.phase !== 'lobby' || game.players.includes(current.memberId)) return null;
+    if (inviteSeen?.id !== game.id) {
+      inviteSeen = { id: game.id, until: Date.now() + INVITE_MS };
+      setTimeout(() => {
+        syncOverlay();
+        publishState();
+      }, INVITE_MS + 100);
+    }
+    return Date.now() < inviteSeen.until ? { gameId: game.id, kind: game.kind, starterName: game.starterName } : null;
   };
 
   // A poll is on everyone's screen while it runs, then its winner for a moment. The overlay counts the same time.
@@ -482,7 +517,8 @@ function start(): void {
     const head = connection?.current().queue[0];
     const playing = head?.startAt != null && hiddenReason(head) === null && !excludedNow();
     // Asked for on this PC, like the test: it shows even for someone who keeps the overlay off.
-    const showsPoll = settings.current.overlayEnabled && !settings.current.clean && !excludedNow() && pollOnScreen();
+    const showsPoll =
+      settings.current.overlayEnabled && !settings.current.clean && !excludedNow() && (pollOnScreen() || gameInvite() !== null);
     const wanted = wheelOpen !== null || overlayTest || localReplay?.startAt != null || (playing && settings.current.overlayEnabled) || showsPoll;
 
     if (wanted && !stageWindow.isVisible()) {
@@ -693,6 +729,7 @@ function start(): void {
     let wasOnline = false;
     connection = new PartyConnection(session, {
       onUnreadable: () => updater.check(),
+      onReaction: addReaction,
       onSkipped: (memberId, name) => {
         if (memberId === connection?.current().memberId) return;
         skippedBy = name;
@@ -2158,6 +2195,17 @@ function start(): void {
 
   handle(IpcChannel.StopGame, (gameId: unknown) => {
     if (typeof gameId === 'string') connection?.stopGame(gameId);
+  });
+
+  handle(IpcChannel.GameAction, (gameId: unknown, action: unknown) => {
+    const actions = ['join', 'ready', 'unready', 'launch', 'leave', 'rematch'] as const;
+    const known = actions.find((one) => one === action);
+    if (typeof gameId === 'string' && known) connection?.gameAction(gameId, known);
+  });
+
+  handle(IpcChannel.GameReact, (gameId: unknown, emoji: unknown) => {
+    const parsed = GameReactionSchema.safeParse(emoji);
+    if (typeof gameId === 'string' && parsed.success) connection?.gameReact(gameId, parsed.data);
   });
 
   const sendForGame = async (gameId: string, files: SavedFile[], caption: string): Promise<ActionResult> => {

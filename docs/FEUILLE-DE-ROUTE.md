@@ -113,6 +113,18 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ## À venir
 
+### En cours : 0.22.0 (jeux)
+
+- Salon : Rejoindre, Prêt, l'ouvreur lance ; départ tout seul 5 s après « tous prêts » ou 1 min après assez de joueurs
+- Bandeau d'invitation à l'écran + point sur l'onglet Jeux
+- Le suivant prend la main si l'ouvreur part, Quitter en partie, Rejoindre aussi (manche suivante)
+- Look cartoon, avatars qui sautillent, coches, « Manche 2 ! », réactions émojis, podium avec confettis, Revanche
+
+### Ensuite
+
+- Aperçu du LiveChat par-dessus une fenêtre choisie (questions avant)
+- Bug : l'overlay par-dessus Fortnite d'un pote, qui se ferme / crash
+
 ### Publiée : 0.21.0 (motion design)
 
 - Changement d'onglet : grand cadre qui se transforme, cadres de côté qui partent par leur côté, sens des onglets
