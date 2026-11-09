@@ -124,7 +124,7 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 ### Ensuite
 
-- 0.23.0 prête (pas encore publiée) : effets 3D, apparitions/sorties 3D, fond de fenêtre en direct dans LiveChat avancé, violet au centre de Party
+- 0.23.0 publiée le 9 novembre 2026 : effets 3D, apparitions/sorties 3D, fond de fenêtre en direct dans LiveChat avancé, violet au centre de Party
 - Bug : l'overlay par-dessus Fortnite d'un pote, qui se ferme / crash
 
 ### Publiée : 0.21.0 (motion design)
