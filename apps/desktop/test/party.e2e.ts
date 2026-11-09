@@ -2394,11 +2394,12 @@ describe.skipIf(online)('party flow in the real app', () => {
     await control.mouse.up();
     expect(await layers.first().evaluate((element) => (element as HTMLElement).style.transform)).not.toContain('rotate(0deg)');
 
-    await control.getByText('Effets').click();
+    await control.locator('summary', { hasText: 'Effets' }).click();
     await control.getByText('Noir et blanc').click();
-    await control.getByLabel('Apparition').selectOption('pop');
+    await control.getByLabel('Apparition').selectOption('3d:door');
     await control.getByLabel('Sortie').selectOption('fade');
-    await control.getByLabel('Rotation animée').selectOption('10');
+    await control.getByTestId('layer-animation').selectOption('3d:cube');
+    await control.getByTestId('layer-speed').selectOption('fast');
     await control.getByRole('button', { name: 'Dupliquer en miroir' }).click();
     await expect.poll(() => layers.count()).toBe(2);
     await picture(control, '19-advanced-selected.png');
@@ -2411,6 +2412,25 @@ describe.skipIf(online)('party flow in the real app', () => {
     await control.getByTestId('clip-start').waitFor({ timeout: 15_000 });
     await control.locator('[data-testid="clip-wave"][data-ready="true"]').waitFor();
     await picture(control, '20-advanced.png');
+
+    // A window of this PC behind the board, only here.
+    await control.getByRole('button', { name: 'Fond', exact: true }).click();
+    const picker = control.getByTestId('backdrop-picker');
+    await picker.waitFor();
+    const windows = picker.locator('.backdrop-window');
+    await expect.poll(async () => (await windows.count()) > 0 || (await picker.getByText('Aucune fenêtre').count()) > 0, { timeout: 15_000 }).toBe(true);
+    if ((await windows.count()) > 0) {
+      control.on('console', (message) => {
+        if (message.text().includes('backdrop')) console.log(`backdrop: ${message.text()}`);
+      });
+      await windows.first().click();
+      await control.getByTestId('scene-backdrop').waitFor({ timeout: 10_000 });
+      await picture(control, '20-advanced-backdrop.png');
+      await control.getByRole('button', { name: 'Sans fond' }).click();
+      await control.getByTestId('scene-backdrop').waitFor({ state: 'detached' });
+    } else {
+      await picker.getByRole('button', { name: 'Fermer' }).click();
+    }
 
     // The preview plays it here alone.
     await control.getByRole('button', { name: 'Aperçu', exact: true }).click();
@@ -2434,12 +2454,21 @@ describe.skipIf(online)('party flow in the real app', () => {
     await guest.stage.getByTestId('overlay-audio').waitFor({ state: 'attached' });
     const looks = await shown.evaluateAll((elements) =>
       elements.map((element) => {
-        const media = element.querySelector('img') as HTMLImageElement;
-        return { place: (element as HTMLElement).style.left, flip: media.style.transform, filter: media.style.filter, ready: media.complete && media.naturalWidth > 0 };
+        const media = element.querySelector('img[data-testid="overlay-image"]') as HTMLImageElement;
+        const turning = element.querySelector('.scene-motion.is-3d') as HTMLElement | null;
+        return {
+          place: (element as HTMLElement).style.left,
+          flip: media.style.transform,
+          filter: media.style.filter,
+          ready: media.complete && media.naturalWidth > 0,
+          effect: turning?.style.animationName ?? '',
+          faces: element.querySelectorAll('.scene-copy').length,
+        };
       }),
     );
     expect(looks.every(({ filter, ready }) => filter.includes('grayscale') && ready)).toBe(true);
     expect(looks.filter(({ flip }) => flip.includes('scaleX')).length).toBe(1);
+    expect(looks.every(({ effect, faces }) => effect === 'scene-3d-cube' && faces === 3)).toBe(true);
     expect(looks[0]!.place).not.toBe(looks[1]!.place);
     await picture(guest.stage, '21-overlay-advanced.png');
     await host.control.getByRole('button', { name: 'Passer pour tous' }).first().click();

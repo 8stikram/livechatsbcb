@@ -203,6 +203,29 @@ export const fileNamesOf = (files: { name: string }[]): string | null =>
 const SceneMotionSchema = z.enum(['none', 'pop', 'fade', 'slide']);
 export type SceneMotion = z.infer<typeof SceneMotionSchema>;
 
+// Moves that go on while it is on screen, turning in depth.
+export const SCENE_3D_EFFECTS = [
+  'turn',
+  'turn-thick',
+  'half',
+  'flip',
+  'cube',
+  'tilt',
+  'wobble',
+  'float',
+  'jump',
+  'heart',
+  'eight',
+  'zoom-tilt',
+] as const;
+const Scene3dEffectSchema = z.enum(SCENE_3D_EFFECTS);
+export type Scene3dEffect = z.infer<typeof Scene3dEffectSchema>;
+const Scene3dSpeedSchema = z.enum(['slow', 'medium', 'fast']);
+export type Scene3dSpeed = z.infer<typeof Scene3dSpeedSchema>;
+// Turns around to show itself, comes from far behind, opens like a door.
+const Scene3dMotionSchema = z.enum(['turn', 'depth', 'door']);
+export type Scene3dMotion = z.infer<typeof Scene3dMotionSchema>;
+
 // One picture placed on the whole screen, in percent of it. Its height follows from its proportions, so no screen stretches it.
 export const SceneLayerSchema = z.object({
   file: z.number().int().min(0).max(MAX_MEDIA_FILES - 1),
@@ -219,6 +242,11 @@ export const SceneLayerSchema = z.object({
   spinRpm: z.number().int().min(-120).max(120),
   enter: SceneMotionSchema,
   exit: SceneMotionSchema,
+  // In 3D, as fields of their own: an app from before them drops them and shows enter, exit and the spin instead.
+  effect3d: Scene3dEffectSchema.optional(),
+  effectSpeed: Scene3dSpeedSchema.optional(),
+  enter3d: Scene3dMotionSchema.optional(),
+  exit3d: Scene3dMotionSchema.optional(),
   // A video has its own passage and its own sound. Saved before they did, it follows the LiveChat.
   clipStartMs: z.number().int().min(0).max(24 * MAX_CLIP_MS).optional(),
   clipMs: z.number().int().min(MIN_DISPLAY_MS).max(MAX_CLIP_MS).optional(),

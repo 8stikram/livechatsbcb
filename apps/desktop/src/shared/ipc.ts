@@ -177,6 +177,8 @@ export type PlaybackView = {
   link: MediaLink | null;
 };
 
+export type BackdropView = { id: string; name: string; thumbnail: string };
+
 export type SceneLayerView = Omit<SceneLayer, 'file'> & { kind: 'image' | 'video' | 'link'; url: string | null };
 
 // Starred in the history, and kept on this PC for as long as the star stays.
@@ -495,6 +497,8 @@ export const IpcChannel = {
   StopGame: 'game:stop',
   GameAction: 'game:action',
   GameReact: 'game:react',
+  ListBackdrops: 'backdrop:list',
+  ChooseBackdrop: 'backdrop:choose',
   SendGameFiles: 'game:send-files',
   SendGameText: 'game:send-text',
   SoundLevel: 'stage:sound-level',
@@ -595,6 +599,9 @@ export type LiveChatApi = {
   stopGame(gameId: string): Promise<void>;
   gameAction(gameId: string, action: GameAction): Promise<void>;
   gameReact(gameId: string, emoji: GameReaction): Promise<void>;
+  // The open windows that can sit behind the advanced editor, then the one about to be captured.
+  listBackdrops(): Promise<BackdropView[]>;
+  chooseBackdrop(id: string): Promise<void>;
   // Opens the file picker: pictures for the jokes and the impostor, any LiveChat otherwise.
   sendGameFiles(gameId: string): Promise<GameSendResult>;
   sendGameText(gameId: string, text: string): Promise<ActionResult>;

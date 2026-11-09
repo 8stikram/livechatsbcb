@@ -73,6 +73,7 @@ html:not(.overlay) body {
   background:
     radial-gradient(620px 460px at 18% 12%, rgb(255 255 255 / 11%), transparent 70%),
     radial-gradient(760px 560px at 88% 92%, rgb(160 70 220 / 26%), transparent 70%),
+    radial-gradient(700px 520px at 32% 78%, rgb(160 70 220 / 20%), transparent 70%),
     radial-gradient(420px 320px at 62% 38%, rgb(200 90 230 / 12%), transparent 70%),
     var(--ground);
 }
@@ -83,6 +84,7 @@ html.see-through body {
   background:
     radial-gradient(620px 460px at 18% 12%, rgb(255 255 255 / 8%), transparent 70%),
     radial-gradient(760px 560px at 88% 92%, rgb(160 70 220 / 22%), transparent 70%),
+    radial-gradient(700px 520px at 32% 78%, rgb(160 70 220 / 17%), transparent 70%),
     radial-gradient(420px 320px at 62% 38%, rgb(200 90 230 / 10%), transparent 70%),
     rgb(38 24 56 / 28%);
 }
@@ -1472,6 +1474,7 @@ select.input {
 .scene-tools {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
@@ -1651,6 +1654,166 @@ select.input {
   to {
     opacity: 0;
     translate: 0 60%;
+  }
+}
+
+/* In 3D: the depth is a share of the screen, so the small preview turns exactly like the real one. */
+.scene-layer {
+  perspective: 160cqw;
+}
+
+.scene-layer > .scene-motion,
+.scene-motion.is-3d {
+  transform-style: preserve-3d;
+}
+
+.scene-copy {
+  position: absolute;
+  inset: 0;
+}
+
+@keyframes scene-3d-turn {
+  to { transform: rotateY(360deg); }
+}
+
+@keyframes scene-3d-turn-thick {
+  to { transform: rotateY(360deg); }
+}
+
+@keyframes scene-3d-cube {
+  to { transform: rotateY(-360deg); }
+}
+
+@keyframes scene-3d-flip {
+  to { transform: rotateX(-360deg); }
+}
+
+/* Shows its back, stays a moment, comes back. */
+@keyframes scene-3d-half {
+  0%, 12% { transform: rotateY(0deg); }
+  38%, 62% { transform: rotateY(180deg); }
+  88%, 100% { transform: rotateY(360deg); }
+}
+
+@keyframes scene-3d-tilt {
+  0%, 100% { transform: rotateY(-28deg); }
+  50% { transform: rotateY(28deg); }
+}
+
+@keyframes scene-3d-wobble {
+  0%, 100% { transform: rotateX(0deg) rotateY(0deg); }
+  25% { transform: rotateX(14deg) rotateY(-14deg); }
+  50% { transform: rotateX(0deg) rotateY(14deg); }
+  75% { transform: rotateX(-14deg) rotateY(-6deg); }
+}
+
+@keyframes scene-3d-float {
+  0%, 100% { transform: translateY(0) rotateX(8deg) rotateY(-6deg); }
+  50% { transform: translateY(-7%) rotateX(-8deg) rotateY(6deg); }
+}
+
+/* Squashes before leaving the ground and when it lands. */
+@keyframes scene-3d-jump {
+  0%, 100% { transform: translateY(0) scale(1.08, 0.92); }
+  15% { transform: translateY(0) scale(0.95, 1.06); }
+  50% { transform: translateY(-22%) rotateX(18deg) scale(1, 1); }
+  85% { transform: translateY(0) scale(1, 1); }
+}
+
+@keyframes scene-3d-heart {
+  0%, 40%, 100% { transform: scale(1) translateZ(0); }
+  12% { transform: scale(1.14) translateZ(4cqw); }
+  24% { transform: scale(1.02) translateZ(0); }
+  32% { transform: scale(1.1) translateZ(3cqw); }
+}
+
+/* A figure of eight lying down, leaning into each curve. */
+@keyframes scene-3d-eight {
+  0%, 100% { transform: translate(0, 0) rotateY(0deg); }
+  12.5% { transform: translate(14%, -8%) rotateY(25deg); }
+  25% { transform: translate(22%, 0) rotateY(35deg); }
+  37.5% { transform: translate(14%, 8%) rotateY(25deg); }
+  50% { transform: translate(0, 0) rotateY(0deg); }
+  62.5% { transform: translate(-14%, -8%) rotateY(-25deg); }
+  75% { transform: translate(-22%, 0) rotateY(-35deg); }
+  87.5% { transform: translate(-14%, 8%) rotateY(-25deg); }
+}
+
+@keyframes scene-3d-zoom-tilt {
+  0%, 100% { transform: scale(0.9) rotateY(-22deg) rotateX(6deg); }
+  50% { transform: scale(1.1) rotateY(22deg) rotateX(-6deg); }
+}
+
+/* Comes in turning round to face the screen. */
+@keyframes scene-enter-3d-turn {
+  from {
+    opacity: 0;
+    transform: rotateY(-180deg) scale(0.7);
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@keyframes scene-exit-3d-turn {
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: rotateY(180deg) scale(0.7);
+  }
+}
+
+/* From far behind the screen to its place. */
+@keyframes scene-enter-3d-depth {
+  from {
+    opacity: 0;
+    transform: translateZ(-400cqw);
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes scene-exit-3d-depth {
+  50% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateZ(-400cqw);
+  }
+}
+
+/* Hinged on its left side, it swings open towards you. */
+@keyframes scene-enter-3d-door {
+  from {
+    opacity: 0;
+    transform-origin: left center;
+    transform: rotateY(-95deg);
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    transform-origin: left center;
+    transform: rotateY(0deg);
+  }
+}
+
+@keyframes scene-exit-3d-door {
+  from {
+    transform-origin: left center;
+    transform: rotateY(0deg);
+  }
+  70% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform-origin: left center;
+    transform: rotateY(-95deg);
   }
 }
 
@@ -5466,4 +5629,71 @@ html.calm body::before {
     animation: none !important;
   }
   .round-banner { display: none; }
+}
+
+/* A window of this PC behind the board of the advanced editor: under everything placed on it. */
+.scene-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.backdrop-opacity {
+  flex: 0 0 96px;
+  display: flex;
+  align-items: center;
+}
+
+.backdrop-picker {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.backdrop-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  max-height: 260px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.backdrop-window {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  transition: border-color 120ms ease-out, background 120ms ease-out;
+}
+
+.backdrop-window:hover,
+.backdrop-window.is-on {
+  border-color: var(--line-strong);
+  background: rgb(255 255 255 / 9%);
+}
+
+.backdrop-window img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #000;
+}
+
+.backdrop-window span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }

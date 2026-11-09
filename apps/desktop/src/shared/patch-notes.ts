@@ -3,6 +3,18 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.23.0',
+    date: '9 novembre 2026',
+    items: [
+      'LiveChat avancé, Effets : 12 animations en 3D (Tour 360, épais, Demi-tour, Salto, Cube, Bascule, Wobble, Flotte, Saute, Cœur, Huit, Zoom penché)',
+      'Vitesse lente, moyenne ou rapide pour chaque animation 3D',
+      'Nouvelles apparitions et sorties : Se retourne, Arrive du fond, Porte qui s’ouvre',
+      'Bouton Fond : une fenêtre de ton PC (ton jeu) en direct derrière le cadre, pour caler ton image pile au bon endroit',
+      'Curseur pour régler la visibilité du fond. Il reste chez toi, rien n’est envoyé',
+      'Un peu plus de violet au centre de l’onglet Party',
+    ],
+  },
+  {
     version: '0.22.0',
     date: '8 novembre 2026',
     items: [

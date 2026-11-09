@@ -1,6 +1,6 @@
 import { release } from 'node:os';
 import { join } from 'node:path';
-import { BrowserWindow, nativeImage, nativeTheme, screen, session, shell } from 'electron';
+import { BrowserWindow, desktopCapturer, nativeImage, nativeTheme, screen, session, shell, type NativeImage } from 'electron';
 import { APP_ORIGIN } from './app-protocol';
 import { findLink } from '../shared/links';
 import iconPath from '../renderer/src/assets/logo.png?asset';
@@ -45,10 +45,65 @@ const lockDown = (window: BrowserWindow): void => {
   window.webContents.on('will-attach-webview', (event) => event.preventDefault());
 };
 
+// The app's own page may capture a window, and only the one just chosen in it: see allowBackdropCapture.
+const ownCapture = (permission: string, url: string): boolean => permission === 'display-capture' && isOwnPage(url);
+
 export const denyAllPermissions = (): void => {
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback) => callback(ownCapture(permission, contents.getURL())));
   // TikTok's player breaks when it is told everything is refused. Being asked for anything real still goes above.
-  session.defaultSession.setPermissionCheckHandler((_contents, _permission, origin) => origin === TIKTOK_ORIGIN);
+  session.defaultSession.setPermissionCheckHandler(
+    (contents, permission, origin) => origin === TIKTOK_ORIGIN || ownCapture(permission, contents?.getURL() ?? ''),
+  );
+};
+
+// A window chosen to sit behind the advanced editor. Only shown on this PC, never sent.
+let backdropSource: string | null = null;
+
+// A game in true full screen comes out black: it is better left out of the list than shown as nothing.
+const looksBlack = (image: NativeImage): boolean => {
+  if (image.isEmpty()) return true;
+  const pixels = image.toBitmap();
+  let lit = 0;
+  let seen = 0;
+  for (let index = 0; index < pixels.length; index += 4 * 37) {
+    seen += 1;
+    if (Math.max(pixels[index]!, pixels[index + 1]!, pixels[index + 2]!) > 24) lit += 1;
+  }
+  return seen === 0 || lit / seen < 0.02;
+};
+
+export const listBackdropWindows = async (own: BrowserWindow[]): Promise<Array<{ id: string; name: string; thumbnail: string }>> => {
+  const ownIds = new Set(own.filter((window) => !window.isDestroyed()).map((window) => window.getMediaSourceId()));
+  const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 320, height: 180 } });
+  return sources
+    .filter(({ id, name, thumbnail }) => !ownIds.has(id) && name.trim() !== '' && !looksBlack(thumbnail))
+    .map(({ id, name, thumbnail }) => ({ id, name, thumbnail: thumbnail.toDataURL() }));
+};
+
+export const chooseBackdrop = (id: string): void => {
+  backdropSource = id;
+};
+
+// Only the window just chosen in the app, once: no page can ask for the screen by itself.
+export const allowBackdropCapture = (): void => {
+  session.defaultSession.setDisplayMediaRequestHandler(
+    (request, callback) => {
+      const id = backdropSource;
+      backdropSource = null;
+      if (!id || !isOwnPage(request.frame?.url ?? '')) {
+        callback({});
+        return;
+      }
+      void desktopCapturer
+        .getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } })
+        .then((sources) => {
+          const source = sources.find((one) => one.id === id);
+          callback(source ? { video: source } : {});
+        })
+        .catch(() => callback({}));
+    },
+    { useSystemPicker: false },
+  );
 };
 
 // YouTube's player refuses to work unless it is told who it is playing for, and a page of the app sends nothing.

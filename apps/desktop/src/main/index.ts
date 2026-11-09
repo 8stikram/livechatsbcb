@@ -55,7 +55,7 @@ import { SessionStore } from './session-store';
 import { SettingsSchema, SettingsStore } from './settings-store';
 import { AppTray } from './tray';
 import { Updater } from './updater';
-import { createControlWindow, createStageWindow, denyAllPermissions, introduceToPlayers, isOwnPage, openInBrowser, openSoundCloudSearch, placeOverlay, type StartMode } from './windows';
+import { allowBackdropCapture, chooseBackdrop, createControlWindow, createStageWindow, denyAllPermissions, listBackdropWindows, introduceToPlayers, isOwnPage, openInBrowser, openSoundCloudSearch, placeOverlay, type StartMode } from './windows';
 import { checkLink } from './links';
 import { GameWatch, openApps } from './game-watch';
 import { findLink } from '../shared/links';
@@ -166,6 +166,7 @@ const takeRestartMode = (): StartMode | null => {
 
 function start(): void {
   denyAllPermissions();
+  allowBackdropCapture();
   introduceToPlayers();
   serveMediaFiles();
   if (!process.env['ELECTRON_RENDERER_URL']) serveRenderer();
@@ -2201,6 +2202,12 @@ function start(): void {
     const actions = ['join', 'ready', 'unready', 'launch', 'leave', 'rematch'] as const;
     const known = actions.find((one) => one === action);
     if (typeof gameId === 'string' && known) connection?.gameAction(gameId, known);
+  });
+
+  handle(IpcChannel.ListBackdrops, () => listBackdropWindows(BrowserWindow.getAllWindows()));
+
+  handle(IpcChannel.ChooseBackdrop, (id: unknown) => {
+    if (typeof id === 'string') chooseBackdrop(id);
   });
 
   handle(IpcChannel.GameReact, (gameId: unknown, emoji: unknown) => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent } from 'react';
-import { MAX_SCENE_PICTURES, type SceneLayer } from '@livechatsbcb/protocol';
-import type { AppState, LibraryFileView, LinkDraft, PlaybackView } from '../../../shared/ipc';
+import { MAX_SCENE_PICTURES, type Scene3dEffect, type Scene3dMotion, type Scene3dSpeed, type SceneLayer } from '@livechatsbcb/protocol';
+import type { AppState, BackdropView, LibraryFileView, LinkDraft, PlaybackView } from '../../../shared/ipc';
 import { Caption, Playing, Profile, ScreenPreview, layerLook, layerPlace } from '../scene';
 import { KindIcon } from './icons';
 import { LazyVideo } from './LazyVideo';
@@ -289,6 +289,110 @@ const LibraryStrip = ({ scene }: { scene: Scene }) => {
   );
 };
 
+const BACKDROP_FPS = 15;
+const BACKDROP_KEY = 'backdrop-opacity';
+const readOpacity = (): number => {
+  try {
+    const saved = Number(localStorage.getItem(BACKDROP_KEY));
+    return saved >= 10 && saved <= 100 ? saved : 60;
+  } catch {
+    return 60;
+  }
+};
+
+// A window of this PC, live behind the board, to place things exactly on a game. Only here: nothing of it is sent.
+const useBackdrop = () => {
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [name, setName] = useState('');
+  const [opacity, setOpacityNow] = useState(readOpacity);
+
+  useEffect(() => () => stream?.getTracks().forEach((track) => track.stop()), [stream]);
+
+  return {
+    stream,
+    name,
+    opacity,
+    setOpacity: (value: number) => {
+      setOpacityNow(value);
+      try {
+        localStorage.setItem(BACKDROP_KEY, String(value));
+      } catch {
+        // Kept until the window closes.
+      }
+    },
+    choose: async (picked: BackdropView): Promise<string | null> => {
+      await window.liveChat.chooseBackdrop(picked.id);
+      try {
+        const next = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: BACKDROP_FPS }, audio: false });
+        // The window closed: the board goes back to plain.
+        next.getVideoTracks()[0]?.addEventListener('ended', () => setStream(null));
+        setStream(next);
+        setName(picked.name);
+        return null;
+      } catch (problem) {
+        console.warn('backdrop', problem);
+        return 'Cette fenêtre ne peut pas être affichée.';
+      }
+    },
+    remove: () => setStream(null),
+  };
+};
+type Backdrop = ReturnType<typeof useBackdrop>;
+
+const BackdropVideo = ({ backdrop }: { backdrop: Backdrop }) => {
+  const video = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (video.current) video.current.srcObject = backdrop.stream;
+  }, [backdrop.stream]);
+  if (!backdrop.stream) return null;
+  return <video ref={video} className="scene-backdrop" style={{ opacity: backdrop.opacity / 100 }} autoPlay muted playsInline data-testid="scene-backdrop" />;
+};
+
+const BackdropPicker = ({ backdrop, onClose, onError }: { backdrop: Backdrop; onClose: () => void; onError: (message: string | null) => void }) => {
+  const [windows, setWindows] = useState<BackdropView[] | null>(null);
+  useEffect(() => {
+    void window.liveChat.listBackdrops().then(setWindows);
+  }, []);
+  return (
+    <div className="glass backdrop-picker" data-testid="backdrop-picker">
+      <div className="field-line">
+        <strong>Une fenêtre derrière</strong>
+        <span className="hint">Seulement chez toi, rien n’est envoyé.</span>
+        <span className="spacer" />
+        <button type="button" className="pill quiet small" onClick={onClose}>
+          Fermer
+        </button>
+      </div>
+      {windows === null ? (
+        <p className="hint">Recherche des fenêtres…</p>
+      ) : windows.length === 0 ? (
+        <p className="hint">Aucune fenêtre à montrer. Un jeu doit être en fenêtré ou en plein écran fenêtré.</p>
+      ) : (
+        <ul className="backdrop-list scroll">
+          {windows.map((one) => (
+            <li key={one.id}>
+              <button
+                type="button"
+                className={backdrop.stream && backdrop.name === one.name ? 'backdrop-window is-on' : 'backdrop-window'}
+                title={one.name}
+                onClick={() =>
+                  void backdrop.choose(one).then((problem) => {
+                    onError(problem);
+                    if (!problem) onClose();
+                  })
+                }
+              >
+                <img src={one.thumbnail} alt="" />
+                <span>{one.name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
 export const SceneBoard = ({
   scene,
   state,
@@ -307,6 +411,8 @@ export const SceneBoard = ({
   link: LinkDraft | null;
 }) => {
   const [showLibrary, setShowLibrary] = useState(true);
+  const backdrop = useBackdrop();
+  const [picking, setPicking] = useState(false);
 
   const pick = async () => onError(await scene.pick());
 
@@ -321,6 +427,19 @@ export const SceneBoard = ({
           <button type="button" className="pill quiet small" onClick={() => void pick()}>
             Depuis mon PC
           </button>
+          <button type="button" className={backdrop.stream ? 'pill secondary small' : 'pill quiet small'} aria-expanded={picking} onClick={() => setPicking(!picking)}>
+            Fond
+          </button>
+          {backdrop.stream && (
+            <>
+              <span className="backdrop-opacity">
+                <Slider label="Visibilité du fond" value={backdrop.opacity} min={10} max={100} step={5} onChange={backdrop.setOpacity} />
+              </span>
+              <button type="button" className="pill quiet small" title={`Retirer ${backdrop.name}`} onClick={backdrop.remove}>
+                Sans fond
+              </button>
+            </>
+          )}
           <span className="spacer" />
           <button type="button" className="pill quiet small" disabled={!scene.canUndo} onClick={scene.undo}>
             Annuler
@@ -330,7 +449,10 @@ export const SceneBoard = ({
           </button>
         </div>
 
+        {picking && <BackdropPicker backdrop={backdrop} onClose={() => setPicking(false)} onError={onError} />}
+
         <ScreenPreview testId="scene-preview">
+          <BackdropVideo backdrop={backdrop} />
           {preview ? (
             <>
               <Playing
@@ -369,6 +491,66 @@ const SPINS: Array<[number, string]> = [
   [-40, 'Rapide, sens inverse'],
 ];
 
+// In 3D, the same list as the spin: one or the other.
+const EFFECTS_3D: Array<[Scene3dEffect, string]> = [
+  ['turn', 'Tour 360'],
+  ['turn-thick', 'Tour 360 épais'],
+  ['half', 'Demi-tour'],
+  ['flip', 'Salto avant'],
+  ['cube', 'Cube qui tourne'],
+  ['tilt', 'Bascule'],
+  ['wobble', 'Wobble'],
+  ['float', 'Flotte'],
+  ['jump', 'Saute'],
+  ['heart', 'Battement de cœur'],
+  ['eight', 'Huit'],
+  ['zoom-tilt', 'Zoom penché'],
+];
+
+const SPEEDS: Array<[Scene3dSpeed, string]> = [
+  ['slow', 'Lent'],
+  ['medium', 'Moyen'],
+  ['fast', 'Rapide'],
+];
+
+// An app from before 3D shows the closest plain move instead.
+const MOTIONS_3D: Array<[Scene3dMotion, string, SceneLayer['enter']]> = [
+  ['turn', 'Se retourne', 'pop'],
+  ['depth', 'Arrive du fond', 'pop'],
+  ['door', 'Porte qui s’ouvre', 'fade'],
+];
+
+const motionValue = (plain: SceneLayer['enter'], deep: Scene3dMotion | undefined) => (deep ? `3d:${deep}` : plain);
+
+const MotionSelect = ({ label, value, onChange }: { label: string; value: string; onChange: (plain: SceneLayer['enter'], deep: Scene3dMotion | undefined) => void }) => (
+  <label className="field">
+    <span>{label}</span>
+    <select
+      className="input"
+      value={value}
+      onChange={(event) => {
+        const chosen = event.target.value;
+        const deep = MOTIONS_3D.find(([one]) => `3d:${one}` === chosen);
+        if (deep) onChange(deep[2], deep[0]);
+        else onChange(chosen as SceneLayer['enter'], undefined);
+      }}
+    >
+      {MOTIONS.map(([one, name]) => (
+        <option key={one} value={one}>
+          {name}
+        </option>
+      ))}
+      <optgroup label="En 3D">
+        {MOTIONS_3D.map(([one, name]) => (
+          <option key={one} value={`3d:${one}`}>
+            {name}
+          </option>
+        ))}
+      </optgroup>
+    </select>
+  </label>
+);
+
 const nameOf = <Value,>(options: Array<[Value, string]>, value: Value) => options.find(([option]) => option === value)?.[1] ?? '';
 
 // Follows what is selected: nothing is on screen that doesn't concern it.
@@ -384,9 +566,9 @@ export const LayerPanel = ({ scene, layer, link, onRemoveLink }: { scene: Scene;
   const effects = [
     layer.grayscale ? 'noir et blanc' : '',
     layer.blur > 0 ? 'flou' : '',
-    layer.spinRpm !== 0 ? 'rotation' : '',
-    layer.enter !== 'none' ? 'apparition' : '',
-    layer.exit !== 'none' ? 'sortie' : '',
+    layer.effect3d ? (nameOf(EFFECTS_3D, layer.effect3d).toLowerCase()) : layer.spinRpm !== 0 ? 'rotation' : '',
+    layer.enter !== 'none' || layer.enter3d ? 'apparition' : '',
+    layer.exit !== 'none' || layer.exit3d ? 'sortie' : '',
   ].filter(Boolean);
 
   return (
@@ -441,35 +623,50 @@ export const LayerPanel = ({ scene, layer, link, onRemoveLink }: { scene: Scene;
             )}
           </label>
           <label className="field">
-            <span>Rotation animée</span>
-            <select className="input" value={layer.spinRpm} onChange={(event) => set({ spinRpm: Number(event.target.value) })}>
-              {SPINS.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
+            <span>Animation</span>
+            <select
+              className="input"
+              data-testid="layer-animation"
+              value={layer.effect3d ? `3d:${layer.effect3d}` : String(layer.spinRpm)}
+              onChange={(event) => {
+                const chosen = event.target.value;
+                const effect = EFFECTS_3D.find(([one]) => `3d:${one}` === chosen)?.[0];
+                set(effect ? { effect3d: effect, effectSpeed: layer.effectSpeed ?? 'medium', spinRpm: 0 } : { effect3d: undefined, spinRpm: Number(chosen) });
+              }}
+            >
+              <optgroup label="Rotation">
+                {SPINS.map(([value, label]) => (
+                  <option key={value} value={String(value)}>
+                    {label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="En 3D">
+                {EFFECTS_3D.map(([value, label]) => (
+                  <option key={value} value={`3d:${value}`}>
+                    {label}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </label>
-          <label className="field">
-            <span>Apparition</span>
-            <select className="input" value={layer.enter} onChange={(event) => set({ enter: event.target.value as Layer['enter'] })}>
-              {MOTIONS.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Sortie</span>
-            <select className="input" value={layer.exit} onChange={(event) => set({ exit: event.target.value as Layer['exit'] })}>
-              {MOTIONS.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {layer.effect3d && (
+            <label className="field">
+              <span>Vitesse</span>
+              <select className="input" data-testid="layer-speed" value={layer.effectSpeed ?? 'medium'} onChange={(event) => set({ effectSpeed: event.target.value as Scene3dSpeed })}>
+                {SPEEDS.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {layer.effect3d && file?.kind === 'video' && (layer.effect3d === 'cube' || layer.effect3d === 'turn-thick') && (
+            <span className="hint">Sur une vidéo, il tourne sans épaisseur ni faces.</span>
+          )}
+          <MotionSelect label="Apparition" value={motionValue(layer.enter, layer.enter3d)} onChange={(enter, enter3d) => set({ enter, enter3d })} />
+          <MotionSelect label="Sortie" value={motionValue(layer.exit, layer.exit3d)} onChange={(exit, exit3d) => set({ exit, exit3d })} />
         </div>
       </details>
 
@@ -488,7 +685,7 @@ export const LayerPanel = ({ scene, layer, link, onRemoveLink }: { scene: Scene;
           Terminé
         </button>
       </div>
-      <p className="hint">{nameOf(SPINS, layer.spinRpm) !== 'Aucune' || layer.enter !== 'none' || layer.exit !== 'none' ? 'Les mouvements se voient dans l’aperçu.' : ''}</p>
+      <p className="hint">{layer.spinRpm !== 0 || layer.effect3d || layer.enter !== 'none' || layer.exit !== 'none' || layer.enter3d || layer.exit3d ? 'Les mouvements se voient dans l’aperçu.' : ''}</p>
     </div>
   );
 };

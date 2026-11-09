@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
-import type { SceneLayer } from '@livechatsbcb/protocol';
+import type { Scene3dEffect, Scene3dSpeed, SceneLayer } from '@livechatsbcb/protocol';
 import type { OverlayLayout, PlaybackView, SceneLayerView, Zone } from '../../shared/ipc';
 import { Avatar } from './Avatar';
 import { LinkPlayback } from './link-player';
@@ -85,13 +85,13 @@ export const layerLook = ({ flip, grayscale, blur }: Pick<SceneLayer, 'flip' | '
   };
 };
 
-const motionStyle = ({ enter, exit }: SceneLayerView, durationMs: number): CSSProperties => {
+const motionStyle = ({ enter, exit, enter3d, exit3d }: SceneLayerView, durationMs: number): CSSProperties => {
+  const enterName = enter3d ? `scene-enter-3d-${enter3d}` : enter === 'none' ? null : `scene-enter-${enter}`;
+  const exitName = exit3d ? `scene-exit-3d-${exit3d}` : exit === 'none' ? null : `scene-exit-${exit}`;
   const motions = [
-    ...(enter === 'none' ? [] : [{ name: `scene-enter-${enter}`, delay: 0, fill: 'backwards' }]),
+    ...(enterName ? [{ name: enterName, delay: 0, fill: 'backwards' }] : []),
     // Too short to be seen leaving: it would cut into how it came in.
-    ...(exit === 'none' || durationMs < 2 * MOTION_MS
-      ? []
-      : [{ name: `scene-exit-${exit}`, delay: durationMs - MOTION_MS, fill: 'forwards' }]),
+    ...(!exitName || durationMs < 2 * MOTION_MS ? [] : [{ name: exitName, delay: durationMs - MOTION_MS, fill: 'forwards' }]),
   ];
   if (motions.length === 0) return {};
   return {
@@ -103,8 +103,34 @@ const motionStyle = ({ enter, exit }: SceneLayerView, durationMs: number): CSSPr
   };
 };
 
-const spinStyle = ({ spinRpm }: SceneLayerView): CSSProperties =>
-  spinRpm === 0
+// One turn or one beat, at the middle speed. Slow and fast stretch or shorten it.
+const EFFECT_MS: Record<Scene3dEffect, number> = {
+  turn: 3_000,
+  'turn-thick': 3_000,
+  half: 3_200,
+  flip: 2_400,
+  cube: 4_000,
+  tilt: 2_400,
+  wobble: 1_600,
+  float: 3_000,
+  jump: 1_100,
+  heart: 1_200,
+  eight: 4_000,
+  'zoom-tilt': 3_000,
+};
+const SPEED_FACTOR: Record<Scene3dSpeed, number> = { slow: 1.7, medium: 1, fast: 0.55 };
+// Turning all the way round goes at a steady pace; the others breathe.
+const STEADY: Scene3dEffect[] = ['turn', 'turn-thick', 'flip', 'cube'];
+
+const spinStyle = ({ spinRpm, effect3d, effectSpeed }: SceneLayerView): CSSProperties =>
+  effect3d
+    ? {
+        animationName: `scene-3d-${effect3d}`,
+        animationDuration: `${Math.round(EFFECT_MS[effect3d] * SPEED_FACTOR[effectSpeed ?? 'medium'])}ms`,
+        animationTimingFunction: STEADY.includes(effect3d) ? 'linear' : 'ease-in-out',
+        animationIterationCount: 'infinite',
+      }
+    : spinRpm === 0
     ? {}
     : {
         animationName: 'scene-spin',
@@ -183,6 +209,8 @@ const PlayingLayer = ({
   const shownMs = layer.kind === 'video' ? (layer.clipMs ?? item.durationMs) : item.durationMs;
   const stillThere = useOnScreen(startAt, shownMs);
   const silent = layer.muted || (item.hasSound && item.videoMuted);
+  // Thickness and the other faces of the cube are copies of a picture: a video plays once, and simply turns.
+  const copies = layer.kind === 'image' ? copiesOf(layer) : [];
   return (
     <div
       className="scene-layer"
@@ -191,7 +219,13 @@ const PlayingLayer = ({
     >
       {/* Three levels, as moving in, spinning and being placed each need a transform of their own. */}
       <div className="scene-motion" style={onScreen ? motionStyle(layer, shownMs) : undefined}>
-        <div className="scene-motion" style={onScreen ? spinStyle(layer) : undefined}>
+        <div
+          className={layer.effect3d ? 'scene-motion is-3d' : 'scene-motion'}
+          style={onScreen ? spinStyle(layer) : undefined}
+        >
+          {copies.map((style, index) => (
+            <img key={index} className="overlay-media scene-copy" style={{ ...layerLook(layer), ...style }} src={layer.url ?? undefined} alt="" />
+          ))}
           {layer.kind === 'link' ? (
             item.link && (
               <div className="overlay-media layer-link" style={layerLook(layer)} data-testid="overlay-link-layer">
@@ -206,7 +240,7 @@ const PlayingLayer = ({
               </div>
             )
           ) : layer.kind === 'image' ? (
-            <img className="overlay-media" style={layerLook(layer)} src={layer.url ?? undefined} alt="" data-testid="overlay-image" />
+            <img className="overlay-media" style={{ ...layerLook(layer), ...frontOf(layer) }} src={layer.url ?? undefined} alt="" data-testid="overlay-image" />
           ) : (
             <SyncedMedia
               kind="video"
@@ -223,6 +257,25 @@ const PlayingLayer = ({
     </div>
   );
 };
+
+// The edge of a thick picture: copies one behind the other, darker towards the back.
+const THICK_COPIES = 8;
+const copiesOf = ({ effect3d, width, flip, grayscale }: SceneLayerView): CSSProperties[] => {
+  const mirror = flip ? ' scaleX(-1)' : '';
+  if (effect3d === 'turn-thick')
+    return Array.from({ length: THICK_COPIES }, (_, index) => ({
+      transform: `translateZ(${(-(index + 1) * width * 0.004).toFixed(3)}cqw)${mirror}`,
+      filter: `${grayscale ? 'grayscale(1) ' : ''}brightness(${(0.75 - index * 0.04).toFixed(2)})`,
+    }));
+  // The three other faces of a box as wide as the picture.
+  if (effect3d === 'cube')
+    return [90, 180, 270].map((angle) => ({ transform: `rotateY(${angle}deg) translateZ(${width / 2}cqw)${mirror}` }));
+  return [];
+};
+
+// The face in front of the cube stands out by half its width, like the others.
+const frontOf = ({ effect3d, width, kind }: SceneLayerView): CSSProperties =>
+  effect3d === 'cube' && kind === 'image' ? { translate: `0 0 ${width / 2}cqw` } : {};
 
 const LEVEL_EVERY_MS = 70;
 
