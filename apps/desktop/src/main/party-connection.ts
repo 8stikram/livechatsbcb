@@ -144,6 +144,10 @@ export class PartyConnection {
     this.send({ t: 'game-say', gameId, text, ...(entryId ? { entryId } : {}) });
   }
 
+  gameFound(gameId: string, finderId: string): void {
+    this.send({ t: 'game-found', gameId, finderId });
+  }
+
   removeGameBot(gameId: string, botId: string): void {
     this.send({ t: 'game-bot-remove', gameId, botId });
   }
@@ -156,7 +160,7 @@ export class PartyConnection {
     this.send({ t: 'game-stop', gameId });
   }
 
-  gameAction(gameId: string, action: 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch' | 'done' | 'bot-add'): void {
+  gameAction(gameId: string, action: 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch' | 'done' | 'bot-add' | 'pass'): void {
     if (action === 'ready' || action === 'unready') this.send({ t: 'game-ready', gameId, ready: action === 'ready' });
     else this.send({ t: `game-${action}`, gameId });
   }

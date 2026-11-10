@@ -51,5 +51,18 @@ export const GameArt = ({ kind }: { kind: GameKind }) => (
         <path d="M68 116 q12 6 24 0" className="art-line" />
       </g>
     )}
+    {kind === "guess" && (
+      <>
+        <g className="art-bob">
+          <rect x="70" y="26" width="20" height="14" rx="4" className="art-hat" />
+          <circle cx="80" cy="92" r="46" className="art-fill" />
+          <circle cx="80" cy="92" r="36" className="art-lens" />
+          <line x1="80" y1="92" x2="80" y2="64" className="art-handle art-tick" />
+          <circle cx="80" cy="92" r="5" className="art-hat" />
+        </g>
+        <text x="16" y="48" className="art-word art-pop">?</text>
+        <text x="130" y="40" className="art-word art-pop is-late">!</text>
+      </>
+    )}
   </svg>
 );

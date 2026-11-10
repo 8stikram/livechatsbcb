@@ -5,6 +5,7 @@ const TITLES: Record<GameInviteView['kind'], string> = {
   question: 'Question débile',
   who: 'Qui l’a envoyé ?',
   undercover: 'Undercover',
+  guess: 'Devine Vite',
 };
 
 const COLORS: Record<GameInviteView['kind'], string> = {
@@ -12,6 +13,7 @@ const COLORS: Record<GameInviteView['kind'], string> = {
   question: '#ff5fa2',
   who: '#4cc9f0',
   undercover: '#9b6bff',
+  guess: '#ffd23f',
 };
 
 // Someone opened a game: everyone sees it at the top of the screen for a moment, and joins in the app.

@@ -2242,6 +2242,46 @@ describe.skipIf(online)('party flow in the real app', () => {
     for (const member of [host, guest]) await openTab(member, 'LiveChat');
   });
 
+  it('plays Devine Vite with a bot: three words each, whoever speaks sees the word and says who found it', async () => {
+    for (const member of [host, guest]) await openTab(member, 'Jeux');
+    await host.control.getByTestId('game-card-guess').getByRole('button', { name: 'Ouvrir' }).click();
+    await guest.control.getByTestId('game-lobby').getByRole('button', { name: 'Rejoindre' }).click();
+    await host.control.locator('.lobby-faces .toy-face:not(.is-empty)').nth(1).waitFor();
+    await host.control.getByTestId('game-add-bot').click();
+    await guest.control.getByTestId('game-lobby').getByText('Bot Gaston').waitFor();
+    await host.control.getByTestId('game-lobby').getByRole('button', { name: 'Lancer' }).click();
+
+    for (const [index, member] of [host, guest].entries()) {
+      const field = member.control.getByLabel('Un mot à faire deviner');
+      for (const word of ['Raclette', 'Tour Eiffel', 'Mamie']) {
+        await field.fill(`${word} ${index}`);
+        await field.press('Enter');
+        await member.control.locator('.game-words').getByText(`${word} ${index}`).or(member.control.locator('[data-testid="game"][data-phase="write"]')).waitFor();
+      }
+    }
+
+    // Whoever speaks sees the word; the others only know who speaks.
+    await host.control.locator('[data-testid="game"][data-phase="write"]').waitFor();
+    await expect.poll(async () => (await host.control.getByTestId('guess-secret').count()) + (await guest.control.getByTestId('guess-secret').count()), { timeout: 20_000 }).toBe(1);
+    const talker = (await host.control.getByTestId('guess-secret').count()) === 1 ? host : guest;
+    const listener = talker === host ? guest : host;
+    await listener.control.getByTestId('game-turn').waitFor();
+    await picture(talker.control, 'guess-turn.png');
+    const word = await talker.control.getByTestId('guess-secret').textContent();
+    await talker.control.getByTestId('guess-found').click();
+    await talker.control.getByTestId('guess-finder').first().click();
+    await expect.poll(() => talker.control.getByTestId('guess-secret').textContent().catch(() => word)).not.toBe(word);
+    await talker.control.locator('.game-faces .toy-face.is-me .toy-face-points').filter({ hasText: '1' }).waitFor();
+
+    await host.control.getByRole('button', { name: 'Arrêter la partie' }).click();
+    await host.control.getByRole('button', { name: 'Arrêter pour tous ?' }).click();
+    await guest.control.getByTestId('game-ranking').waitFor();
+    for (const member of [host, guest]) {
+      await member.control.getByRole('button', { name: 'Autre jeu' }).click();
+      await openTab(member, 'LiveChat');
+    }
+  });
+
   it('keeps copied pictures in the library, and puts one in the LiveChat on a click', async () => {
     const logo = join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png');
     const control = host.control;

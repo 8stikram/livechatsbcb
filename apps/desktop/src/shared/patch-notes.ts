@@ -14,6 +14,8 @@ export const PATCH_NOTES: PatchNote[] = [
       'Meilleure blague : de 2 à 5 images puis « Valider ». Deux joueurs écrivent sur la même image et s’affrontent en duel, ils ne votent pas. Une blague manquante est remplacée par une blague maison',
       'Undercover : les images viennent de ce qui est passé aujourd’hui (une vidéo se lance quand tu appuies, son bas réglable). L’imposteur n’a pas d’image, juste « Tu es l’imposteur ». Chacun son tour donne un mot, visible par tous',
       'Question débile : tu réponds avec un LiveChat avancé, la question déjà écrite dessus. Les résultats s’affichent un par un',
+      'Nouveau jeu, Devine Vite : chacun écrit 3 mots (l’app complète). À ton tour, 30 s pour en faire deviner un max : tu cliques « Trouvé ! » puis le nom de celui qui a trouvé, 1 point pour vous deux. « Passer » remet le mot plus loin',
+      'Devine Vite en 3 manches avec les mêmes mots : parle librement, puis un seul mot, puis fais deviner avec une image, un GIF ou un son (bibliothèque, images copiées, PC ou Ctrl+V)',
     ],
   },
   {

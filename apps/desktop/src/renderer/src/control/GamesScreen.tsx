@@ -19,7 +19,10 @@ import type {
   GameView,
   PartyView,
 } from "../../../shared/ipc";
+import { createPortal } from "react-dom";
 import { Avatar } from "../Avatar";
+import { useClipboardShelf } from "./ClipboardShelf";
+import { LibraryPicker, type Shelf } from "./LibraryPicker";
 import { layerLook, layerPlace } from "../scene";
 import { ConfirmButton } from "./ConfirmButton";
 import { GameArt } from "./game-art";
@@ -45,6 +48,11 @@ const GAMES: Array<{ kind: GameKind; title: string; rule: string }> = [
     kind: "undercover",
     title: "Undercover",
     rule: "Tout le monde a la même image, sauf l’imposteur qui n’en a pas. Chacun son tour donne un mot, puis on vote pour le démasquer.",
+  },
+  {
+    kind: "guess",
+    title: "Devine Vite",
+    rule: "Chacun écrit 3 mots. À ton tour, 30 s pour en faire deviner un max : en parlant, puis avec un seul mot, puis avec une image ou un son.",
   },
 ];
 
@@ -239,6 +247,7 @@ const COLORS: Record<GameKind, string> = {
   question: "#ff5fa2",
   who: "#4cc9f0",
   undercover: "#9b6bff",
+  guess: "#ffd23f",
 };
 
 const accentOf = (kind: GameKind): CSSProperties =>
@@ -552,6 +561,201 @@ const TextForm = ({
   );
 };
 
+// Devine Vite: each one writes the words the others will have to find.
+const GuessWords = ({ game, now }: { game: GameView; now: number }) => {
+  const wanted = GAME_ENTRIES_PER_PLAYER.guess;
+  return (
+    <div className="game-step">
+      <p className="game-ask">
+        Écris {wanted} mots ou noms à faire deviner : un objet, une star, un film, un pote…
+      </p>
+      <p className="hint mono" data-testid="game-sent">
+        {game.mySent} / {wanted} mots
+      </p>
+      {game.mySent < wanted ? (
+        <TextForm
+          label="Un mot à faire deviner"
+          placeholder="Ex : Tour Eiffel"
+          maxLength={40}
+          endsAt={game.endsAt}
+          now={now}
+          onSend={(text) => void window.liveChat.gameSay(game.id, text)}
+        />
+      ) : (
+        <p className="hint">C’est noté. On attend les autres.</p>
+      )}
+      {game.entries.length > 0 && (
+        <ul className="game-words">
+          {game.entries.map((entry) => (
+            <li key={entry.id}>
+              <span>{entry.caption}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+const GUESS_ROUNDS = [
+  "Décris le mot comme tu veux.",
+  "Un seul mot pour le faire deviner.",
+  "Une image, un GIF ou un son. Sans écrire.",
+];
+
+// Round 3: what whoever speaks shows, from the library, what was copied, the PC, or Ctrl+V.
+const GuessShow = ({ game }: { game: GameView }) => {
+  const [shelf, setShelf] = useState<Shelf | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const clips = useClipboardShelf();
+  const run = async (send: () => Promise<GameSendResult>) => {
+    setError(null);
+    setError(sendError(await send()));
+  };
+  return (
+    <div className="guess-show">
+      <div className="game-actions">
+        <button type="button" className="pill primary" onClick={() => setShelf("image")}>
+          Ma bibliothèque
+        </button>
+        <button
+          type="button"
+          className="pill quiet"
+          onClick={() => void run(() => window.liveChat.sendGameFiles(game.id))}
+        >
+          Depuis le PC
+        </button>
+      </div>
+      {clips.items.length > 0 && (
+        <ul className="guess-clips" aria-label="Images copiées">
+          {clips.items.slice(0, 8).map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                title="Montrer cette image"
+                onClick={() => void run(() => window.liveChat.sendGameKept(game.id, "clipboard", item.id))}
+              >
+                <img src={item.url} alt="" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="hint">Ou colle une image avec Ctrl+V.</p>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      {shelf &&
+        createPortal(
+          <LibraryPicker
+            shelf={shelf}
+            onShelf={setShelf}
+            onClose={() => setShelf(null)}
+            onPick={(file) => {
+              setShelf(null);
+              void run(() => window.liveChat.sendGameKept(game.id, "library", file.id));
+            }}
+          />,
+          document.body,
+        )}
+    </div>
+  );
+};
+
+const GuessTurn = ({ game, party }: { game: GameView; party: PartyView }) => {
+  const me = party.memberId;
+  const speaking = game.turn === me;
+  const [choosing, setChoosing] = useState(false);
+  useEffect(() => setChoosing(false), [game.secret]);
+  const shown = game.entries[0];
+  return (
+    <div className="game-step">
+      <p className="toy-tag" data-testid="guess-round">
+        Manche {game.round} · {GUESS_ROUNDS[game.round - 1]}
+      </p>
+      {speaking ? (
+        <>
+          <p className="game-ask">À toi de faire deviner !</p>
+          <div className="guess-card" key={game.secret ?? ""} data-testid="guess-secret">
+            {game.secret}
+          </div>
+          {game.round === 3 && <GuessShow game={game} />}
+          {shown && <GameMedia files={shown.files} />}
+          {choosing ? (
+            <div className="guess-finders">
+              <p className="game-ask">Qui a trouvé ?</p>
+              <div className="game-choices">
+                {game.players
+                  .filter((id) => id !== me)
+                  .map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      className="game-choice"
+                      data-testid="guess-finder"
+                      onClick={() => void window.liveChat.gameFound(game.id, id)}
+                    >
+                      {nameOf(party, game, id)}
+                    </button>
+                  ))}
+              </div>
+              <button type="button" className="pill quiet small" onClick={() => setChoosing(false)}>
+                Retour
+              </button>
+            </div>
+          ) : (
+            <div className="game-actions">
+              <button
+                type="button"
+                className="toy-button ghost"
+                data-testid="guess-pass"
+                onClick={() => void window.liveChat.gameAction(game.id, "pass")}
+              >
+                Passer
+              </button>
+              <button
+                type="button"
+                className="toy-button big"
+                data-testid="guess-found"
+                onClick={() => setChoosing(true)}
+              >
+                Trouvé !
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="game-ask" data-testid="game-turn">
+            {nameOf(party, game, game.turn)} fait deviner…
+          </p>
+          {game.round !== 3 ? (
+            <p className="hint">Écoute sur Discord et crie ta réponse !</p>
+          ) : shown ? (
+            <GameMedia files={shown.files} big />
+          ) : (
+            <p className="hint">On attend son image, son GIF ou son son.</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+// Between two rounds: the same words come back, harder.
+const GuessBreak = ({ game }: { game: GameView }) => (
+  <div className="game-step">
+    <p className="toy-title">Manche {game.round} finie !</p>
+    {game.round < game.rounds && (
+      <p className="game-ask">
+        Les mêmes mots reviennent. Manche {game.round + 1} : {GUESS_ROUNDS[game.round]}
+      </p>
+    )}
+  </div>
+);
+
 const Collect = ({
   game,
   onAnswer,
@@ -678,6 +882,7 @@ const Words = ({ game, party }: { game: GameView; party: PartyView }) =>
 
 const Write = ({ game, party, now }: { game: GameView; party: PartyView; now: number }) => {
   const me = party.memberId;
+  if (game.kind === "guess") return <GuessTurn game={game} party={party} />;
   if (game.kind === "joke")
     return (
       <div className="game-step">
@@ -1182,7 +1387,13 @@ const Board = ({
         ) : (
           <span className="game-timer">
             <span className="count" data-testid="game-phase">
-              {waitingVote ? "En attente du premier vote" : PHASE_LABEL[game.phase]}
+              {waitingVote
+                ? "En attente du premier vote"
+                : game.kind === "guess" && game.phase === "write"
+                  ? "Chrono"
+                  : game.kind === "guess" && game.phase === "reveal"
+                    ? "Pause"
+                    : PHASE_LABEL[game.phase]}
             </span>
             <span className="game-clock mono" data-testid="game-timer">
               {secondsLeft}
@@ -1212,6 +1423,10 @@ const Board = ({
               </button>
             )}
           </div>
+        ) : game.phase === "collect" && game.kind === "guess" ? (
+          <GuessWords game={game} now={now} />
+        ) : game.phase === "reveal" && game.kind === "guess" ? (
+          <GuessBreak game={game} />
         ) : game.phase === "collect" ? (
           <Collect game={game} onAnswer={onAnswer} />
         ) : game.phase === "write" ? (

@@ -2230,6 +2230,10 @@ function start(): void {
     if (cleaned) connection?.gameSay(gameId, cleaned, typeof entryId === 'string' ? entryId : undefined);
   });
 
+  handle(IpcChannel.GameFound, (gameId: unknown, finderId: unknown) => {
+    if (typeof gameId === 'string' && typeof finderId === 'string') connection?.gameFound(gameId, finderId);
+  });
+
   handle(IpcChannel.GameRemoveBot, (gameId: unknown, botId: unknown) => {
     if (typeof gameId === 'string' && typeof botId === 'string') connection?.removeGameBot(gameId, botId);
   });
@@ -2243,7 +2247,7 @@ function start(): void {
   });
 
   handle(IpcChannel.GameAction, (gameId: unknown, action: unknown) => {
-    const actions = ['join', 'ready', 'unready', 'launch', 'leave', 'rematch', 'done', 'bot-add'] as const;
+    const actions = ['join', 'ready', 'unready', 'launch', 'leave', 'rematch', 'done', 'bot-add', 'pass'] as const;
     const known = actions.find((one) => one === action);
     if (typeof gameId === 'string' && known) connection?.gameAction(gameId, known);
   });
@@ -2279,8 +2283,13 @@ function start(): void {
 
   // What this player can still send to the game: how many, and whether only pictures.
   const gameRoom = (gameId: unknown): { gameId: string; left: number; picturesOnly: boolean } | null => {
-    const game = connection?.current().game;
-    if (typeof gameId !== 'string' || game?.id !== gameId || game.phase !== 'collect' || game.iAmDone) return null;
+    const snapshot = connection?.current();
+    const game = snapshot?.game;
+    if (typeof gameId !== 'string' || game?.id !== gameId) return null;
+    // Devine Vite, round 3: whoever speaks shows one thing at a time, of any kind.
+    if (game.kind === 'guess')
+      return game.phase === 'write' && game.round === 3 && game.turn === snapshot?.memberId ? { gameId, left: 1, picturesOnly: false } : null;
+    if (game.phase !== 'collect' || game.iAmDone) return null;
     return {
       gameId,
       left: GAME_ENTRIES_PER_PLAYER[game.kind] - game.mySent - gameSending,
@@ -2312,6 +2321,19 @@ function start(): void {
     } else return { ok: false, error: 'unsupported' };
     if (files.some(({ contentType: type }) => room.picturesOnly && fileKindOf(type) !== 'image')) return { ok: false, error: 'unsupported' };
     return sendChosenForGame(room.gameId, files.slice(0, room.left));
+  });
+
+  handle(IpcChannel.SendGameKept, async (gameId: unknown, from: unknown, id: unknown): Promise<GameSendResult> => {
+    const room = gameRoom(gameId);
+    if (!room || typeof id !== 'string') return { ok: false, error: 'invalid_request' };
+    if (room.left <= 0) return { ok: false, error: 'queue_full' };
+    const path = from === 'library' ? (library.fileById(id)?.path ?? null) : from === 'clipboard' ? clipboardHistory.pathOf(id) : null;
+    const contentType = path ? contentTypeOf(path) : null;
+    const info = path && (await stat(path).catch(() => null));
+    if (!path || !contentType || !info) return { ok: false, error: 'not_found' };
+    if (room.picturesOnly && fileKindOf(contentType) !== 'image') return { ok: false, error: 'unsupported' };
+    if (info.size > MAX_MEDIA_BYTES) return { ok: false, error: 'too_large' };
+    return sendChosenForGame(room.gameId, [{ path, name: basename(path), size: info.size, contentType }]);
   });
 
   handle(IpcChannel.SendGameFiles, async (gameId: unknown): Promise<GameSendResult> => {

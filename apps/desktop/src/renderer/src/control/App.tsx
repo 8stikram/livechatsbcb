@@ -297,7 +297,12 @@ export const App = () => {
 
       // On the games tab, while a game waits for pictures, what is pasted goes to the game.
       const game = state.game;
-      if (view === 'games' && game?.phase === 'collect' && game.players.includes(state.party.memberId)) {
+      const me = state.party.memberId;
+      const takesPictures =
+        game !== null &&
+        game.players.includes(me) &&
+        (game.kind === 'guess' ? game.phase === 'write' && game.round === 3 && game.turn === me : game.phase === 'collect');
+      if (view === 'games' && game && takesPictures) {
         const image = pasted[0];
         if (!image) return;
         event.preventDefault();

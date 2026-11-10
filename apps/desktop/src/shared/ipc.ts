@@ -241,7 +241,7 @@ export type GameView = Omit<Game, 'entries' | 'myPicture'> & {
   sending: number;
 };
 
-export type GameAction = 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch' | 'done' | 'bot-add';
+export type GameAction = 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch' | 'done' | 'bot-add' | 'pass';
 // A reaction floating by for a few seconds.
 export type GameReactionView = { id: number; memberId: string; emoji: GameReaction };
 // A lobby someone opened, that this member has not joined: on screen, even in game, for a few seconds.
@@ -510,6 +510,8 @@ export const IpcChannel = {
   StartGame: 'game:start',
   GameSay: 'game:say',
   GameRemoveBot: 'game:remove-bot',
+  GameFound: 'game:found',
+  SendGameKept: 'game:send-kept',
   GameVote: 'game:vote',
   StopGame: 'game:stop',
   GameAction: 'game:action',
@@ -624,6 +626,10 @@ export type LiveChatApi = {
   // On the jokes, which picture it is written on.
   gameSay(gameId: string, text: string, entryId?: string): Promise<void>;
   removeGameBot(gameId: string, botId: string): Promise<void>;
+  // Devine Vite: whoever speaks says who found the word.
+  gameFound(gameId: string, finderId: string): Promise<void>;
+  // A picture of the library, or one copied earlier, sent to the game.
+  sendGameKept(gameId: string, from: 'library' | 'clipboard', id: string): Promise<GameSendResult>;
   gameVote(gameId: string, choice: string): Promise<void>;
   stopGame(gameId: string): Promise<void>;
   gameAction(gameId: string, action: GameAction): Promise<void>;
