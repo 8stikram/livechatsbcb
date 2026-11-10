@@ -1,0 +1,421 @@
+/* Question débile, Professeur Boum: an underground lab. Chalkboard for the question, a pressure
+   gauge for the clock, answers in specimen jars with lab labels, VS as a spark. */
+
+.panel.world-boum {
+  --accent: #5dffa8 !important;
+  --text: #eaf6ef;
+  --text-soft: #cfe9dc;
+  --text-muted: #9fc9b4;
+  --glass: rgb(200 255 230 / 5%);
+  --glass-raised: rgb(200 255 230 / 9%);
+  --glass-hover: rgb(200 255 230 / 14%);
+  --line: rgb(200 255 230 / 18%);
+  --line-bright: rgb(200 255 230 / 45%);
+  --well: rgb(4 10 8 / 55%);
+  --boum-green: #5dffa8;
+  --boum-mint: #9fe7c2;
+  --boum-yellow: #ffd23f;
+  --boum-paper: #f4ecd2;
+  --boum-title: 'Archivo Black', 'Geist Variable', sans-serif;
+  --boum-label: 'Bebas Neue', 'Geist Variable', sans-serif;
+  --boum-chalk: 'Permanent Marker', cursive;
+  color: var(--text);
+  font-family: 'Barlow', var(--font);
+  border: 1px solid #2a4a3e;
+  background:
+    linear-gradient(rgb(93 255 168 / 4%) 1px, transparent 1px) 0 0 / 22px 22px,
+    linear-gradient(90deg, rgb(93 255 168 / 4%) 1px, transparent 1px) 0 0 / 22px 22px,
+    radial-gradient(120% 90% at 50% 0%, #19332c 0%, #0c1513 58%, #070c0b 100%);
+}
+
+.panel.world-boum .scroll {
+  scrollbar-color: rgb(93 255 168 / 30%) transparent;
+}
+
+/* Lab labels */
+.panel.world-boum .toy-tag {
+  padding: 4px 10px 3px;
+  border: 1px solid #c9b98a;
+  border-radius: 2px;
+  background: var(--boum-paper);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 35%);
+  color: #2a2316;
+  font: 400 11px/1.2 var(--boum-title);
+  letter-spacing: 0.12em;
+  rotate: -2deg;
+}
+
+.panel.world-boum .lobby-title h2 {
+  margin: 10px 0 8px;
+  color: var(--text);
+  font: 400 36px/1.05 var(--boum-title);
+  letter-spacing: 0.01em;
+  text-shadow: 0 0 18px rgb(93 255 168 / 25%);
+}
+
+.panel.world-boum .lobby-title p {
+  color: var(--text-soft);
+}
+
+/* The mascot in the lab, behind a brass porthole frame. */
+.panel.world-boum .lobby-stage {
+  border: 4px solid #b98a3a;
+  border-radius: 18px;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 45%), inset 0 0 18px rgb(93 255 168 / 12%);
+}
+
+.panel.world-boum .toy-face-ring {
+  background: radial-gradient(circle at 50% 35%, rgb(93 255 168 / 30%), rgb(8 20 16 / 90%) 70%);
+  box-shadow: 0 0 0 3px var(--boum-green), 0 5px 0 #127a4b;
+}
+
+.panel.world-boum .toy-face.is-me .toy-face-ring {
+  box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--boum-green), 0 5px 0 #127a4b;
+}
+
+.panel.world-boum .toy-face.is-empty .toy-face-ring {
+  background: transparent;
+  border-color: rgb(93 255 168 / 35%);
+  box-shadow: none;
+}
+
+.panel.world-boum .toy-face-name {
+  font: 700 13px 'Barlow', var(--font);
+}
+
+.panel.world-boum .toy-face-points {
+  color: var(--boum-yellow);
+  font: 400 19px/1 var(--boum-label);
+  letter-spacing: 0.04em;
+}
+
+.panel.world-boum .toy-badge.is-check {
+  box-shadow: 0 0 0 3px #0c1513;
+}
+
+.panel.world-boum .lobby-status {
+  color: var(--boum-mint);
+  font: 400 22px var(--boum-label);
+  letter-spacing: 0.1em;
+}
+
+.panel.world-boum .toy-button {
+  --toy: var(--boum-green);
+  border-radius: 12px;
+  background: linear-gradient(#7dffbc, #2fd487);
+  box-shadow: 0 5px 0 #127a4b, 0 10px 20px rgb(0 0 0 / 35%);
+  color: #0c1513;
+  font: 400 15px var(--boum-title);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.panel.world-boum .toy-button:active:not(:disabled) {
+  box-shadow: 0 2px 0 #127a4b;
+}
+
+.panel.world-boum .toy-button.big {
+  font-size: 17px;
+}
+
+.panel.world-boum .toy-button.small {
+  font-size: 12px;
+}
+
+.panel.world-boum .toy-button.ghost {
+  background: rgb(200 255 230 / 6%);
+  box-shadow:
+    inset 0 0 0 2px rgb(93 255 168 / 45%),
+    0 4px 0 rgb(0 0 0 / 40%);
+  color: var(--text);
+}
+
+.panel.world-boum .toy-button.is-on {
+  background: linear-gradient(#ffe27a, #ffb03a);
+  box-shadow: 0 5px 0 #8a5a12;
+}
+
+.panel.world-boum .pill.primary {
+  background: var(--boum-paper);
+  color: #22302a;
+  font-weight: 700;
+}
+
+.panel.world-boum .input {
+  border: 2px solid rgb(200 255 230 / 25%);
+  border-radius: 10px;
+  background: rgb(4 10 8 / 60%);
+}
+
+/* In game */
+.panel.world-boum .game-top-title {
+  font: 400 24px/1.1 var(--boum-title);
+}
+
+.panel.world-boum .game-top-art {
+  background: rgb(93 255 168 / 14%);
+}
+
+.panel.world-boum .game-timer .count {
+  color: var(--boum-mint);
+  font: 700 12px 'Barlow', var(--font);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* A pressure gauge: a coloured arc above the seconds. */
+.panel.world-boum .game-clock {
+  position: relative;
+  display: grid;
+  place-items: end center;
+  min-width: 72px;
+  height: 62px;
+  padding: 0 8px 5px;
+  border: 3px solid #b98a3a;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 100%, #1c2622 0 13px, transparent 14px) 50% 5px / 44px 22px no-repeat,
+    conic-gradient(from 270deg at 50% 100%, #2fd487 0 60deg, #ffd23f 60deg 120deg, #ff5a4a 120deg 180deg, transparent 180deg) 50% 5px / 44px 22px no-repeat,
+    linear-gradient(160deg, #2a3530, #141c19);
+  box-shadow: 0 6px 14px rgb(0 0 0 / 45%), inset 0 0 14px rgb(93 255 168 / 12%);
+  color: var(--boum-yellow);
+  font: 400 26px/1 var(--boum-label);
+  letter-spacing: 0.04em;
+}
+
+/* The needle. */
+.panel.world-boum .game-clock::before {
+  content: '';
+  position: absolute;
+  top: 9px;
+  left: 50%;
+  width: 2px;
+  height: 17px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: #f1f6ee;
+  transform-origin: 50% 100%;
+  rotate: 35deg;
+}
+
+.panel.world-boum .game-banner {
+  border: 4px solid #6b4a2b;
+  border-radius: 10px;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 45%);
+}
+
+/* The question on a chalkboard. */
+.panel.world-boum .game-prompt {
+  position: relative;
+  width: min(100%, 720px);
+  max-width: none;
+  padding: 12px 20px 16px;
+  border: 8px solid #6b4a2b;
+  border-radius: 6px;
+  background:
+    radial-gradient(60% 80% at 80% 30%, rgb(255 255 255 / 6%), transparent 70%),
+    linear-gradient(135deg, #26362f, #17211d);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 40%), 0 8px 22px rgb(0 0 0 / 45%);
+  color: #f1f6ee;
+  font: 400 24px/1.3 var(--boum-chalk);
+  text-shadow: 0 0 1px #fff, 0 0 8px rgb(255 255 255 / 18%);
+}
+
+.panel.world-boum .game-ask {
+  color: var(--text);
+  font: 700 17px 'Barlow', var(--font);
+}
+
+.panel.world-boum .hint {
+  color: var(--text-muted);
+}
+
+/* Answers in specimen jars. */
+.panel.world-boum .game-duel {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.panel.world-boum .game-entry,
+.panel.world-boum .game-mine .game-media {
+  position: relative;
+  min-width: 200px;
+  max-width: 340px;
+  min-height: 150px;
+  justify-content: center;
+  padding: 16px 14px 22px;
+  border: 2px solid rgb(200 255 230 / 40%);
+  border-radius: 16px 16px 30px 30px;
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 20%), rgb(255 255 255 / 4%) 22%, rgb(255 255 255 / 2%) 72%, rgb(255 255 255 / 14%)),
+    linear-gradient(180deg, rgb(93 255 168 / 0%) 62%, rgb(93 255 168 / 38%) 63%, rgb(20 150 92 / 55%));
+  box-shadow: inset 0 0 22px rgb(93 255 168 / 15%), 0 10px 24px rgb(0 0 0 / 45%);
+  color: var(--text);
+  rotate: -2deg;
+}
+
+.panel.world-boum .game-duel-side:nth-child(even) .game-entry {
+  rotate: 1.8deg;
+}
+
+/* The lid of the jar. */
+.panel.world-boum .game-entry::before {
+  content: '';
+  position: absolute;
+  top: -14px;
+  left: 19%;
+  width: 62%;
+  height: 16px;
+  border-radius: 5px 5px 2px 2px;
+  background:
+    repeating-linear-gradient(90deg, rgb(0 0 0 / 18%) 0 3px, transparent 3px 7px),
+    linear-gradient(#f2d48a, #9a6d26);
+  box-shadow: 0 2px 0 #5e3f14;
+}
+
+.panel.world-boum .game-entry:not(:disabled):hover {
+  border-color: rgb(200 255 230 / 75%);
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 26%), rgb(255 255 255 / 8%) 22%, rgb(255 255 255 / 4%) 72%, rgb(255 255 255 / 18%)),
+    linear-gradient(180deg, rgb(93 255 168 / 0%) 55%, rgb(93 255 168 / 45%) 56%, rgb(20 150 92 / 65%));
+}
+
+.panel.world-boum .game-entry.is-mine {
+  border-color: var(--boum-yellow);
+  box-shadow: 0 0 0 3px rgb(255 210 63 / 45%), inset 0 0 22px rgb(93 255 168 / 15%), 0 10px 24px rgb(0 0 0 / 45%);
+}
+
+.panel.world-boum .game-entry.is-winner {
+  border-color: var(--boum-yellow);
+  box-shadow: 0 0 0 4px var(--boum-yellow), 0 0 28px rgb(255 210 63 / 50%), inset 0 0 22px rgb(93 255 168 / 15%);
+}
+
+/* A text answer: a paper note in the jar. */
+.panel.world-boum .game-caption.is-alone {
+  max-width: 250px;
+  padding: 12px 14px;
+  border-radius: 4px;
+  background: #fdf8ea;
+  box-shadow: 0 4px 10px rgb(0 0 0 / 35%);
+  color: #22302a;
+  font: 400 19px/1.25 var(--boum-chalk);
+  rotate: 2deg;
+}
+
+.panel.world-boum .game-file,
+.panel.world-boum .game-scene {
+  border-radius: 6px;
+  box-shadow: 0 4px 10px rgb(0 0 0 / 35%);
+}
+
+/* The label of the specimen. */
+.panel.world-boum .game-entry-foot {
+  position: relative;
+  z-index: 1;
+  margin-bottom: -34px;
+  padding: 4px 12px 5px;
+  border: 1px solid #c9b98a;
+  background: var(--boum-paper);
+  box-shadow: 0 3px 6px rgb(0 0 0 / 35%);
+  color: #2a2316;
+  font: 400 13px/1.2 'Special Elite', monospace;
+  rotate: 2deg;
+}
+
+.panel.world-boum .game-entry-foot .mono {
+  font: 400 14px 'Archivo Black', sans-serif;
+}
+
+.panel.world-boum .game-entry:has(.game-entry-foot) {
+  margin-bottom: 18px;
+}
+
+/* VS: a spark. */
+.panel.world-boum .game-vs {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding-top: 40px;
+  color: var(--boum-yellow);
+  font: 400 26px/1 var(--boum-label);
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 10px rgb(255 210 63 / 60%);
+}
+
+.panel.world-boum .game-vs::before {
+  content: '';
+  width: 26px;
+  height: 40px;
+  background: linear-gradient(#fff3b0, #ffd23f 50%, #ff9f1a);
+  clip-path: polygon(60% 0, 8% 56%, 44% 56%, 30% 100%, 92% 38%, 54% 38%, 74% 0);
+  filter: drop-shadow(0 0 8px rgb(255 210 63 / 60%));
+  animation: boum-zap 1.6s steps(1) infinite;
+}
+
+.panel.world-boum .game-mine .game-media {
+  min-width: 140px;
+  min-height: 110px;
+}
+
+.panel.world-boum .toy-title {
+  font: 400 34px/1.1 var(--boum-title);
+  text-shadow: 0 0 18px rgb(93 255 168 / 35%);
+}
+
+.panel.world-boum .podium .avatar {
+  box-shadow: 0 0 0 3px var(--boum-green);
+}
+
+.panel.world-boum .podium-name {
+  font: 700 14px 'Barlow', var(--font);
+}
+
+.panel.world-boum .podium-block {
+  border: 2px solid rgb(200 255 230 / 35%);
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 14%), transparent 30%),
+    linear-gradient(180deg, rgb(93 255 168 / 12%), rgb(20 150 92 / 55%));
+  box-shadow: none;
+}
+
+.panel.world-boum .podium-step-1 .podium-block {
+  background: linear-gradient(#ffe27a, #ffb03a);
+  color: #2a1d07;
+}
+
+.panel.world-boum .podium-rest li {
+  background: rgb(200 255 230 / 6%);
+}
+
+.panel.world-boum .round-banner span {
+  border-radius: 12px;
+  background: linear-gradient(#7dffbc, #2fd487);
+  box-shadow: 0 6px 0 #127a4b;
+  color: #0c1513;
+  font: 400 40px/1.1 var(--boum-title);
+  text-transform: uppercase;
+}
+
+.panel.world-boum .reaction-button {
+  background: rgb(93 255 168 / 8%);
+}
+
+.panel.world-boum .reaction-button:hover {
+  background: rgb(93 255 168 / 18%);
+}
+
+@keyframes boum-zap {
+  0%, 100% { opacity: 1; }
+  48% { opacity: 0.55; }
+  52% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel.world-boum .game-vs::before { animation: none; }
+}
+
+html.calm .panel.world-boum .game-vs::before {
+  animation: none !important;
+}
