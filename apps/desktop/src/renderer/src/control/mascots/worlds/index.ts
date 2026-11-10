@@ -2,3 +2,4 @@
 import '../fonts';
 import './insp.css';
 import './micro.css';
+import './boum.css';

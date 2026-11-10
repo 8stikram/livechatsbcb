@@ -1,0 +1,470 @@
+/* Meilleure blague, Monsieur Micro: a comedy club stage. Velvet, a frame of chasing bulbs,
+   jokes in speech balloons with name tags, an applause meter for the votes, an ON AIR clock. */
+
+.panel.world-micro {
+  --accent: #ffcf4a !important;
+  --text: #fff6e6;
+  --text-soft: #f0d9c8;
+  --text-muted: #d9b48a;
+  --glass: rgb(255 230 210 / 6%);
+  --glass-raised: rgb(255 230 210 / 10%);
+  --glass-hover: rgb(255 230 210 / 15%);
+  --line: rgb(255 207 74 / 22%);
+  --line-bright: rgb(255 207 74 / 50%);
+  --well: rgb(20 4 10 / 55%);
+  --micro-ink: #24121a;
+  --micro-cream: #fff7e8;
+  --micro-red: #ff3550;
+  --micro-gold: #ffcf4a;
+  --micro-title: 'Shrikhand', 'Geist Variable', serif;
+  --micro-label: 'Bebas Neue', 'Geist Variable', sans-serif;
+  --micro-bulb: radial-gradient(circle at center, #fffbe6 0 1.6px, #ffcf4a 2.6px, rgb(255 170 40 / 40%) 4px, transparent 6px);
+  --micro-socket: radial-gradient(circle at center, #6a4a22 0 1.8px, transparent 2.6px);
+  color: var(--text);
+  font-family: 'Barlow', var(--font);
+  border: 1px solid #3a1a10;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 15px, rgb(0 0 0 / 9%) 15px 16px),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgb(0 0 0 / 6%) 31px 32px),
+    radial-gradient(120% 90% at 50% 0%, #4a1220 0%, #21070e 55%, #10040a 100%);
+}
+
+/* The bulbs around the stage: sockets, then the lit bulbs moving along. */
+.panel.world-micro::before,
+.panel.world-micro::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  z-index: 0;
+  border-radius: calc(var(--radius-panel) - 3px);
+  pointer-events: none;
+}
+
+.panel.world-micro::before {
+  background:
+    var(--micro-socket) 0 0 / 12px 14px repeat-x,
+    var(--micro-socket) 0 100% / 12px 14px repeat-x,
+    var(--micro-socket) 0 0 / 14px 12px repeat-y,
+    var(--micro-socket) 100% 0 / 14px 12px repeat-y;
+}
+
+.panel.world-micro::after {
+  background:
+    var(--micro-bulb) 0 0 / 24px 14px repeat-x,
+    var(--micro-bulb) 0 100% / 24px 14px repeat-x,
+    var(--micro-bulb) 0 0 / 14px 24px repeat-y,
+    var(--micro-bulb) 100% 0 / 14px 24px repeat-y;
+  animation: micro-chase 1.2s steps(2, jump-none) infinite;
+}
+
+.panel.world-micro > * {
+  position: relative;
+  z-index: 1;
+}
+
+.panel.world-micro > .round-banner,
+.panel.world-micro > .reaction-sky {
+  position: absolute;
+}
+
+.panel.world-micro .round-banner {
+  z-index: 4;
+}
+
+.panel.world-micro .reaction-sky {
+  z-index: 3;
+}
+
+.panel.world-micro .scroll {
+  scrollbar-color: rgb(255 207 74 / 30%) transparent;
+}
+
+.panel.world-micro .toy-tag {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--micro-gold);
+  font: 400 17px/1 var(--micro-label);
+  letter-spacing: 0.14em;
+}
+
+.panel.world-micro .lobby-title h2 {
+  margin: 6px 0 8px;
+  color: var(--text);
+  font: 400 42px/1.05 var(--micro-title);
+  text-shadow: 0 3px 0 #8e1529, 0 0 18px rgb(255 80 100 / 35%);
+}
+
+.panel.world-micro .lobby-title p {
+  color: #e8c9b8;
+  font-weight: 600;
+}
+
+/* The mascot in a gold frame, hung on the wall. */
+.panel.world-micro .lobby-stage {
+  padding: 8px;
+  border-radius: 6px;
+  background: linear-gradient(145deg, #f3c45a, #a8741c 45%, #f6d27a 70%, #8a5a12);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 50%), inset 0 0 0 2px rgb(0 0 0 / 25%);
+  rotate: -1.2deg;
+}
+
+.panel.world-micro .toy-face-ring {
+  background: radial-gradient(circle at 50% 30%, rgb(255 207 74 / 35%), rgb(40 8 16 / 90%) 70%);
+  box-shadow: 0 0 0 3px var(--micro-gold), 0 0 18px rgb(255 207 74 / 35%);
+}
+
+.panel.world-micro .toy-face.is-me .toy-face-ring {
+  box-shadow: 0 0 0 3px var(--micro-cream), 0 0 0 6px var(--micro-red), 0 0 18px rgb(255 53 80 / 45%);
+}
+
+.panel.world-micro .toy-face.is-empty .toy-face-ring {
+  background: transparent;
+  border-color: rgb(255 207 74 / 35%);
+  box-shadow: none;
+}
+
+.panel.world-micro .toy-face-name {
+  font: 400 16px/1 var(--micro-label);
+  letter-spacing: 0.08em;
+}
+
+.panel.world-micro .toy-face-points {
+  color: var(--micro-gold);
+  font: 400 19px/1 var(--micro-label);
+}
+
+.panel.world-micro .toy-badge.is-check {
+  box-shadow: 0 0 0 3px #21070e;
+}
+
+.panel.world-micro .lobby-status {
+  color: var(--micro-gold);
+  font: 400 22px var(--micro-label);
+  letter-spacing: 0.1em;
+}
+
+.panel.world-micro .toy-button {
+  --toy: var(--micro-gold);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 45%),
+    0 4px 0 #a8741c,
+    0 0 18px rgb(255 207 74 / 25%);
+  color: #14060a;
+  font: 800 16px 'Barlow', var(--font);
+  letter-spacing: 0.02em;
+}
+
+.panel.world-micro .toy-button.big {
+  font-size: 19px;
+}
+
+.panel.world-micro .toy-button.small {
+  font-size: 14px;
+}
+
+.panel.world-micro .toy-button.ghost {
+  --toy: rgb(255 230 210 / 10%);
+  box-shadow:
+    inset 0 0 0 2px rgb(255 207 74 / 45%),
+    0 4px 0 rgb(0 0 0 / 40%);
+  color: var(--text);
+}
+
+.panel.world-micro .toy-button.is-on {
+  --toy: var(--online);
+}
+
+.panel.world-micro .pill.primary {
+  background: var(--micro-cream);
+  color: var(--micro-ink);
+  font-weight: 700;
+}
+
+.panel.world-micro .input {
+  border: 2px solid rgb(255 207 74 / 30%);
+  background: rgb(20 4 10 / 60%);
+}
+
+/* In game */
+.panel.world-micro .game-top-title {
+  font: 400 28px/1.1 var(--micro-title);
+  text-shadow: 0 3px 0 #8e1529;
+}
+
+.panel.world-micro .game-top-title .toy-tag {
+  font-size: 15px;
+  text-shadow: none;
+}
+
+.panel.world-micro .game-top-art {
+  background: rgb(255 207 74 / 18%);
+}
+
+/* ON AIR, and a round clock with a red ring. */
+.panel.world-micro .game-timer {
+  align-items: center;
+  gap: 10px;
+}
+
+.panel.world-micro .game-timer::before {
+  content: 'ON AIR';
+  padding: 4px 9px 3px 22px;
+  border: 2px solid var(--micro-red);
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 10px 50%, var(--micro-red) 0 4px, transparent 5px),
+    rgb(255 40 70 / 16%);
+  box-shadow: 0 0 14px rgb(255 53 80 / 45%);
+  color: #ffe6ea;
+  font: 400 15px/1 var(--micro-label);
+  letter-spacing: 0.18em;
+  animation: micro-onair 1.2s ease-in-out infinite;
+}
+
+.panel.world-micro .game-timer .count {
+  color: var(--text-muted);
+  font: 400 15px var(--micro-label);
+  letter-spacing: 0.12em;
+}
+
+.panel.world-micro .game-clock {
+  width: 56px;
+  height: 56px;
+  background: radial-gradient(circle, #2a0a12 0 58%, #14050a 60%);
+  box-shadow:
+    inset 0 0 0 4px var(--micro-red),
+    0 0 0 3px #3a1a10,
+    0 0 16px rgb(255 53 80 / 40%);
+  color: var(--text);
+  font: 400 28px/1 var(--micro-label);
+}
+
+.panel.world-micro .game-banner {
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 4px #a8741c,
+    0 0 0 6px #f3c45a,
+    0 8px 20px rgb(0 0 0 / 50%);
+}
+
+.panel.world-micro .game-ask {
+  color: var(--text);
+  font: 700 18px 'Barlow', var(--font);
+}
+
+.panel.world-micro .hint {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* Pictures in gold frames. */
+.panel.world-micro .game-file {
+  padding: 6px;
+  border-radius: 4px;
+  background: linear-gradient(145deg, #f3c45a, #a8741c 45%, #f6d27a 70%, #8a5a12);
+  box-shadow: 0 8px 18px rgb(0 0 0 / 45%);
+}
+
+.panel.world-micro .game-task {
+  border: 1px dashed rgb(255 207 74 / 30%);
+  border-radius: 14px;
+  background: rgb(20 4 10 / 45%);
+}
+
+.panel.world-micro .game-task .hint {
+  color: var(--micro-gold);
+  font: 800 15px 'Barlow', var(--font);
+}
+
+/* The jokes: speech balloons with a name tag. */
+.panel.world-micro .game-duel {
+  align-items: center;
+  gap: 18px;
+  padding: 14px 4px 22px;
+}
+
+.panel.world-micro .game-duel-side {
+  gap: 18px;
+}
+
+.panel.world-micro .game-entry.game-joke {
+  position: relative;
+  overflow: visible;
+  min-width: 190px;
+  max-width: 340px;
+  padding: 18px 22px 26px;
+  border: 3px solid #1a0a0e;
+  border-radius: 26px;
+  background: var(--micro-cream);
+  box-shadow: 7px 9px 0 rgb(0 0 0 / 40%);
+  color: var(--micro-ink);
+  rotate: -2.5deg;
+}
+
+.panel.world-micro .game-duel-side:nth-child(even) .game-entry.game-joke {
+  rotate: 2.2deg;
+}
+
+.panel.world-micro .game-entry.game-joke::after {
+  content: '';
+  position: absolute;
+  right: 36px;
+  bottom: -17px;
+  width: 26px;
+  height: 26px;
+  border-right: 3px solid #1a0a0e;
+  border-bottom: 3px solid #1a0a0e;
+  background: var(--micro-cream);
+  transform: skewX(-28deg) rotate(45deg);
+}
+
+.panel.world-micro .game-duel-side:nth-child(even) .game-entry.game-joke::after {
+  right: auto;
+  left: 36px;
+  transform: skewX(28deg) rotate(45deg);
+}
+
+.panel.world-micro .game-entry.game-joke .game-caption.is-alone {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--micro-ink);
+  font: 800 20px/1.2 'Barlow', var(--font);
+}
+
+.panel.world-micro .game-entry.game-joke .game-caption.is-alone::before {
+  content: '“';
+  display: block;
+  height: 20px;
+  margin: -8px 0 4px;
+  color: #b8173a;
+  font: 400 42px/1 var(--micro-title);
+}
+
+.panel.world-micro .game-entry.game-joke:not(:disabled):hover {
+  border-color: #1a0a0e;
+  background: #fffdf6;
+  translate: 0 -3px;
+}
+
+.panel.world-micro .game-entry.game-joke.is-mine {
+  border-color: #1a0a0e;
+  background: var(--micro-cream);
+  box-shadow: 7px 9px 0 rgb(0 0 0 / 40%), 0 0 0 4px var(--micro-red);
+}
+
+.panel.world-micro .game-entry.game-joke.is-winner {
+  border-color: #1a0a0e;
+  background: var(--micro-cream);
+  box-shadow: 7px 9px 0 rgb(0 0 0 / 40%), 0 0 0 4px var(--micro-gold), 0 0 26px rgb(255 207 74 / 55%);
+}
+
+/* Who wrote it, and the applause: a tag stuck under the balloon. */
+.panel.world-micro .game-entry.game-joke .game-entry-foot {
+  position: absolute;
+  z-index: 1;
+  bottom: -16px;
+  left: 18px;
+  padding: 5px 12px 4px 14px;
+  border-radius: 4px;
+  background: var(--micro-gold);
+  box-shadow: 3px 4px 0 rgb(0 0 0 / 45%);
+  color: #14060a;
+  font: 400 18px/1 var(--micro-label);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 6px 50%);
+  rotate: -4deg;
+}
+
+.panel.world-micro .game-duel-side:nth-child(even) .game-entry.game-joke .game-entry-foot {
+  right: 18px;
+  left: auto;
+  rotate: 3deg;
+}
+
+.panel.world-micro .game-entry-foot .mono {
+  font: 400 20px/1 var(--micro-label);
+  color: #b8173a;
+}
+
+/* VS like a sign on the stage. */
+.panel.world-micro .game-vs {
+  color: var(--micro-gold);
+  font: 400 34px/1 var(--micro-title);
+  text-shadow: 0 3px 0 #8e1529, 0 0 16px rgb(255 207 74 / 45%);
+}
+
+.panel.world-micro .game-entry:not(.game-joke) {
+  border-color: rgb(255 207 74 / 25%);
+}
+
+.panel.world-micro .toy-title {
+  color: var(--text);
+  font: 400 40px/1.1 var(--micro-title);
+  text-shadow: 0 3px 0 #8e1529, 0 0 18px rgb(255 80 100 / 35%);
+}
+
+.panel.world-micro .podium .avatar {
+  box-shadow: 0 0 0 3px var(--micro-gold), 0 0 16px rgb(255 207 74 / 45%);
+}
+
+.panel.world-micro .podium-name {
+  font: 400 18px/1 var(--micro-label);
+  letter-spacing: 0.08em;
+}
+
+.panel.world-micro .podium-block {
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(#7a1a2c, #3a0a14);
+  box-shadow: inset 0 3px 0 rgb(255 207 74 / 35%), 0 0 0 1px rgb(255 207 74 / 30%);
+}
+
+.panel.world-micro .podium-step-1 .podium-block {
+  background: linear-gradient(#f6d27a, #a8741c);
+  color: #14060a;
+}
+
+.panel.world-micro .podium-rest li {
+  background: rgb(255 230 210 / 8%);
+}
+
+.panel.world-micro .round-banner span {
+  border: 3px solid #1a0a0e;
+  border-radius: 26px;
+  background: var(--micro-cream);
+  box-shadow: 7px 9px 0 rgb(0 0 0 / 45%);
+  color: #b8173a;
+  font: 400 44px/1.1 var(--micro-title);
+}
+
+.panel.world-micro .reaction-button {
+  background: rgb(255 207 74 / 10%);
+}
+
+.panel.world-micro .reaction-button:hover {
+  background: rgb(255 207 74 / 22%);
+}
+
+@keyframes micro-chase {
+  to {
+    background-position: 12px 0, 12px 100%, 0 12px, 100% 12px;
+  }
+}
+
+@keyframes micro-onair {
+  50% { box-shadow: 0 0 4px rgb(255 53 80 / 20%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel.world-micro::after,
+  .panel.world-micro .game-timer::before {
+    animation: none;
+  }
+}
+
+html.calm .panel.world-micro::after,
+html.calm .panel.world-micro .game-timer::before {
+  animation: none !important;
+}
