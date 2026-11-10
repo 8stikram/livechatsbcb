@@ -94,6 +94,8 @@ export type Settings = {
   tutorialDone: boolean;
   // The others see the name of the game being played, not just "En jeu".
   showGame: boolean;
+  // Rain, smoke, lightning and shakes around the mascots of the party games.
+  gameEffects: boolean;
 };
 
 export const DEFAULT_LAYOUT: OverlayLayout = {
@@ -118,6 +120,7 @@ export const DEFAULT_SETTINGS: Settings = {
   wheelKey: ON_MAC ? 'Ctrl+Alt+Space' : 'Ctrl+Shift+Space',
   tutorialDone: true,
   showGame: true,
+  gameEffects: true,
   speechEnabled: true,
   speechVoice: null,
   speechRate: 100,

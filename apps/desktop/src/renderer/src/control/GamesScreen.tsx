@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import {
   GAME_ENTRIES_PER_PLAYER,
   GAME_MIN_ENTRIES,
@@ -367,8 +367,8 @@ const Face = ({
   </li>
 );
 
-// Task 3 wires the Settings switch here.
-const MASCOT_EFFECTS = true;
+// The owner's "Effets dans les jeux" setting, for every mascot of the screen.
+const MascotEffects = createContext(true);
 
 // The persona of the game, reacting to what happens in it.
 const GameMascot = ({
@@ -382,6 +382,7 @@ const GameMascot = ({
   frame: "scene" | "banner";
   reactions?: GameReactionView[];
 }) => {
+  const effects = useContext(MascotEffects);
   const { mood, pulse, look, burst } = useGameMood(game, me, reactions);
   return (
     <Mascot
@@ -390,7 +391,7 @@ const GameMascot = ({
       pulse={pulse}
       look={look}
       burst={burst}
-      effects={MASCOT_EFFECTS}
+      effects={effects}
       frame={frame}
     />
   );
@@ -398,6 +399,7 @@ const GameMascot = ({
 
 // At the podium: held on its victory (or its disappointment), with the victory moment's bursts.
 const PodiumMascot = ({ game }: { game: GameView }) => {
+  const effects = useContext(MascotEffects);
   const persona = personaOf(game.kind);
   const target = game.reason === "few" || game.reason === "stopped" ? "decu" : "victoire";
   const burst = persona.moments.find(([, mood]) => mood === "victoire")?.[2];
@@ -412,7 +414,7 @@ const PodiumMascot = ({ game }: { game: GameView }) => {
         pulse={shown.pulse}
         look={0}
         burst={target === "victoire" ? burst : undefined}
-        effects={MASCOT_EFFECTS}
+        effects={effects}
         frame="scene"
         hold
       />
@@ -1542,17 +1544,21 @@ export const GamesScreen = ({
   const shown =
     game && !(game.phase === "done" && closed === game.id) ? game : null;
   if (!shown) return <Picker party={party} />;
-  if (shown.phase === "lobby")
-    return <Lobby game={shown} party={party} now={now} />;
   return (
-    <Board
-      game={shown}
-      party={party}
-      now={now}
-      reactions={state.gameReactions}
-      onClose={() => setClosed(shown.id)}
-      onAnswer={onAnswer}
-    />
+    <MascotEffects.Provider value={state.settings.gameEffects}>
+      {shown.phase === "lobby" ? (
+        <Lobby game={shown} party={party} now={now} />
+      ) : (
+        <Board
+          game={shown}
+          party={party}
+          now={now}
+          reactions={state.gameReactions}
+          onClose={() => setClosed(shown.id)}
+          onAnswer={onAnswer}
+        />
+      )}
+    </MascotEffects.Provider>
   );
 };
 

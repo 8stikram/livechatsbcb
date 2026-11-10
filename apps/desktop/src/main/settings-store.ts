@@ -35,6 +35,7 @@ export const SettingsSchema = z.object({
   excludedApps: z.array(z.string().min(1).max(100)).max(30),
   tutorialDone: z.boolean(),
   showGame: z.boolean(),
+  gameEffects: z.boolean(),
 });
 
 const settingsPath = () => join(app.getPath('userData'), 'settings.json');

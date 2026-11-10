@@ -26,13 +26,22 @@ export const Switch = ({
   checked,
   onChange,
   children,
+  label,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   children: ReactNode;
+  // Announced as a real switch, under this name.
+  label?: string;
 }) => (
   <label className="switch">
-    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+    <input
+      type="checkbox"
+      role={label ? 'switch' : undefined}
+      aria-label={label}
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+    />
     <span className="switch-track" aria-hidden="true" />
     <span>{children}</span>
   </label>
@@ -259,6 +268,10 @@ export const SettingsScreen = ({ state, onOpenNotes }: { state: AppState; onOpen
               Réduire les animations
             </Switch>
             <p className="hint">L'app devient plus calme. Ce qui s'affiche en jeu ne change pas.</p>
+            <Switch checked={settings.gameEffects} onChange={(gameEffects) => set({ gameEffects })} label="Effets dans les jeux">
+              Effets dans les jeux
+            </Switch>
+            <p className="hint">Pluie, fumée, éclairs et secousses autour des persos</p>
           </section>
 
           <section className="glass panel" aria-labelledby="tour-title">

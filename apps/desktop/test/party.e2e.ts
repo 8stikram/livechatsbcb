@@ -2188,6 +2188,18 @@ describe.skipIf(online)('party flow in the real app', () => {
     expect(await lobbyMascot.locator('svg').evaluate((svg) => svg.querySelectorAll('path, circle, rect, ellipse, polygon').length)).toBeGreaterThan(5);
     expect(await lobbyMascot.locator('svg').evaluate((svg) => { const b = (svg as SVGSVGElement).getBBox(); return b.width * b.height; })).toBeGreaterThan(0);
     await expect.poll(() => lobbyMascot.getAttribute('data-mood'), { timeout: 2_000 }).not.toBe('repos');
+    // "Effets dans les jeux": on, the mascot has its effects canvas; off, none; back on, it returns.
+    // (The e2e app is not in reduced motion, so the canvas does show when on.)
+    await expect.poll(() => lobbyMascot.locator('canvas').count()).toBe(1);
+    await openSettings(host, 'Général');
+    const effectsSwitch = host.control.getByRole('switch', { name: 'Effets dans les jeux' });
+    await effectsSwitch.setChecked(false, { force: true });
+    await openTab(host, 'Jeux');
+    await expect.poll(() => lobbyMascot.locator('canvas').count()).toBe(0);
+    await openSettings(host, 'Général');
+    await effectsSwitch.setChecked(true, { force: true });
+    await openTab(host, 'Jeux');
+    await expect.poll(() => lobbyMascot.locator('canvas').count()).toBe(1);
     // Two people and a bot make three.
     await host.control.getByTestId('game-add-bot').click();
     await guest.control.getByTestId('game-lobby').getByText('Bot Gaston').waitFor();
