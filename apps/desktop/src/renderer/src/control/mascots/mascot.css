@@ -1,0 +1,18 @@
+/* Stage box of a mascot: the drawing, a canvas of particles over it, a white flash. */
+.mascot { position: relative; width: 100%; height: 100%; overflow: hidden; isolation: isolate; }
+.mascot-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.mascot-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.mascot-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; mix-blend-mode: screen; }
+.mascot-flash.on { animation: mascot-flash .45s ease-out; }
+@keyframes mascot-flash { 0% { opacity: .9; } 100% { opacity: 0; } }
+.mascot.shake { animation: mascot-shake .42s cubic-bezier(.36, .07, .19, .97); }
+@keyframes mascot-shake {
+  10%, 90% { transform: translate(-2px, 1px); } 20%, 80% { transform: translate(4px, -2px); }
+  30%, 50%, 70% { transform: translate(-6px, 2px); } 40%, 60% { transform: translate(6px, -1px); }
+}
+.mascot-svg.paused *, .mascot-svg.paused { animation-play-state: paused !important; }
+.mascot-svg.no-anim *, .mascot-svg.no-anim { animation: none !important; }
+html.calm .mascot.shake, html.calm .mascot-flash.on { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .mascot.shake, .mascot-flash.on { animation: none; }
+}
