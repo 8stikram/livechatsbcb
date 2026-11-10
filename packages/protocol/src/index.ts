@@ -6,8 +6,8 @@ export const WS_SUBPROTOCOL_PREFIX = 'livechatsbcb.v';
 export const WS_TOKEN_PREFIX = 'token.';
 // Which version of the app is connecting, so that the others can tell when theirs is behind.
 export const WS_APP_PREFIX = 'app.';
-// Offered by apps that know the game lobby (0.22.0 and later). Older ones are not shown it.
-export const WS_LOBBY = 'feature.lobby';
+// Offered by apps that know the games as they are now (0.24.0 and later). Older ones are not shown them: the rules changed underneath them.
+export const WS_LOBBY = 'feature.games2';
 
 export const MAX_ONLINE_MEMBERS = 15;
 export const MAX_REGISTERED_MEMBERS = 30;
@@ -341,7 +341,7 @@ export const MediaDraftSchema = z
   })
   .refine((draft) => draft.files.length > 0 || draft.caption.length > 0 || draft.link !== null)
   .refine(({ link, files, scene }) => link === null || scene !== null || files.length === 0)
-  .refine(({ game, link, scene, to, jump }) => game === null || (link === null && scene === null && to.length === 0 && !jump))
+  .refine(({ game, link, to, jump }) => game === null || (link === null && to.length === 0 && !jump))
   .refine((draft) => draft.files.reduce((total, { size }) => total + size, 0) <= MAX_MEDIA_BYTES)
   .refine(({ scene, files, ...draft }) => {
     if (scene) return isValidScene(scene, files, draft.link !== null);
@@ -425,7 +425,12 @@ export const GamePhaseSchema = z.enum(['lobby', 'collect', 'write', 'vote', 'rev
 export type GamePhase = z.infer<typeof GamePhaseSchema>;
 export const MAX_GAME_TEXT_LENGTH = 80;
 // Who has to be there to start: guessing among two people, or hiding among them, is no game.
-export const GAME_MIN_PLAYERS: Record<GameKind, number> = { joke: 2, question: 3, who: 3, undercover: 3 };
+// Bots count: one person can test any game alone with them.
+export const GAME_MIN_PLAYERS: Record<GameKind, number> = { joke: 3, question: 3, who: 3, undercover: 3 };
+// The jokes need two pictures before « Valider ».
+export const GAME_MIN_ENTRIES: Record<GameKind, number> = { joke: 2, question: 1, who: 1, undercover: 1 };
+export const MAX_GAME_BOTS = 6;
+export const isBotId = (id: string): boolean => id.startsWith('bot:');
 // What each player sends at the start: pictures for the jokes, one LiveChat for the others.
 export const GAME_ENTRIES_PER_PLAYER: Record<GameKind, number> = { joke: 5, question: 1, who: 1, undercover: 1 };
 
@@ -439,6 +444,9 @@ export const GameEntrySchema = z.object({
   ownerId: z.string().nullable(),
   files: z.array(GameFileSchema),
   caption: z.string(),
+  // An answer made in the advanced mode, with the question as its text.
+  scene: SceneSchema.default(null),
+  textPlace: TextPlaceSchema.nullable().default(null),
   // Only told at the reveal.
   votes: z.number().int().nullable(),
   mine: z.boolean(),
@@ -472,7 +480,16 @@ export const GameSchema = z.object({
   // Who runs the lobby, who is ready, and who joined late and plays from the next round.
   chefId: z.string().default(''),
   ready: z.array(z.string()).default([]),
-  waiting: z.array(z.string()).default([]),
+ waiting: z.array(z.string()).default([]),
+  // Played by the service, so that one person can test a game alone.
+  bots: z.array(z.object({ id: z.string(), name: z.string() })).default([]),
+  // A vote waits for its first one, then lasts 30 s.
+  voteStarted: z.boolean().default(false),
+  // Undercover: whose turn it is to write, and whether this player is the impostor.
+  turn: z.string().nullable().default(null),
+  iAmImpostor: z.boolean().default(false),
+  // The jokes: whether this player clicked « Valider » with enough pictures.
+  iAmDone: z.boolean().default(false),
 });
 export type Game = z.infer<typeof GameSchema>;
 
@@ -483,7 +500,11 @@ export type GameReaction = z.infer<typeof GameReactionSchema>;
 
 export const ClientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('game-start'), kind: GameKindSchema }),
-  z.object({ t: z.literal('game-say'), gameId: z.string(), text: z.string().trim().min(1).max(MAX_GAME_TEXT_LENGTH) }),
+  // For the jokes, which picture it is about: each player writes on two.
+  z.object({ t: z.literal('game-say'), gameId: z.string(), text: z.string().trim().min(1).max(MAX_GAME_TEXT_LENGTH), entryId: z.string().max(64).optional() }),
+  z.object({ t: z.literal('game-done'), gameId: z.string() }),
+  z.object({ t: z.literal('game-bot-add'), gameId: z.string() }),
+  z.object({ t: z.literal('game-bot-remove'), gameId: z.string(), botId: z.string().max(64) }),
   z.object({ t: z.literal('game-vote'), gameId: z.string(), choice: z.string().min(1).max(64) }),
   z.object({ t: z.literal('game-stop'), gameId: z.string() }),
   z.object({ t: z.literal('game-join'), gameId: z.string() }),

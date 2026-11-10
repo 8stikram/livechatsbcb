@@ -255,16 +255,16 @@ const testBytes = (size: number) => {
 };
 
 // A whole party on the quick service, where games run twenty times faster.
-const quickParty = async (names: string[]) => {
-  const host = await createParty(names[0], QUICK_BASE);
+const quickParty = async (names: string[], base = QUICK_BASE) => {
+  const host = await createParty(names[0], base);
   const sessions: SessionResponse[] = [host];
   for (const name of names.slice(1)) {
-    const { token } = await loginNew(name, QUICK_BASE);
-    const response = await post('/v1/join', { code: host.code }, bearer(token), QUICK_BASE);
+    const { token } = await loginNew(name, base);
+    const response = await post('/v1/join', { code: host.code }, bearer(token), base);
     expect(response.status).toBe(200);
     sessions.push(SessionResponseSchema.parse(await response.json()));
   }
-  const sockets = sessions.map((session) => new TestSocket(session, WS_SUBPROTOCOL, QUICK_BASE));
+  const sockets = sessions.map((session) => new TestSocket(session, WS_SUBPROTOCOL, base));
   for (const socket of sockets) await socket.welcome();
   await sockets[0]!.sawOnline(names.length);
   return { sessions, sockets };
@@ -366,6 +366,9 @@ describe('party games', () => {
     a.send(JSON.stringify({ t: 'game-start', kind: 'joke' }));
     const lobby = await b.gameWhere((game) => game.phase === 'lobby', 'lobby');
     b.send(JSON.stringify({ t: 'game-join', gameId: lobby.id }));
+    // Two people and a bot make three.
+    b.send(JSON.stringify({ t: 'game-bot-add', gameId: lobby.id }));
+    await a.gameWhere((game) => game.bots.length === 1, 'a bot');
     for (const socket of sockets) socket.send(JSON.stringify({ t: 'game-ready', gameId: lobby.id, ready: true }));
     await a.gameWhere((game) => game.phase === 'collect', 'auto start');
 
@@ -416,48 +419,162 @@ describe('party games', () => {
     for (const socket of sockets) socket.close();
   });
 
-  it('gives each player a picture someone else sent, to joke about, then counts the votes', async () => {
-    const { sessions, sockets } = await quickParty(['Nono', 'Lulu']);
-    const [a, b] = sockets as [TestSocket, TestSocket];
+  it('plays jokes in duels: two authors per picture, they cannot vote, a missing joke is filled in', async () => {
+    const { sessions, sockets } = await quickParty(['Nono', 'Lulu', 'Momo']);
+    const [a, b, c] = sockets as [TestSocket, TestSocket, TestSocket];
     await startGame(sockets, 'joke');
     const started = await b.gameWhere((game) => game.phase === 'collect', 'start');
-    expect(started.kind).toBe('joke');
 
-    // Only pictures.
+    // Only pictures, and « Valider » from two.
     expect((await sendForGame(sessions[0]!, started.id, 'du texte')).status).toBe(409);
-    const pictures = [await uploadForGame(sessions[0]!, started.id, testBytes(64)), await uploadForGame(sessions[1]!, started.id, testBytes(80))];
-    await a.gameWhere((game) => game.mySent === 1, 'sent');
-
-    const writing = await a.gameWhere((game) => game.phase === 'write', 'write');
-    expect(writing.myPicture[0]!.id).toBe(pictures[1]);
-    for (const [index, socket] of sockets.entries()) {
-      socket.send(JSON.stringify({ t: 'game-say', gameId: started.id, text: `blague ${index}` }));
+    for (const [index, session] of sessions.entries()) {
+      await uploadForGame(session, started.id, testBytes(60 + index));
+      sockets[index]!.send(JSON.stringify({ t: 'game-done', gameId: started.id }));
     }
-    const voting = await b.gameWhere((game) => game.phase === 'vote', 'vote');
-    expect(voting.entries.map(({ ownerId }) => ownerId)).toEqual([null, null]);
-    a.send(JSON.stringify({ t: 'game-vote', gameId: started.id, choice: sessions[0]!.memberId }));
-    a.send(JSON.stringify({ t: 'game-vote', gameId: started.id, choice: sessions[1]!.memberId }));
-    b.send(JSON.stringify({ t: 'game-vote', gameId: started.id, choice: sessions[0]!.memberId }));
-    const reveal = await a.gameWhere((game) => game.phase === 'reveal', 'reveal');
-    expect(reveal.scores).toEqual({ [sessions[0]!.memberId]: 1, [sessions[1]!.memberId]: 1 });
-    const done = await b.gameWhere((game) => game.phase === 'done', 'ranking');
-    expect(done.reason).toBeNull();
+    await a.gameWhere((game) => game.mySent === 1 && !game.iAmDone, 'one is not enough');
+    for (const [index, session] of sessions.entries()) {
+      await uploadForGame(session, started.id, testBytes(70 + index));
+      sockets[index]!.send(JSON.stringify({ t: 'game-done', gameId: started.id }));
+    }
+
+    // Everyone writes on two pictures.
+    const views = await Promise.all(sockets.map((socket) => socket.gameWhere((game) => game.phase === 'write', 'write')));
+    for (const view of views) expect(view.entries).toHaveLength(2);
+    // Momo writes nothing.
+    for (const [index, socket] of [a, b].entries()) {
+      for (const entry of views[index]!.entries) socket.send(JSON.stringify({ t: 'game-say', gameId: started.id, text: `blague ${index}`, entryId: entry.id }));
+    }
+
+    const duel = await a.gameWhere((game) => game.phase === 'vote', 'duel');
+    expect(duel.entries).toHaveLength(2);
+    expect(duel.entries.every(({ ownerId }) => ownerId === null)).toBe(true);
+    expect(duel.entries[0]!.files[0]!.id).toBe(duel.entries[1]!.files[0]!.id);
+    const authors = duel.entries.map(({ id }) => id);
+    // Momo's part is a ready-made line, as if he wrote it.
+    const momo = sessions[2]!.memberId;
+    if (authors.includes(momo)) expect(duel.entries.find(({ id }) => id === momo)!.caption).not.toMatch(/^blague/);
+    const voter = sessions.find(({ memberId }) => !authors.includes(memberId))!;
+    const author = sessions.find(({ memberId }) => authors.includes(memberId))!;
+    // An author's vote on their own duel counts for nothing.
+    sockets[sessions.indexOf(author)]!.send(JSON.stringify({ t: 'game-vote', gameId: started.id, choice: authors.find((id) => id !== author.memberId) }));
+    sockets[sessions.indexOf(voter)]!.send(JSON.stringify({ t: 'game-vote', gameId: started.id, choice: authors[0] }));
+    const reveal = await c.gameWhere((game) => game.phase === 'reveal', 'reveal');
+    // One vote, and one more for winning the duel.
+    expect(reveal.scores[authors[0]!]).toBe(2);
+    expect(reveal.scores[authors[1]!]).toBe(0);
+    a.send(JSON.stringify({ t: 'game-stop', gameId: started.id }));
     for (const socket of sockets) socket.close();
   });
 
-  it('hides an impostor with another picture, and needs three to start', async () => {
+  it('waits for the first vote, then gives 30 seconds, and ends even if nobody votes', async () => {
+    const { sessions, sockets } = await quickParty(['Nono', 'Lulu', 'Momo']);
+    const [a, b] = sockets as [TestSocket, TestSocket];
+    await startGame(sockets, 'who');
+    const started = await b.gameWhere((game) => game.phase === 'collect', 'start');
+    for (const [index, session] of sessions.entries()) await sendForGame(session, started.id, `meme ${index}`);
+    const voting = await a.gameWhere((game) => game.phase === 'vote', 'vote');
+    // 2 min, twenty times faster, before anyone votes.
+    expect(voting.endsAt - Date.now()).toBeGreaterThan(4_000);
+    expect(voting.voteStarted).toBe(false);
+    const owner = sessions[Number(voting.entries[0]!.caption.slice(-1))]!.memberId;
+    const voter = sessions.findIndex(({ memberId }) => memberId !== owner);
+    sockets[voter]!.send(JSON.stringify({ t: 'game-vote', gameId: started.id, choice: owner }));
+    const first = await a.gameWhere((game) => game.voteStarted, 'first vote');
+    expect(first.endsAt - Date.now()).toBeLessThan(1_600);
+    // Nobody else votes: it still moves on, to the next picture and its own wait.
+    await a.gameWhere((game) => game.phase === 'reveal', 'reveal');
+    const next = await a.gameWhere((game) => game.phase === 'vote' && game.entries[0]!.id !== voting.entries[0]!.id, 'next vote');
+    expect(next.voteStarted).toBe(false);
+    const quiet = await a.gameWhere((game) => game.phase === 'reveal' && game.entries[0]!.id === next.entries[0]!.id, 'nobody voted', 12_000);
+    expect(quiet.entries[0]!.votes).toBe(0);
+    a.send(JSON.stringify({ t: 'game-stop', gameId: started.id }));
+    for (const socket of sockets) socket.close();
+  });
+
+  it('lets one person play with bots: they get ready, answer and vote', async () => {
+    const { sessions, sockets } = await quickParty(['Nono']);
+    const [a] = sockets as [TestSocket];
+    a.send(JSON.stringify({ t: 'game-start', kind: 'question' }));
+    const lobby = await a.gameWhere((game) => game.phase === 'lobby', 'lobby');
+    for (let bot = 0; bot < 3; bot += 1) a.send(JSON.stringify({ t: 'game-bot-add', gameId: lobby.id }));
+    const full = await a.gameWhere((game) => game.bots.length === 3, 'three bots');
+    expect(full.ready).toEqual(full.bots.map(({ id }) => id));
+    a.send(JSON.stringify({ t: 'game-bot-remove', gameId: lobby.id, botId: full.bots[2]!.id }));
+    const two = await a.gameWhere((game) => game.bots.length === 2, 'two bots');
+    expect(two.bots.map(({ name }) => name)).toEqual(['Bot Gaston', 'Bot Josiane']);
+    a.send(JSON.stringify({ t: 'game-launch', gameId: lobby.id }));
+    await a.gameWhere((game) => game.phase === 'collect', 'start');
+    expect((await sendForGame(sessions[0]!, lobby.id, 'Ma réponse')).status).toBe(201);
+    // The bots answered too, and vote without anyone waiting for them.
+    const duel = await a.gameWhere((game) => game.phase === 'vote', 'vote');
+    expect(duel.entries.length).toBeGreaterThanOrEqual(2);
+    // When two bots face each other, the person is the one left to vote.
+    const other = duel.entries.find(({ mine }) => !mine);
+    if (!duel.entries.some(({ mine }) => mine)) a.send(JSON.stringify({ t: 'game-vote', gameId: lobby.id, choice: other!.id }));
+    const reveal = await a.gameWhere((game) => game.phase === 'reveal', 'reveal', 12_000);
+    expect(reveal.entries.reduce((total, { votes }) => total + (votes ?? 0), 0)).toBeGreaterThan(0);
+    a.send(JSON.stringify({ t: 'game-stop', gameId: lobby.id }));
+    a.close();
+  });
+
+  it('takes a LiveChat avancé as an answer to the question, and only there', async () => {
+    const layer = { file: 0, x: 50, y: 50, width: 40, aspect: 1, rotation: 0, flip: false, grayscale: false, blur: 0, spinRpm: 0, enter: 'pop', exit: 'fade' };
+    const answer = (session: SessionResponse, gameId: string) =>
+      fetch(`${QUICK_BASE}/v1/parties/${session.partyId}/media`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...authorized(session) },
+        body: JSON.stringify({
+          caption: 'La question ?',
+          clipStartMs: 0,
+          durationMs: 2_000,
+          files: [{ contentType: 'image/png', size: 10, name: 'a.png' }],
+          scene: [layer, { ...layer, x: 20 }],
+          textPlace: { x: 5, y: 5, width: 50 },
+          game: gameId,
+        }),
+      });
+
+    const questions = await quickParty(['Nono', 'Lulu', 'Momo']);
+    await startGame(questions.sockets, 'question');
+    const started = await questions.sockets[0]!.gameWhere((game) => game.phase === 'collect', 'start');
+    expect((await answer(questions.sessions[0]!, started.id)).status).toBe(201);
+    for (const socket of questions.sockets) socket.close();
+
+    // Not for the jokes.
+    const jokes = await quickParty(['Nono', 'Lulu', 'Momo']);
+    await startGame(jokes.sockets, 'joke');
+    const collecting = await jokes.sockets[0]!.gameWhere((game) => game.phase === 'collect', 'jokes');
+    expect((await answer(jokes.sessions[0]!, collecting.id)).status).toBe(409);
+    for (const socket of jokes.sockets) socket.close();
+  });
+
+  it('plays Undercover one word at a time, and the impostor gets no picture', async () => {
     const { sessions, sockets } = await quickParty(['Nono', 'Lulu', 'Momo']);
     const [a] = sockets as [TestSocket];
     await startGame(sockets, 'undercover');
     const started = await a.gameWhere((game) => game.phase === 'collect', 'start');
-    const pictures = [];
-    for (const [index, session] of sessions.entries()) pictures.push(await uploadForGame(session, started.id, testBytes(50 + index)));
+    for (const [index, session] of sessions.entries()) await uploadForGame(session, started.id, testBytes(50 + index));
     const views = await Promise.all(sockets.map((socket) => socket.gameWhere((game) => game.phase === 'write', 'write')));
-    const seen = views.map(({ myPicture }) => myPicture[0]!.id);
-    const odd = seen.find((id) => seen.filter((other) => other === id).length === 1)!;
-    const impostor = sessions[seen.indexOf(odd)]!.memberId;
-    for (const [index, socket] of sockets.entries()) socket.send(JSON.stringify({ t: 'game-say', gameId: started.id, text: `mot ${index}` }));
-    await a.gameWhere((game) => game.phase === 'vote', 'vote');
+    const impostors = views.filter(({ iAmImpostor }) => iAmImpostor);
+    expect(impostors).toHaveLength(1);
+    expect(impostors[0]!.myPicture).toEqual([]);
+    const shared = views.filter(({ iAmImpostor }) => !iAmImpostor).map(({ myPicture }) => myPicture[0]!.id);
+    expect(new Set(shared).size).toBe(1);
+    const impostor = sessions[views.indexOf(impostors[0]!)]!.memberId;
+
+    // Only whoever's turn it is writes, and everyone sees each word arrive.
+    const order: string[] = [];
+    for (let word = 0; word < 3; word += 1) {
+      const now = await a.gameWhere((game) => game.phase === 'write' && game.entries.length === word, `turn ${word}`);
+      const turn = now.turn!;
+      order.push(turn);
+      const other = sessions.findIndex(({ memberId }) => memberId !== turn);
+      sockets[other]!.send(JSON.stringify({ t: 'game-say', gameId: started.id, text: 'pas mon tour' }));
+      sockets[sessions.findIndex(({ memberId }) => memberId === turn)]!.send(JSON.stringify({ t: 'game-say', gameId: started.id, text: `mot ${word}` }));
+    }
+    const voting = await a.gameWhere((game) => game.phase === 'vote', 'vote');
+    expect(voting.entries.map(({ ownerId }) => ownerId)).toEqual(order);
+    expect(voting.entries.map(({ caption }) => caption)).toEqual(['mot 0', 'mot 1', 'mot 2']);
     for (const [index, socket] of sockets.entries()) {
       const me = sessions[index]!.memberId;
       const choice = me === impostor ? sessions.find(({ memberId }) => memberId !== me)!.memberId : impostor;
@@ -466,8 +583,32 @@ describe('party games', () => {
     const reveal = await a.gameWhere((game) => game.phase === 'reveal', 'reveal');
     expect(reveal.answer).toBe(impostor);
     expect(reveal.scores[impostor]).toBe(0);
-    expect(Object.values(reveal.scores).reduce((sum, value) => sum + value, 0)).toBe(2);
     a.send(JSON.stringify({ t: 'game-stop', gameId: started.id }));
+    for (const socket of sockets) socket.close();
+  });
+
+  it('deals Undercover pictures from what played today, never a sound, without asking anyone to send', async () => {
+    const { sessions, sockets } = await quickParty(['Nono', 'Lulu', 'Momo'], BASE);
+    const [a] = sockets as [TestSocket];
+    const played: string[] = [];
+    const play = async (mediaId: string) => {
+      await a.queueWhere((queue) => queue[0]?.id === mediaId, 'queued');
+      for (const socket of sockets) socket.send(JSON.stringify({ t: 'ready', mediaId }));
+      await a.historyWhere((history) => history.some(({ id }) => id === mediaId), 'played');
+    };
+    for (let index = 0; index < 3; index += 1) {
+      const mediaId = await uploadFile(sessions[0]!, testBytes(900 + index));
+      await play(mediaId);
+      played.push(mediaId);
+    }
+    const sound = await openUpload(sessions[0]!, 10, 'audio/mpeg', BASE, 'son.mp3');
+    expect(sound.status).toBe(201);
+    await startGame(sockets, 'undercover');
+    const views = await Promise.all(sockets.map((socket) => socket.gameWhere((game) => game.phase === 'write', 'straight to writing')));
+    const dealt = views.flatMap(({ myPicture }) => myPicture.map(({ id }) => id));
+    expect(dealt).toHaveLength(2);
+    expect(played).toContain(dealt[0]);
+    a.send(JSON.stringify({ t: 'game-stop', gameId: views[0]!.id }));
     for (const socket of sockets) socket.close();
   });
 });

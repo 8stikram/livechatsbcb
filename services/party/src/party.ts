@@ -20,6 +20,8 @@ import {
   mediaPartBytes,
   mediaPartCount,
   GAME_MIN_PLAYERS,
+  fileKindOf,
+  isBotId,
   type Account,
   type Activity,
   type Game,
@@ -38,6 +40,8 @@ import { randomToken, sha256 } from './tokens';
 import * as games from './games';
 
 const REACTION_GAP_MS = 500;
+// A picture of the day is only dealt in a game while its file is sure to stay that long.
+const GAME_FILE_MARGIN_MS = 30 * 60_000;
 
 // The lobby came with 0.22.0, which says so. Clients without an app version are tests.
 const knowsLobby = (tags: string[]): boolean => tags.length < 2 || tags.includes(WS_LOBBY);
@@ -229,7 +233,7 @@ export class Party extends DurableObject<Env> {
     if (!member || !(await this.mayStay(member))) return { ok: false, error: 'unauthorized' };
     if (draft.game !== null) {
       const game = this.storedGame();
-      if (game?.id !== draft.game || !games.acceptsEntry(game, member.id, [], draft.caption)) return { ok: false, error: 'queue_full' };
+      if (game?.id !== draft.game || !games.acceptsEntry(game, member.id, [], draft.caption, draft.scene)) return { ok: false, error: 'queue_full' };
       this.addGameEntry(member.id, mediaId, draft, []);
       return { ok: true };
     }
@@ -277,7 +281,7 @@ export class Party extends DurableObject<Env> {
     // What a game no longer waits for isn't worth storing.
     if (draft.game !== null) {
       const game = this.storedGame();
-      return game?.id === draft.game && games.acceptsEntry(game, member.id, draft.files, draft.caption)
+      return game?.id === draft.game && games.acceptsEntry(game, member.id, draft.files, draft.caption, draft.scene)
         ? { ok: true, memberId: member.id }
         : { ok: false, error: 'queue_full' };
     }
@@ -486,13 +490,13 @@ export class Party extends DurableObject<Env> {
         this.startGame(memberId, message.data.kind);
         break;
       case 'game-say': {
-        const { gameId, text } = message.data;
-        this.playGame(gameId, (game) => games.say(game, memberId, text));
+        const { gameId, text, entryId } = message.data;
+        this.playGame(gameId, (game) => games.say(game, memberId, text, Date.now(), this.gameScale(), entryId));
         break;
       }
       case 'game-vote': {
         const { gameId, choice } = message.data;
-        this.playGame(gameId, (game) => games.vote(game, memberId, choice));
+        this.playGame(gameId, (game) => games.vote(game, memberId, choice, Date.now(), this.gameScale()));
         break;
       }
       case 'game-stop': {
@@ -506,6 +510,17 @@ export class Party extends DurableObject<Env> {
           games.stop(game, Date.now());
           return true;
         });
+        break;
+      }
+      case 'game-done':
+        this.playGame(message.data.gameId, (game) => games.markDone(game, memberId));
+        break;
+      case 'game-bot-add':
+        this.playGame(message.data.gameId, (game) => games.addBot(game, memberId, Date.now(), this.gameScale()));
+        break;
+      case 'game-bot-remove': {
+        const { gameId, botId } = message.data;
+        this.playGame(gameId, (game) => games.removeBot(game, memberId, botId, Date.now(), this.gameScale()));
         break;
       }
       case 'game-join':
@@ -613,7 +628,7 @@ export class Party extends DurableObject<Env> {
     const poll = this.storedPoll();
     const pollEnd = poll && !poll.done ? poll.endsAt : null;
     const game = this.storedGame();
-    const gameStep = game && game.phase !== 'done' ? game.endsAt : null;
+    const gameStep = game && game.phase !== 'done' ? Math.min(game.endsAt, game.botDueAt ?? Infinity) : null;
     const steps = [queueStep, checking ? Number(this.getMeta('nextMemberCheck')) : null, pollEnd, gameStep].filter((step) => step !== null);
     if (steps.length > 0) void this.ctx.storage.setAlarm(Math.min(...steps));
     else void this.ctx.storage.deleteAlarm();
@@ -1005,7 +1020,23 @@ export class Party extends DurableObject<Env> {
     const raw = this.getMeta('game');
     if (!raw) return null;
     // A game saved before the lobby existed lacks its fields.
-    return { chefId: '', ready: [], waiting: [], enoughSince: null, readySince: null, ...(JSON.parse(raw) as object) } as unknown as games.StoredGame;
+    return {
+      chefId: '',
+      ready: [],
+      waiting: [],
+      enoughSince: null,
+      readySince: null,
+      bots: [],
+      voteStarted: false,
+      turnOrder: [],
+      turn: null,
+      finished: [],
+      tasks: {},
+      jokes: {},
+      botDueAt: null,
+      botStep: '',
+      ...(JSON.parse(raw) as object),
+    } as unknown as games.StoredGame;
   }
 
   // Apps older than the lobby can't read it: they just don't see it.
@@ -1014,6 +1045,20 @@ export class Party extends DurableObject<Env> {
     if (!game || (game.phase === 'done' && Date.now() > game.endsAt)) return null;
     if (game.phase === 'lobby' && !lobby) return null;
     return games.gameView(game, memberId);
+  }
+
+  // Pictures and videos played for everybody in the last hours, for the games: never a whisper, never a sound.
+  private gamePictures(): games.StoredEntry[] {
+    const stillThere = Date.now() + GAME_FILE_MARGIN_MS;
+    return this.ctx.storage.sql
+      .exec<HistoryRow>('SELECT item, played_at FROM history WHERE expires_at > ? ORDER BY played_at DESC', stillThere)
+      .toArray()
+      .map((row) => JSON.parse(row.item) as StoredItem)
+      .filter((item) => item.to.length === 0 && !item.link)
+      .flatMap((item) => {
+        const file = item.files.find(({ contentType }) => fileKindOf(contentType) === 'image' || fileKindOf(contentType) === 'video');
+        return file ? [{ id: item.id, ownerId: '', files: [file], caption: '' }] : [];
+      });
   }
 
   private gameScale(): number {
@@ -1026,21 +1071,24 @@ export class Party extends DurableObject<Env> {
     if (game.phase === 'lobby' && now >= game.endsAt) {
       // Whoever went away is out; with too few, the lobby waits again, and empty or idle, it closes.
       const online = this.onlineIds();
-      game.players = game.players.filter((id) => online.has(id));
-      game.ready = game.ready.filter((id) => online.has(id));
-      if (!game.players.includes(game.chefId)) game.chefId = game.players[0] ?? '';
+      game.players = game.players.filter((id) => online.has(id) || isBotId(id));
+      game.ready = game.ready.filter((id) => online.has(id) || isBotId(id));
+      if (!game.players.includes(game.chefId)) game.chefId = game.players.find((id) => !isBotId(id)) ?? '';
       const enough = game.players.length >= GAME_MIN_PLAYERS[game.kind];
-      if (enough && game.enoughSince !== null) games.launch(game, now, this.gameScale());
+      if (!game.players.some((id) => !isBotId(id))) return this.closeGame();
+      if (enough && game.enoughSince !== null) games.launch(game, now, this.gameScale(), this.gamePictures());
       else if (game.players.length === 0 || game.enoughSince === null) return this.closeGame();
       else games.armLobby(game, now, this.gameScale());
     }
     for (let steps = 0; steps < 20 && game.phase !== 'done'; steps += 1) {
-      const online = [...this.onlineIds()].filter((id) => game.players.includes(id));
+      // Bots count as there: they always play their part, a moment later.
+      const online = game.players.filter((id) => isBotId(id) || this.onlineIds().has(id));
       const done = games.acted(game);
-      const everyone = game.phase !== 'reveal' && online.length > 0 && online.every((id) => done.includes(id));
+      const everyone = game.phase !== 'reveal' && online.some((id) => !isBotId(id)) && online.every((id) => done.includes(id));
       if (now < game.endsAt && !everyone) break;
-      games.advance(game, now, this.gameScale());
+      games.advance(game, now, this.gameScale(), this.gamePictures());
     }
+    games.planBots(game, now, this.gameScale());
     this.setMeta('game', JSON.stringify(game));
     this.broadcastEach((memberId, lobby) => ({ t: 'game', game: this.gameFor(memberId, lobby) }));
     if (this.advanceQueue()) this.broadcastQueue();
@@ -1055,7 +1103,9 @@ export class Party extends DurableObject<Env> {
     const game = this.storedGame();
     if (!game || game.phase === 'done') return;
     if (game.phase === 'lobby' && game.enoughSince === null && Date.now() >= game.endsAt) return this.closeGame();
-    if (Date.now() >= game.endsAt) this.saveGame(game);
+    if (game.botDueAt !== null && Date.now() >= game.botDueAt) games.botsPlay(game, Date.now(), this.gameScale());
+    else if (Date.now() < game.endsAt) return;
+    this.saveGame(game);
   }
 
   private playGame(gameId: string, act: (game: games.StoredGame) => boolean): void {
@@ -1078,13 +1128,13 @@ export class Party extends DurableObject<Env> {
     this.playGame(gameId, (game) => {
       if (game.phase !== 'lobby' || game.chefId !== memberId) return false;
       const online = this.onlineIds();
-      game.players = game.players.filter((id) => online.has(id));
-      game.ready = game.ready.filter((id) => online.has(id));
+      game.players = game.players.filter((id) => online.has(id) || isBotId(id));
+      game.ready = game.ready.filter((id) => online.has(id) || isBotId(id));
       if (game.players.length < GAME_MIN_PLAYERS[game.kind]) {
         games.armLobby(game, Date.now(), this.gameScale());
         return true;
       }
-      games.launch(game, Date.now(), this.gameScale());
+      games.launch(game, Date.now(), this.gameScale(), this.gamePictures());
       return true;
     });
   }
@@ -1122,6 +1172,8 @@ export class Party extends DurableObject<Env> {
         ownerId: memberId,
         files: draft.files.map((file, index) => ({ ...file, id: fileIds[index]! })),
         caption: draft.caption,
+        scene: draft.scene,
+        textPlace: draft.scene ? draft.textPlace : null,
       }),
     );
   }
