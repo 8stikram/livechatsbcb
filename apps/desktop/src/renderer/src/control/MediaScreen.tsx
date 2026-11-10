@@ -563,6 +563,7 @@ export const MediaScreen = ({
     speak,
     layers: scene.layers.filter((layer) => sceneLink || !layer.link).map(({ key: _key, ...layer }) => layer),
     soundId: scene.soundId,
+    textPlace: scene.textPlace,
     to,
     link: sceneLink ? { site: sceneLink.site, id: sceneLink.id, title: sceneLink.title, volume: linkVolume } : null,
     ...(sceneLink && clip
@@ -610,6 +611,7 @@ export const MediaScreen = ({
         senderAvatarUrl: state.account?.avatarUrl ?? null,
         kind: scene.hasVideo ? 'video' : 'image',
         caption: input.caption.trim(),
+        textPlace: input.textPlace,
         fileName: null,
         clipStartMs: input.clipStartMs,
         durationMs: input.durationMs,

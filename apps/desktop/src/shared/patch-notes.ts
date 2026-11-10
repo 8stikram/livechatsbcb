@@ -3,6 +3,15 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.24.0',
+    date: '10 novembre 2026',
+    items: [
+      'LiveChat avancé : le texte se déplace à la souris comme une image. Bouton « Remettre à sa place » pour le ramener',
+      'Bibliothèque, nouvel onglet Presse-papier : les 50 dernières images que tu copies, un clic les met dans ton LiveChat',
+      'Une étoile garde une image pour toujours, « Vider » enlève le reste, « Pause » arrête de les garder. Ce que copie un gestionnaire de mots de passe est ignoré, et rien ne quitte ton PC',
+    ],
+  },
+  {
     version: '0.23.0',
     date: '9 novembre 2026',
     items: [

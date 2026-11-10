@@ -522,6 +522,7 @@ export const App = () => {
                   category={libraryCategory}
                   onCategory={setLibraryCategory}
                   onOpenEditor={() => setChosenView('media')}
+                  onBringIn={(pasted) => void waitFor(pasted)}
                 />
               </div>
               <div className="view" hidden={view !== 'history'}>

@@ -11,6 +11,7 @@ import type {
   GameReaction,
   Poll,
   SceneLayer,
+  TextPlace,
 } from '@livechatsbcb/protocol';
 
 // The pages have no process: they read it from the browser.
@@ -158,6 +159,8 @@ export type PlaybackView = {
   senderAvatarUrl: string | null;
   kind: MediaKind;
   caption: string;
+  // Where the sender moved the text. Null keeps it at this screen's usual place.
+  textPlace: TextPlace | null;
   fileName: string | null;
   clipStartMs: number;
   durationMs: number;
@@ -260,6 +263,8 @@ export type SceneInput = {
   speak: boolean;
   layers: EditedLayer[];
   soundId: string | null;
+  // Where the text was moved to. Null where it usually is.
+  textPlace: TextPlace | null;
   // Who it is whispered to. Empty for everybody.
   to: string[];
   link: MediaLink | null;
@@ -276,6 +281,8 @@ export type ExternalFiles =
   | { mode: 'send'; error: IncomingError };
 // What is being asked for: anything at first, then whichever of the two is still missing.
 export type DraftSlot = 'picture' | 'sound';
+
+export type ClipView = { id: string; url: string; path: string; starred: boolean; copiedAt: number; width: number; height: number };
 
 export type LibraryFileView = {
   shortcut: string | null;
@@ -457,6 +464,13 @@ export const IpcChannel = {
   SetLibraryFavorite: 'library:set-favorite',
   SetLibraryTags: 'library:set-tags',
   UseLibraryFile: 'library:use-file',
+  ClipboardList: 'clipboard:list',
+  ClipboardUse: 'clipboard:use',
+  ClipboardStar: 'clipboard:star',
+  ClipboardRemove: 'clipboard:remove',
+  ClipboardClear: 'clipboard:clear',
+  ClipboardPause: 'clipboard:pause',
+  ClipboardChanged: 'clipboard:changed',
   ShowLibraryFileMenu: 'library:file-menu',
   StartScene: 'scene:start',
   PickSceneFile: 'scene:pick-file',
@@ -535,6 +549,15 @@ export type LiveChatApi = {
   // A file of the folders, or a saved LiveChat.
   setLibraryTags(target: { fileId: string } | { savedId: string }, tags: string[]): Promise<LibraryView>;
   useLibraryFile(fileId: string): Promise<{ ok: true; draft: DraftMedia } | { ok: false }>;
+  // The pictures copied while the app ran. They stay on this PC.
+  listClipboard(): Promise<{ items: ClipView[]; paused: boolean }>;
+  // Into the LiveChat being prepared, as if it had just been pasted.
+  useClipboardImage(id: string, advanced: boolean): Promise<IncomingResult>;
+  starClipboardImage(id: string, starred: boolean): Promise<void>;
+  removeClipboardImage(id: string): Promise<void>;
+  clearClipboard(): Promise<void>;
+  pauseClipboard(paused: boolean): Promise<void>;
+  onClipboardChanged(listener: () => void): () => void;
   startScene(): Promise<SceneFile[]>;
   pickSceneFile(wanted?: 'picture' | 'sound'): Promise<SceneResult>;
   useLibraryFileInScene(fileId: string): Promise<SceneResult>;

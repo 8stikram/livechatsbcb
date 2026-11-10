@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent, type PointerEvent } from 'react';
 import { MAX_SCENE_PICTURES, type Scene3dEffect, type Scene3dMotion, type Scene3dSpeed, type SceneLayer } from '@livechatsbcb/protocol';
 import type { AppState, BackdropView, LibraryFileView, LinkDraft, PlaybackView } from '../../../shared/ipc';
-import { Caption, Playing, Profile, ScreenPreview, layerLook, layerPlace } from '../scene';
+import { Caption, Playing, Profile, ScreenPreview, layerLook, layerPlace, placedZone, zoneStyle } from '../scene';
 import { KindIcon } from './icons';
 import { LazyVideo } from './LazyVideo';
 import { Slider } from './NowPlaying';
@@ -138,6 +138,33 @@ const EditingStage = ({ scene, state, caption, link }: { scene: Scene; state: Ap
     target.addEventListener('pointercancel', onUp);
   };
 
+  // The text goes where it is dropped, keeping its width. It starts from where this screen usually shows it.
+  const startTextDrag = (event: PointerEvent) => {
+    event.stopPropagation();
+    event.preventDefault();
+    const rect = box.current?.getBoundingClientRect();
+    if (!rect || event.button !== 0) return;
+    const start = placedZone(layout.text, scene.textPlace);
+    const { clientX: startX, clientY: startY } = event;
+    const target = event.currentTarget;
+    target.setPointerCapture(event.pointerId);
+    const onMove = (move: globalThis.PointerEvent) => {
+      scene.setTextPlace({
+        x: round(clamp(start.x + ((move.clientX - startX) / rect.width) * 100, -50, 150)),
+        y: round(clamp(start.y + ((move.clientY - startY) / rect.height) * 100, -50, 150)),
+        width: round(clamp(start.w, 5, 100)),
+      });
+    };
+    const onUp = () => {
+      target.removeEventListener('pointermove', onMove as EventListener);
+      target.removeEventListener('pointerup', onUp);
+      target.removeEventListener('pointercancel', onUp);
+    };
+    target.addEventListener('pointermove', onMove as EventListener);
+    target.addEventListener('pointerup', onUp);
+    target.addEventListener('pointercancel', onUp);
+  };
+
   const onDrop = (event: DragEvent) => {
     const fileId = event.dataTransfer.getData(DROP_TYPE);
     const rect = box.current?.getBoundingClientRect();
@@ -161,6 +188,16 @@ const EditingStage = ({ scene, state, caption, link }: { scene: Scene; state: Ap
         }}
         onDrop={onDrop}
       >
+        {/* Under the pictures, so their handles stay within reach over the text. */}
+        {caption.trim() && (
+          <div
+            className="scene-text-grip"
+            style={zoneStyle(placedZone(layout.text, scene.textPlace))}
+            data-testid="scene-text"
+            title="Glisse pour déplacer le texte"
+            onPointerDown={startTextDrag}
+          />
+        )}
         <div className="scene-canvas">
           {scene.layers.map((layer) => {
             const file = scene.fileOf(layer.fileId);
@@ -199,7 +236,7 @@ const EditingStage = ({ scene, state, caption, link }: { scene: Scene; state: Ap
         </div>
         <div className="scene-info">
           <Profile name={state.account?.name ?? ''} avatarUrl={state.account?.avatarUrl ?? null} zone={layout.profile} />
-          {caption.trim() && <Caption text={caption} zone={layout.text} />}
+          {caption.trim() && <Caption text={caption} zone={layout.text} place={scene.textPlace} />}
         </div>
         {scene.layers.length === 0 && <p className="scene-empty hint">Ajoute une image ou une vidéo, puis place-la où tu veux.</p>}
       </div>
@@ -441,6 +478,11 @@ export const SceneBoard = ({
             </>
           )}
           <span className="spacer" />
+          {scene.textPlace && (
+            <button type="button" className="pill quiet small" data-testid="text-reset" onClick={() => scene.setTextPlace(null)}>
+              Remettre à sa place
+            </button>
+          )}
           <button type="button" className="pill quiet small" disabled={!scene.canUndo} onClick={scene.undo}>
             Annuler
           </button>

@@ -67,6 +67,17 @@ const api: LiveChatApi = {
     ipcRenderer.on(IpcChannel.ExternalFilesWaiting, handler);
     return () => ipcRenderer.removeListener(IpcChannel.ExternalFilesWaiting, handler);
   },
+  listClipboard: () => ipcRenderer.invoke(IpcChannel.ClipboardList),
+  useClipboardImage: (id, advanced) => ipcRenderer.invoke(IpcChannel.ClipboardUse, id, advanced),
+  starClipboardImage: (id, starred) => ipcRenderer.invoke(IpcChannel.ClipboardStar, id, starred),
+  removeClipboardImage: (id) => ipcRenderer.invoke(IpcChannel.ClipboardRemove, id),
+  clearClipboard: () => ipcRenderer.invoke(IpcChannel.ClipboardClear),
+  pauseClipboard: (paused) => ipcRenderer.invoke(IpcChannel.ClipboardPause, paused),
+  onClipboardChanged: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on(IpcChannel.ClipboardChanged, handler);
+    return () => ipcRenderer.removeListener(IpcChannel.ClipboardChanged, handler);
+  },
   takeExternalFiles: (advanced) => ipcRenderer.invoke(IpcChannel.TakeExternalFiles, advanced),
   sendExternalFiles: (durationMs) => ipcRenderer.invoke(IpcChannel.SendExternalFiles, durationMs),
   onShortcutFeedback: (listener) => {

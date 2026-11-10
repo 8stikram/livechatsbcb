@@ -2231,6 +2231,56 @@ describe.skipIf(online)('party flow in the real app', () => {
     for (const member of [host, guest]) await openTab(member, 'LiveChat');
   });
 
+  it('keeps copied pictures in the library, and puts one in the LiveChat on a click', async () => {
+    const logo = join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png');
+    const control = host.control;
+    // Pictures nobody copied before, whatever earlier steps put on the clipboard.
+    const mark = Date.now() % 250;
+    const copyPicture = (flip: boolean) =>
+      spawnSync('powershell', [
+        '-NoProfile',
+        '-STA',
+        '-Command',
+        `Add-Type -AssemblyName System.Windows.Forms, System.Drawing; $i = New-Object System.Drawing.Bitmap([System.Drawing.Image]::FromFile('${logo}')); $i.SetPixel(0, 0, [System.Drawing.Color]::FromArgb(255, ${mark}, 7, 9)); ${flip ? '$i.RotateFlip([System.Drawing.RotateFlipType]::RotateNoneFlipX); ' : ''}[System.Windows.Forms.Clipboard]::SetImage($i)`,
+      ]);
+    const copyText = () => spawnSync('powershell', ['-NoProfile', '-Command', "Set-Clipboard -Value 'juste du texte'"]);
+
+    await openTab(host, 'Bibliothèque');
+    await control.getByRole('button', { name: /^Presse-papier/ }).click();
+    const items = control.getByTestId('clipboard-item');
+    const before = await items.count();
+
+    // The same picture twice is one, another one is one more, a text is none.
+    copyPicture(false);
+    await expect.poll(() => items.count(), { timeout: 10_000 }).toBe(before + 1);
+    copyText();
+    copyPicture(false);
+    copyPicture(true);
+    await expect.poll(() => items.count(), { timeout: 10_000 }).toBe(before + 2);
+    copyText();
+    await new Promise((done) => setTimeout(done, 1_500));
+    expect(await items.count()).toBe(before + 2);
+
+    // A star keeps it through « Vider ».
+    await items.first().getByTestId('clipboard-star').getByRole('button').click();
+    await control.getByTestId('clipboard-clear').click();
+    await expect.poll(() => items.count()).toBe(1);
+
+    // In pause, nothing new comes in.
+    await control.getByTestId('clipboard-pause').click();
+    await control.getByTestId('clipboard-pause').filter({ hasText: 'Reprendre' }).waitFor();
+    copyPicture(false);
+    await new Promise((done) => setTimeout(done, 1_500));
+    expect(await items.count()).toBe(1);
+    await control.getByTestId('clipboard-pause').click();
+    await control.getByTestId('clipboard-pause').filter({ hasText: 'Pause' }).waitFor();
+
+    // A click puts it in the LiveChat, ready to send.
+    await items.first().locator('.library-picture').click();
+    await control.getByTestId('live-preview').locator('img.overlay-media').waitFor();
+    await picture(control, '22-clipboard.png');
+  });
+
   it('reopens what played as a copy in the advanced mode', async () => {
     await openTab(host, 'Historique');
     await host.control.getByTestId('history-item').filter({ hasText: '.png' }).first().getByRole('button', { name: 'Modifier' }).click();
@@ -2440,6 +2490,26 @@ describe.skipIf(online)('party flow in the real app', () => {
     await control.getByRole('button', { name: 'Arrêter l’aperçu' }).first().click();
     await layers.first().waitFor();
 
+    // The text moves like a picture, and comes back to its place on demand.
+    const text = control.getByTestId('scene-text');
+    expect(await control.getByTestId('text-reset').count()).toBe(0);
+    // Grabbed where no picture covers it: the pictures stay on top of it.
+    const spot = await text.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      for (let y = box.top + 2; y < box.bottom; y += 4) {
+        for (let x = box.left + 2; x < box.right; x += 4) if (document.elementFromPoint(x, y) === element) return { x, y };
+      }
+      return null;
+    });
+    expect(spot).not.toBeNull();
+    await control.mouse.move(spot!.x, spot!.y);
+    await control.mouse.down();
+    await control.mouse.move(spot!.x - 20, spot!.y - 15, { steps: 5 });
+    await control.mouse.move(spot!.x - 40, spot!.y - 30, { steps: 5 });
+    await control.mouse.up();
+    await control.getByTestId('text-reset').waitFor();
+    const textLeft = await text.evaluate((element) => (element as HTMLElement).style.left);
+
     await control.getByRole('button', { name: 'Sauvegarder dans la bibliothèque' }).click();
     await control.getByLabel('Nom de ce LiveChat').fill('Face à face');
     await control.getByRole('button', { name: 'Sauvegarder', exact: true }).click();
@@ -2451,6 +2521,8 @@ describe.skipIf(online)('party flow in the real app', () => {
     const shown = guest.stage.getByTestId('overlay-layer');
     await expect.poll(() => shown.count()).toBe(2);
     await guest.stage.getByTestId('overlay-text').filter({ hasText: 'Un texte' }).waitFor();
+    // Where it was moved to, on the other PC too.
+    expect(await guest.stage.getByTestId('overlay-text').evaluate((element) => (element as HTMLElement).style.left)).toBe(textLeft);
     await guest.stage.getByTestId('overlay-audio').waitFor({ state: 'attached' });
     const looks = await shown.evaluateAll((elements) =>
       elements.map((element) => {
@@ -2489,6 +2561,11 @@ describe.skipIf(online)('party flow in the real app', () => {
     await saved.getByRole('button', { name: 'Modifier' }).click();
     await expect.poll(() => layers.count()).toBe(2);
     await expect(control.getByLabel('Texte à afficher').inputValue()).resolves.toBe('Un texte');
+    // Saved moved, it comes back moved, and goes back to its place in one click.
+    expect(await text.evaluate((element) => (element as HTMLElement).style.left)).toBe(textLeft);
+    await control.getByTestId('text-reset').click();
+    await control.getByTestId('text-reset').waitFor({ state: 'detached' });
+    expect(await text.evaluate((element) => (element as HTMLElement).style.left)).not.toBe(textLeft);
 
     // A video among the pictures, heard or not as chosen, and on time like any other.
     await answerDialogWith(host, join(sandbox, 'clip.webm'));

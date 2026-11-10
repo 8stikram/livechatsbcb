@@ -719,8 +719,8 @@ describe('party service', () => {
     const image = (name: string) => ({ contentType: 'image/png', size: 10, name });
     const sound = { contentType: 'audio/mpeg', size: 20, name: 'son.mp3' };
     const video = { contentType: 'video/mp4', size: 30, name: 'clip.mp4' };
-    const send = (files: unknown[], scene: unknown) =>
-      post(`/v1/parties/${host.partyId}/media`, { caption: '', clipStartMs: 0, durationMs: 2_000, files, scene }, authorized(host));
+    const send = (files: unknown[], scene: unknown, textPlace: unknown = undefined) =>
+      post(`/v1/parties/${host.partyId}/media`, { caption: '', clipStartMs: 0, durationMs: 2_000, files, scene, textPlace }, authorized(host));
 
     // Without a scene, it stays one to look at and one to listen to.
     expect((await send([image('a.png'), image('b.png')], null)).status).toBe(400);
@@ -748,7 +748,9 @@ describe('party service', () => {
     const { fileIds } = (await accepted.json()) as { fileIds: string[] };
     expect(fileIds).toHaveLength(7);
 
-    const twice = await send([image('a.png')], [layer, { ...layer, flip: true, x: 70 }]);
+    // The text moved too far, or too small.
+    expect((await send([image('a.png')], [layer], { x: 10, y: 70, width: 2 })).status).toBe(400);
+    const twice = await send([image('a.png')], [layer, { ...layer, flip: true, x: 70 }], { x: 10, y: 70, width: 50 });
     expect(twice.status).toBe(201);
     const { mediaId } = (await twice.json()) as { mediaId: string };
     const socket = new TestSocket(host);
@@ -765,6 +767,8 @@ describe('party service', () => {
     });
     const [item] = await socket.queueWhere((queue) => queue.length === 1, 'the scene');
     expect(item!.scene).toEqual([{ ...layer, muted: false }, { ...layer, flip: true, x: 70, muted: false }]);
+    // Where the text was moved to comes along.
+    expect(item!.textPlace).toEqual({ x: 10, y: 70, width: 50 });
     socket.close();
   });
 

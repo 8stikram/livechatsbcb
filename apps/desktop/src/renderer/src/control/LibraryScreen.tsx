@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { keyLabel, ON_MAC, type AppState, type KeyChange, type LibraryFileView, type LibraryView, type RenameOutcome, type SavedView } from '../../../shared/ipc';
+import { keyLabel, ON_MAC, type AppState, type IncomingResult, type KeyChange, type LibraryFileView, type LibraryView, type RenameOutcome, type SavedView } from '../../../shared/ipc';
+import { ClipboardShelf, useClipboardShelf } from './ClipboardShelf';
 import { ConfirmButton } from './ConfirmButton';
 import { GlideList } from './glide';
 import { IconPlay, IconStar, KindIcon } from './icons';
@@ -12,7 +13,7 @@ import { canSendIn, mediaErrorMessage } from './messages';
 import type { DraftFiles } from './use-draft';
 import type { Scene } from './use-scene';
 
-export type Category = 'image' | 'video' | 'audio' | 'saved';
+export type Category = 'image' | 'video' | 'audio' | 'saved' | 'clipboard';
 type Sort = 'date' | 'sent' | 'name' | 'type';
 type Tagged = { name: string; favorite: boolean; tags: string[]; sentCount: number };
 
@@ -24,6 +25,7 @@ const CATEGORIES: Array<[Category, string]> = [
   ['video', 'Vidéos'],
   ['audio', 'Sons'],
   ['saved', 'Sauvegardés'],
+  ['clipboard', 'Presse-papier'],
 ];
 
 // Pictures of videos are costly to load: the rest waits until someone asks.
@@ -325,6 +327,7 @@ export const LibraryScreen = ({
   category,
   onCategory,
   onOpenEditor,
+  onBringIn,
 }: {
   state: AppState;
   files: DraftFiles;
@@ -333,7 +336,9 @@ export const LibraryScreen = ({
   category: Category;
   onCategory: (category: Category) => void;
   onOpenEditor: () => void;
+  onBringIn: (pasted: Promise<IncomingResult>) => void;
 }) => {
+  const clips = useClipboardShelf();
   const [library, setLibrary] = useState<LibraryView | null>(null);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<Sort>('date');
@@ -537,7 +542,7 @@ export const LibraryScreen = ({
     (saved) => saved.kind,
   );
   const count = (kind: Category) =>
-    kind === 'saved' ? library.saved.length : library.files.filter((file) => file.kind === kind).length;
+    kind === 'clipboard' ? clips.items.length : kind === 'saved' ? library.saved.length : library.files.filter((file) => file.kind === kind).length;
 
   const noFolder = library.folders.length === 0 && category !== 'saved';
   const nothing = category === 'saved' ? savedItems.length === 0 : kindFiles.length === 0;
@@ -657,7 +662,9 @@ export const LibraryScreen = ({
         </p>
       )}
 
-      {noFolder ? (
+      {category === 'clipboard' ? (
+        <ClipboardShelf items={clips.items} paused={clips.paused} advanced={scene.active} onBringIn={onBringIn} />
+      ) : noFolder ? (
         <div className="history-empty">
           <p className="draft-empty-title">Montre où sont tes fichiers</p>
           <p className="hint">L'app les range toute seule. Rien ne quitte ton PC tant que tu n'envoies pas.</p>

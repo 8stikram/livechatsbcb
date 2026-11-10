@@ -125,6 +125,7 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 ### Ensuite
 
 - 0.23.0 publiée le 9 novembre 2026 : effets 3D, apparitions/sorties 3D, fond de fenêtre en direct dans LiveChat avancé, violet au centre de Party
+- 0.24.0 en préparation (pas publiée) : texte déplaçable dans LiveChat avancé, onglet Presse-papier dans la bibliothèque. Ensuite : nouvelles règles des jeux et bots, puis jeu de mots, puis mascottes (validées le 10 novembre 2026, dans docs/persos/)
 - Bug : l'overlay par-dessus Fortnite d'un pote, qui se ferme / crash
 
 ### Publiée : 0.21.0 (motion design)

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import type { TextPlace } from '@livechatsbcb/protocol';
 import { MAX_MEDIA_BYTES, MAX_SCENE_PICTURES, MAX_SCENE_VIDEOS, MIN_DISPLAY_MS } from '@livechatsbcb/protocol';
 import type { EditedLayer, LoadedScene, SceneFile, SceneResult } from '../../../shared/ipc';
 import { playLengthMs } from './play-length';
@@ -49,6 +50,8 @@ export const useScene = () => {
   const [selected, setSelected] = useState<string | null>(null);
   const [clip, setClipState] = useState<{ leader: string; clip: Clip } | null>(null);
   const [clipKey, setClipKey] = useState<string | null>(null);
+  // Where the text was dragged to, in percent of the screen. Null where the viewer usually shows it.
+  const [textPlace, setTextPlace] = useState<TextPlace | null>(null);
   const stageVideos = useRef(new Map<string, HTMLVideoElement>());
 
   const { stage } = timeline;
@@ -170,10 +173,13 @@ export const useScene = () => {
     setSelected(null);
     setClipState(null);
     setClipKey(null);
+    setTextPlace(null);
   };
 
   return {
     active,
+    textPlace,
+    setTextPlace,
     files,
     layers,
     soundId,
@@ -354,6 +360,7 @@ export const useScene = () => {
           soundId: loaded.soundId,
         },
       });
+      setTextPlace(loaded.textPlace ?? null);
       setSelected(null);
       setActive(true);
     },

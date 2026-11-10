@@ -7,7 +7,7 @@ import { z } from 'zod';
 import {
   MAX_MEDIA_BYTES,
   MediaContentTypeSchema,
-  SceneLayerSchema,
+  SceneLayerSchema, TextPlaceSchema,
   fileKindOf,
   mediaKindOf,
   type FileKind,
@@ -55,6 +55,8 @@ const SavedSchema = z.object({
   files: z.array(SavedFileSchema),
   // Saved before the advanced mode existed: no scene.
   scene: z.array(SceneLayerSchema).nullable().default(null),
+  // Where the text was moved to in the advanced mode. Null where it usually is.
+  textPlace: TextPlaceSchema.nullable().default(null),
   // Starred in the history: its files are copies that belong to it, in a folder of its own.
   kept: z.object({ historyId: z.string(), senderName: z.string(), senderAvatarUrl: z.string().nullable() }).nullable().default(null),
 });

@@ -302,6 +302,14 @@ export type MediaLink = z.infer<typeof MediaLinkSchema>;
 
 export const linkKindOf = ({ site }: Pick<MediaLink, 'site'>): 'video' | 'audio' => (site === 'soundcloud' ? 'audio' : 'video');
 
+// Where the text was moved to, in percent of the screen (its top-left corner and its width). Null keeps it at its usual place.
+export const TextPlaceSchema = z.object({
+  x: z.number().min(-50).max(150),
+  y: z.number().min(-50).max(150),
+  width: z.number().min(5).max(100),
+});
+export type TextPlace = z.infer<typeof TextPlaceSchema>;
+
 export const MediaDraftSchema = z
   .object({
     caption: z.string().trim().max(MAX_CAPTION_LENGTH),
@@ -313,6 +321,7 @@ export const MediaDraftSchema = z
     // Read aloud on each PC, in that PC's own voice.
     speak: z.boolean().default(false),
     scene: SceneSchema.default(null),
+    textPlace: TextPlaceSchema.nullable().default(null),
     link: MediaLinkSchema.nullable().default(null),
     // Only for these members, and nobody else ever knows. Empty is for everybody.
     to: z.array(z.string().min(1).max(64)).max(MAX_ONLINE_MEMBERS).default([]),
@@ -374,6 +383,7 @@ export const QueueItemSchema = z.object({
   soundMuted: z.boolean(),
   speak: z.boolean().default(false),
   scene: SceneSchema,
+  textPlace: TextPlaceSchema.nullable().default(null),
   link: MediaLinkSchema.nullable().default(null),
   to: z.array(z.string()).default([]),
   // When the service forgets it, and deletes its file. Playing it again doesn't push this back.

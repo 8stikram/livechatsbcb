@@ -1379,6 +1379,24 @@ select.input {
   pointer-events: none;
 }
 
+.scene.is-editing .scene-canvas {
+  pointer-events: none;
+}
+
+.scene.is-editing .scene-layer {
+  pointer-events: auto;
+}
+
+.scene-text-grip {
+  position: absolute;
+  cursor: move;
+  border-radius: 6px;
+}
+
+.scene-text-grip:hover {
+  outline: 1.5px dashed rgb(255 255 255 / 70%);
+}
+
 .scene-handle {
   position: absolute;
   width: 12px;

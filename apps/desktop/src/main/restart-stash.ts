@@ -2,7 +2,7 @@ import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
 import { z } from 'zod';
-import { SceneLayerSchema } from '@livechatsbcb/protocol';
+import { SceneLayerSchema, TextPlaceSchema } from '@livechatsbcb/protocol';
 import { SavedFileSchema, type SavedLiveChat } from './library';
 
 const StashSchema = z.object({
@@ -17,11 +17,12 @@ const StashSchema = z.object({
       speak: z.boolean().default(false),
       files: z.array(SavedFileSchema),
       scene: z.array(SceneLayerSchema).nullable(),
+      textPlace: TextPlaceSchema.nullable().default(null),
     })
     .nullable(),
 });
 export type RestartStash = z.infer<typeof StashSchema>;
-export type StashedRecipe = Pick<SavedLiveChat, 'caption' | 'clipStartMs' | 'durationMs' | 'videoMuted' | 'soundMuted' | 'speak' | 'files' | 'scene'>;
+export type StashedRecipe = Pick<SavedLiveChat, 'caption' | 'clipStartMs' | 'durationMs' | 'videoMuted' | 'soundMuted' | 'speak' | 'files' | 'scene' | 'textPlace'>;
 
 const stashPath = () => join(app.getPath('userData'), 'restart-stash.json');
 

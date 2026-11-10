@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
-import type { Scene3dEffect, Scene3dSpeed, SceneLayer } from '@livechatsbcb/protocol';
+import type { Scene3dEffect, Scene3dSpeed, SceneLayer, TextPlace } from '@livechatsbcb/protocol';
 import type { OverlayLayout, PlaybackView, SceneLayerView, Zone } from '../../shared/ipc';
 import { Avatar } from './Avatar';
 import { LinkPlayback } from './link-player';
@@ -63,8 +63,12 @@ export const Profile = ({ name, avatarUrl, zone, ring = 'none' }: { name: string
   </div>
 );
 
-export const Caption = ({ text, zone }: { text: string; zone: Zone }) => (
-  <div className="zone zone-text" style={zoneStyle(zone)} data-testid="overlay-text">
+// Moved by whoever sent it, the text keeps the height of the usual text zone of this screen.
+export const placedZone = (zone: Zone, place: TextPlace | null | undefined): Zone =>
+  place ? { x: place.x, y: place.y, w: place.width, h: zone.h } : zone;
+
+export const Caption = ({ text, zone, place }: { text: string; zone: Zone; place?: TextPlace | null }) => (
+  <div className="zone zone-text" style={zoneStyle(placedZone(zone, place))} data-testid="overlay-text">
     <p className={`outlined ${captionSize(text)}`}>{text}</p>
   </div>
 );
@@ -428,7 +432,7 @@ export const Playing = ({
           volume={item.hasSound && item.soundMuted ? 0 : volume}
         />
       )}
-      {item.caption && <Caption text={item.caption} zone={layout.text} />}
+      {item.caption && <Caption text={item.caption} zone={layout.text} place={item.textPlace} />}
     </div>
   );
 };

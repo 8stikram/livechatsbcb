@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { mkdir, rm, stat } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, powerMonitor, screen, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
 import { z } from 'zod';
@@ -23,6 +23,7 @@ import {
   type GameFile,
   MediaLinkSchema,
   SceneLayerSchema,
+  TextPlaceSchema,
   fileKindOf,
   mediaKindOf,
   fileNamesOf,
@@ -36,6 +37,7 @@ import {
   type QueueItem,
   type MediaLink,
   type SceneLayer,
+  type TextPlace,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
 import { IpcChannel, isNewerVersion, keyLabel, DEFAULT_SETTINGS, WHEEL_SIZE, type ActionKey, type KeyChange, type ExternalFiles, type IncomingError, type IncomingResult, type ActionResult, type GameSendResult, type GameInviteView, type GameReactionView, type HiddenReason, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
@@ -47,6 +49,7 @@ import { cleanPasted, downloadLink, folder as pastedFolder, savePastedImage, typ
 import { PREPARE_ARG, registerExplorerMenu, SEND_ARG } from './explorer-menu';
 import { CONTENT_TYPE_BY_EXTENSION, contentTypeOf, extensionOf, forgetMediaFile, registerMediaFile, serveMediaFiles } from './media-files';
 import { retryWhileOffline, uploadFile } from './media-upload';
+import { createClipboardHistory } from './clipboard-history';
 import { forgetRestartStash, takeRestartStash, writeRestartStash, type RestartStash, type StashedRecipe } from './restart-stash';
 import { RestartCountdown } from './update-restart';
 import * as partyApi from './party-api';
@@ -114,6 +117,7 @@ const SceneInputSchema = z.object({
   speak: z.boolean().default(false),
   layers: z.array(SceneLayerSchema.omit({ file: true }).extend({ fileId: z.string() })),
   soundId: z.string().nullable(),
+  textPlace: TextPlaceSchema.nullable().default(null),
   to: z.array(z.string()).max(MAX_ONLINE_MEMBERS).default([]),
   // Its player is the layer marked as the link.
   link: MediaLinkSchema.nullable().default(null),
@@ -327,6 +331,7 @@ function start(): void {
     senderAvatarUrl: item.senderAvatarUrl,
     kind: item.kind,
     caption: item.caption,
+    textPlace: item.textPlace,
     clipStartMs: item.clipStartMs,
     durationMs: item.durationMs,
     videoMuted: item.videoMuted,
@@ -375,6 +380,7 @@ function start(): void {
         senderAvatarUrl: item.senderAvatarUrl,
         kind: item.kind,
         caption: item.caption,
+        textPlace: item.textPlace,
         clipStartMs: item.clipStartMs,
         durationMs: item.durationMs,
         videoMuted: item.videoMuted,
@@ -895,6 +901,7 @@ function start(): void {
   type Timing = Pick<z.infer<typeof SendMediaInputSchema>, 'caption' | 'clipStartMs' | 'durationMs' | 'videoMuted' | 'soundMuted'> & {
     speak?: boolean;
     scene?: SceneLayer[] | null;
+    textPlace?: TextPlace | null;
     link?: MediaLink | null;
     to?: string[];
     jump?: boolean;
@@ -948,6 +955,7 @@ function start(): void {
           ...timing,
           speak: timing.speak ?? false,
           scene: timing.scene ?? null,
+          textPlace: timing.scene ? (timing.textPlace ?? null) : null,
           link: timing.link ?? null,
           to: timing.to ?? [],
           jump: timing.jump ?? false,
@@ -1364,6 +1372,31 @@ function start(): void {
     return library.view();
   });
 
+  // The pictures copied while the app runs, for the « Presse-papier » of the library.
+  const clipboardHistory = createClipboardHistory(join(app.getPath('userData'), 'clipboard'), clipboard, () => {
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(IpcChannel.ClipboardChanged);
+  });
+  clipboardHistory.start();
+  app.on('before-quit', () => clipboardHistory.stop());
+
+  handle(IpcChannel.ClipboardList, () => ({ items: clipboardHistory.list(), paused: clipboardHistory.paused() }));
+  handle(IpcChannel.ClipboardUse, async (id: unknown, advanced: unknown): Promise<IncomingResult> => {
+    const path = typeof id === 'string' ? clipboardHistory.pathOf(id) : null;
+    const bytes = path ? await readFile(path).catch(() => null) : null;
+    if (!bytes) return { ok: false, error: 'not_found' };
+    // A copy of its own: removing it from the history later leaves the LiveChat whole.
+    const saved = await savePastedImage(new Uint8Array(bytes), 'image/png', 'Presse-papier.png');
+    return saved.ok ? bringIn([saved.file], advanced === true) : saved;
+  });
+  handle(IpcChannel.ClipboardStar, (id: unknown, starred: unknown) => {
+    if (typeof id === 'string') clipboardHistory.star(id, starred === true);
+  });
+  handle(IpcChannel.ClipboardRemove, (id: unknown) => {
+    if (typeof id === 'string') clipboardHistory.remove(id);
+  });
+  handle(IpcChannel.ClipboardClear, () => clipboardHistory.clear());
+  handle(IpcChannel.ClipboardPause, (paused: unknown) => clipboardHistory.setPaused(paused === true));
+
   handle(IpcChannel.UseLibraryFile, async (fileId: unknown) => {
     const file = typeof fileId === 'string' ? library.fileById(fileId) : null;
     const info = file && (await stat(file.path).catch(() => null));
@@ -1738,8 +1771,8 @@ function start(): void {
     const recipe = input.success ? sceneRecipe(input.data) : null;
     // A link is not kept in the library.
     if (!input.success || !recipe || input.data.link) return { ok: false, error: 'invalid_request' };
-    const { name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak } = input.data;
-    await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, ...recipe });
+    const { name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, textPlace } = input.data;
+    await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, textPlace, ...recipe });
     return { ok: true };
   });
 
@@ -1752,7 +1785,7 @@ function start(): void {
     const files = chosen.map(({ path, name: fileName, size, contentType }) => ({ path, name: fileName, size, contentType }));
     if (files.length === 0 && !caption.trim()) return { ok: false, error: 'invalid_request' };
 
-    await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, files, scene: null });
+    await library.saveLiveChat({ name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, files, scene: null, textPlace: null });
     return { ok: true };
   });
 
@@ -1768,7 +1801,7 @@ function start(): void {
 
   const loadRecipe = (saved: StashedRecipe) => {
     if (saved.scene) {
-      const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak } = saved;
+      const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, textPlace } = saved;
       for (const id of [...sceneFiles.keys()]) forgetSceneFile(id);
       const files = saved.files.map((file) => putInScene(file));
       return {
@@ -1783,6 +1816,7 @@ function start(): void {
           files,
           layers: saved.scene.map(({ file, ...layer }) => ({ ...layer, fileId: files[file]!.id })),
           soundId: files.find(({ kind }) => kind === 'audio')?.id ?? null,
+          textPlace,
         },
       };
     }
@@ -1828,8 +1862,8 @@ function start(): void {
         // Written by someone else, and this name can end up in a path.
         files.push({ path, name: name.replace(/[\\/]/g, '_'), size, contentType });
       }
-      const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene } = item;
-      return loadRecipe({ caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, files });
+      const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, textPlace } = item;
+      return loadRecipe({ caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, textPlace, files });
     } catch {
       return { ok: false };
     } finally {
@@ -1860,7 +1894,7 @@ function start(): void {
         const { withPicture, withSound, link: _link, to: _to, ...timing } = input.data;
         const chosen = [withPicture ? draft.picture : null, withSound ? draft.sound : null].filter((file) => file !== null);
         const files = chosen.map(({ path, name, size, contentType }) => ({ path, name, size, contentType }));
-        stashed.recipe = { ...timing, files, scene: null };
+        stashed.recipe = { ...timing, files, scene: null, textPlace: null };
       }
     }
     if (stashed.recipe?.files.length === 0 && !stashed.recipe.caption.trim()) stashed.recipe = null;
@@ -2058,11 +2092,11 @@ function start(): void {
         files.push({ path, name: name.replace(/[\\/]/g, '_'), size, contentType });
       }
 
-      const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, senderName, senderAvatarUrl } = item;
+      const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, textPlace, senderName, senderAvatarUrl } = item;
       const name = caption.split('\n')[0]!.trim().slice(0, 60) || item.files[0]?.name.replace(/\.[^.]*$/, '') || 'LiveChat';
       await library.keepFromHistory(
         id,
-        { name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, files },
+        { name, caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, textPlace, files },
         { historyId: item.id, senderName, senderAvatarUrl },
       );
       return { ok: true };
@@ -2098,7 +2132,7 @@ function start(): void {
     const files = saved.files.map(({ name, size, contentType }) => ({ id: randomUUID(), name, size, contentType }));
     for (const [index, file] of saved.files.entries()) cache.adopt(key, files[index]!.id, file.path, file.contentType);
 
-    const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, savedAt, kept } = saved;
+    const { caption, clipStartMs, durationMs, videoMuted, soundMuted, speak, scene, textPlace, savedAt, kept } = saved;
     const item: HistoryItem = {
       id: saved.id,
       files,
@@ -2114,6 +2148,7 @@ function start(): void {
       soundMuted,
       speak,
       scene,
+      textPlace,
       link: null,
       expiresAt: Number.MAX_SAFE_INTEGER,
       playedAt: savedAt,
