@@ -361,6 +361,7 @@ export const LibraryScreen = ({
   );
 
   const [listening, setListening] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [renaming, setRenaming] = useState<{ file: LibraryFileView; name: string } | null>(null);
   const player = useRef<HTMLAudioElement>(null);
 
@@ -400,6 +401,13 @@ export const LibraryScreen = ({
     void window.liveChat.setLibraryTags({ savedId: saved.id }, tags).then(setLibrary);
   const isOnline = canSendIn(state.party);
   const canSend = isOnline && state.upload === null;
+
+  // Read the folders again, for files added while the tab was open.
+  const refresh = async () => {
+    setRefreshing(true);
+    setLibrary(await window.liveChat.scanLibrary());
+    setRefreshing(false);
+  };
 
   const addFolder = async () => {
     setError(null);
@@ -583,6 +591,17 @@ export const LibraryScreen = ({
           <option value="name">Nom</option>
           <option value="type">Type</option>
         </select>
+        <button
+          type="button"
+          className={refreshing ? 'pill secondary small library-refresh is-busy' : 'pill secondary small library-refresh'}
+          title="Actualiser"
+          aria-label="Actualiser la bibliothèque"
+          data-testid="library-refresh"
+          disabled={refreshing}
+          onClick={() => void refresh()}
+        >
+          ↻
+        </button>
         <button
           type="button"
           className="pill secondary small"

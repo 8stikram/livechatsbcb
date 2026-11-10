@@ -6000,3 +6000,25 @@ html.calm body::before {
   border-radius: 18px;
   overflow: hidden;
 }
+
+/* Library refresh */
+.library-refresh {
+  min-width: 34px;
+  font-size: 15px;
+}
+
+.library-refresh.is-busy {
+  animation: library-spin 700ms linear infinite;
+}
+
+@keyframes library-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-refresh.is-busy {
+    animation: none;
+  }
+}
