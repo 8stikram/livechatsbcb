@@ -5985,11 +5985,32 @@ html.calm body::before {
 .game-banner {
   flex: none;
   width: 100%;
-  height: 160px;
+  height: 110px;
   border-radius: 14px;
   overflow: hidden;
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* A short window keeps room for the game under the banner. */
+@media (max-height: 760px) {
+  .game-banner {
+    height: 84px;
+  }
+
+  .game-faces .toy-face-ring {
+    width: 34px;
+    height: 34px;
+  }
+
+  .game-faces .toy-face-ring .avatar {
+    width: 30px;
+    height: 30px;
+  }
+
+  .game-faces .toy-face {
+    gap: 2px;
+  }
 }
 
 .podium-mascot {

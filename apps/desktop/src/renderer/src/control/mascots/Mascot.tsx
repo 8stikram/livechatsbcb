@@ -4,6 +4,10 @@ import { createFx, type Fx } from './fx';
 import { PERSONAS, type FxSpec, type Mood, type Persona, type PersonaId } from './persona';
 import { PIECE_SETTINGS } from './settings';
 
+// Where the band of the banner is centred, down the head box: between the eyes and the mouth.
+// The professor's head box includes his tall hair, so his face sits lower in it.
+const BANNER_FACE_AT: Partial<Record<PersonaId, number>> & { other: number } = { boum: 0.62, other: 0.5 };
+
 const MOODS: Mood[] = ['repos', 'louche', 'rire', 'victoire', 'decu', 'surprise'];
 
 export type MascotProps = {
@@ -23,25 +27,26 @@ export type MascotProps = {
   hold?: boolean;
 };
 
-// ---------- persona CSS: injected once per persona, reference-counted ----------
-const styleRefs = new Map<PersonaId, { el: HTMLStyleElement; n: number }>();
+// ---------- persona CSS: added once per persona, reference-counted ----------
+// A constructed sheet, not a <style> tag: the pages' security policy ("style-src 'self'") refuses
+// inline <style> tags, which left every persona without its CSS (micro and boule then went dark).
+const styleRefs = new Map<PersonaId, { sheet: CSSStyleSheet; n: number }>();
 function acquireStyle(p: Persona) {
   const hit = styleRefs.get(p.id);
   if (hit) {
     hit.n++;
     return;
   }
-  const el = document.createElement('style');
-  el.dataset.persona = p.id;
-  el.textContent = p.css || '';
-  document.head.appendChild(el);
-  styleRefs.set(p.id, { el, n: 1 });
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(p.css || '');
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  styleRefs.set(p.id, { sheet, n: 1 });
 }
 function releaseStyle(id: PersonaId) {
   const hit = styleRefs.get(id);
   if (!hit) return;
   if (--hit.n <= 0) {
-    hit.el.remove();
+    document.adoptedStyleSheets = document.adoptedStyleSheets.filter((sheet) => sheet !== hit.sheet);
     styleRefs.delete(id);
   }
 }
@@ -229,10 +234,38 @@ export function Mascot({ persona: id, mood, pulse, look, effects, frame, still, 
     return () => cancelAnimationFrame(raf);
   }, [look, motionOk, persona]);
 
+  // ---------- banner: the whole width of the scene, a band around the face ----------
+  const [bannerBox, setBannerBox] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (frame !== 'banner' || !root) {
+      setBannerBox(null);
+      return;
+    }
+    const fit = () => {
+      const { width, height } = root.getBoundingClientRect();
+      // Odd sizes (hidden, or taller than the scene's shape): the plain centred crop.
+      if (width < 1 || height < 1 || height / width >= 400 / 640) return setBannerBox(null);
+      const band = (640 * height) / width;
+      const face = PIECE_SETTINGS[id].head;
+      const centre = face.y + face.h * (BANNER_FACE_AT[id] ?? BANNER_FACE_AT.other);
+      const top = Math.min(400 - band, Math.max(0, centre - band / 2));
+      setBannerBox(`0 ${top.toFixed(1)} 640 ${band.toFixed(1)}`);
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(root);
+    return () => ro.disconnect();
+  }, [frame, id]);
+
   const head = PIECE_SETTINGS[id].head;
-  const viewBox = frame === 'head' ? `${head.x} ${head.y} ${head.w} ${head.h}` : '0 0 640 400';
-  // The banner is wide and short: anchor to the top so the face stays in view.
-  const aspect = frame === 'banner' ? 'xMidYMin slice' : 'xMidYMid slice';
+  const viewBox =
+    frame === 'head'
+      ? `${head.x} ${head.y} ${head.w} ${head.h}`
+      : frame === 'banner' && bannerBox
+        ? bannerBox
+        : '0 0 640 400';
+  const aspect = 'xMidYMid slice';
   const cls = `mascot-svg p-${id} mood-${shown}${still ? ' paused' : ''}${motionOk ? '' : ' no-anim'}`;
 
   return (
