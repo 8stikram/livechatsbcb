@@ -4,9 +4,10 @@ import { createFx, type Fx } from './fx';
 import { PERSONAS, type FxSpec, type Mood, type Persona, type PersonaId } from './persona';
 import { PIECE_SETTINGS } from './settings';
 
-// Where the band of the banner is centred, down the head box: between the eyes and the mouth.
-// The professor's head box includes his tall hair, so his face sits lower in it.
-const BANNER_FACE_AT: Partial<Record<PersonaId, number>> & { other: number } = { boum: 0.62, other: 0.5 };
+// Scene height (0..400) halfway between each mascot's eyes and mouth, measured on the
+// `yeux` and `bouche` pieces at rest in the running app (persona styles and the owner's
+// piece settings applied). The banner band is centred there so both show.
+const BANNER_FACE_Y: Record<PersonaId, number> = { insp: 114, micro: 150, boum: 131, boule: 119, chrono: 125 };
 
 const MOODS: Mood[] = ['repos', 'louche', 'rire', 'victoire', 'decu', 'surprise'];
 
@@ -247,8 +248,7 @@ export function Mascot({ persona: id, mood, pulse, look, effects, frame, still, 
       // Odd sizes (hidden, or taller than the scene's shape): the plain centred crop.
       if (width < 1 || height < 1 || height / width >= 400 / 640) return setBannerBox(null);
       const band = (640 * height) / width;
-      const face = PIECE_SETTINGS[id].head;
-      const centre = face.y + face.h * (BANNER_FACE_AT[id] ?? BANNER_FACE_AT.other);
+      const centre = BANNER_FACE_Y[id];
       const top = Math.min(400 - band, Math.max(0, centre - band / 2));
       setBannerBox(`0 ${top.toFixed(1)} 640 ${band.toFixed(1)}`);
     };

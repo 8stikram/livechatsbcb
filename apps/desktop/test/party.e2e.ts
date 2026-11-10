@@ -2221,7 +2221,6 @@ describe.skipIf(online)('party flow in the real app', () => {
     await openTab(host, 'Jeux');
     await expect.poll(() => lobbyMascot.locator('canvas').count()).toBe(0);
     await openSettings(host, 'Général');
-    // The switch follows the saved setting a moment later: click, then wait for it to turn.
     if ((await effectsSwitch.isChecked()) !== true) await effectsSwitch.click({ force: true });
     await expect.poll(() => effectsSwitch.isChecked()).toBe(true);
     await openTab(host, 'Jeux');

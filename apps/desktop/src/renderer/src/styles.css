@@ -5997,20 +5997,6 @@ html.calm body::before {
   .game-banner {
     height: 84px;
   }
-
-  .game-faces .toy-face-ring {
-    width: 34px;
-    height: 34px;
-  }
-
-  .game-faces .toy-face-ring .avatar {
-    width: 30px;
-    height: 30px;
-  }
-
-  .game-faces .toy-face {
-    gap: 2px;
-  }
 }
 
 .podium-mascot {
@@ -6041,5 +6027,90 @@ html.calm body::before {
 @media (prefers-reduced-motion: reduce) {
   .library-refresh.is-busy {
     animation: none;
+  }
+}
+
+/* Short windows (under 760 px): a tighter game so the main action shows without scrolling.
+   `.panel.game-main` matches the worlds' own rules, and this file loads after them. */
+@media (max-height: 760px) {
+  .panel.game-main {
+    gap: 8px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .panel.game-main .game-top {
+    padding-bottom: 6px;
+  }
+
+  .panel.game-main .game-top-art {
+    zoom: 0.75;
+  }
+
+  .panel.game-main .game-top-title {
+    font-size: 19px;
+  }
+
+  .panel.game-main .game-timer {
+    zoom: 0.8;
+  }
+
+  /* Scores in one tight row: small picture, then name and points side by side. */
+  .panel.game-main .game-faces {
+    gap: 4px 16px;
+  }
+
+  .panel.game-main .game-faces .toy-face {
+    flex-direction: row;
+    width: auto;
+    max-width: 170px;
+    gap: 6px;
+  }
+
+  .panel.game-main .game-faces .toy-face-ring {
+    flex: none;
+    width: 28px;
+    height: 28px;
+  }
+
+  .panel.game-main .game-faces .toy-face-ring .avatar {
+    width: 24px;
+    height: 24px;
+  }
+
+  .panel.game-main .game-faces .toy-face-name {
+    max-width: 90px;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .panel.game-main .game-faces .toy-face-points {
+    font-size: 13px;
+    line-height: 1.2;
+  }
+
+  .panel.game-main .game-faces .toy-badge {
+    width: 14px;
+    height: 14px;
+    font-size: 8px;
+  }
+
+  /* Pictures smaller, so what you do with them (word, joke, vote) stays in view. */
+  .panel.game-main .game-file {
+    max-height: 130px;
+  }
+
+  .panel.game-main .game-media.is-big .game-file {
+    max-height: 170px;
+  }
+
+  .panel.game-main .game-scene {
+    width: min(260px, 100%);
+  }
+
+  .panel.game-main .reaction-button {
+    width: 30px;
+    height: 30px;
+    font-size: 15px;
   }
 }
