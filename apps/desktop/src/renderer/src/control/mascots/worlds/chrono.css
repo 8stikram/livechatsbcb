@@ -1,0 +1,375 @@
+/* Devine Vite, Coach Chrono: a night arena. Bebas Neue scoreboard, an LED clock, the word on a
+   referee card, « Trouvé ! » in green and « Passer » as a yellow card. */
+
+.panel.world-chrono {
+  --accent: #ffd451 !important;
+  --text: #eef2ff;
+  --text-soft: #c9d2f2;
+  --text-muted: #9aa6d2;
+  --glass: rgb(200 210 255 / 5%);
+  --glass-raised: rgb(200 210 255 / 9%);
+  --glass-hover: rgb(200 210 255 / 14%);
+  --line: rgb(143 155 200 / 22%);
+  --line-bright: rgb(143 155 200 / 50%);
+  --well: rgb(4 5 9 / 60%);
+  --chrono-yellow: #ffd451;
+  --chrono-navy: #1d2a44;
+  --chrono-card: #f6f1e4;
+  --chrono-label: 'Bebas Neue', 'Geist Variable', sans-serif;
+  --chrono-word: 'Archivo Black', 'Geist Variable', sans-serif;
+  color: var(--text);
+  font-family: 'Barlow', var(--font);
+  border: 1px solid #2a3360;
+  background:
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 2.2%) 0 1px, transparent 1px 4px),
+    radial-gradient(60% 40% at 15% 0%, rgb(143 216 255 / 12%), transparent 70%),
+    radial-gradient(60% 40% at 85% 0%, rgb(143 216 255 / 10%), transparent 70%),
+    radial-gradient(120% 90% at 50% 0%, #1d2550 0%, #0c1026 55%, #070914 100%);
+}
+
+.panel.world-chrono .scroll {
+  scrollbar-color: rgb(143 155 200 / 35%) transparent;
+}
+
+/* Tags as slanted arena boards. */
+.panel.world-chrono .toy-tag {
+  padding: 7px 16px 6px;
+  border-radius: 0;
+  background: linear-gradient(#ffd451, #f5a623);
+  color: #1a1300;
+  font: 800 12px/1 'Barlow', var(--font);
+  letter-spacing: 0.06em;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+
+.panel.world-chrono .lobby-title h2 {
+  margin: 8px 0 6px;
+  color: var(--text);
+  font: 400 52px/0.95 var(--chrono-label);
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 18px rgb(143 216 255 / 30%);
+}
+
+.panel.world-chrono .lobby-title p {
+  color: var(--text-soft);
+}
+
+.panel.world-chrono .lobby-stage {
+  border: 2px solid #353a55;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 8%);
+}
+
+.panel.world-chrono .toy-face-ring {
+  background: radial-gradient(circle at 50% 35%, #2a3466, #0b0e1f 70%);
+  box-shadow: 0 0 0 3px #3b4680, 0 5px 0 #05060d;
+}
+
+.panel.world-chrono .toy-face.is-me .toy-face-ring {
+  box-shadow: 0 0 0 3px var(--chrono-yellow), 0 5px 0 #05060d, 0 0 16px rgb(255 212 81 / 40%);
+}
+
+.panel.world-chrono .toy-face.is-empty .toy-face-ring {
+  background: transparent;
+  border-color: rgb(143 155 200 / 40%);
+  box-shadow: none;
+}
+
+.panel.world-chrono .toy-face-name {
+  font: 800 13px 'Barlow', var(--font);
+}
+
+.panel.world-chrono .toy-face-points {
+  color: var(--chrono-yellow);
+  font: 400 20px/1 var(--chrono-label);
+  letter-spacing: 0.04em;
+}
+
+.panel.world-chrono .toy-badge.is-check {
+  box-shadow: 0 0 0 3px #0c1026;
+}
+
+.panel.world-chrono .lobby-status {
+  color: var(--chrono-yellow);
+  font: 400 24px var(--chrono-label);
+  letter-spacing: 0.1em;
+}
+
+.panel.world-chrono .toy-button {
+  --toy: #14a24f;
+  border-radius: 12px;
+  background: linear-gradient(#3ee27e, #14a24f);
+  box-shadow: 0 5px 0 #0b6b33, 0 10px 18px rgb(20 162 79 / 30%);
+  color: #fff;
+  font: 400 17px var(--chrono-word);
+  letter-spacing: 0.02em;
+  text-shadow: 0 2px 0 rgb(0 0 0 / 25%);
+  text-transform: uppercase;
+}
+
+.panel.world-chrono .toy-button:active:not(:disabled) {
+  box-shadow: 0 1px 0 #0b6b33;
+}
+
+.panel.world-chrono .toy-button.big {
+  font-size: 21px;
+}
+
+.panel.world-chrono .toy-button.small {
+  font-size: 12px;
+}
+
+.panel.world-chrono .toy-button.ghost {
+  background: #141a38;
+  box-shadow:
+    inset 0 0 0 2px #3b4680,
+    0 4px 0 #05060d;
+  color: var(--text-soft);
+  text-shadow: none;
+}
+
+.panel.world-chrono .toy-button.is-on {
+  background: linear-gradient(#ffe27a, #f5a623);
+  box-shadow: 0 5px 0 #8a5a12;
+  color: #1a1300;
+  text-shadow: none;
+}
+
+/* « Passer »: a yellow card. */
+.panel.world-chrono .toy-button[data-testid='guess-pass'] {
+  position: relative;
+  padding-left: 46px;
+  background: linear-gradient(#ffe27a, #f5b823);
+  box-shadow: 0 5px 0 #9a6a0a, 0 10px 18px rgb(245 184 35 / 25%);
+  color: #1a1300;
+  text-shadow: none;
+}
+
+.panel.world-chrono .toy-button[data-testid='guess-pass']::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  width: 16px;
+  height: 22px;
+  margin-top: -11px;
+  border-radius: 2px;
+  background: #ffd23f;
+  box-shadow: 0 0 0 2px #1a1300, 2px 3px 0 rgb(0 0 0 / 25%);
+  rotate: -10deg;
+}
+
+.panel.world-chrono .pill.primary {
+  background: var(--chrono-yellow);
+  color: #1a1300;
+  font-weight: 800;
+}
+
+.panel.world-chrono .input {
+  border: 2px solid #353a55;
+  border-radius: 10px;
+  background: #0b0e1f;
+}
+
+/* In game */
+.panel.world-chrono .game-top-title {
+  font: 400 32px/1 var(--chrono-label);
+  letter-spacing: 0.05em;
+}
+
+.panel.world-chrono .game-top-art {
+  background: rgb(255 212 81 / 14%);
+}
+
+.panel.world-chrono .game-timer .count {
+  color: #8fd8ff;
+  font: 400 15px var(--chrono-label);
+  letter-spacing: 0.2em;
+}
+
+/* The LED scoreboard clock. */
+.panel.world-chrono .game-clock {
+  position: relative;
+  min-width: 70px;
+  height: 52px;
+  padding: 0 10px;
+  border: 2px solid #353a55;
+  border-radius: 8px;
+  background: #040509;
+  box-shadow: 0 6px 14px rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 8%);
+  color: #ffb020;
+  font: 400 44px/52px var(--chrono-label);
+  text-shadow: 0 0 12px rgb(255 140 30 / 75%);
+}
+
+.panel.world-chrono .game-clock::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: radial-gradient(circle, transparent 52%, rgb(4 5 9 / 65%) 72%) 0 0 / 3px 3px;
+  pointer-events: none;
+}
+
+.panel.world-chrono .game-banner {
+  border: 2px solid #353a55;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 45%);
+}
+
+/* The players: a score ticker. */
+.panel.world-chrono .game-faces {
+  align-self: center;
+  flex-wrap: nowrap;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 6px 12px 6px 0;
+  border: 1px solid #2a3360;
+  border-radius: 8px;
+  background: #0b0e1f;
+  overflow: hidden;
+}
+
+.panel.world-chrono .game-faces::before {
+  content: 'SCORES';
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  margin: -6px 4px -6px 0;
+  padding: 0 14px;
+  background: var(--chrono-yellow);
+  color: #1a1300;
+  font: 400 18px/1 var(--chrono-label);
+  letter-spacing: 0.14em;
+}
+
+.panel.world-chrono .game-ask {
+  color: var(--text);
+  font: 700 18px 'Barlow', var(--font);
+}
+
+.panel.world-chrono .hint {
+  color: var(--text-muted);
+}
+
+/* The word: a referee card. */
+.panel.world-chrono .guess-card {
+  position: relative;
+  min-width: min(100%, 280px);
+  max-width: 100%;
+  padding: 26px 30px 22px;
+  border-radius: 12px;
+  background: var(--chrono-card);
+  box-shadow:
+    0 14px 30px rgb(0 0 0 / 50%),
+    inset 0 0 0 2px #e2d9c3,
+    inset 0 0 0 7px var(--chrono-card),
+    inset 0 0 0 8.5px #d8452f;
+  color: var(--chrono-navy);
+  font: 400 40px/1.05 var(--chrono-word);
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+  transform: rotate(-2.5deg);
+}
+
+.panel.world-chrono .guess-card::before {
+  content: '';
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 84px;
+  height: 20px;
+  margin-left: -42px;
+  background: rgb(255 226 140 / 75%);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 20%);
+  rotate: 3deg;
+}
+
+/* The words written: little tickets. */
+.panel.world-chrono .game-words li {
+  border-radius: 0;
+  background: #141a38;
+  color: var(--text);
+  font: 700 14px 'Barlow', var(--font);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  padding: 7px 18px;
+}
+
+/* Who found it: players' boards. */
+.panel.world-chrono .game-choice {
+  border: 2px solid #353a55;
+  border-radius: 10px;
+  background: linear-gradient(#22263a, #121420);
+  color: var(--text);
+  font: 400 22px/1 var(--chrono-label);
+  letter-spacing: 0.06em;
+}
+
+.panel.world-chrono .game-choice:not(:disabled):hover {
+  border-color: #3ee27e;
+  background: linear-gradient(#263a30, #121a16);
+}
+
+.panel.world-chrono .game-choice.is-mine,
+.panel.world-chrono .game-choice.is-winner {
+  border-color: var(--chrono-yellow);
+  background: linear-gradient(#22263a, #121420);
+}
+
+.panel.world-chrono .game-file {
+  border: 2px solid #353a55;
+  border-radius: 10px;
+}
+
+.panel.world-chrono .toy-title {
+  font: 400 46px/1 var(--chrono-label);
+  letter-spacing: 0.05em;
+  color: var(--chrono-yellow);
+  text-shadow: 0 0 18px rgb(255 176 32 / 45%);
+}
+
+.panel.world-chrono .podium .avatar {
+  box-shadow: 0 0 0 3px var(--chrono-yellow);
+}
+
+.panel.world-chrono .podium-name {
+  font: 400 19px/1 var(--chrono-label);
+  letter-spacing: 0.06em;
+}
+
+.panel.world-chrono .podium-block {
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(#22263a, #121420);
+  box-shadow: inset 0 0 0 2px #353a55;
+  color: #ffb020;
+  font-family: var(--chrono-label);
+}
+
+.panel.world-chrono .podium-step-1 .podium-block {
+  background: linear-gradient(#ffd451, #f5a623);
+  box-shadow: none;
+  color: #1a1300;
+}
+
+.panel.world-chrono .podium-rest li {
+  background: #141a38;
+}
+
+.panel.world-chrono .round-banner span {
+  border-radius: 0;
+  background: linear-gradient(#ffd451, #f5a623);
+  box-shadow: none;
+  color: #1a1300;
+  font: 400 60px/1 var(--chrono-label);
+  letter-spacing: 0.06em;
+  clip-path: polygon(16px 0, 100% 0, calc(100% - 16px) 100%, 0 100%);
+}
+
+.panel.world-chrono .reaction-button {
+  background: rgb(143 155 200 / 10%);
+}
+
+.panel.world-chrono .reaction-button:hover {
+  background: rgb(143 155 200 / 22%);
+}
