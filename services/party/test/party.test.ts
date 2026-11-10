@@ -119,8 +119,8 @@ class TestSocket {
     for (const waiter of this.waiters.splice(0)) waiter();
   }
 
-  async until<T>(check: () => T | undefined, label: string): Promise<T> {
-    const deadline = Date.now() + 8_000;
+  async until<T>(check: () => T | undefined, label: string, timeoutMs = 8_000): Promise<T> {
+    const deadline = Date.now() + timeoutMs;
     for (;;) {
       const value = check();
       if (value !== undefined) return value;
@@ -182,12 +182,16 @@ class TestSocket {
     this.socket.send(text);
   }
 
-  gameWhere(check: (game: Game) => boolean, label: string) {
-    return this.until(() => {
-      const latest = this.messages.findLast((message) => message.t === 'game' || message.t === 'welcome');
-      const game = latest && 'game' in latest ? latest.game : null;
-      return game && check(game) ? game : undefined;
-    }, label);
+  gameWhere(check: (game: Game) => boolean, label: string, timeoutMs?: number) {
+    return this.until(
+      () => {
+        const latest = this.messages.findLast((message) => message.t === 'game' || message.t === 'welcome');
+        const game = latest && 'game' in latest ? latest.game : null;
+        return game && check(game) ? game : undefined;
+      },
+      label,
+      timeoutMs,
+    );
   }
 
   close() {
@@ -609,6 +613,86 @@ describe('party games', () => {
     expect(dealt).toHaveLength(2);
     expect(played).toContain(dealt[0]);
     a.send(JSON.stringify({ t: 'game-stop', gameId: views[0]!.id }));
+    for (const socket of sockets) socket.close();
+  });
+  it('plays Devine Vite: three words each, only the speaker sees the word, a find scores for both, a pass comes back', async () => {
+    const { sessions, sockets } = await quickParty(['Nono', 'Lulu', 'Momo']);
+    const [a] = sockets as [TestSocket];
+    await startGame(sockets, 'guess');
+    const started = await a.gameWhere((game) => game.phase === 'collect', 'start');
+    for (const [index, socket] of sockets.entries())
+      for (const word of [`Mot ${index}a`, `mot ${index}A`, `Mot ${index}b`, `Mot ${index}c`, `Mot ${index}d`])
+        socket.send(JSON.stringify({ t: 'game-say', gameId: started.id, text: word }));
+    // The same word twice counts once, and a fourth is too many.
+    const views = await Promise.all(sockets.map((socket) => socket.gameWhere((game) => game.phase === 'write', 'first turn')));
+    const speaker = views[0]!.turn!;
+    const speakerIndex = sessions.findIndex(({ memberId }) => memberId === speaker);
+    const others = sessions.filter(({ memberId }) => memberId !== speaker);
+    expect(views[speakerIndex]!.secret).toBeTruthy();
+    for (const [index, view] of views.entries()) if (index !== speakerIndex) expect(view.secret).toBeNull();
+    const talker = sockets[speakerIndex]!;
+    const first = views[speakerIndex]!.secret!;
+
+    // Only whoever speaks can say it was found.
+    sockets[sessions.indexOf(others[0]!)]!.send(JSON.stringify({ t: 'game-found', gameId: started.id, finderId: speaker }));
+    talker.send(JSON.stringify({ t: 'game-pass', gameId: started.id }));
+    const passed = await talker.gameWhere((game) => game.secret !== first, 'next word');
+    talker.send(JSON.stringify({ t: 'game-found', gameId: started.id, finderId: others[0]!.memberId }));
+    const scored = await talker.gameWhere((game) => game.scores[speaker] === 1, 'a point');
+    expect(scored.scores[others[0]!.memberId]).toBe(1);
+    expect(scored.scores[others[1]!.memberId]).toBe(0);
+    expect(scored.secret).not.toBe(passed.secret);
+    // Three words each kept: the same one twice counts once, and more are refused.
+    for (const view of views) expect(view.mySent).toBe(3);
+    a.send(JSON.stringify({ t: 'game-stop', gameId: started.id }));
+    for (const socket of sockets) socket.close();
+  });
+
+  it('plays Devine Vite over three rounds, and in the last whoever speaks shows a picture, nobody else', async () => {
+    const { sessions, sockets } = await quickParty(['Nono', 'Lulu']);
+    const [a, b] = sockets as [TestSocket, TestSocket];
+    a.send(JSON.stringify({ t: 'game-start', kind: 'guess' }));
+    const lobby = await a.gameWhere((game) => game.phase === 'lobby', 'lobby');
+    b.send(JSON.stringify({ t: 'game-join', gameId: lobby.id }));
+    a.send(JSON.stringify({ t: 'game-bot-add', gameId: lobby.id }));
+    await a.gameWhere((game) => game.players.length === 3, 'with a bot');
+    a.send(JSON.stringify({ t: 'game-launch', gameId: lobby.id }));
+    await a.gameWhere((game) => game.phase === 'collect', 'start');
+    for (const socket of sockets)
+      for (const word of ['Chat', 'Chien', 'Lapin']) socket.send(JSON.stringify({ t: 'game-say', gameId: lobby.id, text: word }));
+
+    // Whoever speaks finds every word at once, the bot plays its turns, until a person speaks in round 3.
+    const handled = new Set<string>();
+    const drive = (index: number) =>
+      sockets[index]!.gameWhere(
+        (game) => {
+          if (game.phase === 'done') return true;
+          const people = sessions.map(({ memberId }) => memberId);
+          if (game.round === 3 && game.phase === 'write' && people.includes(game.turn ?? '')) return true;
+          const me = sessions[index]!.memberId;
+          const key = `${game.round}:${game.secret}:${game.endsAt}`;
+          if (game.phase === 'write' && game.turn === me && game.secret && !handled.has(key)) {
+            handled.add(key);
+            sockets[index]!.send(JSON.stringify({ t: 'game-found', gameId: lobby.id, finderId: sessions[1 - index]!.memberId }));
+          }
+          return false;
+        },
+        'round 3',
+        40_000,
+      );
+    const [last] = await Promise.all([drive(0), drive(1)]);
+    expect(last.phase).toBe('write');
+    expect(last.round).toBe(3);
+    const speaker = sessions.find(({ memberId }) => memberId === last.turn)!;
+    const listener = sessions.find(({ memberId }) => memberId !== last.turn)!;
+    // Not someone who doesn't speak, and never a written word.
+    expect((await sendForGame(listener, lobby.id, '', [{ contentType: 'image/png', size: 10, name: 'a.png' }])).status).toBe(409);
+    expect((await sendForGame(speaker, lobby.id, 'Chat')).status).toBe(409);
+    await uploadForGame(speaker, lobby.id, testBytes(32));
+    const shown = await sockets[sessions.indexOf(listener)]!.gameWhere((game) => game.entries.length === 1, 'the picture');
+    expect(shown.entries[0]!.files).toHaveLength(1);
+    expect(shown.secret).toBeNull();
+    a.send(JSON.stringify({ t: 'game-stop', gameId: lobby.id }));
     for (const socket of sockets) socket.close();
   });
 });

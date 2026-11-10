@@ -418,7 +418,7 @@ export const PollRequestSchema = z.object({
 export type PollRequest = z.infer<typeof PollRequestSchema>;
 
 // Party games. One at a time, played in the app's window, never over a game.
-export const GameKindSchema = z.enum(['joke', 'question', 'who', 'undercover']);
+export const GameKindSchema = z.enum(['joke', 'question', 'who', 'undercover', 'guess']);
 export type GameKind = z.infer<typeof GameKindSchema>;
 // The lobby comes first: players click to join, then it starts.
 export const GamePhaseSchema = z.enum(['lobby', 'collect', 'write', 'vote', 'reveal', 'done']);
@@ -426,13 +426,13 @@ export type GamePhase = z.infer<typeof GamePhaseSchema>;
 export const MAX_GAME_TEXT_LENGTH = 80;
 // Who has to be there to start: guessing among two people, or hiding among them, is no game.
 // Bots count: one person can test any game alone with them.
-export const GAME_MIN_PLAYERS: Record<GameKind, number> = { joke: 3, question: 3, who: 3, undercover: 3 };
+export const GAME_MIN_PLAYERS: Record<GameKind, number> = { joke: 3, question: 3, who: 3, undercover: 3, guess: 3 };
 // The jokes need two pictures before « Valider ».
-export const GAME_MIN_ENTRIES: Record<GameKind, number> = { joke: 2, question: 1, who: 1, undercover: 1 };
+export const GAME_MIN_ENTRIES: Record<GameKind, number> = { joke: 2, question: 1, who: 1, undercover: 1, guess: 1 };
 export const MAX_GAME_BOTS = 6;
 export const isBotId = (id: string): boolean => id.startsWith('bot:');
 // What each player sends at the start: pictures for the jokes, one LiveChat for the others.
-export const GAME_ENTRIES_PER_PLAYER: Record<GameKind, number> = { joke: 5, question: 1, who: 1, undercover: 1 };
+export const GAME_ENTRIES_PER_PLAYER: Record<GameKind, number> = { joke: 5, question: 1, who: 1, undercover: 1, guess: 3 };
 
 const GameFileSchema = z.object({ id: z.uuid(), name: z.string(), contentType: MediaContentTypeSchema, size: z.number() });
 export type GameFile = z.infer<typeof GameFileSchema>;
@@ -490,6 +490,8 @@ export const GameSchema = z.object({
   iAmImpostor: z.boolean().default(false),
   // The jokes: whether this player clicked « Valider » with enough pictures.
   iAmDone: z.boolean().default(false),
+  // Devine Vite: the word to have guessed, only for whoever speaks.
+  secret: z.string().nullable().default(null),
 });
 export type Game = z.infer<typeof GameSchema>;
 
@@ -503,6 +505,9 @@ export const ClientMessageSchema = z.discriminatedUnion('t', [
   // For the jokes, which picture it is about: each player writes on two.
   z.object({ t: z.literal('game-say'), gameId: z.string(), text: z.string().trim().min(1).max(MAX_GAME_TEXT_LENGTH), entryId: z.string().max(64).optional() }),
   z.object({ t: z.literal('game-done'), gameId: z.string() }),
+  // Devine Vite: whoever speaks says who found the word, or passes it.
+  z.object({ t: z.literal('game-found'), gameId: z.string(), finderId: z.string().min(1).max(64) }),
+  z.object({ t: z.literal('game-pass'), gameId: z.string() }),
   z.object({ t: z.literal('game-bot-add'), gameId: z.string() }),
   z.object({ t: z.literal('game-bot-remove'), gameId: z.string(), botId: z.string().max(64) }),
   z.object({ t: z.literal('game-vote'), gameId: z.string(), choice: z.string().min(1).max(64) }),

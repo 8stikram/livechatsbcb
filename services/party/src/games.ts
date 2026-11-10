@@ -74,6 +74,11 @@ export type StoredGame = {
   // When the bots play their part of this step, and which step that was.
   botDueAt: number | null;
   botStep: string;
+  // Devine Vite: the words each one wrote, every word of the game, those left this round, and who speaks in turn.
+  words: Record<string, string[]>;
+  deck: string[];
+  pile: string[];
+  speakers: string[];
 };
 
 // A finished game still shows its ranking for a while.
@@ -83,12 +88,16 @@ export const VOTE_WAIT_MS = 120_000;
 export const VOTE_AFTER_FIRST_MS = 30_000;
 // Undercover: each player has this long to write their word.
 export const WORD_TURN_MS = 20_000;
+// Devine Vite: each one speaks this long, and the game has about this many words per player.
+export const GUESS_TURN_MS = 30_000;
+const GUESS_WORDS_EACH = 5;
+const GUESS_MAX_WORDS = 40;
 
 const SECONDS: Record<"collect" | "write" | "reveal", Record<GameKind, number>> = {
-  collect: { joke: 90, question: 90, who: 60, undercover: 45 },
-  write: { joke: 90, question: 0, who: 0, undercover: 0 },
+  collect: { joke: 90, question: 90, who: 60, undercover: 45, guess: 60 },
+  write: { joke: 90, question: 0, who: 0, undercover: 0, guess: 0 },
   // Plus a moment per answer, shown one after the other.
-  reveal: { joke: 5, question: 4, who: 6, undercover: 5 },
+  reveal: { joke: 5, question: 4, who: 6, undercover: 5, guess: 4 },
 };
 const REVEAL_EACH_S = 1.5;
 
@@ -161,6 +170,16 @@ export const HOUSE_JOKES = [
   "Quand quelqu’un dit « on fait un tour de table ».",
   "Moi qui attends que l’autre raccroche en premier.",
   "Le cousin qui « s’y connaît en ordi ».",
+];
+
+// Devine Vite: what completes the words the players wrote.
+export const HOUSE_WORDS = [
+  "Pizza", "Girafe", "Tour Eiffel", "Astronaute", "Brosse à dents", "Pompier", "Volcan", "Licorne",
+  "Football", "Sirène", "Chocolat", "Dinosaure", "Parapluie", "Vampire", "Trampoline", "Kangourou",
+  "Croissant", "Pirate", "Arc-en-ciel", "Robot", "Château", "Fantôme", "Banane", "Ninja",
+  "Moustache", "Papillon", "Requin", "Sapin de Noël", "Fusée", "Hamburger", "Pingouin", "Magicien",
+  "Bowling", "Cactus", "Escargot", "Karaoké", "Momie", "Raclette", "Zombie", "Tondeuse",
+  "Baguette", "Sumo", "Igloo", "Yoga", "Sous-marin", "Clown", "Hérisson", "Disco",
 ];
 
 export const BOT_NAMES = ["Bot Gaston", "Bot Josiane", "Bot Kevin", "Bot Mamie Lulu", "Bot Fernand", "Bot Jessica"];
@@ -330,7 +349,10 @@ export const leave = (
     return true;
   }
   // Their turn to write goes to the next one at once.
-  if (game.turn === memberId) nextTurn(game, now, scale);
+  if (game.turn === memberId) {
+    if (game.kind === "guess") nextSpeaker(game, now, scale);
+    else nextTurn(game, now, scale);
+  }
   game.turnOrder = game.turnOrder.filter((id) => id !== memberId);
   return true;
 };
@@ -419,6 +441,10 @@ export const createGame = (
     jokes: {},
     botDueAt: null,
     botStep: "",
+    words: {},
+    deck: [],
+    pile: [],
+    speakers: [],
   };
 };
 
@@ -450,6 +476,9 @@ export const acceptsEntry = (
   caption: string,
   scene: SceneLayer[] | null = null,
 ): boolean => {
+  // Devine Vite, round 3: whoever speaks shows a picture, a GIF or a sound, without writing.
+  if (game.kind === "guess")
+    return game.phase === "write" && game.round === 3 && game.turn === memberId && files.length === 1 && caption === "" && scene === null;
   if (game.phase !== "collect" || !game.players.includes(memberId))
     return false;
   if (sentBy(game, memberId).length >= GAME_ENTRIES_PER_PLAYER[game.kind])
@@ -466,6 +495,8 @@ export const addEntry = (game: StoredGame, entry: StoredEntry): boolean => {
   if (!acceptsEntry(game, entry.ownerId, entry.files, entry.caption, entry.scene ?? null))
     return false;
   game.pool.push(entry);
+  // What is shown now: a new one replaces the last.
+  if (game.kind === "guess") game.current = [entry.id];
   return true;
 };
 
@@ -485,6 +516,15 @@ export const say = (
   scale: number,
   entryId?: string,
 ): boolean => {
+  // Devine Vite: the words of the game, written at the start.
+  if (game.kind === "guess") {
+    const mine = game.words[memberId] ?? [];
+    const word = text.slice(0, 40);
+    if (game.phase !== "collect" || !game.players.includes(memberId) || mine.length >= GAME_ENTRIES_PER_PLAYER.guess) return false;
+    if (mine.some((one) => one.toLowerCase() === word.toLowerCase())) return false;
+    game.words[memberId] = [...mine, word];
+    return true;
+  }
   if (game.phase !== "write") return false;
   if (game.kind === "joke") {
     if (!entryId || !game.tasks[memberId]?.includes(entryId)) return false;
@@ -499,6 +539,64 @@ export const say = (
   }
   if (!game.assign[memberId]) return false;
   game.said[memberId] = text;
+  return true;
+};
+
+// Devine Vite: the next one speaks, with what is left of the pile.
+const nextSpeaker = (game: StoredGame, now: number, scale: number): void => {
+  game.speakers = game.speakers.filter((id) => game.players.includes(id));
+  const speaker = game.speakers.shift();
+  if (!speaker) return finish(game, now, "few");
+  game.speakers.push(speaker);
+  game.turn = speaker;
+  game.current = [];
+  game.phase = "write";
+  game.endsAt = now + GUESS_TURN_MS * scale;
+};
+
+// Every word is back in the pile, in a new order.
+const startGuessRound = (game: StoredGame, now: number, scale: number): void => {
+  admit(game);
+  for (const id of game.players) if (!game.speakers.includes(id)) game.speakers.push(id);
+  game.pile = shuffle(game.deck);
+  nextSpeaker(game, now, scale);
+};
+
+// The words written, then words of the house up to about five each.
+const buildDeck = (game: StoredGame): string[] => {
+  const deck: string[] = [];
+  const known = new Set<string>();
+  const add = (word: string) => {
+    const key = word.trim().toLowerCase();
+    if (!key || known.has(key) || deck.length >= GUESS_MAX_WORDS) return;
+    known.add(key);
+    deck.push(word.trim());
+  };
+  for (const words of Object.values(game.words)) for (const word of words) add(word);
+  const wanted = Math.min(GUESS_MAX_WORDS, GUESS_WORDS_EACH * game.players.length);
+  for (const word of shuffle(HOUSE_WORDS)) if (deck.length < wanted) add(word);
+  return shuffle(deck);
+};
+
+export const found = (game: StoredGame, memberId: string, finderId: string, now: number, scale: number): boolean => {
+  if (game.kind !== "guess" || game.phase !== "write" || game.turn !== memberId) return false;
+  if (finderId === memberId || !game.players.includes(finderId) || game.pile.length === 0) return false;
+  // A point for whoever found it, and one for whoever made them find it.
+  for (const id of [memberId, finderId]) game.scores[id] = (game.scores[id] ?? 0) + 1;
+  game.pile.shift();
+  game.current = [];
+  if (game.pile.length === 0) {
+    game.turn = null;
+    enter(game, "reveal", now, scale);
+  }
+  return true;
+};
+
+// A passed word goes to the bottom of the pile and comes back later.
+export const pass = (game: StoredGame, memberId: string): boolean => {
+  if (game.kind !== "guess" || game.phase !== "write" || game.turn !== memberId || game.pile.length === 0) return false;
+  game.pile.push(game.pile.shift()!);
+  game.current = [];
   return true;
 };
 
@@ -555,10 +653,13 @@ export const acted = (game: StoredGame): string[] => {
       return game.players.filter(
         (id) =>
           isBotId(id) ||
+          (game.kind === "guess" && (game.words[id]?.length ?? 0) >= GAME_ENTRIES_PER_PLAYER.guess) ||
           game.finished.includes(id) ||
           sentBy(game, id).length >= GAME_ENTRIES_PER_PLAYER[game.kind],
       );
     case "write":
+      // Devine Vite: only time ends a turn.
+      if (game.kind === "guess") return [];
       if (game.kind === "joke") return game.players.filter((id) => jokeTasksDone(game, id));
       if (game.kind === "undercover") return game.players.filter((id) => !game.turnOrder.includes(id) && game.turn !== id);
       return game.players.filter((id) => !game.assign[id] || id in game.said);
@@ -573,6 +674,7 @@ export const acted = (game: StoredGame): string[] => {
 const revealCount = (game: StoredGame): number => {
   if (game.kind === "undercover") return Object.keys(game.said).length;
   if (game.kind === "joke") return 2;
+  if (game.kind === "guess") return 0;
   return Math.max(1, game.current.length);
 };
 
@@ -755,6 +857,10 @@ const score = (game: StoredGame): void => {
 export const advance = (game: StoredGame, now: number, scale: number, history: StoredEntry[] = []): void => {
   switch (game.phase) {
     case "collect":
+      if (game.kind === "guess") {
+        game.deck = buildDeck(game);
+        return startGuessRound(game, now, scale);
+      }
       if (game.kind === "joke") {
         if (game.pool.length < 2) return finish(game, now, "few");
         game.rounds = Math.max(1, Math.min(3, Math.floor(game.pool.length / game.players.length)));
@@ -777,6 +883,7 @@ export const advance = (game: StoredGame, now: number, scale: number, history: S
     case "write":
       // Undercover: time ran out on this turn, the next one writes.
       if (game.kind === "undercover") return nextTurn(game, now, scale);
+      if (game.kind === "guess") return nextSpeaker(game, now, scale);
       if (game.kind === "joke") {
         fillJokes(game);
         return nextDuel(game, now, scale);
@@ -786,6 +893,11 @@ export const advance = (game: StoredGame, now: number, scale: number, history: S
       score(game);
       return enter(game, "reveal", now, scale);
     case "reveal":
+      if (game.kind === "guess") {
+        if (game.round >= game.rounds) return finish(game, now);
+        game.round += 1;
+        return startGuessRound(game, now, scale);
+      }
       if (game.kind === "question") return startDuel(game, now, scale, history);
       if (game.kind === "joke") return nextDuel(game, now, scale);
       if (game.kind === "who") {
@@ -808,7 +920,8 @@ export const stop = (game: StoredGame, now: number): void =>
   finish(game, now, "stopped");
 
 // Which step the bots answer to: a new one gets them to play again, a moment later.
-const botStepOf = (game: StoredGame): string => `${game.phase}:${game.round}:${game.current.join(",")}:${game.turn ?? ""}`;
+const botStepOf = (game: StoredGame): string =>
+  `${game.phase}:${game.round}:${game.current.join(",")}:${game.turn ?? ""}:${game.pile.length}:${game.pile[0] ?? ""}`;
 
 // Sets when the bots play, once something new asks them to.
 export const planBots = (game: StoredGame, now: number, scale: number): void => {
@@ -817,7 +930,7 @@ export const planBots = (game: StoredGame, now: number, scale: number): void => 
   game.botStep = step;
   const wanted =
     botIds(game).length > 0 &&
-    ((game.phase === "write" && (game.kind !== "undercover" || isBotId(game.turn ?? ""))) || game.phase === "vote");
+    ((game.phase === "write" && (!["undercover", "guess"].includes(game.kind) || isBotId(game.turn ?? ""))) || game.phase === "vote");
   game.botDueAt = wanted ? now + (1_500 + Math.random() * 3_500) * scale : null;
 };
 
@@ -828,6 +941,12 @@ export const botsPlay = (game: StoredGame, now: number, scale: number): void => 
     if (game.phase === "write" && game.kind === "joke")
       for (const entryId of game.tasks[bot] ?? []) say(game, bot, pickOne(HOUSE_JOKES), now, scale, entryId);
     if (game.phase === "write" && game.kind === "undercover" && game.turn === bot) say(game, bot, pickOne(BOT_WORDS), now, scale);
+    // Devine Vite: someone at random finds it, or the bot passes.
+    if (game.phase === "write" && game.kind === "guess" && game.turn === bot) {
+      const others = game.players.filter((id) => id !== bot);
+      if (Math.random() < 0.25 || others.length === 0) pass(game, bot);
+      else found(game, bot, pickOne(others), now, scale);
+    }
     if (game.phase === "vote" && !sitsOut(game, bot) && !(bot in game.votes)) {
       const options = choices(game, bot);
       if (options.length > 0) vote(game, bot, pickOne(options), now, scale);
@@ -846,7 +965,24 @@ export const gameView = (game: StoredGame, memberId: string): Game => {
   let entries: GameEntry[] = [];
   let myPicture: GameFile[] = [];
 
-  if (game.phase === "collect") {
+  if (game.kind === "guess") {
+    // The words written at the start, then what whoever speaks shows in round 3.
+    if (game.phase === "collect")
+      entries = (game.words[memberId] ?? []).map((word, index) => ({
+        id: `${memberId}:${index}`,
+        ownerId: memberId,
+        files: [],
+        caption: word,
+        ...plain,
+        votes: null,
+        mine: true,
+      }));
+    else if (game.phase === "write")
+      entries = game.current.flatMap((id) => {
+        const entry = byId.get(id);
+        return entry ? [{ id, ownerId: entry.ownerId, files: entry.files, caption: "", ...plain, votes: null, mine: entry.ownerId === memberId }] : [];
+      });
+  } else if (game.phase === "collect") {
     entries = sentBy(game, memberId).map(({ id, files, caption, scene, textPlace }) => ({
       id,
       ownerId: memberId,
@@ -936,7 +1072,7 @@ export const gameView = (game: StoredGame, memberId: string): Game => {
     prompt: game.prompt,
     entries,
     myPicture,
-    mySent: sentBy(game, memberId).length,
+    mySent: game.kind === "guess" ? (game.words[memberId]?.length ?? 0) : sentBy(game, memberId).length,
     acted: acted(game),
     myChoice: game.votes[memberId] ?? null,
     answer: shown ? game.answer : null,
@@ -949,5 +1085,6 @@ export const gameView = (game: StoredGame, memberId: string): Game => {
     turn: game.turn,
     iAmImpostor: game.kind === "undercover" && (game.phase === "write" || game.phase === "vote") && game.answer === memberId,
     iAmDone: game.finished.includes(memberId),
+    secret: game.kind === "guess" && game.phase === "write" && game.turn === memberId ? (game.pile[0] ?? null) : null,
   };
 };

@@ -512,6 +512,14 @@ export class Party extends DurableObject<Env> {
         });
         break;
       }
+      case 'game-found': {
+        const { gameId, finderId } = message.data;
+        this.playGame(gameId, (game) => games.found(game, memberId, finderId, Date.now(), this.gameScale()));
+        break;
+      }
+      case 'game-pass':
+        this.playGame(message.data.gameId, (game) => games.pass(game, memberId));
+        break;
       case 'game-done':
         this.playGame(message.data.gameId, (game) => games.markDone(game, memberId));
         break;
@@ -1035,6 +1043,10 @@ export class Party extends DurableObject<Env> {
       jokes: {},
       botDueAt: null,
       botStep: '',
+      words: {},
+      deck: [],
+      pile: [],
+      speakers: [],
       ...(JSON.parse(raw) as object),
     } as unknown as games.StoredGame;
   }
