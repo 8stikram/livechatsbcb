@@ -1,0 +1,515 @@
+/* Undercover, Inspecteur Loupe: a police folder on a dark desk. Manila paper, typed labels,
+   polaroids for the pictures, words pinned as evidence, a red stamp for the impostor. */
+
+.panel.world-insp {
+  --accent: #c0262d !important;
+  --text: #2b1d10;
+  --text-soft: #4b3a26;
+  --text-muted: #6a5236;
+  --on-solid: #f6f1e4;
+  --online: #2f7d3e;
+  --danger: #a3161d;
+  --glass: rgb(255 250 235 / 30%);
+  --glass-raised: rgb(255 250 235 / 48%);
+  --glass-hover: rgb(255 250 235 / 62%);
+  --glass-active: rgb(255 250 235 / 70%);
+  --line: rgb(70 45 15 / 28%);
+  --line-strong: rgb(70 45 15 / 40%);
+  --line-bright: rgb(70 45 15 / 60%);
+  --well: #f6f1e4;
+  --insp-paper: #f6f1e4;
+  --insp-red: #c0262d;
+  --insp-ink-red: #8a2a20;
+  --insp-type: 'Special Elite', 'Courier Prime', monospace;
+  --insp-label: 'Bebas Neue', 'Geist Variable', sans-serif;
+  color: var(--text);
+  font-family: 'Courier Prime', var(--font);
+  border: 1px solid rgb(70 45 15 / 55%);
+  border-radius: 8px 20px 20px 20px;
+  background:
+    repeating-linear-gradient(115deg, rgb(90 60 20 / 3.5%) 0 2px, transparent 2px 7px),
+    radial-gradient(80% 60% at 20% 10%, #ecd294, transparent 60%),
+    radial-gradient(70% 80% at 90% 100%, #b58f4c, transparent 70%),
+    #d9b673;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 240 200 / 35%),
+    inset 0 -40px 60px -40px rgb(90 60 20 / 35%),
+    0 14px 30px rgb(0 0 0 / 50%);
+}
+
+.panel.world-insp .scroll {
+  scrollbar-color: rgb(70 45 15 / 35%) transparent;
+}
+
+/* Typed labels */
+.panel.world-insp .toy-tag {
+  padding: 3px 12px 2px;
+  border-radius: 6px 6px 0 0;
+  background: #c9a45e;
+  box-shadow: inset 0 1px 0 #f0d79e;
+  color: var(--text);
+  font: 400 13px/1.4 var(--insp-type);
+  letter-spacing: 0.12em;
+}
+
+.panel.world-insp .lobby-title .toy-tag::before {
+  content: 'Dossier · ';
+}
+
+.panel.world-insp .lobby-title h2 {
+  margin: 8px 0 6px;
+  color: var(--text);
+  font: 400 50px/0.95 var(--insp-label);
+  letter-spacing: 0.06em;
+}
+
+.panel.world-insp .lobby-title p {
+  padding-top: 8px;
+  border-top: 2px dashed var(--line);
+  color: var(--text-soft);
+  font: 400 14px/1.45 'Courier Prime', monospace;
+}
+
+/* The mascot as a polaroid with a paper clip. */
+.panel.world-insp .lobby-stage {
+  position: relative;
+  overflow: visible;
+  height: 245px;
+  padding: 8px 8px 30px;
+  border-radius: 2px;
+  background: var(--insp-paper);
+  box-shadow: 0 8px 18px rgb(40 20 0 / 45%);
+  rotate: -2.5deg;
+}
+
+.panel.world-insp .lobby-stage::before {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  top: -14px;
+  left: 26px;
+  width: 15px;
+  height: 42px;
+  border: 3px solid #9aa3aa;
+  border-bottom-color: transparent;
+  border-radius: 8px;
+}
+
+.panel.world-insp .lobby-stage::after {
+  content: 'Inspecteur Loupe';
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  left: 8px;
+  color: #26355e;
+  font: 400 16px/1 'Permanent Marker', cursive;
+  text-align: center;
+}
+
+/* Faces as pinned photos. */
+.panel.world-insp .toy-face-ring {
+  border-radius: 3px;
+  background: var(--insp-paper);
+  box-shadow: 0 4px 8px rgb(40 20 0 / 40%);
+  color: var(--text-muted);
+}
+
+.panel.world-insp .toy-face-ring .avatar {
+  border-radius: 2px;
+}
+
+.panel.world-insp .toy-face:nth-child(odd) .toy-face-ring { rotate: -3deg; }
+.panel.world-insp .toy-face:nth-child(even) .toy-face-ring { rotate: 2.5deg; }
+
+.panel.world-insp .toy-face.is-me .toy-face-ring {
+  box-shadow: 0 0 0 3px var(--insp-red), 0 4px 8px rgb(40 20 0 / 40%);
+}
+
+.panel.world-insp .toy-face.is-empty .toy-face-ring {
+  background: transparent;
+  border: 2px dashed rgb(70 45 15 / 45%);
+  box-shadow: none;
+}
+
+.panel.world-insp .toy-face-name {
+  color: var(--text);
+  font: 400 13px var(--insp-type);
+}
+
+.panel.world-insp .toy-face-points {
+  color: var(--insp-ink-red);
+  font: 400 18px/1 var(--insp-label);
+  letter-spacing: 0.06em;
+}
+
+.panel.world-insp .toy-badge.is-check {
+  box-shadow: 0 0 0 3px var(--insp-paper);
+  color: #fff;
+}
+
+.panel.world-insp .toy-face-remove {
+  background: var(--text);
+  color: var(--insp-paper);
+}
+
+.panel.world-insp .lobby-status {
+  padding: 0 4px;
+  background: linear-gradient(transparent 58%, rgb(255 214 80 / 60%) 58%);
+  color: var(--insp-ink-red);
+  font: 400 18px var(--insp-type);
+}
+
+/* Buttons: rubber stamps and typed labels. */
+.panel.world-insp .toy-button {
+  --toy: var(--insp-red);
+  border-radius: 6px;
+  box-shadow:
+    inset 0 0 0 2px rgb(255 230 210 / 30%),
+    0 4px 0 #6e1418;
+  color: #fbf3e0;
+  font: 400 19px var(--insp-label);
+  letter-spacing: 0.08em;
+}
+
+.panel.world-insp .toy-button.big {
+  font-size: 24px;
+}
+
+.panel.world-insp .toy-button.small {
+  font-size: 16px;
+}
+
+.panel.world-insp .toy-button.ghost {
+  --toy: rgb(255 250 235 / 45%);
+  box-shadow:
+    inset 0 0 0 2px rgb(70 45 15 / 55%),
+    0 4px 0 rgb(70 45 15 / 35%);
+  color: var(--text);
+}
+
+.panel.world-insp .toy-button.is-on {
+  --toy: var(--online);
+}
+
+.panel.world-insp .pill.primary {
+  border-radius: 6px;
+  font-family: var(--insp-type);
+}
+
+.panel.world-insp .pill.primary:hover:not(:disabled) {
+  background: #000;
+}
+
+.panel.world-insp .input {
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: repeating-linear-gradient(#fbf8ef 0 21px, #d6e2ec 21px 22px);
+  background-position: 0 10px;
+  color: var(--text);
+  font: 400 16px var(--insp-type);
+}
+
+/* In game */
+.panel.world-insp .game-top {
+  padding-bottom: 10px;
+  border-bottom: 2px dashed var(--line);
+}
+
+.panel.world-insp .game-top-art {
+  background: rgb(255 250 235 / 45%);
+}
+
+.panel.world-insp .game-top-title {
+  color: var(--text);
+  font: 400 34px/1 var(--insp-label);
+  letter-spacing: 0.06em;
+}
+
+.panel.world-insp .game-top-title .toy-tag {
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.panel.world-insp .game-timer .count {
+  color: var(--text-soft);
+  font: 400 13px var(--insp-type);
+}
+
+/* A stopwatch. */
+.panel.world-insp .game-clock {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  margin-top: 8px;
+  background: radial-gradient(circle, #f2ead6 0 62%, #e6dcc2 63%);
+  box-shadow:
+    0 0 0 3px #c99a46,
+    0 0 0 6px #1b1d20,
+    0 6px 10px rgb(40 20 0 / 45%);
+  color: #2b2117;
+  font: 400 27px/1 var(--insp-label);
+}
+
+.panel.world-insp .game-clock::before {
+  content: '';
+  position: absolute;
+  top: -15px;
+  left: 50%;
+  width: 12px;
+  height: 8px;
+  margin-left: -6px;
+  border-radius: 2px;
+  background: #b9863a;
+  box-shadow: 0 3px 0 -1px #7a5520;
+}
+
+.panel.world-insp .game-banner {
+  border: 6px solid var(--insp-paper);
+  border-radius: 3px;
+  box-shadow: 0 6px 14px rgb(40 20 0 / 40%);
+}
+
+.panel.world-insp .game-faces .toy-face-ring {
+  padding: 2px;
+}
+
+.panel.world-insp .game-ask {
+  color: var(--text);
+  font: 400 18px/1.35 var(--insp-type);
+}
+
+.panel.world-insp .hint {
+  color: var(--text-muted);
+  font-family: 'Courier Prime', monospace;
+}
+
+/* Pictures as polaroids. */
+.panel.world-insp .game-file {
+  padding: 7px 7px 22px;
+  border-radius: 2px;
+  background: var(--insp-paper);
+  box-shadow: 0 6px 14px rgb(40 20 0 / 45%);
+  rotate: -1.5deg;
+}
+
+.panel.world-insp .game-file.is-loading {
+  rotate: none;
+}
+
+.panel.world-insp .game-volume {
+  color: var(--text-soft);
+}
+
+/* « Tu es l'imposteur »: a red stamp. */
+.panel.world-insp .game-impostor {
+  padding: 18px 26px 16px;
+  border: 4px double var(--insp-red);
+  border-radius: 6px;
+  background: rgb(246 241 228 / 88%);
+  box-shadow: 0 6px 14px rgb(40 20 0 / 30%);
+  rotate: -5deg;
+  animation: insp-stamp 420ms cubic-bezier(0.175, 0.885, 0.32, 1.275) backwards;
+}
+
+.panel.world-insp .game-impostor p {
+  color: var(--insp-red);
+  font: 400 50px/1 var(--insp-label);
+  letter-spacing: 0.08em;
+}
+
+.panel.world-insp .game-impostor span {
+  max-width: 26em;
+  color: var(--text);
+  font: 400 14px/1.4 var(--insp-type);
+}
+
+/* The words: evidence tags. */
+.panel.world-insp .game-words {
+  gap: 12px;
+}
+
+.panel.world-insp .game-words li {
+  position: relative;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 16px 7px 24px;
+  border-top: 3px solid #d0565b;
+  border-radius: 2px;
+  background: repeating-linear-gradient(#fbf8ef 0 21px, #b9cfe0 21px 22px);
+  background-position: 0 6px;
+  box-shadow: 0 3px 8px rgb(40 20 0 / 35%);
+  rotate: -1.5deg;
+}
+
+.panel.world-insp .game-words li:nth-child(even) {
+  rotate: 1.2deg;
+}
+
+.panel.world-insp .game-words li::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #d9b673;
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 50%);
+}
+
+.panel.world-insp .game-words strong {
+  color: var(--text-muted);
+  font: 400 13px var(--insp-type);
+}
+
+.panel.world-insp .game-words span {
+  color: #1d1712;
+  font: 400 20px/1.1 var(--insp-type);
+}
+
+/* The vote: a line-up of suspects. */
+.panel.world-insp .game-choices {
+  gap: 14px;
+  padding: 16px 14px 12px;
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(to bottom, rgb(255 255 255 / 14%) 0 1px, transparent 1px 14px),
+    #2c3136;
+  box-shadow: inset 0 0 22px rgb(0 0 0 / 60%);
+}
+
+.panel.world-insp .game-choice {
+  position: relative;
+  min-width: 120px;
+  padding: 12px 14px 10px;
+  border: 3px solid #e9e4d8;
+  border-radius: 3px;
+  background: #3a4148;
+  box-shadow: 0 4px 10px rgb(0 0 0 / 50%);
+  color: #f2ede0;
+}
+
+.panel.world-insp .game-choice::before {
+  content: '';
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 11px;
+  height: 11px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ff9aa0, #c0262d 60%);
+  box-shadow: 0 2px 2px rgb(0 0 0 / 50%);
+}
+
+.panel.world-insp .game-choice strong {
+  padding: 1px 10px;
+  border: 1px solid #555;
+  background: #15171a;
+  font: 400 19px/1.1 var(--insp-label);
+  letter-spacing: 0.1em;
+}
+
+.panel.world-insp .game-choice span {
+  color: #e8dcc0;
+  font: 400 15px var(--insp-type);
+}
+
+.panel.world-insp .game-choice .game-votes {
+  color: #ff6b70;
+  font: 400 20px/1 var(--insp-label);
+}
+
+.panel.world-insp .game-choice:not(:disabled):hover {
+  border-color: #fff;
+  background: #464e56;
+}
+
+.panel.world-insp .game-choice.is-mine {
+  border-color: #e8b83a;
+  background: #3a4148;
+  box-shadow: 0 0 0 2px #e8b83a, 0 6px 16px rgb(232 184 58 / 45%);
+}
+
+.panel.world-insp .game-choice.is-winner {
+  border-color: var(--insp-red);
+  background: #4a2a2c;
+  box-shadow: 0 0 0 3px #fbf3e0, 0 0 0 6px var(--insp-red), 0 8px 18px rgb(0 0 0 / 55%);
+}
+
+/* The podium: filing boxes. */
+.panel.world-insp .toy-title {
+  color: var(--text);
+  font: 400 46px/1 var(--insp-label);
+  letter-spacing: 0.08em;
+}
+
+.panel.world-insp .podium .avatar {
+  border-radius: 3px;
+  box-shadow: 0 0 0 4px var(--insp-paper), 0 4px 8px rgb(40 20 0 / 40%);
+}
+
+.panel.world-insp .podium-name {
+  color: var(--text);
+  font: 400 15px var(--insp-type);
+}
+
+.panel.world-insp .podium-block {
+  border-radius: 3px 3px 0 0;
+  background: #a37c3c;
+  box-shadow: inset 0 3px 0 rgb(255 240 200 / 35%), inset 0 -2px 0 rgb(0 0 0 / 15%);
+  color: #fbf3e0;
+}
+
+.panel.world-insp .podium-step-1 .podium-block {
+  background: var(--insp-red);
+  color: #fbf3e0;
+}
+
+.panel.world-insp .podium-rest li {
+  background: rgb(255 250 235 / 45%);
+  font-family: var(--insp-type);
+}
+
+.panel.world-insp .round-banner span {
+  border: 4px double #fbf3e0;
+  border-radius: 6px;
+  background: var(--insp-red);
+  box-shadow: 0 8px 0 #6e1418;
+  color: #fbf3e0;
+  font: 400 56px/1 var(--insp-label);
+  letter-spacing: 0.08em;
+}
+
+.panel.world-insp .reaction-button {
+  background: rgb(70 45 15 / 12%);
+}
+
+.panel.world-insp .reaction-button:hover {
+  background: rgb(70 45 15 / 22%);
+}
+
+.panel.world-insp .reaction-who {
+  color: #fff;
+}
+
+@keyframes insp-stamp {
+  0% { opacity: 0; transform: scale(2.4); }
+  60% { opacity: 1; transform: scale(0.95); }
+  100% { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel.world-insp .game-impostor { animation: none; }
+}
+
+html.calm .panel.world-insp .game-impostor {
+  animation: none !important;
+}
+
+/* Players without a picture keep their initial readable on the paper. */
+.panel.world-insp .podium .avatar {
+  background: #3a4148;
+  color: #f2ede0;
+}

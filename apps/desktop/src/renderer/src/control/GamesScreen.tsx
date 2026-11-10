@@ -30,6 +30,7 @@ import { errorMessage } from "./messages";
 import { Mascot } from "./mascots/Mascot";
 import { personaOf } from "./mascots/persona";
 import { useGameMood } from "./mascots/use-game-mood";
+import "./mascots/worlds";
 
 const GAMES: Array<{ kind: GameKind; title: string; rule: string }> = [
   {
@@ -445,7 +446,7 @@ const Lobby = ({
 
   return (
     <section
-      className="glass panel game-lobby"
+      className={`glass panel game-lobby world-${personaOf(game.kind).id}`}
       style={accentOf(game.kind)}
       data-testid="game-lobby"
     >
@@ -1421,7 +1422,7 @@ const Board = ({
   const waiting = game.waiting.includes(party.memberId);
   return (
     <section
-      className="glass panel game-main"
+      className={`glass panel game-main world-${personaOf(game.kind).id}`}
       style={accentOf(game.kind)}
       aria-labelledby="game-title"
       data-testid="game"
