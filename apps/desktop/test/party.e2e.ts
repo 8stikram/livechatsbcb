@@ -2166,9 +2166,9 @@ describe.skipIf(online)('party flow in the real app', () => {
     await guest.stage.getByTestId('poll-result').waitFor({ state: 'detached', timeout: 15_000 });
   }, 120_000);
 
-  it('plays the best joke: pictures from the PC, a joke on a friend’s, votes, then the ranking', async () => {
+  it('plays the best joke with a bot: pictures from the PC, two jokes per picture, a duel, then the ranking', async () => {
     const logo = join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png');
-    const pictures = [1, 2, 3, 4, 5].map((index) => {
+    const pictures = [1, 2].map((index) => {
       const path = join(sandbox, `blague-${index}.png`);
       copyFileSync(logo, path);
       return path;
@@ -2182,41 +2182,52 @@ describe.skipIf(online)('party flow in the real app', () => {
     await guest.control.getByTestId('game-lobby').getByRole('button', { name: 'Rejoindre' }).click();
     await host.control.getByTestId('game-lobby').getByText('Toi').waitFor();
     await host.control.locator('.lobby-faces .toy-face:not(.is-empty)').nth(1).waitFor();
+    // Two people and a bot make three.
+    await host.control.getByTestId('game-add-bot').click();
+    await guest.control.getByTestId('game-lobby').getByText('Bot Gaston').waitFor();
     await picture(host.control, 'game-lobby.png');
     await host.control.getByTestId('game-lobby').getByRole('button', { name: 'Lancer' }).click();
 
     for (const member of [host, guest]) {
-      await member.control.getByTestId('game').filter({ hasText: 'Envoie 5 images' }).waitFor();
+      await member.control.getByTestId('game').filter({ hasText: 'Envoie de 2 à 5 images' }).waitFor();
       await member.app.evaluate(({ dialog }, files) => {
         dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: files })) as typeof dialog.showOpenDialog;
       }, pictures);
       await member.control.getByRole('button', { name: 'Choisir des images' }).click();
-      // The last one sent moves the game on at once.
-      await member.control
-        .getByTestId('game-sent')
-        .filter({ hasText: '5 / 5' })
-        .or(member.control.locator('[data-testid="game"][data-phase="write"]'))
-        .waitFor();
+      await member.control.getByTestId('game-sent').filter({ hasText: '2 / 5' }).waitFor();
+      await member.control.getByTestId('game-done').click();
     }
 
-    // Each gets a picture the other sent, and nothing in the queue moves.
+    // Each writes on two pictures someone else sent.
     for (const [index, member] of [host, guest].entries()) {
-      const field = member.control.getByLabel('Ta blague');
-      await field.waitFor();
-      await member.control.locator('.game-media.is-big img').waitFor();
+      await member.control.locator('[data-testid="game"][data-phase="write"]').waitFor();
+      await expect.poll(() => member.control.getByTestId('game-task').count()).toBe(2);
       if (index === 0) await picture(member.control, 'game-write.png');
-      await field.fill(`Blague ${index}`);
-      await field.press('Enter');
+      for (const joke of [1, 2]) {
+        const field = member.control.getByLabel('Ta blague').first();
+        await field.fill(`Blague ${index}-${joke}`);
+        await field.press('Enter');
+        // The last joke written moves the game on at once.
+        await member.control
+          .getByText(`« Blague ${index}-${joke} » ✓`)
+          .or(member.control.locator('[data-testid="game"][data-phase="vote"]'))
+          .waitFor();
+      }
     }
+
+    // A duel: two jokes on the same picture. Its authors don't vote.
+    await host.control.locator('[data-testid="game"][data-phase="vote"]').waitFor();
     for (const member of [host, guest]) {
-      await member.control.getByTestId('game-entry').filter({ hasNotText: 'La tienne' }).click();
+      if (await member.control.getByText('Tu ne votes pas sur ton duel.').isVisible()) continue;
+      await member.control.getByTestId('game-entry').first().click();
     }
-    await host.control.locator('[data-testid="game"][data-phase="reveal"]').waitFor();
+    await host.control.locator('[data-testid="game"][data-phase="reveal"]').waitFor({ timeout: 40_000 });
     // Reactions float on everyone's game.
     await guest.control.getByRole('button', { name: '😂' }).click();
     await host.control.locator('.reaction-float').filter({ hasText: '😂' }).first().waitFor();
     await picture(host.control, 'game-reveal.png');
-    expect(await host.control.getByTestId('game-entry').filter({ hasText: 'Blague 1' }).textContent()).toContain('Pote');
+    // One by one, who wrote each joke.
+    await expect.poll(() => host.control.locator('.game-entry-foot').count()).toBe(2);
 
     await host.control.getByRole('button', { name: 'Arrêter la partie' }).click();
     await host.control.getByRole('button', { name: 'Arrêter pour tous ?' }).click();

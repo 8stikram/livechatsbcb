@@ -140,8 +140,12 @@ export class PartyConnection {
     this.send({ t: 'game-start', kind });
   }
 
-  gameSay(gameId: string, text: string): void {
-    this.send({ t: 'game-say', gameId, text });
+  gameSay(gameId: string, text: string, entryId?: string): void {
+    this.send({ t: 'game-say', gameId, text, ...(entryId ? { entryId } : {}) });
+  }
+
+  removeGameBot(gameId: string, botId: string): void {
+    this.send({ t: 'game-bot-remove', gameId, botId });
   }
 
   gameVote(gameId: string, choice: string): void {
@@ -152,7 +156,7 @@ export class PartyConnection {
     this.send({ t: 'game-stop', gameId });
   }
 
-  gameAction(gameId: string, action: 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch'): void {
+  gameAction(gameId: string, action: 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch' | 'done' | 'bot-add'): void {
     if (action === 'ready' || action === 'unready') this.send({ t: 'game-ready', gameId, ready: action === 'ready' });
     else this.send({ t: `game-${action}`, gameId });
   }

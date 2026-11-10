@@ -241,7 +241,7 @@ export type GameView = Omit<Game, 'entries' | 'myPicture'> & {
   sending: number;
 };
 
-export type GameAction = 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch';
+export type GameAction = 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch' | 'done' | 'bot-add';
 // A reaction floating by for a few seconds.
 export type GameReactionView = { id: number; memberId: string; emoji: GameReaction };
 // A lobby someone opened, that this member has not joined: on screen, even in game, for a few seconds.
@@ -268,6 +268,8 @@ export type SceneInput = {
   // Who it is whispered to. Empty for everybody.
   to: string[];
   link: MediaLink | null;
+  // An answer to the question game, sent to it rather than to the party.
+  game?: string | null;
 };
 export type LoadedScene = SceneInput & { files: SceneFile[] };
 export type IncomingError = 'too_large' | 'empty' | 'unsupported' | 'too_many' | 'bad_link' | 'not_found' | 'link_waiting' | 'link_gone' | 'link_blocked';
@@ -507,6 +509,7 @@ export const IpcChannel = {
   VotePoll: 'poll:vote',
   StartGame: 'game:start',
   GameSay: 'game:say',
+  GameRemoveBot: 'game:remove-bot',
   GameVote: 'game:vote',
   StopGame: 'game:stop',
   GameAction: 'game:action',
@@ -514,6 +517,7 @@ export const IpcChannel = {
   ListBackdrops: 'backdrop:list',
   ChooseBackdrop: 'backdrop:choose',
   SendGameFiles: 'game:send-files',
+  SendGamePaste: 'game:send-paste',
   SendGameText: 'game:send-text',
   SoundLevel: 'stage:sound-level',
   LiveLevel: 'live:level',
@@ -617,7 +621,9 @@ export type LiveChatApi = {
   listApps(): Promise<Array<{ name: string; title: string }>>;
   votePoll(pollId: string, choice: number): Promise<void>;
   startGame(kind: GameKind): Promise<void>;
-  gameSay(gameId: string, text: string): Promise<void>;
+  // On the jokes, which picture it is written on.
+  gameSay(gameId: string, text: string, entryId?: string): Promise<void>;
+  removeGameBot(gameId: string, botId: string): Promise<void>;
   gameVote(gameId: string, choice: string): Promise<void>;
   stopGame(gameId: string): Promise<void>;
   gameAction(gameId: string, action: GameAction): Promise<void>;
@@ -627,6 +633,8 @@ export type LiveChatApi = {
   chooseBackdrop(id: string): Promise<void>;
   // Opens the file picker: pictures for the jokes and the impostor, any LiveChat otherwise.
   sendGameFiles(gameId: string): Promise<GameSendResult>;
+  // Files with a place on disk, or a picture copied from somewhere.
+  sendGamePaste(gameId: string, paths: string[] | null, bytes: Uint8Array | null, contentType: string, name: string): Promise<GameSendResult>;
   sendGameText(gameId: string, text: string): Promise<ActionResult>;
   // From the overlay: how loud what is playing is, from 0 to 1.
   reportLevel(level: number): void;

@@ -492,6 +492,8 @@ export const MediaScreen = ({
   active,
   whisperTo,
   onWhisperTo: setWhisperTo,
+  gameAnswer,
+  onGameAnswer,
 }: {
   state: AppState;
   files: DraftFiles;
@@ -500,6 +502,9 @@ export const MediaScreen = ({
   // Kept by the window, so that the party can open this tab already whispering to someone.
   whisperTo: string[];
   onWhisperTo: (to: string[]) => void;
+  // While answering the question game: what is made here goes to the game.
+  gameAnswer: { gameId: string; prompt: string } | null;
+  onGameAnswer: (sent: boolean) => void;
 }) => {
   const { link, linkVolume, picture, sound, leader, hasFiles, clip, unreadable, caption, displayMs, videoMuted, soundMuted } = files;
   const [linkProblem, setLinkProblem] = useState<string | null>(null);
@@ -677,7 +682,13 @@ export const MediaScreen = ({
     setError(null);
     setSaved(false);
     stopPreview();
-    const result = advanced ? await window.liveChat.sendScene(sceneInput()) : await window.liveChat.sendMedia(recipe());
+    const forGame = gameAnswer !== null && advanced;
+    const result = forGame
+      ? await window.liveChat.sendScene({ ...sceneInput(), to: [], game: gameAnswer.gameId })
+      : advanced
+        ? await window.liveChat.sendScene(sceneInput())
+        : await window.liveChat.sendMedia(recipe());
+    if (result.ok && forGame) onGameAnswer(true);
     if (result.ok) {
       const clear = () => {
         if (advanced) {
@@ -962,7 +973,18 @@ export const MediaScreen = ({
       </section>
 
       <section className="glass panel media-side" aria-label="Envoyer ton LiveChat">
-        <h2>{selectedLayer ? 'Cet élément' : 'Envoyer à la party'}</h2>
+        <h2>{selectedLayer ? 'Cet élément' : gameAnswer ? 'Ta réponse au jeu' : 'Envoyer à la party'}</h2>
+        {gameAnswer && (
+          <div className="game-answer-note" data-testid="game-answer-note">
+            <p>
+              Question : <strong>{gameAnswer.prompt}</strong>
+            </p>
+            {!advanced && <p className="hint">Repasse en « Avancé » pour répondre.</p>}
+            <button type="button" className="pill quiet small" onClick={() => onGameAnswer(false)}>
+              Ne plus répondre
+            </button>
+          </div>
+        )}
 
         {selectedLayer && <LayerPanel scene={scene} layer={selectedLayer} link={sceneLink} onRemoveLink={() => files.setLink(null)} />}
 
@@ -1134,7 +1156,7 @@ export const MediaScreen = ({
           </button>
         )}
 
-        {!state.upload && <WhisperPicker state={state} to={to} onChange={setWhisperTo} />}
+        {!state.upload && !gameAnswer && <WhisperPicker state={state} to={to} onChange={setWhisperTo} />}
 
         {state.upload ? (
           <div className="upload" role="status">
@@ -1157,7 +1179,7 @@ export const MediaScreen = ({
             type="button"
             className={justSent ? 'pill primary is-sent' : 'pill primary'}
             data-tour="send"
-            disabled={!hasContent || !isOnline}
+            disabled={!hasContent || !isOnline || (gameAnswer !== null && !advanced)}
             onClick={() => void send()}
           >
             {justSent && (
@@ -1165,7 +1187,7 @@ export const MediaScreen = ({
                 <IconCheck size={16} />
               </span>
             )}
-            {sendLabel(state, to)}
+            {gameAnswer ? 'Envoyer au jeu' : sendLabel(state, to)}
           </button>
         )}
 

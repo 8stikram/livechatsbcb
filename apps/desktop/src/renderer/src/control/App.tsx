@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { DEFAULT_DISPLAY_MS, MAX_CAPTION_LENGTH } from '@livechatsbcb/protocol';
-import { keyLabel, type EditResult, type IncomingResult } from '../../../shared/ipc';
+import { keyLabel, type EditResult, type GameView, type IncomingResult } from '../../../shared/ipc';
 import logo from '../assets/logo.png';
 import { useAppState } from '../use-app-state';
 import { GuildPicker } from './GuildPicker';
@@ -169,6 +169,23 @@ export const App = () => {
   const [incomingBusy, setIncomingBusy] = useState(false);
   const [incomingNote, setIncomingNote] = useState<string | null>(null);
 
+  // An answer to the question game, made in LiveChat avancé with the question as its text.
+  const [gameAnswer, setGameAnswer] = useState<{ gameId: string; prompt: string } | null>(null);
+  const answerGame = async (game: GameView) => {
+    setGameAnswer({ gameId: game.id, prompt: game.prompt });
+    files.setCaption(game.prompt.slice(0, MAX_CAPTION_LENGTH));
+    setPicking(false);
+    setChosenView('media');
+    if (!scene.active) {
+      const problem = await scene.enter(null, false);
+      if (problem) setIncomingNote(problem);
+    }
+  };
+  const answering = state?.game?.id === gameAnswer?.gameId && state?.game?.phase === 'collect';
+  useEffect(() => {
+    if (gameAnswer && !answering) setGameAnswer(null);
+  }, [gameAnswer, answering]);
+
   useEffect(() => {
     if (!incomingNote) return;
     const timer = setTimeout(() => setIncomingNote(null), 8_000);
@@ -277,6 +294,25 @@ export const App = () => {
       const text = data.getData('text/plain').trim();
       const pasted = [...data.files];
       const hasPaths = pasted.some((file) => window.liveChat.pathForFile(file) !== '');
+
+      // On the games tab, while a game waits for pictures, what is pasted goes to the game.
+      const game = state.game;
+      if (view === 'games' && game?.phase === 'collect' && game.players.includes(state.party.memberId)) {
+        const image = pasted[0];
+        if (!image) return;
+        event.preventDefault();
+        const paths = pasted.map((file) => window.liveChat.pathForFile(file)).filter((path) => path !== '');
+        const sent =
+          paths.length > 0
+            ? window.liveChat.sendGamePaste(game.id, paths, null, '', '')
+            : image
+                .arrayBuffer()
+                .then((bytes) => window.liveChat.sendGamePaste(game.id, null, new Uint8Array(bytes), image.type, image.name || 'Image collée.png'));
+        void sent.then((result) => {
+          if (!result.ok && result.error !== 'cancelled') setIncomingNote('Cette image n’a pas pu aller au jeu.');
+        });
+        return;
+      }
 
       if (pasted[0] && (hasPaths || !(inField && text))) {
         event.preventDefault();
@@ -511,6 +547,11 @@ export const App = () => {
                   active={view === 'media' && !showPicker}
                   whisperTo={whisperTo}
                   onWhisperTo={setWhisperTo}
+                  gameAnswer={answering ? gameAnswer : null}
+                  onGameAnswer={(sent) => {
+                    setGameAnswer(null);
+                    if (sent) setChosenView('games');
+                  }}
                 />
               </div>
               <div className="view" hidden={view !== 'library'}>
@@ -529,7 +570,7 @@ export const App = () => {
                 <HistoryScreen state={state} active={view === 'history'} onEdit={editInAdvanced} from={historyFrom} onFrom={setHistoryFrom} />
               </div>
               <div className="view" hidden={view !== 'games'}>
-                <GamesScreen state={state} party={party} active={view === 'games' && !showPicker} />
+                <GamesScreen state={state} party={party} active={view === 'games' && !showPicker} onAnswer={(game) => void answerGame(game)} />
               </div>
             </>
           )}

@@ -9,6 +9,11 @@ export const PATCH_NOTES: PatchNote[] = [
       'LiveChat avancé : le texte se déplace à la souris comme une image. Bouton « Remettre à sa place » pour le ramener',
       'Bibliothèque, nouvel onglet Presse-papier : les 50 dernières images que tu copies, un clic les met dans ton LiveChat',
       'Une étoile garde une image pour toujours, « Vider » enlève le reste, « Pause » arrête de les garder. Ce que copie un gestionnaire de mots de passe est ignoré, et rien ne quitte ton PC',
+      'Jeux : bouton « + Bot » dans le salon, pour tester un jeu même seul. Les bots écrivent des bêtises et votent au hasard',
+      'Jeux : le vote attend le premier votant (2 min max), puis laisse 30 s. Ce que tu as tapé part tout seul quand le temps finit. Ctrl+V colle une image dans le jeu',
+      'Meilleure blague : de 2 à 5 images puis « Valider ». Deux joueurs écrivent sur la même image et s’affrontent en duel, ils ne votent pas. Une blague manquante est remplacée par une blague maison',
+      'Undercover : les images viennent de ce qui est passé aujourd’hui (une vidéo se lance quand tu appuies, son bas réglable). L’imposteur n’a pas d’image, juste « Tu es l’imposteur ». Chacun son tour donne un mot, visible par tous',
+      'Question débile : tu réponds avec un LiveChat avancé, la question déjà écrite dessus. Les résultats s’affichent un par un',
     ],
   },
   {

@@ -1,8 +1,11 @@
-import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import {
   GAME_ENTRIES_PER_PLAYER,
+  GAME_MIN_ENTRIES,
   GAME_REACTIONS,
   GAME_MIN_PLAYERS,
+  MAX_GAME_BOTS,
+  isBotId,
   MAX_CAPTION_LENGTH,
   MAX_GAME_TEXT_LENGTH,
   type GameKind,
@@ -17,6 +20,7 @@ import type {
   PartyView,
 } from "../../../shared/ipc";
 import { Avatar } from "../Avatar";
+import { layerLook, layerPlace } from "../scene";
 import { ConfirmButton } from "./ConfirmButton";
 import { GameArt } from "./game-art";
 import { errorMessage } from "./messages";
@@ -25,12 +29,12 @@ const GAMES: Array<{ kind: GameKind; title: string; rule: string }> = [
   {
     kind: "joke",
     title: "Meilleure blague",
-    rule: "Chacun envoie 5 images de son PC. Tu reçois celle d’un autre et tu fais la meilleure blague dessus. Tout le monde vote.",
+    rule: "Chacun envoie jusqu’à 5 images. Deux joueurs font une blague sur la même image, et la party vote pour la meilleure du duel.",
   },
   {
     kind: "question",
     title: "Question débile",
-    rule: "Une question débile, tu réponds avec un LiveChat. Les réponses s’affrontent en duel, la party vote.",
+    rule: "Une question débile, tu réponds avec un LiveChat avancé. Les réponses s’affrontent en duel, la party vote.",
   },
   {
     kind: "who",
@@ -40,7 +44,7 @@ const GAMES: Array<{ kind: GameKind; title: string; rule: string }> = [
   {
     kind: "undercover",
     title: "Undercover",
-    rule: "Tout le monde a la même image, sauf l’imposteur. Chacun donne un mot, puis on vote pour le démasquer.",
+    rule: "Tout le monde a la même image, sauf l’imposteur qui n’en a pas. Chacun son tour donne un mot, puis on vote pour le démasquer.",
   },
 ];
 
@@ -68,18 +72,71 @@ const sendError = (result: GameSendResult): string | null => {
   return errorMessage(result.error);
 };
 
+const SOFT_VOLUME = 0.3;
+
+// Starts only when pressed, with the sound low and a slider to change it.
+const PressVideo = ({ url }: { url: string }) => {
+  const video = useRef<HTMLVideoElement>(null);
+  const [volume, setVolume] = useState(SOFT_VOLUME);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    if (video.current) video.current.volume = volume;
+  }, [volume]);
+  const toggle = () => {
+    const element = video.current;
+    if (!element) return;
+    if (element.paused) void element.play();
+    else element.pause();
+  };
+  return (
+    <div className="game-press-video" data-testid="game-press-video">
+      <video
+        ref={video}
+        className="game-file"
+        src={url}
+        loop
+        playsInline
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onClick={toggle}
+      />
+      {!playing && (
+        <button type="button" className="toy-button small game-play" onClick={toggle}>
+          ▶ Lancer la vidéo
+        </button>
+      )}
+      <label className="game-volume">
+        <span>Son</span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={volume}
+          aria-label="Volume de la vidéo"
+          onChange={(event) => setVolume(Number(event.target.value))}
+        />
+      </label>
+    </div>
+  );
+};
+
 const GameMedia = ({
   files,
   caption,
   big = false,
+  press = false,
 }: {
   files: GameFileView[];
   caption?: string;
   big?: boolean;
+  press?: boolean;
 }) => (
   <div className={big ? "game-media is-big" : "game-media"}>
     {files.map((file) =>
-      !file.url ? (
+      press && file.kind === "video" && file.url ? (
+        <PressVideo key={file.id} url={file.url} />
+      ) : !file.url ? (
         <div
           key={file.id}
           className="game-file is-loading"
@@ -124,6 +181,59 @@ const GameMedia = ({
   </div>
 );
 
+type Entry = GameView["entries"][number];
+
+const GameScene = ({ entry }: { entry: Entry }) => {
+  const place = entry.textPlace;
+  return (
+    <div className="game-scene" data-testid="game-scene">
+      {(entry.scene ?? []).map((layer, index) => {
+        const file = entry.files[layer.file];
+        if (layer.link || !file?.url) return null;
+        return (
+          <div key={index} className="game-scene-layer" style={layerPlace(layer)}>
+            {file.kind === "video" ? (
+              <video src={file.url} style={layerLook(layer)} autoPlay loop muted playsInline />
+            ) : (
+              <img src={file.url} alt="" style={layerLook(layer)} />
+            )}
+          </div>
+        );
+      })}
+      {entry.caption && (
+        <p
+          className="game-scene-text"
+          style={place ? { left: `${place.x}%`, top: `${place.y}%`, width: `${place.width}%` } : undefined}
+        >
+          {entry.caption}
+        </p>
+      )}
+    </div>
+  );
+};
+
+const EntryMedia = ({ entry }: { entry: Entry }) =>
+  entry.scene ? <GameScene entry={entry} /> : <GameMedia files={entry.files} caption={entry.caption} />;
+
+// One after the other, a moment apart, at the reveal.
+const REVEAL_STEP_MS = 700;
+const useReveal = (count: number, on: boolean): number => {
+  const [shown, setShown] = useState(on ? 0 : count);
+  useEffect(() => {
+    if (!on) {
+      setShown(count);
+      return;
+    }
+    setShown(0);
+    const timer = window.setInterval(
+      () => setShown((done) => Math.min(count, done + 1)),
+      REVEAL_STEP_MS,
+    );
+    return () => window.clearInterval(timer);
+  }, [on, count]);
+  return shown;
+};
+
 const COLORS: Record<GameKind, string> = {
   joke: "#ffb547",
   question: "#ff5fa2",
@@ -134,9 +244,13 @@ const COLORS: Record<GameKind, string> = {
 const accentOf = (kind: GameKind): CSSProperties =>
   ({ "--accent": COLORS[kind] }) as CSSProperties;
 
-type Member = PartyView["members"][number];
-const memberOf = (party: PartyView, id: string): Member | undefined =>
-  party.members.find((member) => member.id === id);
+type Who = { name: string; avatarUrl: string | null };
+const whoOf = (party: PartyView, game: GameView, id: string | null): Who | undefined =>
+  game.bots.find((bot) => bot.id === id) !== undefined
+    ? { name: game.bots.find((bot) => bot.id === id)!.name, avatarUrl: null }
+    : party.members.find((member) => member.id === id);
+const nameOf = (party: PartyView, game: GameView, id: string | null): string =>
+  whoOf(party, game, id)?.name ?? "Quelqu’un";
 
 const Picker = ({ party }: { party: PartyView }) => {
   const online = party.members.filter((member) => member.online).length;
@@ -186,12 +300,14 @@ const Face = ({
   badge,
   delay = 0,
   points,
+  onRemove,
 }: {
-  member: Member | undefined;
+  member: Who | undefined;
   me: boolean;
   badge?: "chef" | "ready" | "done" | null;
   delay?: number;
   points?: number;
+  onRemove?: () => void;
 }) => (
   <li
     className={["toy-face", badge ? `has-${badge}` : "", me ? "is-me" : ""]
@@ -222,6 +338,17 @@ const Face = ({
     <span className="toy-face-name">
       {me ? "Toi" : (member?.name ?? "Parti")}
     </span>
+    {onRemove && (
+      <button
+        type="button"
+        className="toy-face-remove"
+        aria-label={`Retirer ${member?.name ?? "le bot"}`}
+        title="Retirer"
+        onClick={onRemove}
+      >
+        ×
+      </button>
+    )}
     {points !== undefined && (
       <span className="toy-face-points mono">{points}</span>
     )}
@@ -270,7 +397,7 @@ const Lobby = ({
         {game.players.map((id, index) => (
           <Face
             key={id}
-            member={memberOf(party, id)}
+            member={whoOf(party, game, id)}
             me={id === me}
             delay={index * 60}
             badge={
@@ -279,6 +406,11 @@ const Lobby = ({
                 : game.ready.includes(id)
                   ? "ready"
                   : null
+            }
+            onRemove={
+              joined && isBotId(id)
+                ? () => void window.liveChat.removeGameBot(game.id, id)
+                : undefined
             }
           />
         ))}
@@ -331,6 +463,16 @@ const Lobby = ({
             <button
               type="button"
               className="toy-button ghost"
+              data-testid="game-add-bot"
+              title="Un joueur pour essayer : il écrit des bêtises et vote au hasard"
+              disabled={game.bots.length >= MAX_GAME_BOTS}
+              onClick={() => act("bot-add")}
+            >
+              + Bot
+            </button>
+            <button
+              type="button"
+              className="toy-button ghost"
               onClick={() => act("leave")}
             >
               Quitter
@@ -348,7 +490,7 @@ const Faces = ({ game, party }: { game: GameView; party: PartyView }) => (
     {game.players.map((id) => (
       <Face
         key={id}
-        member={memberOf(party, id)}
+        member={whoOf(party, game, id)}
         me={id === party.memberId}
         badge={game.acted.includes(id) ? "done" : null}
         points={game.scores[id] ?? 0}
@@ -357,16 +499,25 @@ const Faces = ({ game, party }: { game: GameView; party: PartyView }) => (
   </ul>
 );
 
+const AUTO_SEND_BEFORE_MS = 1_200;
+
 const TextForm = ({
   label,
   placeholder,
   maxLength,
   onSend,
+  endsAt,
+  now,
+  autoFocus = true,
 }: {
   label: string;
   placeholder: string;
   maxLength: number;
   onSend: (text: string) => void;
+  // When time is about to run out, what was typed is sent anyway.
+  endsAt?: number;
+  now?: number;
+  autoFocus?: boolean;
 }) => {
   const [text, setText] = useState("");
   const submit = (event: FormEvent) => {
@@ -375,6 +526,14 @@ const TextForm = ({
     onSend(text.trim());
     setText("");
   };
+  const late = endsAt !== undefined && now !== undefined && endsAt - now <= AUTO_SEND_BEFORE_MS;
+  useEffect(() => {
+    if (!late || !text.trim()) return;
+    onSend(text.trim());
+    setText("");
+    // Only once time runs out.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [late]);
   return (
     <form className="game-form" onSubmit={submit}>
       <input
@@ -383,7 +542,7 @@ const TextForm = ({
         maxLength={maxLength}
         placeholder={placeholder}
         aria-label={label}
-        autoFocus
+        autoFocus={autoFocus}
         onChange={(event) => setText(event.target.value)}
       />
       <button type="submit" className="pill primary" disabled={!text.trim()}>
@@ -393,11 +552,18 @@ const TextForm = ({
   );
 };
 
-const Collect = ({ game }: { game: GameView }) => {
+const Collect = ({
+  game,
+  onAnswer,
+}: {
+  game: GameView;
+  onAnswer: (game: GameView) => void;
+}) => {
   const [error, setError] = useState<string | null>(null);
   const wanted = GAME_ENTRIES_PER_PLAYER[game.kind];
   const pictures = game.kind === "joke" || game.kind === "undercover";
-  const left = wanted - game.mySent - game.sending;
+  const left = game.iAmDone ? 0 : wanted - game.mySent - game.sending;
+  const enough = game.mySent >= GAME_MIN_ENTRIES[game.kind];
   const run = async (send: () => Promise<GameSendResult>) => {
     setError(null);
     setError(sendError(await send()));
@@ -412,11 +578,13 @@ const Collect = ({ game }: { game: GameView }) => {
       )}
       <p className="game-ask">
         {game.kind === "joke" &&
-          `Envoie ${wanted} images de ton PC. Les autres feront des blagues dessus.`}
+          (game.iAmDone
+            ? "C’est validé. On attend les autres."
+            : `Envoie de 2 à ${wanted} images (ou colle-les avec Ctrl+V). Les autres feront des blagues dessus.`)}
         {game.kind === "undercover" &&
-          "Envoie une image de ton PC. Elle servira à l’un des tours."}
+          "Envoie une image de ton PC (ou colle-la avec Ctrl+V). Elle servira à l’un des tours."}
         {game.kind === "question" &&
-          "Réponds avec un LiveChat : une image, une vidéo, un son, ou du texte."}
+          "Réponds avec un LiveChat avancé : la question est déjà écrite dessus."}
         {game.kind === "who" &&
           "Envoie un meme. Personne ne saura que c’est toi."}
       </p>
@@ -424,11 +592,23 @@ const Collect = ({ game }: { game: GameView }) => {
         {game.mySent} / {wanted} envoyé{wanted > 1 ? "s" : ""}
         {game.sending > 0 && ` · ${game.sending} en route`}
       </p>
+      {left > 0 && game.kind === "question" && (
+        <div className="game-actions">
+          <button
+            type="button"
+            className="toy-button big"
+            data-testid="game-answer"
+            onClick={() => onAnswer(game)}
+          >
+            Répondre en LiveChat avancé
+          </button>
+        </div>
+      )}
       {left > 0 && (
         <div className="game-actions">
           <button
             type="button"
-            className="pill primary"
+            className={game.kind === "question" ? "pill quiet" : "pill primary"}
             onClick={() =>
               void run(() => window.liveChat.sendGameFiles(game.id))
             }
@@ -437,8 +617,20 @@ const Collect = ({ game }: { game: GameView }) => {
               ? left > 1
                 ? "Choisir des images"
                 : "Choisir une image"
-              : "Choisir un fichier"}
+              : "Ou juste un fichier"}
           </button>
+          {game.kind === "joke" && (
+            <button
+              type="button"
+              className="pill primary"
+              data-testid="game-done"
+              disabled={!enough || game.sending > 0}
+              title={enough ? undefined : "Au moins 2 images"}
+              onClick={() => void window.liveChat.gameAction(game.id, "done")}
+            >
+              Valider
+            </button>
+          )}
         </div>
       )}
       {left > 0 && !pictures && (
@@ -471,31 +663,78 @@ const Collect = ({ game }: { game: GameView }) => {
   );
 };
 
-const Write = ({ game, me }: { game: GameView; me: string }) => {
-  const done = game.acted.includes(me);
-  if (game.myPicture.length === 0)
+// The words given so far, in the order of the turns.
+const Words = ({ game, party }: { game: GameView; party: PartyView }) =>
+  game.entries.length === 0 ? null : (
+    <ol className="game-words" data-testid="game-words">
+      {game.entries.map((entry) => (
+        <li key={entry.id}>
+          <strong>{entry.mine ? "Toi" : nameOf(party, game, entry.id)}</strong>
+          <span>{entry.caption}</span>
+        </li>
+      ))}
+    </ol>
+  );
+
+const Write = ({ game, party, now }: { game: GameView; party: PartyView; now: number }) => {
+  const me = party.memberId;
+  if (game.kind === "joke")
     return (
-      <p className="game-ask">
-        Pas d’image pour toi ce tour-ci, regarde les autres.
-      </p>
+      <div className="game-step">
+        <p className="game-ask">
+          Une blague sur chaque image. Quelqu’un d’autre écrit sur la même : la party choisira.
+        </p>
+        <div className="game-tasks">
+          {game.entries.map((entry, index) => (
+            <div key={entry.id} className="game-task" data-testid="game-task">
+              <GameMedia files={entry.files} />
+              {entry.caption ? (
+                <p className="hint">« {entry.caption} » ✓</p>
+              ) : (
+                <TextForm
+                  label="Ta blague"
+                  placeholder="Ta blague"
+                  maxLength={MAX_GAME_TEXT_LENGTH}
+                  endsAt={game.endsAt}
+                  now={now}
+                  autoFocus={index === 0}
+                  onSend={(text) => void window.liveChat.gameSay(game.id, text, entry.id)}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
     );
+
+  const myTurn = game.turn === me;
   return (
     <div className="game-step">
-      <p className="game-ask">
-        {game.kind === "joke"
-          ? "Fais la meilleure blague sur cette image."
-          : "Donne un mot en lien avec ton image. Attention : l’imposteur a une autre image, et toi aussi peut-être."}
-      </p>
-      <GameMedia files={game.myPicture} big />
-      {done ? (
-        <p className="hint">C’est noté. On attend les autres.</p>
+      {game.iAmImpostor ? (
+        <div className="game-impostor" data-testid="game-impostor">
+          <p>Tu es l’imposteur</p>
+          <span>Tu n’as pas d’image. Écoute les mots des autres et fais semblant.</span>
+        </div>
       ) : (
-        <TextForm
-          label={game.kind === "joke" ? "Ta blague" : "Ton mot"}
-          placeholder={game.kind === "joke" ? "Ta blague" : "Un mot"}
-          maxLength={MAX_GAME_TEXT_LENGTH}
-          onSend={(text) => void window.liveChat.gameSay(game.id, text)}
-        />
+        <GameMedia files={game.myPicture} big press />
+      )}
+      <Words game={game} party={party} />
+      {myTurn ? (
+        <>
+          <p className="game-ask">À toi ! Donne un mot.</p>
+          <TextForm
+            label="Ton mot"
+            placeholder="Un mot"
+            maxLength={MAX_GAME_TEXT_LENGTH}
+            endsAt={game.endsAt}
+            now={now}
+            onSend={(text) => void window.liveChat.gameSay(game.id, text)}
+          />
+        </>
+      ) : (
+        <p className="game-ask" data-testid="game-turn">
+          {game.turn ? `À ${nameOf(party, game, game.turn)} d’écrire…` : "Tout le monde a parlé."}
+        </p>
       )}
     </div>
   );
@@ -504,8 +743,12 @@ const Write = ({ game, me }: { game: GameView; me: string }) => {
 const Vote = ({ game, party }: { game: GameView; party: PartyView }) => {
   const me = party.memberId;
   const shown = game.phase === "reveal";
-  const nameOf = (id: string | null) =>
-    party.members.find((member) => member.id === id)?.name ?? "Quelqu’un";
+  const name = (id: string | null) => nameOf(party, game, id);
+  const revealed = useReveal(
+    game.kind === "undercover" ? game.players.length : game.entries.length,
+    shown,
+  );
+  const allShown = revealed >= (game.kind === "undercover" ? game.players.length : game.entries.length);
   const vote = (choice: string) =>
     void window.liveChat.gameVote(game.id, choice);
   const others = game.players.filter((id) => id !== me);
@@ -517,7 +760,7 @@ const Vote = ({ game, party }: { game: GameView; party: PartyView }) => {
       <div className="game-step">
         <p className="game-ask">
           {shown
-            ? `C’était ${nameOf(game.answer)} !`
+            ? `C’était ${name(game.answer)} !`
             : mine
               ? "C’est le tien. Chut."
               : "Qui l’a envoyé ?"}
@@ -541,7 +784,7 @@ const Vote = ({ game, party }: { game: GameView; party: PartyView }) => {
                 aria-pressed={game.myChoice === id}
                 onClick={() => vote(id)}
               >
-                {nameOf(id)}
+                {name(id)}
               </button>
             ))}
           </div>
@@ -555,12 +798,18 @@ const Vote = ({ game, party }: { game: GameView; party: PartyView }) => {
       <div className="game-step">
         <p className="game-ask">
           {shown
-            ? `L’imposteur était ${nameOf(game.answer)} !`
+            ? allShown
+              ? `L’imposteur était ${name(game.answer)} !`
+              : "Et l’imposteur était…"
             : "Qui est l’imposteur ?"}
         </p>
-        <GameMedia files={game.myPicture} />
+        {game.iAmImpostor ? (
+          <p className="hint">Tu étais l’imposteur : ne te fais pas prendre.</p>
+        ) : (
+          <GameMedia files={game.myPicture} press />
+        )}
         <div className="game-choices">
-          {game.players.map((id) => {
+          {game.players.map((id, index) => {
             const word = game.entries.find((entry) => entry.id === id);
             return (
               <button
@@ -569,7 +818,7 @@ const Vote = ({ game, party }: { game: GameView; party: PartyView }) => {
                 className={[
                   "game-choice",
                   game.myChoice === id ? "is-mine" : "",
-                  shown && game.answer === id ? "is-winner" : "",
+                  shown && allShown && game.answer === id ? "is-winner" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
@@ -577,9 +826,9 @@ const Vote = ({ game, party }: { game: GameView; party: PartyView }) => {
                 aria-pressed={game.myChoice === id}
                 onClick={() => vote(id)}
               >
-                <strong>{nameOf(id)}</strong>
+                <strong>{name(id)}</strong>
                 <span>{word?.caption ?? "…"}</span>
-                {shown && (
+                {shown && index < revealed && (
                   <span className="mono game-votes">{word?.votes ?? 0}</span>
                 )}
               </button>
@@ -590,7 +839,58 @@ const Vote = ({ game, party }: { game: GameView; party: PartyView }) => {
     );
   }
 
-  // The jokes, and the duels of the question game.
+  if (game.kind === "joke") {
+    const author = game.entries.some((entry) => entry.mine);
+    const best = Math.max(0, ...game.entries.map((entry) => entry.votes ?? 0));
+    return (
+      <div className="game-step">
+        <p className="game-ask">
+          {shown
+            ? "Résultat du duel"
+            : author
+              ? "Tu ne votes pas sur ton duel."
+              : "Quelle blague est la meilleure ?"}
+        </p>
+        {game.entries[0] && <GameMedia files={game.entries[0].files} big />}
+        <div className="game-duel">
+          {game.entries.map((entry, index) => (
+            <div key={entry.id} className="game-duel-side">
+              {index > 0 && (
+                <span className="game-vs" aria-hidden="true">
+                  VS
+                </span>
+              )}
+              <button
+                type="button"
+                className={[
+                  "game-entry game-joke",
+                  game.myChoice === entry.id ? "is-mine" : "",
+                  shown && allShown && entry.votes === best && best > 0 ? "is-winner" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                disabled={shown || author}
+                aria-pressed={game.myChoice === entry.id}
+                data-testid="game-entry"
+                onClick={() => vote(entry.id)}
+              >
+                <p className="game-caption is-alone">{entry.caption}</p>
+                {shown && index < revealed && (
+                  <span className="game-entry-foot">
+                    {name(entry.ownerId)} · <span className="mono">{entry.votes}</span> vote
+                    {(entry.votes ?? 0) > 1 ? "s" : ""}
+                  </span>
+                )}
+                {!shown && entry.mine && <span className="game-entry-foot">La tienne</span>}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // The duels of the question game.
   const sitting =
     game.kind === "question" && game.entries.some((entry) => entry.mine);
   const best = Math.max(0, ...game.entries.map((entry) => entry.votes ?? 0));
@@ -617,7 +917,7 @@ const Vote = ({ game, party }: { game: GameView; party: PartyView }) => {
               className={[
                 "game-entry",
                 game.myChoice === entry.id ? "is-mine" : "",
-                shown && entry.votes === best && best > 0 ? "is-winner" : "",
+                shown && allShown && entry.votes === best && best > 0 ? "is-winner" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -626,10 +926,10 @@ const Vote = ({ game, party }: { game: GameView; party: PartyView }) => {
               data-testid="game-entry"
               onClick={() => vote(entry.id)}
             >
-              <GameMedia files={entry.files} caption={entry.caption} />
-              {shown && (
+              <EntryMedia entry={entry} />
+              {shown && index < revealed && (
                 <span className="game-entry-foot">
-                  {nameOf(entry.ownerId)} ·{" "}
+                  {name(entry.ownerId)} ·{" "}
                   <span className="mono">{entry.votes}</span> vote
                   {(entry.votes ?? 0) > 1 ? "s" : ""}
                 </span>
@@ -706,13 +1006,13 @@ const Podium = ({ game, party }: { game: GameView; party: PartyView }) => {
               >
                 <Avatar
                   className="avatar"
-                  name={memberOf(party, id)?.name ?? "?"}
-                  url={memberOf(party, id)?.avatarUrl ?? null}
+                  name={whoOf(party, game, id)?.name ?? "?"}
+                  url={whoOf(party, game, id)?.avatarUrl ?? null}
                 />
                 <span className="podium-name">
                   {id === party.memberId
                     ? "Toi"
-                    : (memberOf(party, id)?.name ?? "Parti")}
+                    : (whoOf(party, game, id)?.name ?? "Parti")}
                 </span>
                 <span className="podium-block">
                   <span className="podium-medal">
@@ -733,7 +1033,7 @@ const Podium = ({ game, party }: { game: GameView; party: PartyView }) => {
             <li key={id}>
               <span className="mono">{placeOf(id) + 1}</span>
               <span className="game-score-name">
-                {memberOf(party, id)?.name ?? "Parti"}
+                {whoOf(party, game, id)?.name ?? "Parti"}
               </span>
               <span className="mono">{game.scores[id] ?? 0}</span>
             </li>
@@ -813,7 +1113,7 @@ const Reactions = ({
           >
             <span className="reaction-emoji">{emoji}</span>
             <span className="reaction-who">
-              {memberOf(party, memberId)?.name ?? ""}
+              {whoOf(party, game, memberId)?.name ?? ""}
             </span>
           </span>
         ))}
@@ -842,13 +1142,16 @@ const Board = ({
   now,
   reactions,
   onClose,
+  onAnswer,
 }: {
   game: GameView;
   party: PartyView;
   now: number;
   reactions: GameReactionView[];
   onClose: () => void;
+  onAnswer: (game: GameView) => void;
 }) => {
+  const waitingVote = game.phase === "vote" && !game.voteStarted;
   const secondsLeft = Math.max(0, Math.ceil((game.endsAt - now) / 1_000));
   const playing = game.players.includes(party.memberId);
   const waiting = game.waiting.includes(party.memberId);
@@ -878,7 +1181,9 @@ const Board = ({
           </button>
         ) : (
           <span className="game-timer">
-            <span className="count">{PHASE_LABEL[game.phase]}</span>
+            <span className="count" data-testid="game-phase">
+              {waitingVote ? "En attente du premier vote" : PHASE_LABEL[game.phase]}
+            </span>
             <span className="game-clock mono" data-testid="game-timer">
               {secondsLeft}
             </span>
@@ -908,9 +1213,9 @@ const Board = ({
             )}
           </div>
         ) : game.phase === "collect" ? (
-          <Collect game={game} />
+          <Collect game={game} onAnswer={onAnswer} />
         ) : game.phase === "write" ? (
-          <Write game={game} me={party.memberId} />
+          <Write game={game} party={party} now={now} />
         ) : game.phase === "done" ? (
           <Podium game={game} party={party} />
         ) : (
@@ -945,10 +1250,13 @@ export const GamesScreen = ({
   state,
   party,
   active,
+  onAnswer,
 }: {
   state: AppState;
   party: PartyView;
   active: boolean;
+  // Opens LiveChat avancé, with the question as its text.
+  onAnswer: (game: GameView) => void;
 }) => {
   const game = state.game;
   const now = useNow(active && game !== null && game.phase !== "done");
@@ -966,6 +1274,7 @@ export const GamesScreen = ({
       now={now}
       reactions={state.gameReactions}
       onClose={() => setClosed(shown.id)}
+      onAnswer={onAnswer}
     />
   );
 };

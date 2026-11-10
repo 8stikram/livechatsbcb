@@ -121,6 +121,7 @@ const SceneInputSchema = z.object({
   to: z.array(z.string()).max(MAX_ONLINE_MEMBERS).default([]),
   // Its player is the layer marked as the link.
   link: MediaLinkSchema.nullable().default(null),
+  game: z.string().nullable().default(null),
 });
 
 // Nothing touched for this long, and the others see this member as away.
@@ -1758,7 +1759,11 @@ function start(): void {
     // Said here rather than by the service, which would have started on the upload.
     if (!MediaDraftSchema.safeParse({ ...timing, ...recipe }).success) return { ok: false, error: 'invalid_request' };
 
-    const result = await sendFiles(session, recipe.files, { ...timing, scene: recipe.scene });
+    // An answer to the question game goes to the game, as one entry.
+    const forGame = timing.game !== null;
+    if (forGame) gameSending += 1;
+    const result = await sendFiles(session, recipe.files, { ...timing, game: timing.game ?? undefined, to: forGame ? [] : timing.to, scene: recipe.scene });
+    if (forGame) gameSending -= 1;
     if (result.ok) {
       for (const id of [...sceneFiles.keys()]) forgetSceneFile(id);
       publishState();
@@ -2219,10 +2224,14 @@ function start(): void {
     if (parsed.success) connection?.startGame(parsed.data);
   });
 
-  handle(IpcChannel.GameSay, (gameId: unknown, text: unknown) => {
+  handle(IpcChannel.GameSay, (gameId: unknown, text: unknown, entryId: unknown) => {
     if (typeof gameId !== 'string' || typeof text !== 'string') return;
     const cleaned = text.replace(/\s+/g, ' ').trim().slice(0, MAX_GAME_TEXT_LENGTH);
-    if (cleaned) connection?.gameSay(gameId, cleaned);
+    if (cleaned) connection?.gameSay(gameId, cleaned, typeof entryId === 'string' ? entryId : undefined);
+  });
+
+  handle(IpcChannel.GameRemoveBot, (gameId: unknown, botId: unknown) => {
+    if (typeof gameId === 'string' && typeof botId === 'string') connection?.removeGameBot(gameId, botId);
   });
 
   handle(IpcChannel.GameVote, (gameId: unknown, choice: unknown) => {
@@ -2234,7 +2243,7 @@ function start(): void {
   });
 
   handle(IpcChannel.GameAction, (gameId: unknown, action: unknown) => {
-    const actions = ['join', 'ready', 'unready', 'launch', 'leave', 'rematch'] as const;
+    const actions = ['join', 'ready', 'unready', 'launch', 'leave', 'rematch', 'done', 'bot-add'] as const;
     const known = actions.find((one) => one === action);
     if (typeof gameId === 'string' && known) connection?.gameAction(gameId, known);
   });
@@ -2268,11 +2277,47 @@ function start(): void {
     return result;
   };
 
-  handle(IpcChannel.SendGameFiles, async (gameId: unknown): Promise<GameSendResult> => {
+  // What this player can still send to the game: how many, and whether only pictures.
+  const gameRoom = (gameId: unknown): { gameId: string; left: number; picturesOnly: boolean } | null => {
     const game = connection?.current().game;
-    if (typeof gameId !== 'string' || game?.id !== gameId || game.phase !== 'collect') return { ok: false, error: 'invalid_request' };
-    const picturesOnly = game.kind === 'joke' || game.kind === 'undercover';
-    const left = GAME_ENTRIES_PER_PLAYER[game.kind] - game.mySent - gameSending;
+    if (typeof gameId !== 'string' || game?.id !== gameId || game.phase !== 'collect' || game.iAmDone) return null;
+    return {
+      gameId,
+      left: GAME_ENTRIES_PER_PLAYER[game.kind] - game.mySent - gameSending,
+      picturesOnly: game.kind === 'joke' || game.kind === 'undercover',
+    };
+  };
+
+  // One entry per picture, sent side by side.
+  const sendChosenForGame = async (gameId: string, chosen: SavedFile[]): Promise<GameSendResult> => {
+    const results = await Promise.all(chosen.map((file) => sendForGame(gameId, [file], '')));
+    return results.find((result) => !result.ok) ?? { ok: true };
+  };
+
+  // Pasted with Ctrl+V while a game waits for pictures.
+  handle(IpcChannel.SendGamePaste, async (gameId: unknown, paths: unknown, bytes: unknown, contentType: unknown, name: unknown): Promise<GameSendResult> => {
+    const room = gameRoom(gameId);
+    if (!room) return { ok: false, error: 'invalid_request' };
+    if (room.left <= 0) return { ok: false, error: 'queue_full' };
+    let files: SavedFile[];
+    const list = PATH_LIST.safeParse(paths);
+    if (list.success) {
+      const read = await readFiles(list.data);
+      if (!read.ok) return { ok: false, error: read.error === 'empty' || read.error === 'too_large' ? read.error : 'unsupported' };
+      files = read.files;
+    } else if (bytes instanceof Uint8Array && typeof contentType === 'string' && typeof name === 'string') {
+      const saved = await savePastedImage(bytes, contentType, name);
+      if (!saved.ok) return { ok: false, error: saved.error === 'empty' || saved.error === 'too_large' ? saved.error : 'unsupported' };
+      files = [saved.file];
+    } else return { ok: false, error: 'unsupported' };
+    if (files.some(({ contentType: type }) => room.picturesOnly && fileKindOf(type) !== 'image')) return { ok: false, error: 'unsupported' };
+    return sendChosenForGame(room.gameId, files.slice(0, room.left));
+  });
+
+  handle(IpcChannel.SendGameFiles, async (gameId: unknown): Promise<GameSendResult> => {
+    const room = gameRoom(gameId);
+    if (!room) return { ok: false, error: 'invalid_request' };
+    const { left, picturesOnly } = room;
     if (left <= 0) return { ok: true };
     const extensions = Object.entries(CONTENT_TYPE_BY_EXTENSION)
       .filter(([, contentType]) => (picturesOnly ? fileKindOf(contentType) === 'image' : true))
@@ -2293,9 +2338,7 @@ function start(): void {
       if (size > MAX_MEDIA_BYTES) return { ok: false, error: 'too_large' };
       chosen.push({ path, name: basename(path), size, contentType });
     }
-    // One entry per picture, sent side by side.
-    const results = await Promise.all(chosen.map((file) => sendForGame(gameId, [file], '')));
-    return results.find((result) => !result.ok) ?? { ok: true };
+    return sendChosenForGame(room.gameId, chosen);
   });
 
   handle(IpcChannel.SendGameText, (gameId: unknown, text: unknown): Promise<ActionResult> | ActionResult => {
