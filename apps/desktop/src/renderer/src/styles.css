@@ -5148,7 +5148,7 @@ html.calm body::before {
   display: flex;
   align-items: center;
   gap: 18px;
-  max-width: 620px;
+  max-width: 760px;
   text-align: left;
 }
 
@@ -5968,4 +5968,35 @@ html.calm body::before {
   .guess-card {
     animation: none;
   }
+}
+
+/* Mascots in the games screen */
+.lobby-stage {
+  flex: none;
+  width: 360px;
+  height: 225px;
+  max-width: 45vw;
+  border-radius: 18px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.game-banner {
+  flex: none;
+  width: 100%;
+  height: 160px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.podium-mascot {
+  width: 320px;
+  height: 200px;
+  max-width: 100%;
+  margin: 0 auto;
+  border-radius: 18px;
+  overflow: hidden;
 }

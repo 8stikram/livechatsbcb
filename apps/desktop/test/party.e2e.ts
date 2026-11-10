@@ -2182,6 +2182,12 @@ describe.skipIf(online)('party flow in the real app', () => {
     await guest.control.getByTestId('game-lobby').getByRole('button', { name: 'Rejoindre' }).click();
     await host.control.getByTestId('game-lobby').getByText('Toi').waitFor();
     await host.control.locator('.lobby-faces .toy-face:not(.is-empty)').nth(1).waitFor();
+    // Mascot of the lobby: drawn, and it reacts when the guest joined.
+    const lobbyMascot = host.control.locator('[data-testid="game-lobby"] [data-testid="mascot"][data-persona="micro"]');
+    await lobbyMascot.waitFor();
+    expect(await lobbyMascot.locator('svg').evaluate((svg) => svg.querySelectorAll('path, circle, rect, ellipse, polygon').length)).toBeGreaterThan(5);
+    expect(await lobbyMascot.locator('svg').evaluate((svg) => { const b = (svg as SVGSVGElement).getBBox(); return b.width * b.height; })).toBeGreaterThan(0);
+    await expect.poll(() => lobbyMascot.getAttribute('data-mood'), { timeout: 2_000 }).not.toBe('repos');
     // Two people and a bot make three.
     await host.control.getByTestId('game-add-bot').click();
     await guest.control.getByTestId('game-lobby').getByText('Bot Gaston').waitFor();
@@ -2202,6 +2208,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     for (const [index, member] of [host, guest].entries()) {
       await member.control.locator('[data-testid="game"][data-phase="write"]').waitFor();
       await expect.poll(() => member.control.getByTestId('game-task').count()).toBe(2);
+      await member.control.locator('[data-testid="game"] .game-banner [data-testid="mascot"][data-persona="micro"]').waitFor();
       if (index === 0) await picture(member.control, 'game-write.png');
       for (const joke of [1, 2]) {
         const field = member.control.getByLabel('Ta blague').first();
@@ -2232,6 +2239,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByRole('button', { name: 'Arrêter la partie' }).click();
     await host.control.getByRole('button', { name: 'Arrêter pour tous ?' }).click();
     await guest.control.getByTestId('game-ranking').waitFor();
+    await expect.poll(() => guest.control.locator('[data-testid="mascot"][data-persona="micro"]').getAttribute('data-mood')).toMatch(/^(victoire|decu)$/);
     await picture(guest.control, 'game-ranking.png');
     // Revanche: the same lobby again.
     await guest.control.getByRole('button', { name: 'Revanche' }).click();
@@ -2247,6 +2255,12 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByTestId('game-card-guess').getByRole('button', { name: 'Ouvrir' }).click();
     await guest.control.getByTestId('game-lobby').getByRole('button', { name: 'Rejoindre' }).click();
     await host.control.locator('.lobby-faces .toy-face:not(.is-empty)').nth(1).waitFor();
+    // Mascot of the lobby: drawn, and it reacts when the guest joined.
+    const lobbyMascot = host.control.locator('[data-testid="game-lobby"] [data-testid="mascot"][data-persona="chrono"]');
+    await lobbyMascot.waitFor();
+    expect(await lobbyMascot.locator('svg').evaluate((svg) => svg.querySelectorAll('path, circle, rect, ellipse, polygon').length)).toBeGreaterThan(5);
+    expect(await lobbyMascot.locator('svg').evaluate((svg) => { const b = (svg as SVGSVGElement).getBBox(); return b.width * b.height; })).toBeGreaterThan(0);
+    await expect.poll(() => lobbyMascot.getAttribute('data-mood'), { timeout: 2_000 }).not.toBe('repos');
     await host.control.getByTestId('game-add-bot').click();
     await guest.control.getByTestId('game-lobby').getByText('Bot Gaston').waitFor();
     await host.control.getByTestId('game-lobby').getByRole('button', { name: 'Lancer' }).click();
@@ -2262,6 +2276,7 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     // Whoever speaks sees the word; the others only know who speaks.
     await host.control.locator('[data-testid="game"][data-phase="write"]').waitFor();
+    await host.control.locator('[data-testid="game"] .game-banner [data-testid="mascot"][data-persona="chrono"]').waitFor();
     await expect.poll(async () => (await host.control.getByTestId('guess-secret').count()) + (await guest.control.getByTestId('guess-secret').count()), { timeout: 20_000 }).toBe(1);
     const talker = (await host.control.getByTestId('guess-secret').count()) === 1 ? host : guest;
     const listener = talker === host ? guest : host;
@@ -2276,6 +2291,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.control.getByRole('button', { name: 'Arrêter la partie' }).click();
     await host.control.getByRole('button', { name: 'Arrêter pour tous ?' }).click();
     await guest.control.getByTestId('game-ranking').waitFor();
+    await expect.poll(() => guest.control.locator('[data-testid="mascot"][data-persona="chrono"]').getAttribute('data-mood')).toMatch(/^(victoire|decu)$/);
     for (const member of [host, guest]) {
       await member.control.getByRole('button', { name: 'Autre jeu' }).click();
       await openTab(member, 'LiveChat');

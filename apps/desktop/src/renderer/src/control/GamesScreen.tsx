@@ -27,6 +27,9 @@ import { layerLook, layerPlace } from "../scene";
 import { ConfirmButton } from "./ConfirmButton";
 import { GameArt } from "./game-art";
 import { errorMessage } from "./messages";
+import { Mascot } from "./mascots/Mascot";
+import { personaOf } from "./mascots/persona";
+import { useGameMood } from "./mascots/use-game-mood";
 
 const GAMES: Array<{ kind: GameKind; title: string; rule: string }> = [
   {
@@ -364,6 +367,59 @@ const Face = ({
   </li>
 );
 
+// Task 3 wires the Settings switch here.
+const MASCOT_EFFECTS = true;
+
+// The persona of the game, reacting to what happens in it.
+const GameMascot = ({
+  game,
+  me,
+  frame,
+  reactions,
+}: {
+  game: GameView;
+  me: string;
+  frame: "scene" | "banner";
+  reactions?: GameReactionView[];
+}) => {
+  const { mood, pulse, look, burst } = useGameMood(game, me, reactions);
+  return (
+    <Mascot
+      persona={personaOf(game.kind).id}
+      mood={mood}
+      pulse={pulse}
+      look={look}
+      burst={burst}
+      effects={MASCOT_EFFECTS}
+      frame={frame}
+    />
+  );
+};
+
+// At the podium: held on its victory (or its disappointment), with the victory moment's bursts.
+const PodiumMascot = ({ game }: { game: GameView }) => {
+  const persona = personaOf(game.kind);
+  const target = game.reason === "few" || game.reason === "stopped" ? "decu" : "victoire";
+  const burst = persona.moments.find(([, mood]) => mood === "victoire")?.[2];
+  // Starts calm so that the change to the final mood draws its bursts.
+  const [shown, setShown] = useState<{ mood: "repos" | "victoire" | "decu"; pulse: number }>({ mood: "repos", pulse: 0 });
+  useEffect(() => setShown({ mood: target, pulse: 1 }), [target]);
+  return (
+    <div className="podium-mascot">
+      <Mascot
+        persona={persona.id}
+        mood={shown.mood}
+        pulse={shown.pulse}
+        look={0}
+        burst={target === "victoire" ? burst : undefined}
+        effects={MASCOT_EFFECTS}
+        frame="scene"
+        hold
+      />
+    </div>
+  );
+};
+
 const Lobby = ({
   game,
   party,
@@ -392,8 +448,8 @@ const Lobby = ({
       data-testid="game-lobby"
     >
       <div className="lobby-head">
-        <div className="lobby-art">
-          <GameArt kind={game.kind} />
+        <div className="lobby-stage">
+          <GameMascot game={game} me={me} frame="scene" />
         </div>
         <div className="lobby-title">
           <span className="toy-tag">Salon</span>
@@ -1192,6 +1248,7 @@ const Podium = ({ game, party }: { game: GameView; party: PartyView }) => {
 
   return (
     <div className="game-step podium-step">
+      <PodiumMascot game={game} />
       {played && <Confetti />}
       <p className="toy-title">
         {game.reason === "few"
@@ -1401,6 +1458,11 @@ const Board = ({
           </span>
         )}
       </header>
+      {game.phase !== "done" && (
+        <div className="game-banner">
+          <GameMascot game={game} me={party.memberId} frame="banner" reactions={reactions} />
+        </div>
+      )}
       {game.phase !== "done" && <Faces game={game} party={party} />}
       <div
         key={`${game.phase}-${game.round}-${game.entries.map((entry) => entry.id).join()}`}

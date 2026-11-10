@@ -19,6 +19,8 @@ export type MascotProps = {
   still?: boolean;
   /** Extra bursts fired with each pulse, on top of the persona's own. */
   burst?: FxSpec[];
+  /** Keep the mood: no fall back to `repos` (the podium). */
+  hold?: boolean;
 };
 
 // ---------- persona CSS: injected once per persona, reference-counted ----------
@@ -73,7 +75,7 @@ function useMotionOk(): boolean {
   return ok;
 }
 
-export function Mascot({ persona: id, mood, pulse, look, effects, frame, still, burst }: MascotProps) {
+export function Mascot({ persona: id, mood, pulse, look, effects, frame, still, burst, hold }: MascotProps) {
   const persona = PERSONAS[id];
   const uid = useId().replace(/\W/g, '');
   const motionOk = useMotionOk();
@@ -198,10 +200,10 @@ export function Mascot({ persona: id, mood, pulse, look, effects, frame, still, 
       if (burstRef.current?.length) fxRef.current?.burst(burstRef.current);
     }
     first.current = false;
-    if (mood === 'repos') return;
+    if (mood === 'repos' || hold) return;
     const t = window.setTimeout(() => apply('repos'), persona.moodMs || 3000);
     return () => clearTimeout(t);
-  }, [mood, pulse, persona]);
+  }, [mood, pulse, persona, hold]);
 
   // ---------- eyes: ease --look toward the target ----------
   const lookNow = useRef(0);
