@@ -4,3 +4,4 @@ import './insp.css';
 import './micro.css';
 import './boum.css';
 import './boule.css';
+import './chrono.css';
