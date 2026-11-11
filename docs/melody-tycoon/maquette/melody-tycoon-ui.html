@@ -1,460 +1,459 @@
 <title>Melody Tycoon — propositions d'interface</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=Inter+Tight:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&display=swap">
 <style>
-/* Layout : table de présentation sombre ; 3 écrans du jeu (Accueil en tuiles, Effectif en tableau + carte,
-   Studio) dessinés une fois, habillés par 3 variantes de « Nuit » : même squelette de mode carrière,
-   couleur, largeur de lettres et place du menu différentes. */
+/* Layout : une seule fenêtre de jeu jouable (Nuit Néon). Menu en haut, 3 vues qui se remplacent :
+   Accueil en grandes tuiles-images, Effectif en cartes à collectionner, Studio jouable de bout en bout. */
 :root{
   color-scheme:dark;
-  --page:#0b0b0d; --page-fg:#ecece8; --page-mute:#9a9b98; --page-line:#2b2c2f;
-  --f-ui:"Inter Tight",system-ui,-apple-system,"Segoe UI",sans-serif;
-  /* variante 1 : Néon (valeurs par défaut) */
-  --bg:#0b0a10; --panel:#14121c; --panel2:#1c1928; --line:#2d2939; --fg:#f3f1f7; --mute:#958fa6;
-  --a1:#8b5cff; --a2:#ff4fa3; --on-acc:#ffffff;
-  --r-top:#3ecf6e; --r-good:#b9d646; --r-mid:#f2c230; --r-low:#f08a2e; --r-bad:#e5484d; --on-rate:#0b0b0d;
-  --fd:"Archivo",system-ui,sans-serif; --fb:"Archivo",system-ui,sans-serif;
-  --hw:300; --hs:100%; --ht:-.01em;
+  --bg:#0b0a10; --panel:#14121c; --panel2:#1e1a2b; --line:#2d2939; --fg:#f3f1f7; --mute:#958fa6;
+  --a1:#8b5cff; --a2:#ff4fa3; --on-acc:#ffffff; --ok:#3ecf6e; --warn:#f2a630; --bad:#ff5a67;
+  --grad:linear-gradient(90deg,var(--a1),var(--a2));
+  --fd:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
-#stage[data-dir="n2"]{
-  --bg:#060b0f; --panel:#0d151b; --panel2:#132029; --line:#203039; --fg:#eef5f6; --mute:#8297a1;
-  --a1:#19d3c5; --a2:#b6f23c; --on-acc:#04110f;
-  --hw:650; --hs:68%; --ht:.005em;
-}
-#stage[data-dir="n3"]{
-  --bg:#0e0b09; --panel:#181310; --panel2:#221a15; --line:#33281f; --fg:#f7f2ec; --mute:#a2968b;
-  --a1:#ff6a1f; --a2:#ffcf4a; --on-acc:#1a0d02;
-  --hw:750; --hs:122%; --ht:-.035em;
-}
-#stage{--grad:linear-gradient(90deg,var(--a1),var(--a2))}
-
 *{box-sizing:border-box}
-body{background:var(--page);color:var(--page-fg);font-family:var(--f-ui);font-size:15px;line-height:1.45;
-  padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
-.intro h1{font-size:clamp(26px,4vw,40px);line-height:1.02;letter-spacing:-.03em;margin:0 0 10px;font-weight:700;text-wrap:balance}
-.intro p{margin:0;color:var(--page-mute);max-width:64ch}
-.pick{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
-.pick button{font:inherit;text-align:left;color:var(--page-fg);background:transparent;border:1px solid var(--page-line);
-  padding:14px;cursor:pointer;display:flex;flex-direction:column;gap:6px;border-radius:2px}
-.pick button b{font-size:17px}
-.pick button span{color:var(--page-mute);font-size:13px}
-.pick button i{font-style:normal;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--page-mute)}
-.pick button em{display:block;height:6px;width:100%}
-.pick button[aria-pressed="true"]{background:#ecece8;color:#0b0b0d;border-color:#ecece8}
-.pick button[aria-pressed="true"] span,.pick button[aria-pressed="true"] i{color:#3a3b3d}
-.pick button:focus-visible,.app button:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px}
-.note{border-left:2px solid var(--page-line);padding-left:14px;color:var(--page-mute);max-width:72ch;margin:0}
-.note b{color:var(--page-fg);font-weight:600}
-.cap{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--page-mute);margin:0 0 10px;font-weight:500}
-#stage{display:flex;flex-direction:column;gap:36px}
-
-/* ---------- le jeu ---------- */
-.app{background:var(--bg);color:var(--fg);font-family:var(--fb);font-size:14px;outline:1px solid var(--page-line);
-  display:grid;grid-template-columns:minmax(0,1fr);min-width:0;font-variant-numeric:tabular-nums;position:relative}
-.app button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
-.lbl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:500;font-stretch:100%}
+body{background:#07060a;color:var(--fg);font-family:var(--fd);font-size:14px;line-height:1.4;
+  padding-block:22px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.intro{display:flex;flex-wrap:wrap;gap:6px 24px;align-items:baseline;justify-content:space-between}
+.intro h1{font-size:18px;font-weight:600;margin:0;letter-spacing:-.01em}
+.intro p{margin:0;color:var(--mute);font-size:13px;max-width:70ch}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.lbl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:500}
 .lbl::before{content:"[ "}.lbl::after{content:" ]"}
-.h,.t{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);text-transform:uppercase;line-height:.95;margin:0;text-wrap:balance}
+.h{font-weight:300;letter-spacing:-.01em;text-transform:uppercase;line-height:.95;margin:0;text-wrap:balance}
 .gt{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.mut{color:var(--mute)}
 
-.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;padding:12px 18px;border-bottom:1px solid var(--line)}
-.brand{font-family:var(--fd);font-weight:700;font-stretch:62%;text-transform:lowercase;font-size:24px;margin-right:auto;display:flex;align-items:baseline;gap:10px}
-.brand small{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:500;font-stretch:100%}
-.badge{width:30px;height:30px;background:var(--grad);display:inline-grid;place-items:center;color:var(--on-acc);font-weight:800;font-size:15px;align-self:center;clip-path:polygon(0 0,100% 0,100% 72%,50% 100%,0 72%)}
-.stat{display:flex;flex-direction:column;gap:1px}
-.stat b{font-size:15px;font-weight:600}
-.tick{border:1px solid var(--line);padding:6px 10px;display:flex;flex-direction:column;gap:1px}
-.nav{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--line);padding:0 10px;scrollbar-width:thin}
-.nav button{padding:12px 10px 10px;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;color:var(--mute);border-bottom:3px solid transparent}
-.nav button[aria-current="page"]{color:var(--fg);border-image:var(--grad) 1;font-weight:600}
-.body{padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
-.hint{display:flex;flex-wrap:wrap;gap:6px 18px;padding:9px 18px;border-top:1px solid var(--line);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.game{background:var(--bg);border:1px solid var(--line);display:flex;flex-direction:column;min-width:0;font-variant-numeric:tabular-nums;position:relative;overflow:hidden}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.crest{width:42px;height:46px;background:var(--grad);display:grid;place-items:center;font-weight:800;font-size:20px;clip-path:polygon(0 0,100% 0,100% 72%,50% 100%,0 72%);flex:none}
+.id{display:flex;flex-direction:column;gap:4px;margin-right:auto;min-width:150px}
+.id b{font-stretch:62%;font-weight:700;font-size:22px;text-transform:lowercase;line-height:1}
+.xp{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.xp i{display:block;width:120px;height:5px;background:var(--panel2);position:relative}
+.xp i::after{content:"";position:absolute;inset:0 46% 0 0;background:var(--grad)}
+.chip{display:flex;align-items:center;gap:8px;border:1px solid var(--line);padding:6px 10px;background:var(--panel)}
+.chip svg{width:16px;height:16px;flex:none}
+.chip b{font-size:15px;font-weight:600}
+.chip small{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.clock{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.clock b{font-size:17px;font-weight:600}
+.nav{display:flex;gap:4px;padding:0 12px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:thin}
+.nav button{padding:13px 12px 11px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;color:var(--mute);border-bottom:3px solid transparent;transition:color .15s}
+.nav button:hover{color:var(--fg)}
+.nav button[aria-current="page"]{color:var(--fg);font-weight:700;border-image:var(--grad) 1}
+.nav button.soon{opacity:.45}
+.view{padding:16px;display:none;flex-direction:column;gap:14px;min-width:0;animation:in .28s ease both}
+.view.on{display:flex}
+@keyframes in{from{opacity:.4;transform:translateY(8px)}to{opacity:1;transform:none}}
+.hint{display:flex;flex-wrap:wrap;gap:6px 18px;padding:9px 16px;border-top:1px solid var(--line);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
 .hint kbd{font:inherit;border:1px solid var(--line);padding:1px 6px;color:var(--fg);margin-right:5px}
-.news{display:flex;gap:14px;align-items:center;border:1px solid var(--line);padding:8px 12px;overflow:hidden;white-space:nowrap;font-size:12.5px}
-.news b{background:var(--grad);color:var(--on-acc);padding:2px 8px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;flex:none}
+
+/* tuiles de jeu */
+.tile{position:relative;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;text-align:left;padding:16px;min-width:0;overflow:hidden;
+  background:var(--panel);border:2px solid var(--line);transition:transform .18s ease,border-color .18s ease}
+.tile:hover,.tile:focus-visible{transform:translateY(-4px) scale(1.012);border-image:var(--grad) 1}
+.tile:active{transform:scale(.985)}
+.tile .h{font-size:clamp(22px,3vw,34px);position:relative}
+.tile .lbl,.tile .sub{position:relative}
+.sub{color:var(--mute);font-size:13px}
+.go{position:relative;align-self:flex-start;background:var(--grad);color:var(--on-acc);padding:10px 16px;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700}
+button.go:hover{filter:brightness(1.12)}
+.hub{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1.5fr) minmax(0,1.05fr);gap:12px}
+.hub .tile{min-height:330px}
+.t-create{background:radial-gradient(90% 70% at 50% 34%,color-mix(in srgb,var(--a1) 40%,transparent),transparent 70%),var(--panel)}
+.vinyl{position:absolute;left:50%;top:38%;width:min(190px,62%);aspect-ratio:1;border-radius:50%;translate:-50% -50%;
+  background:radial-gradient(circle,var(--a2) 0 13%,#0b0a10 13.5% 16%,transparent 16.5%),repeating-radial-gradient(circle,#17141f 0 3px,#221d2f 3px 5px);
+  box-shadow:0 0 0 2px #2d2939,0 18px 50px -10px color-mix(in srgb,var(--a1) 70%,transparent)}
+.vinyl::after{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 20deg,transparent 0 12%,rgba(255,255,255,.14) 16%,transparent 22% 60%,rgba(255,255,255,.1) 66%,transparent 72%)}
+.t-next{background:var(--panel)}
+.cover{position:absolute;inset:0;background:
+  radial-gradient(70% 60% at 22% 20%,#ff4fa3 0,transparent 60%),radial-gradient(80% 70% at 85% 30%,#8b5cff 0,transparent 62%),
+  radial-gradient(90% 60% at 50% 110%,#2a1a6b 0,transparent 70%),#120f1c}
+.cover::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 30%,rgba(11,10,16,.94) 82%)}
+.t-next .h{font-size:clamp(30px,5vw,60px)}
+.duel{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center}
+.duel b{font-weight:300;text-transform:uppercase;font-size:clamp(16px,2vw,22px)}
+.duel div:last-child{text-align:right}
+.duel span{display:block;font-size:12px;color:var(--mute)}
+.duel em{font-style:normal;font-weight:800;font-stretch:62%;font-size:20px;color:var(--mute)}
+.tape{position:absolute;left:-10%;width:120%;top:34px;transform:rotate(-3deg);background:var(--grad);color:var(--on-acc);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;padding:5px 0;white-space:nowrap;overflow:hidden;font-weight:600}
+.t-night{justify-content:space-between;background:radial-gradient(100% 70% at 100% 0,color-mix(in srgb,var(--a2) 26%,transparent),transparent 65%),var(--panel)}
+.count{font-weight:300;font-size:clamp(40px,6vw,66px);line-height:.9;letter-spacing:-.03em}
+.stars{display:flex;gap:6px}
+.stars i{width:26px;height:26px;background:var(--panel2);clip-path:polygon(50% 0,62% 36%,100% 38%,70% 60%,80% 100%,50% 76%,20% 100%,30% 60%,0 38%,38% 36%);transition:background .3s,transform .3s}
+.stars i.lit{background:var(--a2);transform:scale(1.15)}
+.row4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.row4 .tile{min-height:120px;flex-direction:row;align-items:center;justify-content:flex-start;gap:14px}
+.row4 .tile b{font-weight:300;text-transform:uppercase;font-size:19px;line-height:1.05;display:block}
+.ico{width:46px;height:46px;flex:none;display:grid;place-items:center;background:var(--panel2);font-weight:800;font-size:20px;position:relative}
+.ico.alert::after{content:attr(data-n);position:absolute;top:-8px;right:-8px;min-width:20px;height:20px;border-radius:10px;background:var(--a2);font-size:11px;display:grid;place-items:center;padding:0 5px}
+.podium{display:flex;align-items:flex-end;gap:3px;height:34px}
+.podium i{width:9px;background:var(--line)}.podium i.me{background:var(--grad)}
+.news{display:flex;gap:12px;align-items:center;border:1px solid var(--line);padding:8px 12px;overflow:hidden;white-space:nowrap;font-size:12.5px}
+.news b{background:var(--grad);padding:2px 8px;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;flex:none}
 .news span{overflow:hidden;text-overflow:ellipsis;color:var(--mute)}
 
-/* tuiles façon mode carrière */
-.hub{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px}
-.tile{background:var(--panel);border:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0;position:relative;overflow:hidden;grid-column:span 4}
-.tile.w5{grid-column:span 5}.tile.w7{grid-column:span 7}
-.tile h4{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);text-transform:uppercase;font-size:22px;line-height:1;margin:0}
-.big{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);font-size:36px;line-height:1}
-.mut{color:var(--mute)}
-.rows{display:flex;flex-direction:column}
-.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:7px 0;border-top:1px solid var(--line);align-items:baseline}
-.row span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.up{color:var(--r-top)}.down{color:var(--r-bad)}
-.me{font-weight:700}.me span:first-child{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
-.spark{width:100%;height:46px;display:block}
-.gauge{height:6px;background:var(--panel2);position:relative}
-.gauge i{position:absolute;inset:0 auto 0 0;background:var(--grad)}
-.cta{background:var(--grad)!important;color:var(--on-acc)!important;padding:11px 16px!important;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;align-self:flex-start}
-
-/* grande tuile : prochaine sortie (comme « prochain match ») */
-.next{background:radial-gradient(120% 150% at 85% 0%,color-mix(in srgb,var(--a1) 34%,transparent) 0%,transparent 55%),radial-gradient(90% 120% at 0% 100%,color-mix(in srgb,var(--a2) 20%,transparent) 0%,transparent 60%),var(--panel);min-height:300px;justify-content:space-between;padding-bottom:112px}
-.next .h{font-size:clamp(30px,5vw,58px)}
-.duel{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:center}
-.duel .side{display:flex;flex-direction:column;gap:3px;min-width:0}
-.duel .side:last-child{text-align:right}
-.duel .t{font-size:clamp(17px,2.2vw,24px)}
-.duel .vs{font-family:var(--fd);font-weight:800;font-stretch:62%;font-size:22px;color:var(--mute)}
-.kpis{display:flex;flex-wrap:wrap;gap:8px 24px}
-.kpis div{display:flex;flex-direction:column}
-.kpis b{font-size:17px;font-weight:600}
-.tape{position:absolute;left:-10%;width:120%;background:var(--grad);color:var(--on-acc);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;padding:5px 0;white-space:nowrap;overflow:hidden;font-weight:600}
-.tape.t1{bottom:44px;transform:rotate(-2.4deg)}
-.tape.t2{bottom:14px;transform:rotate(2.2deg);background:var(--fg);color:var(--bg);opacity:.9}
-
-/* notes colorées */
-.rate{display:inline-grid;place-items:center;min-width:34px;height:24px;padding:0 6px;font-weight:800;font-size:13px;color:var(--on-rate);font-stretch:90%}
-.rate.top{background:var(--r-top)}.rate.good{background:var(--r-good)}.rate.mid{background:var(--r-mid)}.rate.low{background:var(--r-low)}.rate.bad{background:var(--r-bad)}
-
-/* effectif */
-.squad{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px}
-.tablewrap{overflow-x:auto;border:1px solid var(--line);background:var(--panel)}
-table{border-collapse:collapse;width:100%;min-width:640px;font-size:13px}
-th{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:500;text-align:left;padding:10px;border-bottom:1px solid var(--line);white-space:nowrap}
-td{padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
-tr:last-child td{border-bottom:0}
-tr.sel td{background:var(--panel2)}
-tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--a1)}
-td .nm{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);text-transform:uppercase;font-size:16px}
-.mini{display:inline-block;width:64px;height:5px;background:var(--panel2);vertical-align:middle;position:relative;margin-right:6px}
-.mini i{position:absolute;inset:0 auto 0 0;background:var(--grad)}
-.card{background:radial-gradient(130% 110% at 100% 0%,color-mix(in srgb,var(--a1) 36%,transparent) 0%,transparent 58%),var(--panel);border:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
-.cardtop{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:end}
-.gen{font-family:var(--fd);font-weight:800;font-stretch:var(--hs);letter-spacing:-.04em;font-size:clamp(64px,9vw,104px);line-height:.8}
-.card .h{font-size:clamp(24px,3.2vw,36px)}
+/* effectif : cartes */
+.squad{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px}
+.deck{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-content:start}
+.pcard{position:relative;aspect-ratio:3/4;display:flex;flex-direction:column;justify-content:space-between;padding:10px;text-align:left;overflow:hidden;
+  border:2px solid var(--line);background:#15121d;transition:transform .2s ease}
+.pcard:hover,.pcard:focus-visible{transform:translateY(-6px) rotate(-1.2deg)}
+.pcard[aria-pressed="true"]{border-image:var(--grad) 1;transform:translateY(-6px)}
+.art{position:absolute;inset:0;background:radial-gradient(60% 50% at 28% 22%,hsl(var(--hue) 95% 62%) 0,transparent 62%),radial-gradient(70% 60% at 82% 70%,hsl(calc(var(--hue) + 70) 90% 52%) 0,transparent 64%),#15121d}
+.art::before{content:attr(data-i);position:absolute;right:-6px;bottom:22%;font-weight:800;font-stretch:62%;font-size:110px;line-height:.8;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.6)}
+.art::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(11,10,16,.92) 92%)}
+.duel>span:last-child{text-align:right}
+.pcard .note{position:relative;font-weight:800;font-size:34px;line-height:.9}
+.pcard .note small{display:block;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;opacity:.85;margin-top:3px}
+.pcard .nm{position:relative;font-weight:300;text-transform:uppercase;font-size:18px;line-height:1}
+.pcard .en{position:relative;height:4px;background:rgba(255,255,255,.18);margin-top:6px}
+.pcard .en i{position:absolute;inset:0 auto 0 0;background:var(--grad)}
+.pcard.add{border-style:dashed;align-items:center;justify-content:center;color:var(--mute);gap:6px;font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+.pcard.add b{font-size:34px;font-weight:300}
+.panel{background:radial-gradient(120% 90% at 100% 0,color-mix(in srgb,var(--a1) 32%,transparent),transparent 60%),var(--panel);border:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.ptop{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:end}
+.gen{font-weight:800;font-size:clamp(64px,9vw,100px);line-height:.8;letter-spacing:-.04em}
+.panel .h{font-size:clamp(24px,3.2vw,36px)}
 .pills{display:flex;flex-wrap:wrap;gap:6px}
 .pill{border:1px solid var(--line);padding:2px 8px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
-.radar{width:100%;max-width:300px;align-self:center;display:block}
-.radar text{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;fill:var(--mute);font-family:var(--fb)}
+.radar{width:100%;max-width:290px;align-self:center;display:block}
+.radar text{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;fill:var(--mute);font-family:var(--fd)}
 .radar .v{fill:var(--fg);font-weight:700;font-size:10.5px}
-.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
-.meta div{border:1px solid var(--line);padding:9px;display:flex;flex-direction:column;gap:3px;background:var(--bg)}
-.meta b{font-size:15px;font-weight:600}
+#rpoly{transition:all .35s ease}
+.bars{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.bars div{border:1px solid var(--line);padding:8px;background:var(--bg);display:flex;flex-direction:column;gap:5px}
+.bars b{font-size:15px;font-weight:600}
+.meter{height:5px;background:var(--panel2);position:relative}
+.meter i{position:absolute;inset:0 auto 0 0;background:var(--grad);transition:width .35s ease}
 .acts{display:flex;flex-wrap:wrap;gap:8px}
-.ghostbtn{border:1px solid var(--line)!important;padding:10px 14px!important;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase}
+.ghost{border:1px solid var(--line);padding:10px 14px;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase}
+.ghost:hover{border-color:var(--fg)}
 
-/* studio */
+/* studio jouable */
 .steps{display:flex;overflow-x:auto;border:1px solid var(--line)}
 .steps div{flex:1 0 auto;padding:9px 12px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);border-right:1px solid var(--line);white-space:nowrap}
 .steps div:last-child{border-right:0}
 .steps .done{color:var(--fg)}.steps .now{background:var(--grad);color:var(--on-acc);font-weight:700}
 .studio{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:14px}
 .col{display:flex;flex-direction:column;gap:12px;min-width:0}
-.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
-.opt{border:1px solid var(--line)!important;background:var(--panel)!important;padding:12px!important;display:flex;flex-direction:column;gap:8px;text-align:left;min-width:0}
-.opt b{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);text-transform:uppercase;font-size:19px;line-height:1}
-.opt .price{font-size:15px;font-weight:600}
-.opt.sel{border-color:transparent!important;background:linear-gradient(var(--panel2),var(--panel2)) padding-box,var(--grad) border-box!important;border-width:2px!important}
-.opt.off{opacity:.42}
-.band{border:1px solid var(--line);background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:12px}
-.range{position:relative;height:10px;background:var(--panel2)}
-.range i{position:absolute;top:0;bottom:0;left:61%;width:12%;background:var(--grad)}
+.stagebox{min-height:380px;display:flex;flex-direction:column;gap:12px}
+.stagebox>*{animation:in .3s ease both}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.opt{position:relative;border:2px solid var(--line);background:var(--panel);padding:14px 12px;display:flex;flex-direction:column;gap:8px;text-align:left;min-width:0;min-height:170px;justify-content:flex-end;transition:transform .18s}
+.opt:not(:disabled):hover{transform:translateY(-4px)}
+.opt b{font-weight:300;text-transform:uppercase;font-size:20px;line-height:1}
+.opt .price{font-size:16px;font-weight:700}
+.opt .lv{position:absolute;top:10px;left:12px;display:flex;gap:3px}
+.opt .lv i{width:14px;height:5px;background:var(--line)}.opt .lv i.f{background:var(--a2)}
+.opt[aria-pressed="true"]{border-image:var(--grad) 1;background:var(--panel2)}
+.opt:disabled{opacity:.4;cursor:not-allowed}
+.band{border:1px solid var(--line);background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:10px}
+.big{font-weight:300;font-size:36px;line-height:1;letter-spacing:-.01em}
+.range{position:relative;height:12px;background:var(--panel2)}
+.range i{position:absolute;top:0;bottom:0;background:var(--grad);transition:left .4s ease,width .4s ease}
+.range u{position:absolute;top:-5px;bottom:-5px;width:3px;background:#fff;display:none}
 .scale{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)}
 .kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px}
-.evt{border:1px solid var(--r-low);background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:10px}
-.evt .lbl{color:var(--r-low)}
-.evt h4{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);text-transform:uppercase;font-size:24px;line-height:1;margin:0}
-.react{display:flex;flex-direction:column;gap:6px}
-.react button{border:1px solid var(--line)!important;padding:9px 11px!important;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;text-align:left}
-.react button:first-child{background:var(--grad)!important;color:var(--on-acc)!important;border-color:transparent!important;font-weight:600}
+.evt{border:2px solid var(--warn);background:var(--panel);padding:16px;display:flex;flex-direction:column;gap:10px}
+.evt.good{border-color:var(--ok)}.evt.good .lbl{color:var(--ok)}
+.evt .lbl{color:var(--warn)}
+.evt h3{font-weight:300;text-transform:uppercase;font-size:clamp(24px,3.4vw,36px);line-height:1;margin:0}
+.react{display:flex;flex-direction:column;gap:8px}
+.react button{border:1px solid var(--line);padding:11px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;text-align:left;transition:transform .15s,border-color .15s}
+.react button:hover{transform:translateX(6px);border-color:var(--fg)}
+.react button b{font-weight:700}
+.feat{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center}
+.wheel{width:190px;height:190px;border-radius:50%;position:relative;flex:none;box-shadow:0 0 0 2px var(--line),0 14px 44px -12px color-mix(in srgb,var(--a1) 70%,transparent)}
+.wheel::after{content:"";position:absolute;inset:34%;border-radius:50%;background:var(--bg);box-shadow:0 0 0 2px var(--line)}
+.needle{position:absolute;left:50%;top:50%;width:4px;height:50%;background:#fff;transform-origin:50% 0;translate:-50% 0;rotate:180deg;z-index:2}
+.needle::after{content:"";position:absolute;left:50%;bottom:-2px;width:14px;height:14px;background:#fff;translate:-50% 0;clip-path:polygon(50% 100%,0 0,100% 0)}
+.pct{position:absolute;inset:0;display:grid;place-items:center;z-index:3;font-weight:700;font-size:22px}
+input[type=range]{width:100%;accent-color:var(--a2)}
+.reveal{align-items:center;text-align:center;justify-content:center;flex:1;gap:8px;border:2px solid var(--line);background:radial-gradient(70% 60% at 50% 40%,color-mix(in srgb,var(--a1) 34%,transparent),transparent 70%),var(--panel);padding:24px;display:flex;flex-direction:column}
+.reveal .n{font-weight:800;font-size:clamp(90px,16vw,170px);line-height:.85;letter-spacing:-.04em}
+.reveal .w{font-weight:300;text-transform:uppercase;font-size:28px}
+.toast{font-size:12.5px;color:var(--mute);min-height:1.4em}
 
-/* variante 2 : menu à gauche, lettres serrées, coins coupés */
-@media (min-width:900px){
-  [data-dir="n2"] .app.main{grid-template-columns:186px minmax(0,1fr);grid-template-areas:"top top" "nav body" "hint hint"}
-  [data-dir="n2"] .app.main .top{grid-area:top}[data-dir="n2"] .app.main .body{grid-area:body}[data-dir="n2"] .app.main .hint{grid-area:hint}
-  [data-dir="n2"] .app.main .nav{grid-area:nav;flex-direction:column;overflow:visible;border-bottom:0;border-right:1px solid var(--line);padding:10px 0;gap:0}
-  [data-dir="n2"] .app.main .nav button{text-align:left;padding:10px 18px;border-bottom:0;border-left:3px solid transparent}
-  [data-dir="n2"] .app.main .nav button[aria-current="page"]{border-image:none;border-left-color:var(--a1);background:var(--panel)}
-}
-[data-dir="n2"] .next,[data-dir="n2"] .card{clip-path:polygon(0 0,calc(100% - 26px) 0,100% 26px,100% 100%,0 100%)}
-[data-dir="n2"] .brand{font-stretch:68%;text-transform:uppercase;font-weight:700}
-[data-dir="n2"] .tile h4,[data-dir="n2"] .opt b{font-size:24px}
-[data-dir="n2"] .big{font-size:42px}
-/* variante 3 : lettres larges, bandeau pleine largeur */
-[data-dir="n3"] .tile.w7,[data-dir="n3"] .tile.w5{grid-column:span 6}
-[data-dir="n3"] .tile.next{grid-column:1/-1}
-[data-dir="n3"] .brand{font-stretch:122%;text-transform:uppercase;font-weight:750;font-size:18px;letter-spacing:-.03em}
-[data-dir="n3"] .tile h4,[data-dir="n3"] .opt b{font-size:17px}
-[data-dir="n3"] .big{font-size:30px}
-[data-dir="n3"] .next .h{font-size:clamp(26px,4.6vw,56px)}
-[data-dir="n3"] td .nm{font-size:13.5px}
-[data-dir="n3"] .tape.t2{display:none}
-
-@media (max-width:900px){.tile,.tile.w5,.tile.w7,[data-dir="n3"] .tile.w7,[data-dir="n3"] .tile.w5{grid-column:1/-1}.squad,.studio{grid-template-columns:minmax(0,1fr)}.body{padding:12px}}
+@media (max-width:900px){.hub,.squad,.studio{grid-template-columns:minmax(0,1fr)}.hub .tile{min-height:250px}.feat{grid-template-columns:minmax(0,1fr)}.wheel{justify-self:center}.view{padding:12px}}
+@media (prefers-reduced-motion:no-preference){.vinyl{animation:spin 6s linear infinite}@keyframes spin{to{rotate:360deg}}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 
 <div class="wrap">
   <div class="intro">
-    <h1>Melody Tycoon — Nuit, 3 versions en couleur</h1>
-    <p>La base « Nuit » (noir, lettres en majuscules, étiquettes entre crochets, rubans), avec de la couleur et l'organisation d'un mode carrière de jeu de foot : écran d'accueil en tuiles, grande tuile « prochaine sortie », effectif en tableau avec notes colorées, carte d'artiste avec radar.</p>
+    <h1>Melody Tycoon — Nuit Néon, version « jeu vidéo »</h1>
+    <p>Moins de chiffres, plus de gros boutons. Tout est cliquable : change d'onglet, choisis un artiste, et joue la création d'un son jusqu'à la note finale.</p>
   </div>
 
-  <div class="pick" role="group" aria-label="Choisir une version">
-    <button type="button" id="dir-n1" data-d="n1" aria-pressed="true"><em style="background:linear-gradient(90deg,#8b5cff,#ff4fa3)"></em><i>Version 1</i><b>Nuit Néon</b><span>Violet et rose, lettres fines, menu en haut</span></button>
-    <button type="button" id="dir-n2" data-d="n2" aria-pressed="false"><em style="background:linear-gradient(90deg,#19d3c5,#b6f23c)"></em><i>Version 2</i><b>Nuit Lagon</b><span>Turquoise et vert, lettres serrées, menu à gauche</span></button>
-    <button type="button" id="dir-n3" data-d="n3" aria-pressed="false"><em style="background:linear-gradient(90deg,#ff6a1f,#ffcf4a)"></em><i>Version 3</i><b>Nuit Braise</b><span>Orange et or, lettres larges, grand bandeau</span></button>
-  </div>
-  <p class="note" id="why"></p>
+  <div class="game">
+    <header class="top">
+      <div class="crest" aria-hidden="true">C</div>
+      <div class="id"><b>chimchar records</b><span class="xp">Label Underground <i></i> vers Respecté</span></div>
+      <div class="chip"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="#ff4fa3" stroke-width="2"/><path d="M10.5 5.2A3.4 3.4 0 1 0 10.5 10.8M4 7h4.5M4 9h4.5" fill="none" stroke="#ff4fa3" stroke-width="1.5"/></svg><div><b id="cash">48 200 €</b><br><small>Cash</small></div></div>
+      <div class="chip"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14 2.2 8.4a3.4 3.4 0 0 1 5-4.6L8 4.6l.8-.8a3.4 3.4 0 0 1 5 4.6z" fill="#8b5cff"/></svg><div><b>212 400</b><br><small>Fans</small></div></div>
+      <div class="chip"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1l2 4.6 5 .5-3.8 3.3 1.2 4.9L8 11.7 3.6 14.3l1.2-4.9L1 6.1l5-.5z" fill="#f2a630"/></svg><div><b>27</b><br><small>Réputation</small></div></div>
+      <div class="clock"><span class="lbl">Semaine 12 · prochain tick</span><b id="clock">07:42:10</b></div>
+    </header>
+    <nav class="nav" aria-label="Onglets du jeu">
+      <button type="button" id="nav-home" data-v="home" aria-current="page">Accueil</button>
+      <button type="button" id="nav-squad" data-v="squad">Effectif</button>
+      <button type="button" id="nav-studio" data-v="studio">Studio</button>
+      <button type="button" class="soon" disabled>Recrutement</button><button type="button" class="soon" disabled>Marché</button><button type="button" class="soon" disabled>Sorties</button><button type="button" class="soon" disabled>Charts</button><button type="button" class="soon" disabled>Finances</button><button type="button" class="soon" disabled>Événements</button>
+    </nav>
 
-  <div id="stage" data-dir="n1">
-
-    <!-- ÉCRAN 1 : ACCUEIL -->
-    <section>
-      <p class="cap">Écran 1 — Accueil</p>
-      <div class="app main">
-        <header class="top">
-          <div class="brand"><span class="badge" aria-hidden="true">C</span>chimchar records <small>Label Underground</small></div>
-          <div class="stat"><span class="lbl">Cash</span><b>48 200 €</b></div>
-          <div class="stat"><span class="lbl">Fans</span><b>212 400</b></div>
-          <div class="stat"><span class="lbl">Réputation</span><b>27</b></div>
-          <div class="tick"><span class="lbl">Semaine 12 · Saison 1</span><b>Prochain tick 07:42:10</b></div>
-        </header>
-        <nav class="nav" aria-label="Onglets du jeu">
-          <button type="button" aria-current="page">Accueil</button><button type="button">Effectif</button><button type="button">Recrutement</button><button type="button">Marché</button><button type="button">Studio</button><button type="button">Sorties</button><button type="button">Charts</button><button type="button">Finances</button><button type="button">Staff</button><button type="button">Dynamique</button><button type="button">Merch et tournées</button><button type="button">Événements</button><button type="button">Paramètres</button>
-        </nav>
-        <main class="body">
-          <div class="hub">
-            <div class="tile w7 next">
-              <div style="display:flex;flex-direction:column;gap:8px">
-                <span class="lbl">Prochaine sortie · semaine 13 · dans 1 tick</span>
-                <h2 class="h">Minuit <span class="gt">moins une</span></h2>
-              </div>
-              <div class="duel">
-                <div class="side"><span class="lbl">Ton artiste</span><span class="t">Liha</span><span class="mut">EP · 4 titres · note 71</span></div>
-                <span class="vs">VS</span>
-                <div class="side"><span class="lbl">Même semaine, même genre</span><span class="t">Tiakola</span><span class="mut">Single · concurrence −10 %</span></div>
-              </div>
-              <div class="kpis">
-                <div><span class="lbl">Portée marketing</span><b>190 000</b></div>
-                <div><span class="lbl">Budget engagé</span><b>5 000 €</b></div>
-                <div><span class="lbl">Tendance pluggnb</span><b class="up">▲ en hausse</b></div>
-              </div>
-              <div class="tape t1" aria-hidden="true">Prochaine sortie ▪▪ Liha ▪▪ Minuit moins une ▪▪ Semaine 13 ▪▪ Prochaine sortie ▪▪ Liha ▪▪ Minuit moins une ▪▪ Semaine 13 ▪▪ Prochaine sortie ▪▪ Liha ▪▪ Minuit moins une ▪▪ Semaine 13 ▪▪ Prochaine sortie ▪▪ Liha</div>
-              <div class="tape t2" aria-hidden="true">Chimchar Records ▪▪ Label Underground ▪▪ Saison 1 ▪▪ Chimchar Records ▪▪ Label Underground ▪▪ Saison 1 ▪▪ Chimchar Records ▪▪ Label Underground ▪▪ Saison 1 ▪▪ Chimchar Records ▪▪ Label Underground</div>
-            </div>
-            <div class="tile w5">
-              <span class="lbl">Cette nuit</span>
-              <h4>« Rue Glacée » — Nova Kalé</h4>
-              <div class="big gt">72 800 streams</div>
-              <div class="rows">
-                <div class="row"><span>Chart Rap FR</span><span class="up">38e ▲ nouvelle entrée</span></div>
-                <div class="row"><span>Score de hit</span><span><span class="rate good">78</span> Hit</span></div>
-                <div class="row"><span>Nouveaux fans</span><span>+2 225</span></div>
-                <div class="row"><span>Encaissé</span><span>+291 €</span></div>
-              </div>
-              <button type="button" class="cta">Créer un son</button>
-            </div>
-
-            <div class="tile">
-              <span class="lbl">Classement de la party</span>
-              <div class="rows">
-                <div class="row"><span>1 · Tom — Velvet Nord</span><span>71,4</span></div>
-                <div class="row me"><span>2 · Toi — Chimchar Records</span><span>64,9 <span class="up">▲</span></span></div>
-                <div class="row"><span>3 · Inès — Maison Brume</span><span>58,2</span></div>
-                <div class="row"><span>4 · Karim — 59 Sound</span><span>41,0 <span class="down">▼</span></span></div>
-              </div>
-            </div>
-            <div class="tile">
-              <span class="lbl">À faire</span>
-              <h4>3 choses t'attendent</h4>
-              <div class="rows">
-                <div class="row"><span>Liha veut un clip</span><span class="down">expire dans 1 tick</span></div>
-                <div class="row"><span>Rapport du scout — Belgique</span><span>4 profils</span></div>
-                <div class="row"><span>Featuring proposé par Tom</span><span>2 500 €</span></div>
-              </div>
-            </div>
-            <div class="tile">
-              <span class="lbl">Trésorerie</span>
-              <div class="big">48 200 €</div>
-              <svg class="spark" viewBox="0 0 200 46" preserveAspectRatio="none" aria-label="Cash sur 8 semaines, en hausse">
-                <defs><linearGradient id="sg" x1="0" x2="1"><stop offset="0" stop-color="var(--a1)"/><stop offset="1" stop-color="var(--a2)"/></linearGradient></defs>
-                <polyline fill="none" stroke="url(#sg)" stroke-width="2.5" points="0,36 28,38 57,31 85,32 114,23 142,26 171,14 200,8"/>
-              </svg>
-              <div class="row"><span class="mut">Prochaine mensualité</span><span>1 530 €</span></div>
-            </div>
-
-            <div class="tile">
-              <span class="lbl">Moral du label</span>
-              <div class="big">68</div>
-              <div class="gauge"><i style="width:68%"></i></div>
-              <div class="rows">
-                <div class="row"><span>Sixto Vega</span><span class="down">34 · veut un rôle</span></div>
-                <div class="row"><span>Liha</span><span>52</span></div>
-              </div>
-            </div>
-            <div class="tile">
-              <span class="lbl">Contrats</span>
-              <div class="rows">
-                <div class="row"><span>Nova Kalé</span><span class="down">fin dans 4 semaines</span></div>
-                <div class="row"><span>Mina Dz</span><span>fin dans 7 semaines</span></div>
-                <div class="row"><span>Sixto Vega</span><span>avance : reste 6 200 €</span></div>
-              </div>
-            </div>
-            <div class="tile">
-              <span class="lbl">Objectifs de saison</span>
-              <div class="rows">
-                <div class="row"><span>1 son dans un top 10 de genre</span><span>38e</span></div>
-                <div class="row"><span>Finir sans dette</span><span class="up">en bonne voie</span></div>
-              </div>
-              <div class="gauge"><i style="width:43%"></i></div>
-              <span class="mut">Semaine 12 sur 28</span>
-            </div>
+    <!-- ACCUEIL -->
+    <main class="view on" id="v-home">
+      <div class="hub">
+        <button type="button" class="tile t-create" id="tile-create" data-go="studio">
+          <span class="vinyl" aria-hidden="true"></span>
+          <span class="lbl">4 artistes ont de l'énergie</span>
+          <span class="h">Créer <span class="gt">un son</span></span>
+          <span class="go">Entrer au studio</span>
+        </button>
+        <button type="button" class="tile t-next" id="tile-next">
+          <span class="cover" aria-hidden="true"></span>
+          <span class="tape" aria-hidden="true">Prochaine sortie ▪▪ Semaine 13 ▪▪ dans 1 tick ▪▪ Prochaine sortie ▪▪ Semaine 13 ▪▪ dans 1 tick ▪▪ Prochaine sortie ▪▪ Semaine 13 ▪▪ dans 1 tick ▪▪ Prochaine sortie ▪▪ Semaine 13</span>
+          <span class="lbl">Prochaine sortie · EP · 4 titres</span>
+          <span class="h">Minuit <span class="gt">moins une</span></span>
+          <span class="duel"><span><b>Liha</b><span>Ton artiste · note 71</span></span><em>VS</em><span><b>Tiakola</b><span>Sort la même semaine</span></span></span>
+        </button>
+        <div class="tile t-night" id="tile-night" style="cursor:default">
+          <span class="lbl">Cette nuit · « Rue Glacée »</span>
+          <div>
+            <div class="count gt" id="streams">0</div>
+            <span class="sub">streams · 38e du chart Rap FR</span>
           </div>
-          <div class="news"><b>Fil de la party</b><span>Tom signe Bedry pour 180 000 € · Inès lance un défi de charts à Karim pour la semaine 14 · Festival du Serveur : inscriptions ouvertes</span></div>
-        </main>
-        <footer class="hint"><span><kbd>Entrée</kbd>Ouvrir</span><span><kbd>Échap</kbd>Retour</span><span><kbd>Tab</kbd>Onglet suivant</span><span><kbd>N</kbd>Notifications</span></footer>
+          <div class="stars" id="stars" aria-label="Score de hit 78 sur 100 : 4 étoiles sur 5"><i></i><i></i><i></i><i></i><i></i></div>
+          <span class="sub">Hit · +2 225 fans · +291 €</span>
+          <button type="button" class="ghost" id="replay" style="align-self:flex-start">Revoir</button>
+        </div>
       </div>
-    </section>
-
-    <!-- ÉCRAN 2 : EFFECTIF -->
-    <section>
-      <p class="cap">Écran 2 — Effectif et carte d'artiste</p>
-      <div class="app">
-        <header class="top">
-          <div class="brand">effectif <small>5 artistes sur 10</small></div>
-          <div class="stat"><span class="lbl">Note moyenne</span><b>58</b></div>
-          <div class="stat"><span class="lbl">Allocations par semaine</span><b>1 150 €</b></div>
-        </header>
-        <main class="body">
-          <div class="squad">
-            <div class="tablewrap">
-              <table>
-                <thead><tr><th>Statut</th><th>Artiste</th><th>Genre</th><th>Note</th><th>Potentiel</th><th>Énergie</th><th>Moral</th><th>Forme</th><th>Contrat</th></tr></thead>
-                <tbody>
-                  <tr><td>Tête d'affiche</td><td><span class="nm">Sixto Vega</span></td><td>Trap</td><td><span class="rate mid">66</span></td><td>70 – 80</td><td><span class="mini"><i style="width:41%"></i></span>41</td><td class="down">34</td><td class="down">▼</td><td>22 sem.</td></tr>
-                  <tr><td>Établi</td><td><span class="nm">Liha</span></td><td>R&amp;B</td><td><span class="rate low">58</span></td><td>74 – 88</td><td><span class="mini"><i style="width:90%"></i></span>90</td><td>52</td><td class="up">▲</td><td>31 sem.</td></tr>
-                  <tr class="sel"><td>Espoir</td><td><span class="nm">Nova Kalé</span></td><td>Rap FR</td><td><span class="rate low">54</span></td><td>72 – 84</td><td><span class="mini"><i style="width:78%"></i></span>78</td><td>67</td><td class="up">▲</td><td class="down">4 sem.</td></tr>
-                  <tr><td>Espoir</td><td><span class="nm">Mina Dz</span></td><td>Drill</td><td><span class="rate low">57</span></td><td>66 – 79</td><td><span class="mini"><i style="width:62%"></i></span>62</td><td>61</td><td>▬</td><td>7 sem.</td></tr>
-                  <tr><td>Formation</td><td><span class="nm">Kosmo 9</span></td><td>Hyperpop</td><td><span class="rate bad">47</span></td><td>68 – 90</td><td><span class="mini"><i style="width:100%"></i></span>100</td><td>74</td><td class="up">▲</td><td>maison</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="card">
-              <div class="cardtop">
-                <div><span class="lbl">Note</span><div class="gen gt">54</div></div>
-                <div>
-                  <span class="lbl">Lyon · France</span>
-                  <h2 class="h">Nova Kalé</h2>
-                </div>
-              </div>
-              <div class="pills"><span class="pill">Espoir</span><span class="pill">Rap FR</span><span class="pill">Potentiel 72 – 84</span><span class="pill">Tardif</span><span class="pill">Refrain contagieux</span></div>
-              <svg class="radar" viewBox="-36 -8 272 216" role="img" aria-label="Radar : voix 58, écriture 61, scène 44, créativité 60, discipline 66, charisme 57">
-                <defs><linearGradient id="rg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="var(--a1)"/><stop offset="1" stop-color="var(--a2)"/></linearGradient></defs>
-                <polygon points="100,20 169.3,60 169.3,140 100,180 30.7,140 30.7,60" fill="none" stroke="var(--line)"/>
-                <polygon points="100,60 134.6,80 134.6,120 100,140 65.4,120 65.4,80" fill="none" stroke="var(--line)"/>
-                <g stroke="var(--line)"><line x1="100" y1="100" x2="100" y2="20"/><line x1="100" y1="100" x2="169.3" y2="60"/><line x1="100" y1="100" x2="169.3" y2="140"/><line x1="100" y1="100" x2="100" y2="180"/><line x1="100" y1="100" x2="30.7" y2="140"/><line x1="100" y1="100" x2="30.7" y2="60"/></g>
-                <polygon points="100,53.6 142.3,75.6 130.5,117.6 100,148 54.3,126.4 60.5,77.2" fill="url(#rg)" fill-opacity=".38" stroke="url(#rg)" stroke-width="2"/>
-                <text x="100" y="8" text-anchor="middle">Voix <tspan class="v">58</tspan></text>
-                <text x="176" y="58">Écriture <tspan class="v">61</tspan></text>
-                <text x="176" y="148">Scène <tspan class="v">44</tspan></text>
-                <text x="100" y="198" text-anchor="middle">Créativité <tspan class="v">60</tspan></text>
-                <text x="24" y="148" text-anchor="end">Discipline <tspan class="v">66</tspan></text>
-                <text x="24" y="58" text-anchor="end">Charisme <tspan class="v">57</tspan></text>
-              </svg>
-              <div class="meta">
-                <div><span class="lbl">Fans</span><b>5 425</b></div>
-                <div><span class="lbl">Hype</span><b>19</b></div>
-                <div><span class="lbl">Valeur</span><b>9 200 €</b></div>
-                <div><span class="lbl">Royalties</span><b>20 %</b></div>
-              </div>
-              <div class="acts"><button type="button" class="cta">Créer un son</button><button type="button" class="ghostbtn">Renouveler</button><button type="button" class="ghostbtn">Concert</button></div>
-            </div>
-          </div>
-        </main>
-        <footer class="hint"><span><kbd>↑↓</kbd>Changer d'artiste</span><span><kbd>Entrée</kbd>Fiche complète</span><span><kbd>Échap</kbd>Retour</span></footer>
+      <div class="row4">
+        <button type="button" class="tile" id="tile-todo"><span class="ico alert" data-n="3">!</span><span><span class="lbl">À faire</span><b>Liha veut un clip</b><span class="sub">Expire dans 1 tick</span></span></button>
+        <button type="button" class="tile" id="tile-rank"><span class="ico"><span class="podium"><i style="height:100%"></i><i class="me" style="height:80%"></i><i style="height:62%"></i><i style="height:40%"></i></span></span><span><span class="lbl">Classement de la party</span><b>2e sur 4</b><span class="sub">Tom est devant, de 6,5 points</span></span></button>
+        <button type="button" class="tile" id="tile-squad" data-go="squad"><span class="ico">5</span><span><span class="lbl">Effectif</span><b>Sixto Vega boude</b><span class="sub">Moral 34 · il veut un rôle</span></span></button>
+        <button type="button" class="tile" id="tile-fest"><span class="ico">14</span><span><span class="lbl">Semaine 14</span><b>Festival du Serveur</b><span class="sub">Inscriptions ouvertes</span></span></button>
       </div>
-    </section>
+      <div class="news"><b>Fil de la party</b><span>Tom signe Bedry pour 180 000 € · Inès lance un défi de charts à Karim · Festival du Serveur : inscriptions ouvertes</span></div>
+    </main>
 
-    <!-- ÉCRAN 3 : STUDIO -->
-    <section>
-      <p class="cap">Écran 3 — Studio, création d'un son (étape 4 sur 5)</p>
-      <div class="app">
-        <header class="top">
-          <div class="brand">studio <small>Nova Kalé · énergie 78</small></div>
-          <div class="stat"><span class="lbl">Thème</span><b>Rupture</b></div>
-          <div class="stat"><span class="lbl">Beat</span><b>Lovetrap · lease</b></div>
-          <div class="stat"><span class="lbl">Producteur</span><b>Dz Minuit</b></div>
-        </header>
-        <main class="body">
-          <div class="steps" aria-label="Étapes">
-            <div class="done">Artiste ✓</div><div class="done">Thème ✓</div><div class="done">Beat ✓</div><div class="done">Producteur ✓</div><div class="now">Studio</div><div>Featuring</div>
+    <!-- EFFECTIF -->
+    <main class="view" id="v-squad">
+      <div class="squad">
+        <div class="deck" id="deck"></div>
+        <div class="panel">
+          <div class="ptop">
+            <div><span class="lbl">Note</span><div class="gen gt" id="p-gen">54</div></div>
+            <div><span class="lbl" id="p-city">Lyon · France</span><h2 class="h" id="p-name">Nova Kalé</h2></div>
           </div>
-          <div class="studio">
-            <div class="col">
-              <span class="lbl">Choisis un studio</span>
-              <div class="opts">
-                <button type="button" class="opt"><span class="lbl">Niveau 1 · débrouille</span><b>Home Studio</b><span class="price">0 €</span><span class="mut">Qualité 40 · panne 25 % · pas de délai</span></button>
-                <button type="button" class="opt sel"><span class="lbl">Niveau 2</span><b>Studio de quartier</b><span class="price">1 500 €</span><span class="mut">Qualité 58 · panne 15 % · pas de délai</span></button>
-                <button type="button" class="opt off" disabled><span class="lbl">Niveau 3 · budget dépassé</span><b>Studio pro</b><span class="price">8 000 €</span><span class="mut">Qualité 74 · panne 8 % · +1 semaine</span></button>
-                <button type="button" class="opt off" disabled><span class="lbl">Niveau 4 · budget dépassé</span><b>Studio prestige</b><span class="price">40 000 €</span><span class="mut">Qualité 88 · panne 4 % · +1 semaine</span></button>
-              </div>
-              <div class="evt">
-                <span class="lbl">Embrouille · après le producteur</span>
-                <h4>Le producteur ne répond plus</h4>
-                <span class="mut">Dz Minuit a disparu depuis hier. La session est dans deux jours.</span>
-                <div class="react">
-                  <button type="button"><span>Payer une rallonge — il revient, relation +1</span><b>+270 €</b></button>
-                  <button type="button"><span>Lui mettre la pression — s'il part, producteur tiré au sort</span><b>60 %</b></button>
-                  <button type="button"><span>Attendre — moral de Nova −3</span><b>+1 semaine</b></button>
-                </div>
-              </div>
-            </div>
-            <div class="col">
-              <div class="band">
-                <span class="lbl">Qualité estimée</span>
-                <div class="big gt">61 – 73</div>
-                <div class="range"><i></i></div>
-                <div class="scale"><span>0</span><span>Correct</span><span>Bon</span><span>Tube</span><span>99</span></div>
-              </div>
-              <div class="band">
-                <span class="lbl">Budget du son</span>
-                <div class="big">3 670 / 4 000 €</div>
-                <div class="gauge"><i style="width:92%"></i></div>
-                <div class="kv">
-                  <span class="mut">Écriture (séance)</span><span>600 €</span>
-                  <span class="mut">Beat (lease)</span><span>400 €</span>
-                  <span class="mut">Producteur + rallonge</span><span>1 170 €</span>
-                  <span class="mut">Studio de quartier</span><span>1 500 €</span>
-                </div>
-              </div>
-              <div class="band">
-                <div class="kv">
-                  <span class="mut">Énergie consommée</span><b>−10</b>
-                  <span class="mut">Délai avant sortie</span><b>aucun</b>
-                  <span class="mut">Choix en débrouille</span><b>0 sur 4</b>
-                </div>
-                <button type="button" class="cta">Valider le studio</button>
-              </div>
-            </div>
+          <div class="pills" id="p-pills"></div>
+          <svg class="radar" viewBox="-36 -8 272 216" role="img" aria-label="Radar des attributs">
+            <defs><linearGradient id="rg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#8b5cff"/><stop offset="1" stop-color="#ff4fa3"/></linearGradient></defs>
+            <polygon points="100,20 169.3,60 169.3,140 100,180 30.7,140 30.7,60" fill="none" stroke="#2d2939"/>
+            <polygon points="100,60 134.6,80 134.6,120 100,140 65.4,120 65.4,80" fill="none" stroke="#2d2939"/>
+            <g stroke="#2d2939"><line x1="100" y1="100" x2="100" y2="20"/><line x1="100" y1="100" x2="169.3" y2="60"/><line x1="100" y1="100" x2="169.3" y2="140"/><line x1="100" y1="100" x2="100" y2="180"/><line x1="100" y1="100" x2="30.7" y2="140"/><line x1="100" y1="100" x2="30.7" y2="60"/></g>
+            <polygon id="rpoly" points="100,100 100,100 100,100 100,100 100,100 100,100" fill="url(#rg)" fill-opacity=".4" stroke="url(#rg)" stroke-width="2"/>
+            <text x="100" y="8" text-anchor="middle">Voix <tspan class="v" id="a0"></tspan></text>
+            <text x="176" y="58">Écriture <tspan class="v" id="a1"></tspan></text>
+            <text x="176" y="148">Scène <tspan class="v" id="a2"></tspan></text>
+            <text x="100" y="198" text-anchor="middle">Créativité <tspan class="v" id="a3"></tspan></text>
+            <text x="24" y="148" text-anchor="end">Discipline <tspan class="v" id="a4"></tspan></text>
+            <text x="24" y="58" text-anchor="end">Charisme <tspan class="v" id="a5"></tspan></text>
+          </svg>
+          <div class="bars">
+            <div><span class="lbl">Énergie</span><b id="p-en">78</b><span class="meter"><i id="m-en"></i></span></div>
+            <div><span class="lbl">Moral</span><b id="p-mo">67</b><span class="meter"><i id="m-mo"></i></span></div>
+            <div><span class="lbl">Hype</span><b id="p-hy">19</b><span class="meter"><i id="m-hy"></i></span></div>
           </div>
-        </main>
-        <footer class="hint"><span><kbd>←→</kbd>Choisir</span><span><kbd>Entrée</kbd>Valider</span><span><kbd>D</kbd>Débrouille</span><span><kbd>Échap</kbd>Quitter</span></footer>
+          <div class="acts"><button type="button" class="go" id="p-create" data-go="studio">Créer un son</button><button type="button" class="ghost" id="p-renew">Renouveler</button><button type="button" class="ghost" id="p-gig">Concert</button></div>
+        </div>
       </div>
-    </section>
+    </main>
+
+    <!-- STUDIO -->
+    <main class="view" id="v-studio">
+      <div class="steps" id="steps"></div>
+      <div class="studio">
+        <div class="col stagebox" id="stagebox"></div>
+        <div class="col">
+          <div class="band">
+            <span class="lbl">Qualité estimée</span>
+            <div class="big gt" id="q-txt">59 – 71</div>
+            <div class="range"><i id="q-bar"></i><u id="q-pin"></u></div>
+            <div class="scale"><span>0</span><span>Correct</span><span>Bon</span><span>Tube</span><span>99</span></div>
+          </div>
+          <div class="band">
+            <span class="lbl">Budget du son</span>
+            <div class="big" id="b-txt">1 900 / 4 000 €</div>
+            <span class="meter"><i id="b-bar"></i></span>
+            <div class="kv"><span class="mut">Artiste</span><b>Nova Kalé</b><span class="mut">Thème</span><b>Rupture</b><span class="mut">Beat</span><b>Lovetrap</b><span class="mut">Producteur</span><b>Dz Minuit</b><span class="mut">Délai avant sortie</span><b id="d-txt">aucun</b></div>
+          </div>
+          <p class="toast" id="toast" role="status"></p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="hint"><span><kbd>Tab</kbd>Se déplacer</span><span><kbd>Entrée</kbd>Valider</span><span><kbd>Échap</kbd>Retour à l'accueil</span></footer>
   </div>
 </div>
 
 <script>
 (function(){
-  var why={
-    n1:"<b>Nuit Néon.</b> Violet et rose sur noir, lettres fines, menu en haut. La plus proche de la Nuit que tu as aimée, avec la couleur déjà présente dans LiveChat.",
-    n2:"<b>Nuit Lagon.</b> Turquoise et vert sur bleu-noir, lettres serrées façon habillage de match, menu à gauche, coins coupés. La plus « jeu de foot ».",
-    n3:"<b>Nuit Braise.</b> Orange et or sur noir chaud, lettres larges, « prochaine sortie » en grand bandeau sur toute la largeur. La plus chaude, façon disque d'or."
-  };
-  var stage=document.getElementById('stage'),note=document.getElementById('why'),btns=document.querySelectorAll('.pick button');
-  function set(d){
-    if(!why[d])d='n1';
-    stage.setAttribute('data-dir',d);note.innerHTML=why[d];
-    btns.forEach(function(b){b.setAttribute('aria-pressed',b.dataset.d===d?'true':'false')});
-    try{localStorage.setItem('mt-nuit',d)}catch(e){}
+  var $=function(id){return document.getElementById(id)};
+  var calm=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var fmt=function(n){return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' ')};
+
+  /* ----- navigation ----- */
+  function show(v){
+    ['home','squad','studio'].forEach(function(k){$('v-'+k).classList.toggle('on',k===v);var b=$('nav-'+k);if(k===v)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+    if(v==='home')night();
+    if(v==='studio'&&!S.started)startSong();
   }
-  btns.forEach(function(b){b.addEventListener('click',function(){set(b.dataset.d)})});
-  var saved='n1';try{saved=localStorage.getItem('mt-nuit')||'n1'}catch(e){}
-  set(saved);
+  document.querySelectorAll('[data-v]').forEach(function(b){b.addEventListener('click',function(){show(b.dataset.v)})});
+  document.querySelectorAll('[data-go]').forEach(function(b){b.addEventListener('click',function(){show(b.dataset.go)})});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')show('home')});
+
+  /* ----- horloge ----- */
+  var left=7*3600+42*60+10;
+  setInterval(function(){left=left>0?left-1:86399;var h=Math.floor(left/3600),m=Math.floor(left%3600/60),s=left%60;$('clock').textContent=[h,m,s].map(function(x){return(x<10?'0':'')+x}).join(':')},1000);
+
+  /* ----- accueil : résultat de la nuit ----- */
+  function countTo(el,to,ms,suffix){
+    if(calm){el.textContent=fmt(to)+(suffix||'');return}
+    var t0=performance.now();
+    (function f(t){var k=Math.min(1,(t-t0)/ms);k=1-Math.pow(1-k,3);el.textContent=fmt(to*k)+(suffix||'');if(k<1)requestAnimationFrame(f)})(t0);
+  }
+  function night(){
+    var st=$('stars').children;for(var i=0;i<5;i++)st[i].classList.remove('lit');
+    countTo($('streams'),72800,1300);
+    for(var j=0;j<4;j++)(function(j){setTimeout(function(){st[j].classList.add('lit')},calm?0:500+j*220)})(j);
+  }
+  $('replay').addEventListener('click',night);
+
+  /* ----- effectif ----- */
+  var A=[
+    {n:'Sixto Vega',i:'SV',c:'Marseille · France',g:66,hue:20,st:'Tête d\'affiche',ge:'Trap',pot:'70 – 80',tr:'Fêtard',a:[55,68,74,62,40,78],en:41,mo:34,hy:55},
+    {n:'Liha',i:'LI',c:'Liège · Belgique',g:58,hue:310,st:'Établie',ge:'R&B',pot:'74 – 88',tr:'Voix unique',a:[76,52,48,64,58,60],en:90,mo:52,hy:18},
+    {n:'Nova Kalé',i:'NK',c:'Lyon · France',g:54,hue:265,st:'Espoir',ge:'Rap FR',pot:'72 – 84',tr:'Refrain contagieux',a:[58,61,44,60,66,57],en:78,mo:67,hy:19},
+    {n:'Mina Dz',i:'MD',c:'Nanterre · France',g:57,hue:200,st:'Espoir',ge:'Drill',pot:'66 – 79',tr:'Plume acérée',a:[48,70,52,56,62,50],en:62,mo:61,hy:22},
+    {n:'Kosmo 9',i:'K9',c:'Lille · France',g:47,hue:150,st:'En formation',ge:'Hyperpop',pot:'68 – 90',tr:'Auto-produit',a:[42,40,36,72,50,44],en:100,mo:74,hy:10}
+  ];
+  var deck=$('deck');
+  A.forEach(function(p,k){
+    var b=document.createElement('button');b.type='button';b.className='pcard';b.id='card-'+k;b.setAttribute('aria-pressed','false');
+    b.innerHTML='<span class="art" data-i="'+p.i+'" style="--hue:'+p.hue+'"></span><span class="note">'+p.g+'<small>'+p.ge+'</small></span><span><span class="nm">'+p.n+'</span><span class="en"><i style="width:'+p.en+'%"></i></span></span>';
+    b.addEventListener('click',function(){pick(k)});deck.appendChild(b);
+  });
+  var add=document.createElement('button');add.type='button';add.className='pcard add';add.id='card-add';add.innerHTML='<b>+</b>5 places libres';deck.appendChild(add);
+  function pick(k){
+    var p=A[k];
+    A.forEach(function(_,j){$('card-'+j).setAttribute('aria-pressed',j===k?'true':'false')});
+    $('p-gen').textContent=p.g;$('p-name').textContent=p.n;$('p-city').textContent=p.c;
+    $('p-pills').innerHTML=[p.st,p.ge,'Potentiel '+p.pot,p.tr].map(function(t){return'<span class="pill">'+t+'</span>'}).join('');
+    var pts=p.a.map(function(v,i){var an=(-90+i*60)*Math.PI/180,r=v/100*80;$('a'+i).textContent=v;return(100+r*Math.cos(an)).toFixed(1)+','+(100+r*Math.sin(an)).toFixed(1)});
+    $('rpoly').setAttribute('points',pts.join(' '));
+    [['en',p.en],['mo',p.mo],['hy',p.hy]].forEach(function(x){$('p-'+x[0]).textContent=x[1];$('m-'+x[0]).style.width=x[1]+'%'});
+  }
+  pick(2);
+
+  /* ----- studio jouable ----- */
+  var STUDIOS=[
+    {n:'Home Studio',p:0,q:-2,lv:1,d:'Gratuit. Panne fréquente.'},
+    {n:'Studio de quartier',p:1500,q:0,lv:2,d:'Correct. Pas de délai.'},
+    {n:'Studio pro',p:8000,q:2,lv:3,d:'Qualité +. Une semaine de mixage.'},
+    {n:'Studio prestige',p:40000,q:3,lv:4,d:'Le meilleur. Une semaine de mixage.'}
+  ];
+  var S={};
+  function reset(){S={started:true,step:'studio',spent:1900,budget:4000,q:65,w:6,pick:null,delay:0,final:null,tries:0}}
+  function steps(){
+    var order=['Artiste','Thème','Beat','Producteur','Studio','Featuring','Note'],cur={studio:4,event:4,feat:5,reveal:6}[S.step];
+    $('steps').innerHTML=order.map(function(t,i){return'<div class="'+(i<cur?'done':i===cur?'now':'')+'">'+t+(i<cur?' ✓':'')+'</div>'}).join('');
+  }
+  function hud(){
+    var q=S.q+(S.pick!=null?STUDIOS[S.pick].q:-2),lo=Math.round(q-S.w),hi=Math.round(q+S.w);
+    S.lo=lo;S.hi=hi;
+    $('q-txt').textContent=S.final!=null?S.final:lo+' – '+hi;
+    $('q-bar').style.left=lo+'%';$('q-bar').style.width=(hi-lo)+'%';
+    var pin=$('q-pin');if(S.final!=null){pin.style.display='block';pin.style.left=S.final+'%'}else pin.style.display='none';
+    $('b-txt').textContent=fmt(S.spent)+' / '+fmt(S.budget)+' €';$('b-bar').style.width=Math.min(100,S.spent/S.budget*100)+'%';
+    $('d-txt').textContent=S.delay?'+'+S.delay+' semaine':'aucun';
+    $('cash').textContent=fmt(48200-(S.spent-1900))+' €';
+    steps();
+  }
+  function say(t){$('toast').textContent=t}
+  var box=$('stagebox');
+  function startSong(){reset();say('');renderStudio()}
+
+  function renderStudio(){
+    S.step='studio';
+    box.innerHTML='<span class="lbl">Étape 4 · choisis un studio</span><div class="opts" id="opts"></div><button type="button" class="go" id="ok-studio" disabled style="opacity:.4">Valider le studio</button>';
+    STUDIOS.forEach(function(s,k){
+      var off=S.spent+s.p>S.budget,b=document.createElement('button');b.type='button';b.className='opt';b.id='opt-'+k;b.disabled=off;b.setAttribute('aria-pressed','false');
+      b.innerHTML='<span class="lv">'+[1,2,3,4].map(function(i){return'<i class="'+(i<=s.lv?'f':'')+'"></i>'}).join('')+'</span><b>'+s.n+'</b><span class="price">'+(s.p?fmt(s.p)+' €':'Gratuit')+'</span><span class="mut">'+(off?'Budget dépassé':s.d)+'</span>';
+      b.addEventListener('click',function(){S.pick=k;STUDIOS.forEach(function(_,j){$('opt-'+j).setAttribute('aria-pressed',j===k?'true':'false')});var ok=$('ok-studio');ok.disabled=false;ok.style.opacity=1;hud()});
+      $('opts').appendChild(b);
+    });
+    $('ok-studio').addEventListener('click',function(){S.spent+=STUDIOS[S.pick].p;renderEvent()});
+    hud();
+  }
+
+  function renderEvent(){
+    S.step='event';
+    var s=STUDIOS[S.pick],extra=s.p?Math.round(s.p*.25):200;
+    box.innerHTML='<div class="evt"><span class="lbl">Embrouille · après le studio</span><h3>Panne au studio</h3><span class="mut">La console lâche en pleine prise. Nova attend dans la cabine.</span><div class="react">'+
+      '<button type="button" id="r-pay"><span>Louer une autre cabine — problème réglé</span><b>+'+fmt(extra)+' €</b></button>'+
+      '<button type="button" id="r-diy"><span>Finir à la maison — son moins propre</span><b>Qualité −3</b></button>'+
+      '<button type="button" id="r-wait"><span>Revenir demain — rien ne change</span><b>+1 semaine</b></button></div></div>';
+    $('r-pay').addEventListener('click',function(){S.spent+=extra;say('Cabine louée. La session reprend.');hud();renderFeat()});
+    $('r-diy').addEventListener('click',function(){S.q-=3;S.w+=1;say('Fini à la maison. La fourchette baisse.');hud();renderFeat()});
+    $('r-wait').addEventListener('click',function(){S.delay=1;say('Session reportée d\'une semaine.');hud();renderFeat()});
+    hud();
+  }
+
+  function renderFeat(){
+    S.step='feat';var ask=1200;
+    box.innerHTML='<span class="lbl">Étape 5 · featuring</span><div class="band feat"><div class="col"><h3 class="h" style="font-size:clamp(24px,3.4vw,36px)">Tayo Bleu <span class="gt">demande 1 200 €</span></h3><span class="mut">Afro, Londres. Un bon featuring ajoute 2 points de qualité.</span>'+
+      '<label class="lbl" for="offer">Ton offre</label><input type="range" id="offer" min="30" max="150" value="100" step="5"><div class="kv"><span class="mut">Tu proposes</span><b id="o-eur"></b><span class="mut">Chance qu\'il accepte</span><b id="o-pct"></b></div>'+
+      '<div class="acts"><button type="button" class="go" id="spin">Lancer la roue</button><button type="button" class="ghost" id="skip">Passer</button></div></div>'+
+      '<div class="wheel" id="wheel"><span class="needle" id="needle"></span><span class="pct" id="w-pct"></span></div></div>';
+    var chance=50;
+    function upd(){
+      var r=+$('offer').value/100,eur=Math.round(ask*r);chance=Math.max(5,Math.min(95,Math.round(50+120*(r-1)+8)));
+      S.offer=eur;$('o-eur').textContent=fmt(eur)+' €';
+      var vex=r<.4;$('o-pct').textContent=vex?'Il sera vexé':chance+' %';$('w-pct').textContent=vex?'✕':chance+' %';
+      var broke=S.spent+eur>S.budget;$('spin').disabled=vex||broke;$('spin').style.opacity=vex||broke?.4:1;
+      if(broke)say('Offre au-dessus du budget restant.');else if(vex)say('Offre trop basse : il le prendrait mal.');else say('');
+      $('wheel').style.background='conic-gradient(var(--ok) 0 '+chance+'%,var(--panel2) '+chance+'% 100%)';
+    }
+    $('offer').addEventListener('input',upd);upd();
+    $('skip').addEventListener('click',function(){say('Pas de featuring.');renderReveal()});
+    $('spin').addEventListener('click',function(){
+      var win=Math.random()*100<chance,arc=win?Math.random()*chance*.9+chance*.05:chance+Math.random()*(100-chance)*.9+(100-chance)*.05,deg=180+360*4+arc*3.6;
+      var nd=$('needle');$('spin').disabled=true;$('skip').disabled=true;$('offer').disabled=true;S.tries++;
+      nd.style.transition=calm?'none':'rotate 2.4s cubic-bezier(.15,.7,.1,1)';nd.style.rotate=deg+'deg';
+      setTimeout(function(){
+        if(win){S.spent+=S.offer;S.q+=2;say('Tayo Bleu accepte. Qualité +2.');hud();setTimeout(renderReveal,calm?0:700)}
+        else if(S.tries>=3){say('Trois refus. Pas de featuring sur ce son.');setTimeout(renderReveal,calm?0:700)}
+        else{say('Refusé. Sa demande monte de 10 %. Encore '+(3-S.tries)+' essai(s).');ask=Math.round(ask*1.1);nd.style.transition='none';nd.style.rotate=(180+arc*3.6)+'deg';$('spin').disabled=false;$('skip').disabled=false;$('offer').disabled=false;upd()}
+      },calm?0:2500);
+    });
+    hud();
+  }
+
+  function renderReveal(){
+    S.step='reveal';hud();
+    var fin=Math.max(1,Math.min(99,Math.round(S.lo+Math.random()*(S.hi-S.lo))));
+    var word=fin<55?'Passable':fin<65?'Correct':fin<75?'Bon':fin<85?'Très bon':'Tube en puissance';
+    box.innerHTML='<div class="reveal"><span class="lbl">Note finale · le son est figé</span><div class="n gt" id="fin">0</div><div class="w" id="word">&nbsp;</div><span class="mut">« Rue Glacée » part au coffre.</span><div class="acts" style="justify-content:center"><button type="button" class="go" id="again">Créer un autre son</button><button type="button" class="ghost" id="home">Retour à l\'accueil</button></div></div>';
+    countTo($('fin'),fin,calm?0:1400);
+    setTimeout(function(){S.final=fin;$('word').textContent=word;hud();say('Son terminé : '+fin+' sur 100.')},calm?0:1450);
+    $('again').addEventListener('click',startSong);$('home').addEventListener('click',function(){S.started=false;show('home')});
+  }
+
+  S.started=false;night();
 })();
 </script>
