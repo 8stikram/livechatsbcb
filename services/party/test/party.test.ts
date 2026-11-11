@@ -2093,7 +2093,7 @@ describe('Melody Tycoon', () => {
 
     const artistId = started.view.roster[0]!.id;
     const tooDear = await act(player.token, {
-      type: 'song', artistId, title: 'Trop cher', themeId: 'rupture', beatId: 'lovetrap',
+      type: 'studio', artistId, themeId: 'rupture', beatId: 'lovetrap',
       levels: { theme: 4, beat: 3, producer: 4, studio: 4 },
     });
     expect(tooDear.ok).toBe(false);
@@ -2114,14 +2114,28 @@ describe('Melody Tycoon', () => {
     expect(preview.preview.cost).toBe(600 + 400 + 1_000 + 1_500);
     expect(preview.preview.qualityMax).toBeGreaterThan(preview.preview.qualityMin);
 
-    const recorded = await act(player.token, { type: 'song', artistId: artist.id, title: '  Rue   Glacée ', themeId: 'rupture', beatId: 'lovetrap', levels });
+    // In the booth: one event after each choice, every embrouille answered, then no featuring.
+    let studio = await act(player.token, { type: 'studio', artistId: artist.id, themeId: 'rupture', beatId: 'lovetrap', levels });
+    if (!studio.ok) throw new Error(studio.message);
+    expect(studio.view.session!.events.map((event) => event.stage)).toEqual(['theme', 'beat', 'producer', 'studio']);
+    // Not before the featuring step is settled.
+    expect((await act(player.token, { type: 'song', title: 'Trop tôt' })).ok).toBe(false);
+    for (const event of studio.view.session!.events.filter((e) => e.kind === 'clash')) {
+      studio = await act(player.token, { type: 'react', reactionId: event.reactions[0]!.id });
+      if (!studio.ok) throw new Error(studio.message);
+    }
+    studio = await act(player.token, { type: 'feat_skip' });
+    if (!studio.ok) throw new Error(studio.message);
+    const session = studio.view.session!;
+
+    const recorded = await act(player.token, { type: 'song', title: '  Rue   Glacée ' });
     if (!recorded.ok) throw new Error(recorded.message);
     const song = recorded.view.songs[0]!;
+    expect(recorded.view.session).toBeNull();
     expect(song).toMatchObject({ title: 'Rue Glacée', state: 'vault' });
-    expect(song.quality).toBeGreaterThanOrEqual(preview.preview.qualityMin);
-    expect(song.quality).toBeLessThanOrEqual(preview.preview.qualityMax);
-    expect(recorded.view.label!.cash).toBe(30_000 - preview.preview.cost);
-    expect(recorded.view.roster[0]!.energy).toBe(artist.energy - preview.preview.energy);
+    expect(song.quality).toBeGreaterThanOrEqual(session.qualityMin);
+    expect(song.quality).toBeLessThanOrEqual(session.qualityMax);
+    expect(recorded.view.label!.cash).toBe(30_000 - session.baseCost - session.extraCost);
 
     const scheduled = await act(player.token, { type: 'release', songId: song.id, inWeeks: 1, marketing: ['social_1'] });
     if (!scheduled.ok) throw new Error(scheduled.message);

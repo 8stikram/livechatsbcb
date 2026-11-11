@@ -5,15 +5,19 @@ import {
   BEATS,
   CFG,
   GENRES,
+  featChance,
   MARKETING,
   THEMES,
   hitWord,
   qualityWord,
   type ArtistView,
+  type GuestView,
   type MarketView,
   type MelodyAction,
   type MelodyView,
   type RosterView,
+  type SessionEventView,
+  type SessionView,
   type SongPreview,
   type SongView,
 } from '@livechatsbcb/melody';
@@ -492,7 +496,189 @@ const SCALE: Array<[number, string]> = [
   [85, 'Tube'],
 ];
 
-const STEPS =['Artiste', 'Thème', 'Beat', 'Équipe', 'Titre', 'Note'];
+const STEPS = ['Artiste', 'Thème', 'Beat', 'Équipe', 'Cabine', 'Featuring', 'Titre', 'Note'];
+const STAGE_NAMES: Record<string, string> = { theme: 'Après l’écriture', beat: 'Après le beat', producer: 'Avec le producteur', studio: 'Au studio', feat: 'Avec l’invité' };
+
+const settled = (session: SessionView): boolean => session.events.every((e) => e.kind === 'fluid' || e.reaction !== null);
+
+// One event card: a smooth session to enjoy, or an embrouille to answer.
+const EventCard = ({ event, busy, onReact, onNext }: { event: SessionEventView; busy: boolean; onReact: (id: string) => void; onNext: () => void }) => (
+  <div className={`mt-evt${event.kind === 'fluid' ? ' is-good' : ''}`}>
+    <Label>{event.kind === 'fluid' ? `${STAGE_NAMES[event.stage]} · ça roule` : `Embrouille · ${STAGE_NAMES[event.stage]?.toLowerCase()}`}</Label>
+    <h3>{event.title}</h3>
+    {event.kind === 'clash' && <span className="mt-mute">{event.text}</span>}
+    {event.kind === 'clash' && event.reaction === null ? (
+      <div className="mt-react">
+        {event.reactions.map((reaction) => (
+          <button key={reaction.id} type="button" disabled={busy} onClick={() => onReact(reaction.id)}>
+            <span>{reaction.text}</span>
+            <b>{reaction.hint}</b>
+          </button>
+        ))}
+      </div>
+    ) : (
+      <>
+        <p className="mt-result">{event.result}</p>
+        <button type="button" className="mt-go" onClick={onNext}>
+          Continuer
+        </button>
+      </>
+    )}
+  </div>
+);
+
+// The featuring talks: pick a guest, set the offer, spin the wheel.
+const Featuring = ({
+  view,
+  session,
+  busy,
+  onAct,
+  onDone,
+  onFreeze,
+}: {
+  view: MelodyView;
+  session: SessionView;
+  busy: boolean;
+  onAct: (action: MelodyAction) => Promise<MelodyView | null>;
+  onDone: () => void;
+  // Holds the side panel as it was while the wheel turns, so it does not give the answer away.
+  onFreeze: (shown: SessionView | null) => void;
+}) => {
+  const [picked, setPicked] = useState<GuestView | null>(null);
+  const [won, setWon] = useState(false);
+  const [share, setShare] = useState(100);
+  const [angle, setAngle] = useState(180);
+  const [spinning, setSpinning] = useState(false);
+  const [said, setSaid] = useState<string | null>(null);
+  const guest = session.guests.find((g) => g.id === picked?.id) ?? picked;
+  const offer = guest ? Math.round((guest.demand * share) / 100) : 0;
+  const chance = guest ? featChance(offer, guest.demand, 0, view.label?.reputation ?? 0, guest.bonus) : null;
+  const room = (view.label?.cash ?? 0) - session.baseCost - session.extraCost;
+  const calm = () => document.documentElement.classList.contains('calm');
+
+  const spin = async () => {
+    if (!guest) return;
+    setSaid(null);
+    // Keeps the price he asks now: after a yes he leaves the list of guests.
+    setPicked(guest);
+    onFreeze(session);
+    const next = await onAct({ type: 'feat', guestId: guest.id, offer });
+    const last = next?.session?.lastOffer;
+    if (!last) {
+      onFreeze(null);
+      return;
+    }
+    const tell = () => {
+      if (last.outcome === 'accepted') {
+        setSaid(`${last.guestName} accepte !`);
+        setWon(true);
+      }
+      else if (last.outcome === 'vexed') setSaid(last.roll === null ? `${last.guestName} est vexé : il ne veut plus te parler pendant un mois.` : `Refusé, et ${last.guestName} est vexé.`);
+      else setSaid('Refusé. Sa demande monte de 10 %.');
+      setSpinning(false);
+      onFreeze(null);
+    };
+    if (last.roll === null) {
+      tell();
+      return;
+    }
+    setSpinning(true);
+    setAngle((current) => current - (current % 360) + 180 + 360 * 4 + last.roll! * 360);
+    setTimeout(tell, calm() ? 0 : 2_600);
+  };
+
+  if (!guest) {
+    return (
+      <>
+        <Label>Étape 6 · un invité sur le son ?</Label>
+        {said && <p className="mt-result">{said}</p>}
+        <div className="mt-deck">
+          {session.guests.map((g) => (
+            <div key={g.id} className="mt-offer">
+              <ArtistCard
+                artist={{ id: g.id, name: g.name, real: g.real, genre: g.genre as ArtistView['genre'], gen: g.gen, potentialMin: 0, potentialMax: 0, fans: g.fans, hype: 0, value: 0 }}
+                onClick={() => {
+                  if (g.blocked) return;
+                  setPicked(g);
+                  setShare(100);
+                  setSaid(null);
+                }}
+              >
+                <span className="mt-card-sub">{g.blocked ?? `Demande ${money(g.demand)}`}</span>
+              </ArtistCard>
+            </div>
+          ))}
+          {session.guests.length === 0 && <span className="mt-sub">Personne n’est dans ton budget pour l’instant.</span>}
+        </div>
+        <button
+          type="button"
+          className="mt-ghost"
+          disabled={busy}
+          onClick={() => void onAct({ type: 'feat_skip' }).then((next) => next && onDone())}
+        >
+          Pas de featuring
+        </button>
+      </>
+    );
+  }
+
+  const vexing = chance === null;
+  const tooDear = !won && offer > room;
+  return (
+    <>
+      <Label>Étape 6 · négociation</Label>
+      <div className="mt-band mt-feat">
+        <div className="mt-col">
+          <h3 className="mt-h">
+            {guest.name} <span className="mt-gt">demande {money(guest.demand)}</span>
+          </h3>
+          <span className="mt-mute">
+            {genreName(guest.genre)} · {compact(guest.fans)} fans. Un bon invité monte la note et ramène ses fans.
+          </span>
+          <label className="mt-lbl" htmlFor="mt-offer">
+            Ton offre
+          </label>
+          <input id="mt-offer" type="range" min={30} max={150} step={5} value={share} disabled={spinning || busy} onChange={(event) => setShare(Number(event.target.value))} />
+          <div className="mt-kv">
+            <span className="mt-mute">Tu proposes</span>
+            <b>{money(offer)}</b>
+            <span className="mt-mute">Chance qu’il accepte</span>
+            <b>{vexing ? 'Il sera vexé' : `${Math.round(chance * 100)} %`}</b>
+          </div>
+          {won && !spinning ? (
+            <button type="button" className="mt-go mt-go-big" onClick={onDone}>
+              Continuer
+            </button>
+          ) : (
+          <div className="mt-acts">
+            <button type="button" className="mt-go" disabled={spinning || busy || tooDear} onClick={() => void spin()}>
+              {vexing ? 'Proposer quand même' : 'Lancer la roue'}
+            </button>
+            <button
+              type="button"
+              className="mt-ghost"
+              disabled={spinning || busy}
+              onClick={() => {
+                setPicked(null);
+                setSaid(null);
+              }}
+            >
+              Autre invité
+            </button>
+          </div>
+          )}
+          <p className="mt-toast" role="status">
+            {said ?? (tooDear ? 'Pas assez de cash pour cette offre.' : vexing ? 'Moins de 40 % de sa demande : il le prendra très mal.' : '')}
+          </p>
+        </div>
+        <div className="mt-wheel" style={{ background: `conic-gradient(var(--mt-ok) 0 ${Math.round((chance ?? 0) * 100)}%, var(--mt-panel2) 0 100%)` }}>
+          <span className="mt-needle" style={{ rotate: `${angle}deg`, transition: spinning ? 'rotate 2.5s cubic-bezier(.15,.7,.1,1)' : 'none' }} />
+          <span className="mt-pct">{vexing ? '✕' : `${Math.round((chance ?? 0) * 100)} %`}</span>
+        </div>
+      </div>
+    </>
+  );
+};
 
 const Studio = ({
   guildId,
@@ -511,7 +697,10 @@ const Studio = ({
   onGo: (tab: Tab) => void;
   busy: boolean;
 }) => {
-  const [step, setStep] = useState(artistId ? 1 : 0);
+  const session = view.session;
+  // Coming back to a session: replay its cards from the start, unless everything is settled.
+  const startStep = session ? (settled(session) && session.featDone ? 6 : 4) : artistId ? 1 : 0;
+  const [step, setStep] = useState(startStep);
   const [themeId, setThemeId] = useState<string | null>(null);
   const [beatId, setBeatId] = useState<string | null>(null);
   const [levels, setLevels] = useState<Levels>({ theme: 1, beat: 1, producer: 1, studio: 1 });
@@ -519,14 +708,19 @@ const Studio = ({
   const [preview, setPreview] = useState<SongPreview | null>(null);
   const [made, setMade] = useState<SongView | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const artist = view.roster.find((a) => a.id === artistId) ?? null;
+  // How many events of the session the player has already gone through.
+  const [seen, setSeen] = useState(0);
+  const [featOpen, setFeatOpen] = useState(!session?.featDone);
+  const [frozen, setFrozen] = useState<SessionView | null>(null);
+  const chosenArtist = session?.artistId ?? artistId;
+  const artist = view.roster.find((a) => a.id === chosenArtist) ?? null;
 
   useEffect(() => {
     if (artistId && step === 0) setStep(1);
   }, [artistId, step]);
 
   useEffect(() => {
-    if (!artistId || !themeId || !beatId || step < 3 || step > 4) return;
+    if (!artistId || !themeId || !beatId || step !== 3) return;
     let live = true;
     const timer = setTimeout(() => {
       void ask<{ preview: SongPreview }>(guildId, 'preview', { artistId, themeId, beatId, levels }).then((answer) => {
@@ -553,26 +747,41 @@ const Studio = ({
     setPreview(null);
     setMade(null);
     setProblem(null);
+    setSeen(0);
+  };
+
+  const enter = async () => {
+    if (!artistId || !themeId || !beatId) return;
+    const next = await onAct({ type: 'studio', artistId, themeId, beatId, levels });
+    if (next?.session) {
+      setSeen(0);
+      setFeatOpen(true);
+      setStep(4);
+    }
+  };
+
+  const leave = async () => {
+    const next = await onAct({ type: 'studio_cancel' });
+    if (next && !next.session) restart();
   };
 
   const record = async () => {
-    if (!artistId || !themeId || !beatId) return;
     const before = new Set(view.songs.map((song) => song.id));
-    const next = await onAct({ type: 'song', artistId, title: title.trim(), themeId, beatId, levels });
+    const next = await onAct({ type: 'song', title: title.trim() });
     const song = next?.songs.find((s) => !before.has(s.id));
     if (song) {
       setMade(song);
-      setStep(5);
+      setStep(7);
     }
   };
 
   const cash = view.label?.cash ?? 0;
   const cap = Math.min(cash, view.label?.songBudgetCap ?? 0);
-  const theme = THEMES.find((t) => t.id === themeId);
-  const beat = BEATS.find((b) => b.id === beatId);
+  const theme = THEMES.find((t) => t.id === (session?.themeId ?? themeId));
+  const beat = BEATS.find((b) => b.id === (session?.beatId ?? beatId));
   const hot = (value: number | undefined) => (value ?? 50) >= 65;
 
-  let stage: ReactNode;
+  let stage: ReactNode = null;
   if (step === 0) {
     stage = (
       <>
@@ -679,38 +888,77 @@ const Studio = ({
             </div>
           </div>
         ))}
-        <button type="button" className="mt-go mt-go-big" disabled={!preview || preview.cost > cap} onClick={() => setStep(4)}>
-          Valider l’équipe
+        <span className="mt-sub">Moins tu paies, plus il y a d’embrouilles en studio.</span>
+        <button
+          type="button"
+          className="mt-go mt-go-big"
+          disabled={busy || !preview || preview.cost > cap || (artist?.energy ?? 0) < (preview?.energy ?? 0)}
+          onClick={() => void enter()}
+        >
+          Entrer en cabine · {preview ? money(preview.cost) : '…'}
         </button>
       </>
     );
-  } else if (step === 4) {
+  } else if (step === 4 && session) {
+    const event = session.events[Math.min(seen, session.events.length - 1)];
+    const done = seen >= session.events.length;
     stage = (
       <>
-        <Label>Étape 5 · le titre</Label>
+        <div className="mt-pips" aria-label={`Événement ${Math.min(seen + 1, session.events.length)} sur ${session.events.length}`}>
+          {session.events.map((e, i) => (
+            <i key={i} className={i < seen ? (e.kind === 'fluid' ? 'good' : 'bad') : i === seen ? 'now' : ''} />
+          ))}
+        </div>
+        {!done && event ? (
+          <EventCard
+            key={seen}
+            event={event}
+            busy={busy}
+            onReact={(reactionId) => void onAct({ type: 'react', reactionId })}
+            onNext={() => {
+              const next = seen + 1;
+              setSeen(next);
+              if (next >= session.events.length) setStep(5);
+            }}
+          />
+        ) : null}
+      </>
+    );
+  } else if (step === 5 && session) {
+    // The guest may ask for more once in the booth: that embrouille comes after the wheel.
+    const late = session.events[seen];
+    stage = featOpen ? (
+      <Featuring view={view} session={session} busy={busy} onAct={onAct} onDone={() => setFeatOpen(false)} onFreeze={setFrozen} />
+    ) : late ? (
+      <EventCard key={seen} event={late} busy={busy} onReact={(reactionId) => void onAct({ type: 'react', reactionId })} onNext={() => setSeen(seen + 1)} />
+    ) : (
+      <>
+        <p className="mt-result">{session.feat ? `${session.feat.name} pose sur le son pour ${money(session.feat.fee)}.` : 'Pas de featuring sur ce son.'}</p>
+        <button type="button" className="mt-go" onClick={() => setStep(6)}>
+          Continuer
+        </button>
+      </>
+    );
+  } else if (step === 6 && session) {
+    stage = (
+      <>
+        <Label>Étape 7 · le titre</Label>
         <label className="mt-field">
           <Label>Titre du son</Label>
           <input value={title} maxLength={40} placeholder="Rue Glacée" autoFocus onChange={(event) => setTitle(event.target.value)} />
         </label>
         <p className="mt-sub">
-          {artist?.name} · {theme?.name} · {beat?.name}. Une fois enregistrée, la note est figée.
+          {session.artistName}
+          {session.feat ? ` feat. ${session.feat.name}` : ''} · {theme?.name} · {beat?.name}. Une fois enregistrée, la note est figée.
         </p>
         <div className="mt-acts">
-          <button
-            type="button"
-            className="mt-go mt-go-big"
-            disabled={busy || title.trim().length === 0 || !preview || preview.cost > cap || (artist?.energy ?? 0) < (preview?.energy ?? 0)}
-            onClick={() => void record()}
-          >
-            Enregistrer · {preview ? money(preview.cost) : '…'}
-          </button>
-          <button type="button" className="mt-ghost" onClick={() => setStep(3)}>
-            Changer l’équipe
+          <button type="button" className="mt-go mt-go-big" disabled={busy || title.trim().length === 0} onClick={() => void record()}>
+            Enregistrer · {money(session.baseCost + session.extraCost)}
           </button>
         </div>
       </>
     );
-  } else if (made) {
+  } else if (step === 7 && made) {
     stage = (
       <div className="mt-reveal">
         <Label>Note finale · le son est figé</Label>
@@ -718,7 +966,7 @@ const Studio = ({
           <CountUp to={made.quality} ms={1400} />
         </div>
         <div className="mt-reveal-w">{qualityWord(made.quality)}</div>
-        <span className="mt-sub">« {made.title} » part au coffre{made.readyInWeeks > 0 ? `, prêt dans ${made.readyInWeeks} semaine` : ''}.</span>
+        <span className="mt-sub">« {made.title} » part au coffre{made.readyInWeeks > 0 ? `, prêt dans ${made.readyInWeeks} semaine${made.readyInWeeks > 1 ? 's' : ''}` : ''}.</span>
         <div className="mt-acts mt-acts-center">
           <button type="button" className="mt-go" onClick={() => onGo('releases')}>
             Programmer la sortie
@@ -731,8 +979,13 @@ const Studio = ({
     );
   }
 
-  const low = preview?.qualityMin ?? 0;
-  const high = preview?.qualityMax ?? 0;
+  const shown = frozen ?? session;
+  const inBooth = shown !== null && step >= 4 && step <= 6;
+  const low = inBooth ? shown.qualityMin : (preview?.qualityMin ?? 0);
+  const high = inBooth ? shown.qualityMax : (preview?.qualityMax ?? 0);
+  const showRange = inBooth || (preview !== null && step === 3);
+  const spent = inBooth ? shown.baseCost + shown.extraCost : preview && step === 3 ? preview.cost : 0;
+  const energy = inBooth ? shown.energy : (preview?.energy ?? 0);
   return (
     <div className="mt-view mt-in">
       <div className="mt-steps">
@@ -741,7 +994,7 @@ const Studio = ({
             key={name}
             type="button"
             className={i < step ? 'done' : i === step ? 'now' : ''}
-            disabled={i >= step || step === 5 || (i > 0 && !artistId)}
+            disabled={i >= step || step >= 4 || (i > 0 && !artistId)}
             onClick={() => (i === 0 ? restart() : setStep(i))}
           >
             {name}
@@ -756,10 +1009,10 @@ const Studio = ({
         <div className="mt-col">
           <div className="mt-band">
             <Label>Qualité estimée</Label>
-            <div className="mt-big mt-gt">{made ? made.quality : preview && step >= 3 ? `${low} – ${high}` : '—'}</div>
+            <div className="mt-big mt-gt">{made && step === 7 ? made.quality : showRange ? `${low} – ${high}` : '—'}</div>
             <div className="mt-range">
-              {preview && step >= 3 && <i style={{ left: `${low}%`, width: `${Math.max(2, high - low)}%` }} />}
-              {made && <u style={{ left: `${made.quality}%` }} />}
+              {showRange && step !== 7 && <i style={{ left: `${low}%`, width: `${Math.max(2, high - low)}%` }} />}
+              {made && step === 7 && <u style={{ left: `${made.quality}%` }} />}
             </div>
             <div className="mt-scale">
               {SCALE.map(([at, word]) => (
@@ -772,9 +1025,9 @@ const Studio = ({
           <div className="mt-band">
             <Label>Budget du son</Label>
             <div className="mt-big">
-              {preview && step >= 3 ? money(preview.cost) : '0 €'} <span className="mt-mute">/ {money(cap)}</span>
+              {money(spent)} <span className="mt-mute">/ {money(cap)}</span>
             </div>
-            <Meter value={preview && cap > 0 ? (preview.cost / cap) * 100 : 0} />
+            <Meter value={cap > 0 ? (spent / cap) * 100 : 0} />
             <div className="mt-kv">
               <span className="mt-mute">Artiste</span>
               <b>{artist?.name ?? '—'}</b>
@@ -782,21 +1035,35 @@ const Studio = ({
               <b>{theme?.name ?? '—'}</b>
               <span className="mt-mute">Beat</span>
               <b>{beat?.name ?? '—'}</b>
+              {inBooth && (
+                <>
+                  <span className="mt-mute">Featuring</span>
+                  <b>{shown.feat?.name ?? '—'}</b>
+                </>
+              )}
               <span className="mt-mute">Énergie</span>
-              <b>
-                {preview && step >= 3 ? `−${preview.energy} sur ${artist?.energy ?? 0}` : artist ? `${artist.energy} dispo` : '—'}
-              </b>
+              <b>{energy > 0 ? `−${energy} sur ${artist?.energy ?? 0}` : artist ? `${artist.energy} dispo` : '—'}</b>
               <span className="mt-mute">Délai</span>
-              <b>{preview && step >= 3 && preview.delayWeeks > 0 ? `+${preview.delayWeeks} semaine` : 'aucun'}</b>
+              <b>
+                {(() => {
+                  const weeks = inBooth ? shown.delayWeeks : (preview?.delayWeeks ?? 0);
+                  return weeks > 0 ? `+${weeks} semaine${weeks > 1 ? 's' : ''}` : 'aucun';
+                })()}
+              </b>
             </div>
           </div>
+          {inBooth && (
+            <button type="button" className="mt-ghost" disabled={busy} onClick={() => void leave()}>
+              Quitter la cabine
+            </button>
+          )}
           <p className="mt-toast" role="status">
             {problem ??
-              (preview && step >= 3 && preview.cost > cap
+              (step === 3 && preview && preview.cost > cap
                 ? cap < cash
                   ? 'Trop cher pour ton palier de label.'
                   : 'Pas assez de cash pour cette équipe.'
-                : preview && artist && step >= 3 && artist.energy < preview.energy
+                : step === 3 && preview && artist && artist.energy < preview.energy
                   ? `${artist.name} est trop fatigué pour cette session.`
                   : '')}
           </p>

@@ -23,7 +23,12 @@ const IdSchema = z.string().min(1).max(64);
 export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('found'), name: z.string().min(1).max(60), starterId: IdSchema }),
   z.object({ type: z.literal('sign'), artistId: IdSchema, advance: z.number().min(0).max(1e10), royaltyRate: z.number().min(0).max(1) }),
-  z.object({ type: z.literal('song'), artistId: IdSchema, title: z.string().min(1).max(80), themeId: IdSchema, beatId: IdSchema, levels: LevelsSchema }),
+  z.object({ type: z.literal('studio'), artistId: IdSchema, themeId: IdSchema, beatId: IdSchema, levels: LevelsSchema }),
+  z.object({ type: z.literal('react'), reactionId: IdSchema }),
+  z.object({ type: z.literal('feat'), guestId: IdSchema, offer: z.number().min(1).max(1e9) }),
+  z.object({ type: z.literal('feat_skip') }),
+  z.object({ type: z.literal('studio_cancel') }),
+  z.object({ type: z.literal('song'), title: z.string().min(1).max(80) }),
   z.object({ type: z.literal('release'), songId: IdSchema, inWeeks: z.number().int().min(1).max(8), marketing: z.array(IdSchema).max(12) }),
   z.object({ type: z.literal('gig'), artistId: IdSchema }),
   z.object({ type: z.literal('loan'), amount: z.number().min(1).max(1e9), weeks: z.union([z.literal(8), z.literal(16), z.literal(24)]) }),

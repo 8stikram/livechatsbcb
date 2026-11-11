@@ -6,7 +6,8 @@ import { artistValue, catalogueValue, contractOf, debtOf, fameTier, fansOf, netW
 import { estimateQuality, producerOfLevel, songCost, songEnergy } from './quality.ts';
 import { clamp, createRng, hashString } from './rng.ts';
 import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer, SongLevels, Trends, World } from './types.ts';
-import { GameError, addPlayerLabel, bookGig, createSong, expectedOffer, freeAgents, scheduleRelease, signArtist, takeLoan, type Offer } from './world.ts';
+import { GameError, addPlayerLabel, bookGig, expectedOffer, freeAgents, scheduleRelease, signArtist, takeLoan, type Offer } from './world.ts';
+import { cancelSession, finishSession, offerFeat, reactToEvent, sessionOf, sessionView, skipFeat, startSession, type SessionView } from './studio.ts';
 
 export const MAX_PLAYER_LABELS = 20;
 
@@ -98,7 +99,12 @@ export const producerFor = (world: World, level: 1 | 2 | 3 | 4, beatId: string):
 export type MelodyAction =
   | { type: 'found'; name: string; starterId: string }
   | { type: 'sign'; artistId: string; advance: number; royaltyRate: number }
-  | { type: 'song'; artistId: string; title: string; themeId: string; beatId: string; levels: SongLevels }
+  | { type: 'studio'; artistId: string; themeId: string; beatId: string; levels: SongLevels }
+  | { type: 'react'; reactionId: string }
+  | { type: 'feat'; guestId: string; offer: number }
+  | { type: 'feat_skip' }
+  | { type: 'studio_cancel' }
+  | { type: 'song'; title: string }
   | { type: 'release'; songId: string; inWeeks: number; marketing: string[] }
   | { type: 'gig'; artistId: string }
   | { type: 'loan'; amount: number; weeks: 8 | 16 | 24 };
@@ -124,17 +130,27 @@ export const applyAction = (world: World, ownerId: string, action: MelodyAction)
       signArtist(world, label.id, action.artistId, offer);
       return;
     }
+    case 'studio':
+      startSession(world, label, action);
+      return;
+    case 'react':
+      reactToEvent(world, label, action.reactionId);
+      return;
+    case 'feat':
+      offerFeat(world, label, action.guestId, action.offer);
+      return;
+    case 'feat_skip':
+      skipFeat(world, label);
+      return;
+    case 'studio_cancel':
+      cancelSession(world, label);
+      return;
     case 'song': {
       const title = action.title.trim().replace(/\s+/g, ' ').slice(0, 40);
       if (title.length === 0) throw new GameError('Donne un titre à ce son.');
-      createSong(world, label.id, {
-        artistId: action.artistId,
-        title,
-        themeId: action.themeId,
-        beatId: action.beatId,
-        levels: action.levels,
-        producer: producerFor(world, action.levels.producer, action.beatId),
-      });
+      const session = sessionOf(world, label.id);
+      if (!session) throw new GameError("Tu n'es pas en studio.");
+      finishSession(world, label, title, producerFor(world, session.levels.producer, session.beatId));
       return;
     }
     case 'release':
@@ -226,6 +242,8 @@ export interface MelodyView {
   market: MarketView[];
   ranking: RankingLine[];
   charts: { global: ChartEntry[]; genres: Record<string, ChartEntry[]> };
+  /** The song being recorded, with its events and featuring talks. */
+  session: SessionView | null;
 }
 
 /** What a label knows of a potential: a range around the truth, always the same for one label and one artist. */
@@ -339,7 +357,13 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
       global: top(world.charts.global, 50),
       genres: Object.fromEntries(Object.entries(world.charts.genres).map(([genre, entries]) => [genre, top(entries, 20)])),
     },
+    session: label ? sessionOfLabel(world, label) : null,
   };
+};
+
+const sessionOfLabel = (world: World, label: Label): SessionView | null => {
+  const session = sessionOf(world, label.id);
+  return session ? sessionView(world, label, producerFor(world, session.levels.producer, session.beatId)) : null;
 };
 
 export interface SongPreview {

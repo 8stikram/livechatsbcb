@@ -7,7 +7,7 @@ import { BEATS, THEMES } from './data/content.ts';
 import { artistValue, contractOf, debtOf, fameTier, rosterOf } from './economy.ts';
 import { estimateQuality, rollQuality, songCost, songDelay, songEnergy, type SongPlan } from './quality.ts';
 import { marketingById } from './release.ts';
-import { rngFor } from './rng.ts';
+import { clamp, rngFor } from './rng.ts';
 import type { Artist, Contract, Label, Producer, Song, SongLevels, Trends, World } from './types.ts';
 
 export class GameError extends Error {}
@@ -149,6 +149,10 @@ export interface SongRequest {
   eventBonus?: number;
   eventCost?: number;
   randomChoices?: number;
+  /** Studio events: weeks added before the song is ready, morale and energy changes for the artist. */
+  extraDelay?: number;
+  moraleDelta?: number;
+  energyDelta?: number;
 }
 
 /** Creates a song: pays, spends energy and freezes the quality. */
@@ -157,9 +161,11 @@ export const createSong = (world: World, labelId: string, request: SongRequest):
   const artist = artistOf(world, request.artistId);
   if (contractOf(world, artist.id)?.labelId !== labelId) return fail(`${artist.name} n'est pas dans ton label.`);
   const feat = request.featArtistId ? artistOf(world, request.featArtistId) : null;
-  const cost = songCost(request.levels, request.producer) + (request.featFee ?? 0) + (request.eventCost ?? 0);
+  const planned = songCost(request.levels, request.producer) + (request.featFee ?? 0);
+  // What studio events cost on top may go past the budget of the tier: it is only taken from the cash.
+  const cost = planned + (request.eventCost ?? 0);
   const cap = CFG.tiers.songBudgetCap[label.tier - 1] ?? 15_000;
-  if (cost > cap) return fail('Ce son dépasse le budget autorisé pour ton palier.');
+  if (planned > cap) return fail('Ce son dépasse le budget autorisé pour ton palier.');
   if (cost > label.cash) return fail('Pas assez de cash pour ce son.');
   const energy = songEnergy(request.levels, feat !== null, artist);
   if (artist.energy < energy) return fail(`${artist.name} n'a pas assez d'énergie.`);
@@ -177,7 +183,8 @@ export const createSong = (world: World, labelId: string, request: SongRequest):
   const quality = rollQuality(estimateQuality(plan), rngFor(world.seed, world.tick, `song${world.nextId}`));
 
   label.cash -= cost;
-  artist.energy -= energy;
+  artist.energy = clamp(artist.energy - energy + (request.energyDelta ?? 0), 0, 100);
+  artist.morale = clamp(artist.morale + (request.moraleDelta ?? 0), 0, 100);
   artist.creativeFatigue = Math.min(100, artist.creativeFatigue + CFG.fatigue.perSong);
   artist.lastActiveTick = world.tick;
   const song: Song = {
@@ -193,7 +200,7 @@ export const createSong = (world: World, labelId: string, request: SongRequest):
     cost,
     state: 'vault',
     createdTick: world.tick,
-    availableTick: world.tick + 1 + songDelay(request.levels),
+    availableTick: world.tick + 1 + songDelay(request.levels) + (request.extraDelay ?? 0),
     releaseTick: null,
     marketingReach: 0,
     marketingCost: 0,

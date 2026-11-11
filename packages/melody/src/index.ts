@@ -21,6 +21,10 @@ export {
   MAX_PLAYER_LABELS, starterChoices, foundLabel, producerFor, applyAction, buildView, previewSong,
   type MelodyAction, type MelodyView, type ArtistView, type RosterView, type SongView, type MarketView, type SongPreview,
 } from './play.ts';
+export {
+  startSession, reactToEvent, cancelSession, offerFeat, skipFeat, finishSession, sessionOf, sessionView, guestDemand, guestBonus, guestChoices,
+  type SessionView, type SessionEventView, type GuestView,
+} from './studio.ts';
 export { runTick, type TickReport, type ReleaseReport, type LabelReport } from './tick.ts';
 export { simulate, STRATEGIES, type Strategy, type Snapshot } from './sim.ts';
 export { createRng, rngFor, type Rng } from './rng.ts';

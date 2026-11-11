@@ -3,6 +3,7 @@ import {
   CFG, GameError, addPlayerLabel, artistValue, bookGig, coherence, createRng, createSong, createWorld, estimateQuality,
   expectedOffer, featChance, featDemand, firstWeek, freeAgents, generalRating, playGig, producerOfLevel, ranking, rosterOf,
   runTick, scheduleRelease, signArtist, simulate, songCost, songEnergy, takeLoan, CATALOG_ARTISTS,
+  applyAction, buildView, cancelSession, guestDemand, offerFeat, reactToEvent, startSession,
 } from '../src/index.ts';
 import type { Artist, World } from '../src/index.ts';
 
@@ -174,5 +175,85 @@ describe('labels', () => {
     expect(Math.max(...season1.map((s) => s.fans))).toBeLessThan(2_000_000);
     expect(world.charts.global.length).toBeGreaterThan(20);
     expect(world.charts.global[0]?.streams).toBeGreaterThan(world.charts.global[1]?.streams ?? 0);
+  });
+});
+
+describe('studio sessions', () => {
+  const levels = { theme: 2, beat: 2, producer: 2, studio: 2 } as const;
+  const plan = (artistId: string) => ({ artistId, themeId: 'rupture', beatId: 'lovetrap', levels: { ...levels } });
+
+  // Moves the week until the draw gives at least one embrouille.
+  const sessionWithClash = () => {
+    const { world, labelId, artist } = worldWithLabel();
+    const label = world.labels[labelId]!;
+    label.cash = 200_000;
+    for (let week = 0; week < 60; week += 1) {
+      world.tick = week;
+      const session = startSession(world, label, plan(artist.id));
+      if (session.events.some((e) => e.kind === 'clash')) return { world, label, artist, session };
+    }
+    throw new Error('no embrouille in 60 weeks');
+  };
+
+  it('draws one event after each choice, the same again if the player starts over', () => {
+    const { world, label, artist, session } = sessionWithClash();
+    expect(session.events.map((e) => e.stage)).toEqual(['theme', 'beat', 'producer', 'studio']);
+    const first = JSON.stringify(session.events);
+    cancelSession(world, label);
+    expect(JSON.stringify(startSession(world, label, plan(artist.id)).events)).toBe(first);
+  });
+
+  it('waits for every embrouille to be answered, then records the song with what they cost', () => {
+    const { world, label } = sessionWithClash();
+    expect(() => applyAction(world, label.ownerId!, { type: 'song', title: 'Trop tôt' })).toThrow(GameError);
+    let view = buildView(world, label.ownerId!);
+    for (const event of view.session!.events.filter((e) => e.kind === 'clash')) {
+      applyAction(world, label.ownerId!, { type: 'react', reactionId: event.reactions[0]!.id });
+    }
+    view = buildView(world, label.ownerId!);
+    expect(view.session!.events.every((e) => e.kind === 'fluid' || e.result !== null)).toBe(true);
+    applyAction(world, label.ownerId!, { type: 'feat_skip' });
+    const extra = view.session!.extraCost;
+    const before = label.cash;
+    applyAction(world, label.ownerId!, { type: 'song', title: 'Après la tempête' });
+    const song = world.songs.at(-1)!;
+    expect(song.title).toBe('Après la tempête');
+    expect(before - label.cash).toBe(view.session!.baseCost + extra);
+    expect(buildView(world, label.ownerId!).session).toBeNull();
+  });
+
+  it('spins the featuring wheel: an insult closes the door, a refusal raises the price, a yes adds the guest', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    const label = world.labels[labelId]!;
+    label.cash = 500_000;
+    // A bigger label, so its budget per song leaves room for dear guests.
+    label.tier = 4;
+    startSession(world, label, plan(artist.id));
+    const clashes = buildView(world, label.ownerId!).session!.events.filter((e) => e.kind === 'clash');
+    for (const event of clashes) reactToEvent(world, label, event.reactions[0]!.id);
+    const guests = buildView(world, label.ownerId!).session!.guests;
+    expect(guests.length).toBeGreaterThan(2);
+
+    const insulted = guests[0]!;
+    offerFeat(world, label, insulted.id, Math.floor(insulted.demand * 0.3));
+    expect(world.sessions![label.id]!.lastOffer).toMatchObject({ outcome: 'vexed', roll: null });
+    expect(() => offerFeat(world, label, insulted.id, insulted.demand * 2)).toThrow(/boude/);
+
+    // Offers just above 60 % of the demand: most are refused, each refusal makes the next one dearer.
+    let accepted = false;
+    for (const guest of guests.slice(1).reverse()) {
+      for (let attempt = 0; attempt < 3 && !accepted; attempt += 1) {
+        const demand = guestDemand(world, label.id, world.artists[guest.id]!);
+        if (attempt > 0) expect(demand).toBeGreaterThan(guest.demand);
+        offerFeat(world, label, guest.id, Math.round(demand * 1.5));
+        accepted = world.sessions![label.id]!.lastOffer!.outcome === 'accepted';
+      }
+      if (accepted) break;
+    }
+    expect(accepted).toBe(true);
+    const session = buildView(world, label.ownerId!).session!;
+    expect(session.feat).not.toBeNull();
+    expect(session.featDone).toBe(true);
+    expect(session.guests).toEqual([]);
   });
 });

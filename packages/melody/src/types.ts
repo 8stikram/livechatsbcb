@@ -219,4 +219,39 @@ export interface World {
   npcSongs: NpcSong[];
   trends: Trends;
   charts: { global: ChartEntry[]; genres: Record<string, ChartEntry[]> };
+  /** The song each label is recording right now (studio events, featuring). Missing in worlds saved before. */
+  sessions?: Record<string, StudioSession>;
+  /** Featuring talks per label and guest: tries this week, and how long he refuses after an insult. */
+  featMemory?: Record<string, { tick: number; tries: number; closedUntil: number }>;
+}
+
+export type StudioStage = 'theme' | 'beat' | 'producer' | 'studio' | 'feat';
+
+export interface SessionEvent {
+  stage: StudioStage;
+  kind: 'fluid' | 'clash';
+  cardId: string;
+  /** Chosen reaction of a clash, null while the player has not answered. */
+  reaction: string | null;
+  /** What happened, once known. */
+  result: string | null;
+}
+
+export interface StudioSession {
+  artistId: string;
+  themeId: string;
+  beatId: string;
+  levels: SongLevels;
+  tick: number;
+  /** How many songs the label had recorded this week when the session started: keeps the draws fixed. */
+  index: number;
+  events: SessionEvent[];
+  quality: number;
+  cost: number;
+  delay: number;
+  morale: number;
+  energy: number;
+  feat: { guestId: string; fee: number } | null;
+  featDone: boolean;
+  lastOffer: { guestId: string; offer: number; chance: number; roll: number | null; outcome: 'accepted' | 'refused' | 'vexed' } | null;
 }

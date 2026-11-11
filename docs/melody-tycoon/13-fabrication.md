@@ -71,3 +71,13 @@ Pas encore dans l'appli : il faut maintenant les écrans (style Nuit Néon jeu v
 - **Charts** : podium du serveur, top global et top par genre, tes sons en surbrillance.
 - **Banque** : cash, dettes, prêts, emprunter (somme et durée).
 - Pas encore : embrouilles du studio, roue du featuring, négociation, tutoriel. Le serveur Melody n'est pas encore mis en ligne : à faire avec la prochaine version publiée.
+
+## Étape 3 — embrouilles et featuring (fait)
+
+- **Cabine** : après « Entrer en cabine », une carte par choix (écriture, beat, producteur, studio). Soit **ça roule** (qualité +2, +5 pour un coup de génie, énergie +3 ou moral +5), soit une **embrouille** à régler avec 2 ou 3 réactions (payer, recadrer = pari sur la discipline, changer d'approche, ignorer). 12 embrouilles + « l'invité demande plus ».
+- Chance d'embrouille : 28 % au niveau 1, 20 % au 2, 13 % au 3, 8 % au 4, moins si l'artiste est discipliné, plus s'il a le moral bas ou est fatigué, −10 % par embrouille déjà subie sur le son (entre 3 et 60 %).
+- **Featuring** : 8 invités possibles, du plus gros que le label peut payer au plus petit (jamais un artiste d'un autre joueur pour l'instant). Curseur d'offre de 30 à 150 % de la demande, chance affichée en direct, **roue** qui tourne. Refus : la demande monte de 10 %, 3 essais par semaine. Moins de 60 % : vexé pour la semaine. Moins de 40 % : vexé 4 semaines sans tourner la roue. Une fois sur quatre, l'invité demande 20 % de plus en cabine.
+- **Pas de triche** : tout est tiré sur le serveur à partir de la graine du monde. Quitter la cabine et recommencer redonne les mêmes cartes la même semaine.
+- Les surcoûts des embrouilles peuvent dépasser le budget du palier : ils sont pris seulement sur le cash.
+- On peut quitter l'onglet en pleine session : on retrouve la cabine en revenant.
+- Pas encore : relation avec les invités, featuring avec l'artiste d'un autre joueur, négociation de contrats, tutoriel.
