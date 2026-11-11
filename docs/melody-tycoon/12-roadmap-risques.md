@@ -10,7 +10,7 @@ On livre d'abord **le cœur qui fait revenir** : créer un son → le sortir →
 | Contenu | Détail |
 |---|---|
 | Monde par serveur | Objet `MelodyWorld`, base, tick par alarme, mise en veille |
-| Données | Paquet `melody-data` : genres, beats, thèmes, cartes, réglages ; catalogue de départ (l'échantillon de ~200 artistes suffit pour tester) |
+| Données | Paquet `melody-data` : genres, beats, thèmes, cartes, réglages ; catalogue de départ (l'échantillon de ~235 artistes suffit pour tester) |
 | **Simulateur d'équilibre** | Un script qui fait jouer 4 labels automatiques pendant 3 saisons en quelques secondes, et sort les courbes (cash, fans, paliers). Indispensable pour régler les chiffres avant que quelqu'un joue |
 | Carte dans l'onglet Jeux | Entrée, création du label |
 
@@ -94,7 +94,7 @@ Label bonus partagé par toute la party · deals de distribution, sous-licences,
 | Q1 | Rythme : 1 jour réel = 1 semaine de jeu, ça te va ? | Oui (H1) |
 | Q2 | Heure du tick | 06:00, heure de Paris |
 | Q3 | Les micro-genres (supertrap, lovetrap, regalia, crank, new jazz) : mes descriptions sont-elles justes ? Quels artistes y associer ? | À corriger par toi |
-| Q4 | Irko, Bedry, Yassboi, Tractopelle Music, AWA : genre, ville, niveau, qui est signé où ? Et la liste des artistes underground à ajouter (comme Ptite Soeur, Jeune Morty, 2hollis, Lucy Bedroque, Rommulas) | À remplir par toi |
+| Q4 | Les lignes marquées `niveau` ou `tout` dans la base (Bedry, Irko, Yass Boi, 8stikram et leurs proches, Tractopelle, AWA) : notes, fans et villes à corriger ; d'autres artistes underground à ajouter ? | À corriger dans le fichier, ou dis-le-moi |
 | Q5 | Y a-t-il des artistes que tu ne veux **pas** dans le jeu, ou que tu veux absolument ? | Liste `seed.csv` + `exclusions.csv` |
 | Q6 | Nombre maximum de labels de joueurs par serveur | 20 |
 | Q7 | Un joueur qui est dans plusieurs serveurs a-t-il un label dans chacun ? | Oui, indépendants |

@@ -4,12 +4,12 @@
 
 | Fichier | Contenu |
 |---|---|
-| `artistes-echantillon.csv` | ~200 artistes : ~185 vrais (rap US, FR, UK, R&B, pop, afro, latin, électro, hyperpop), dont **~40 de la scène underground** (Ptite Soeur, Jeune Morty, 2hollis, Lucy Bedroque, Rommulas, fakemink…) + 15 inventés |
+| `artistes-echantillon.csv` | ~235 artistes : ~220 vrais (rap US, FR, UK, R&B, pop, afro, latin, électro, hyperpop), dont **~80 de la scène underground** (Bedry, Irko, Yass Boi, 8stikram et leurs proches, Ptite Soeur, Jeune Morty, 2hollis, Lucy Bedroque, Rommulas, fakemink…) + 15 inventés |
 | `labels.csv` | 23 vrais labels + le pseudo-label « Indépendants » + 8 labels inventés |
 
 **Important** :
 - Seuls les **noms** des vrais artistes sont utilisés. Toutes les notes (GEN, potentiel, fans du jeu, hype) sont **inventées pour le jeu**, comme les notes d'un jeu de foot.
-- La colonne `a_verifier` signale ce que je ne sais pas avec certitude : `label` = le label de départ est une attribution simplifiée ; `niveau` = note et fans estimés à la louche (scène underground, à régler par toi) ; `tout` = à compléter. **Irko, Bedry, Yassboi, Tractopelle Music et AWA** : je n'ai pas d'information fiable, les lignes sont à remplir par toi (j'ai compris « Bedry » et « Yassboi » comme deux artistes : à confirmer).
+- La colonne `a_verifier` signale ce que je ne sais pas avec certitude : `label` = le label de départ est une attribution simplifiée ; `niveau` = note et fans estimés à la louche (scène underground, à régler par toi) ; `tout` = presque rien trouvé, à compléter. Le détail des recherches est en 9.7.
 - Les villes vides sont celles dont je ne suis pas sûr.
 - Je n'ai mis ni artistes décédés, ni artistes dont la présence poserait un problème évident. La liste finale reste ton choix.
 
@@ -122,3 +122,16 @@ Résultat : identique dans tous les mondes pour les attributs ; seuls le potenti
 - **Dans le catalogue** : ~150 artistes inventés fixes (pépites, artistes des labels inventés), écrits à la main ou générés puis relus, avec traits et risque de scandale.
 - **Par monde** : générés à la demande (démos, rapports de scouts, centre de formation) à partir de la graine du monde : nom tiré de listes par pays (prénom, nom de scène, suffixe), genre selon la région, GEN 35-65, potentiel selon la chance de pépite.
 - **Règle de nommage** : un nom généré est comparé au catalogue ; s'il ressemble trop à un vrai artiste, on retire.
+
+## 9.7 Recherches faites le 11/11/2026 (pages publiques, lues une par une)
+
+| Sujet | Ce que j'ai trouvé | Source |
+|---|---|---|
+| **Bedry** | Rappeur de Fontenay-sous-Bois, trap / cloud. Singles « Hasba » et « T'as dit nan » (2025), mixtape *Beewaba* (octobre 2026, 11 titres, 47e au classement SNEP). Proches : Sherifflazone, 63OG, 63KLUF, Bryan Countach, Mazenko, Jeune Morty, La Fève, Bu$hi ; même scène que Jäde et Norsacce | Deezer, Album of The Year, Billetweb |
+| **Irko** | Né à Tirana, installé à Lyon depuis 2018. *Ghillie in the Mist* (2021), *Dirty Synths and Nice Bars* (2022, avec Meel B), *Danger Rapproché* (2023, avec amne). Proches : amne (Amnezzia), Meel B, abel31, 1863, 111SYRI, Giacoshi, Femtogo, Realo, Zoomy | Deezer, Rate Your Music |
+| **Yass Boi** | Albums *777* (2022) et *LE VISAGE* (2025). Proches : 8stikram, Dracofeuu, H4mza, Matapland, L'Apache, Sarah Massok | Deezer |
+| **8stikram** | *CHIMCHAR* (janvier 2025, 8 titres, dont « Vieux-Lille » avec Yass Boi), « J'suis down bad » (avec Yass Boi), « Murasame », « Voir l'avenir ». Proches : Yass Boi, Jäck Stone, Deagox | Deezer, Apple Music, SoundCloud |
+| **AWA** | Arab With Attitude, label de Kore, créé chez Sony Music France (2018). Artistes : Zola, Nahir, Diddi Trix, Doria. Catalogue racheté par Sony, artistes passés chez RCA France | Billboard France, Booska-P |
+| **Tractopelle Music** | Trouvé sous le nom **Tractopelle Musik / TractoLabel** : label de Monaco fondé en 2025 par MC Pao. Artistes cités : Alkpote, Veust, Coyote Jo Bastard, Taïpan, Baby Kirua, Tmax, Soleil Noir, J. Lord, Taxi B, Deuklo, Infinit'. Les listes diffèrent selon les pages (signés ou simples collaborations) | Sites du label, L'ADN |
+
+Ce que je n'ai **pas** pu trouver : le nombre d'écoutes de chacun (les notes et les fans du jeu restent des estimations), la ville de la plupart des proches, et la confirmation que le Irko trouvé est bien celui auquel tu penses.

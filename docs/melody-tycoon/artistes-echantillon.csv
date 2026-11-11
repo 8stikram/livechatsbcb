@@ -158,9 +158,6 @@ fic_noctis,Noctis,FR,Paris,electro,hyperpop,"house;nuit",62,70,84,18000,20,,non,
 fic_reine_mab,Reine Mab,FR,Rouen,trap,rap_fr,"regalia;charisme",55,72,92,2500,16,,non,bourreau,30,55,
 fic_oslo_k,Oslo K,CH,Genève,rap_fr,trap,"cloud;new_jazz",53,60,78,1200,8,,non,lazy,35,40,
 fic_bambi_riot,Bambi Riot,US,Chicago,hyperpop,rock,"chaos;scene",58,66,87,9000,24,fic_glitch,non,bourreau,30,65,
-irko,Irko,FR,,rap_fr,hyperpop,"underground;a_completer",62,62,84,25000,50,inde,oui,normal,30,45,tout - donne par toi
-bedry,Bedry,FR,,rap_fr,,"underground;a_completer",60,60,84,15000,48,inde,oui,normal,30,45,tout - donne par toi (orthographe ?)
-yassboi,Yassboi,FR,,rap_fr,,"underground;a_completer",60,60,84,15000,48,inde,oui,normal,30,45,tout - donne par toi (orthographe ?)
 ptite_soeur,Ptite Soeur,FR,,rap_fr,hyperpop,"underground;new_wave",66,66,86,60000,62,inde,oui,normal,35,55,niveau et genre
 jeune_morty,Jeune Morty,FR,,rap_fr,trap,"underground;new_wave",65,65,85,50000,58,inde,oui,normal,30,50,niveau et genre
 yvnnis,Yvnnis,FR,,rap_fr,trap,"underground;plume",72,72,86,250000,60,inde,oui,normal,35,45,niveau
@@ -198,3 +195,43 @@ esdeekid,EsDeeKid,UK,Liverpool,rap_us,trap,"underground;masque;uk",73,73,88,1500
 feng,Feng,UK,,rap_us,hyperpop,"underground;uk;jeune",68,68,87,300000,70,inde,oui,normal,35,55,niveau
 jim_legxacy,Jim Legxacy,UK,Londres,rnb,"rap_us;afro","underground;auto_produit;uk",80,80,91,600000,72,xl,oui,par_a_coups,55,55,niveau
 skaiwater,Skaiwater,UK,Nottingham,hyperpop,"rnb;trap","jersey;digital",73,73,85,300000,48,inde,oui,normal,40,50,niveau et label
+irko,Irko,FR,Lyon,rap_fr,trap,"underground;placement;visuel",70,70,86,60000,48,inde,oui,par_a_coups,35,55,niveau
+bedry,Bedry,FR,Fontenay-sous-Bois,trap,rap_fr,"underground;cloud;energie",72,72,90,150000,86,inde,oui,bourreau,35,60,niveau
+yass_boi,Yass Boi,FR,,rap_fr,rnb,"underground;melodique",58,58,84,2000,30,inde,oui,normal,35,40,niveau et genre
+8stikram,8stikram,FR,,rap_fr,trap,"underground;melodique",58,58,88,2000,32,inde,oui,bourreau,35,45,niveau et genre (c'est toi : regle tes notes)
+jack_stone,Jäck Stone,FR,,rap_fr,,"underground;a_completer",55,55,82,1000,22,inde,oui,normal,30,35,tout - proche de 8stikram
+deagox,Deagox,FR,,trap,rap_fr,"underground;sombre",55,55,82,1000,22,inde,oui,normal,25,35,tout - proche de 8stikram
+dracofeuu,Dracofeuu,FR,,rap_fr,,"underground;a_completer",55,55,82,1500,24,inde,oui,normal,30,35,tout - proche de Yass Boi
+h4mza,H4mza,FR,,rap_fr,,"underground;a_completer",54,54,80,1000,20,inde,oui,normal,30,35,tout - proche de Yass Boi
+matapland,Matapland,FR,,rap_fr,,"underground;a_completer",54,54,80,1000,20,inde,oui,normal,30,35,tout - proche de Yass Boi
+lapache,L'Apache,FR,,rap_fr,,"underground;a_completer",56,56,80,2000,22,inde,oui,normal,30,35,tout - proche de Yass Boi
+sarah_massok,Sarah Massok,FR,,rnb,pop,"underground;voix",55,55,82,1000,20,inde,oui,normal,45,35,tout - proche de Yass Boi
+sherifflazone,Sherifflazone,FR,,trap,rap_fr,"underground;new_wave",66,66,85,40000,56,inde,oui,normal,25,45,niveau - proche de Bedry
+63og,63OG,FR,,trap,rap_fr,"underground;new_wave",66,66,86,40000,60,inde,oui,bourreau,25,50,niveau - proche de Bedry
+63kluf,63KLUF,FR,,trap,rap_fr,"underground;new_wave",64,64,85,25000,54,inde,oui,normal,25,45,niveau - proche de Bedry
+bryan_countach,Bryan Countach,FR,,trap,rap_fr,"underground;new_wave",66,66,86,40000,58,inde,oui,bourreau,25,50,niveau - proche de Bedry
+mazenko,Mazenko,FR,,trap,rap_fr,"underground;new_wave",63,63,84,20000,50,inde,oui,normal,25,45,niveau - proche de Bedry
+jade,Jäde,FR,Lyon,rap_fr,"rnb;trap","melodique;charisme",74,74,86,300000,58,inde,oui,normal,50,55,niveau
+norsacce,Norsacce,FR,,trap,rap_fr,"underground;sombre",73,73,83,200000,48,inde,oui,par_a_coups,25,50,niveau
+amne,amne,FR,Lyon,rap_fr,trap,"underground;auto_produit;producteur",68,68,85,20000,40,inde,oui,bourreau,35,40,niveau - proche d'Irko (alias Amnezzia)
+meel_b,Meel B,FR,,rap_fr,electro,"underground;auto_produit;producteur",72,72,84,60000,42,inde,oui,normal,45,45,niveau - proche d'Irko
+abel31,abel31,FR,,rap_fr,trap,"underground;new_wave",66,66,85,30000,50,inde,oui,normal,25,45,niveau - proche d'Irko
+1863,1863,FR,,rap_fr,trap,"underground;new_wave",64,64,83,20000,42,inde,oui,normal,25,40,niveau - proche d'Irko
+111syri,111SYRI,FR,,rap_fr,trap,"underground;new_wave",62,62,83,10000,40,inde,oui,normal,25,40,niveau - proche d'Irko
+giacoshi,Giacoshi,FR,,rap_fr,trap,"underground;new_wave",62,62,82,10000,36,inde,oui,normal,25,40,niveau - proche d'Irko
+zoomy,Zoomy,FR,,rap_fr,trap,"underground;new_wave",63,63,83,15000,40,inde,oui,normal,25,40,niveau - proche d'Irko
+alkpote,Alkpote,FR,Évry,rap_fr,trap,"decale;plume;ancien",82,82,82,900000,50,tractopelle,oui,bourreau,25,65,label (signe ou simple collaboration ?)
+mc_pao,MC Pao,MC,Monaco,rap_fr,trap,"fondateur;luxe",58,58,70,20000,46,tractopelle,oui,normal,30,45,niveau
+deuklo,Deuklo,FR,,rap_fr,trap,"luxe;duo",58,58,72,20000,44,tractopelle,oui,normal,30,45,niveau
+tmax,Tmax,FR,,rap_fr,trap,"a_completer",60,60,76,15000,36,tractopelle,oui,normal,25,40,niveau
+baby_kirua,Baby Kirua,FR,,trap,rap_fr,"jeune;a_completer",62,62,82,20000,42,tractopelle,oui,normal,25,45,niveau
+soleil_noir,Soleil Noir,FR,,rap_fr,trap,"a_completer",62,62,78,20000,36,tractopelle,oui,normal,25,40,niveau
+coyote_jo_bastard,Coyote Jo Bastard,FR,,trap,rap_fr,"energie;rue",70,70,80,150000,44,tractopelle,oui,normal,25,45,niveau
+veust,Veust,FR,Nice,rap_fr,,"plume;ancien",76,76,78,80000,34,tractopelle,oui,normal,30,40,niveau
+taipan,Taïpan,FR,,rap_fr,,"plume;humour",75,75,77,80000,32,tractopelle,oui,normal,35,40,label (signe ou simple collaboration ?)
+infinit,Infinit',FR,Nice,rap_fr,trap,"plume;technique",77,77,80,100000,36,tractopelle,oui,par_a_coups,30,45,label (signe ou simple collaboration ?)
+taxi_b,Taxi B,IT,Milan,trap,rap_us,"energie;italie",72,72,80,400000,40,tractopelle,oui,bourreau,25,50,niveau et label
+j_lord,J. Lord,IT,Naples,trap,rap_us,"jeune;italie",72,72,84,300000,46,tractopelle,oui,normal,30,45,niveau et label
+nahir,Nahir,FR,,rap_fr,trap,"rue;melodique",76,76,82,900000,40,awa,oui,normal,30,40,niveau
+diddi_trix,Diddi Trix,FR,,rap_fr,trap,"west_coast;fete",74,74,80,500000,38,awa,oui,normal,35,45,niveau
+doria,Doria,FR,,rap_fr,trap,"energie;charisme",73,73,82,400000,40,awa,oui,normal,35,45,niveau
