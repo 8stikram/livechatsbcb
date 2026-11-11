@@ -1,0 +1,15 @@
+{
+  "name": "@livechatsbcb/melody",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "data": "node tools/build-data.mjs",
+    "sim": "node src/sim-cli.ts"
+  }
+}
