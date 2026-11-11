@@ -1,0 +1,200 @@
+id,nom,pays,ville,genre,genres_secondaires,tags,gen,pot_min,pot_max,fans,hype,label_id,reel,profil_energie,sync,merch,a_verifier
+the_weeknd,The Weeknd,CA,Toronto,rnb,pop,"sombre;synthe;stade",94,94,96,85000000,78,xo,oui,normal,90,85,
+drake,Drake,CA,Toronto,rap_us,"rnb;pop","melodique;tubes",91,91,93,80000000,74,ovo,oui,bourreau,80,80,
+kendrick_lamar,Kendrick Lamar,US,Compton,rap_us,,"plume;concept",95,95,97,60000000,82,inde,oui,par_a_coups,75,70,label
+travis_scott,Travis Scott,US,Houston,trap,rap_us,"rage;scene;autotune",90,90,93,55000000,80,cactusjack,oui,normal,70,95,
+playboi_carti,Playboi Carti,US,Atlanta,trap,hyperpop,"rage;new_jazz;mode",86,86,91,18000000,85,opium,oui,par_a_coups,45,90,
+ken_carson,Ken Carson,US,Atlanta,trap,hyperpop,"rage;supertrap",78,78,86,4000000,70,opium,oui,bourreau,35,75,
+destroy_lonely,Destroy Lonely,US,Atlanta,trap,hyperpop,"new_jazz;mode",76,76,85,3000000,62,opium,oui,normal,35,70,
+homixide_gang,Homixide Gang,US,Atlanta,trap,,"rage;duo",68,68,78,600000,45,opium,oui,normal,20,50,
+don_toliver,Don Toliver,US,Houston,rnb,trap,"melodique;lovetrap",83,83,88,12000000,66,cactusjack,oui,normal,65,60,
+sheck_wes,Sheck Wes,US,New York,trap,,"energie",70,70,76,2000000,30,cactusjack,oui,lazy,30,40,
+future,Future,US,Atlanta,trap,rap_us,"autotune;toxique",89,89,91,35000000,70,sony,oui,bourreau,55,60,label
+metro_boomin,Metro Boomin,US,Saint-Louis,trap,rap_us,"producteur;sombre",90,90,93,25000000,72,universal,oui,normal,80,60,label
+21_savage,21 Savage,US,Atlanta,trap,rap_us,"froid;rue",86,86,89,30000000,65,sony,oui,normal,50,55,label
+lil_baby,Lil Baby,US,Atlanta,trap,rap_us,"melodique;rue",84,84,87,20000000,55,qc,oui,bourreau,45,50,
+quavo,Quavo,US,Atlanta,trap,,"refrain",80,80,82,9000000,45,qc,oui,normal,45,50,
+lil_yachty,Lil Yachty,US,Atlanta,rap_us,"hyperpop;rock","cameleon",80,80,85,8000000,58,qc,oui,normal,50,60,
+gunna,Gunna,US,Atlanta,trap,,"melodique;mode",83,83,86,15000000,60,warner,oui,normal,45,55,label
+lil_uzi_vert,Lil Uzi Vert,US,Philadelphie,trap,"hyperpop;rock","rage;emo",85,85,88,20000000,64,warner,oui,par_a_coups,50,80,label
+tyler_the_creator,"Tyler, The Creator",US,Los Angeles,rap_us,"rnb;pop","concept;auto_produit",93,93,95,30000000,80,sony,oui,bourreau,75,95,label
+frank_ocean,Frank Ocean,US,Los Angeles,rnb,pop,"rare;culte",93,93,95,20000000,60,inde,oui,lazy,80,85,
+sza,SZA,US,Saint-Louis,rnb,pop,"voix;intime",92,92,94,45000000,78,tde,oui,par_a_coups,85,75,
+schoolboy_q,ScHoolboy Q,US,Los Angeles,rap_us,,"rue;sombre",84,84,86,6000000,40,tde,oui,lazy,45,45,
+doechii,Doechii,US,Tampa,rap_us,"rnb;pop","cameleon;scene",86,86,93,9000000,84,tde,oui,bourreau,70,65,
+doja_cat,Doja Cat,US,Los Angeles,pop,"rap_us;rnb","viral;cameleon",89,89,92,45000000,68,sony,oui,normal,85,70,label
+cardi_b,Cardi B,US,New York,rap_us,latin,"tubes;charisme",84,84,86,30000000,62,warner,oui,lazy,70,65,label
+nicki_minaj,Nicki Minaj,US,New York,rap_us,pop,"plume;clash",89,89,90,35000000,64,universal,oui,normal,65,75,label
+megan_thee_stallion,Megan Thee Stallion,US,Houston,rap_us,,"energie;freestyle",84,84,87,20000000,60,warner,oui,bourreau,65,65,label
+post_malone,Post Malone,US,Dallas,pop,"rap_us;rock","melodique;guitare",88,88,90,50000000,60,universal,oui,normal,85,70,label
+j_cole,J. Cole,US,Fayetteville,rap_us,,"plume;boom_bap",91,91,92,30000000,58,universal,oui,normal,55,55,label
+baby_keem,Baby Keem,US,Las Vegas,rap_us,trap,"energie;decale",82,82,89,6000000,50,inde,oui,par_a_coups,45,50,label
+yeat,Yeat,US,Portland,trap,hyperpop,"rage;synthe",80,80,87,7000000,66,universal,oui,bourreau,35,70,label
+trippie_redd,Trippie Redd,US,Canton,trap,rock,"emo;rage",78,78,82,8000000,42,warner,oui,bourreau,40,55,label
+ice_spice,Ice Spice,US,New York,drill,"rap_us;pop","viral;jersey",74,74,82,8000000,55,universal,oui,normal,60,60,label
+lil_tecca,Lil Tecca,US,New York,rap_us,trap,"plugg;melodique",78,78,85,7000000,60,universal,oui,normal,45,50,label
+asap_rocky,A$AP Rocky,US,New York,rap_us,"trap;rock","mode;cloud",87,87,89,20000000,66,sony,oui,lazy,70,90,label
+billie_eilish,Billie Eilish,US,Los Angeles,pop,"rock;electro","intime;voix",93,93,96,70000000,80,universal,oui,normal,95,90,label
+ariana_grande,Ariana Grande,US,Boca Raton,pop,rnb,"voix;tubes",92,92,93,70000000,74,universal,oui,normal,90,80,label
+brent_faiyaz,Brent Faiyaz,US,Columbia,rnb,,"toxique;intime",86,86,90,12000000,62,inde,oui,par_a_coups,65,60,
+summer_walker,Summer Walker,US,Atlanta,rnb,,"intime;voix",84,84,87,12000000,52,universal,oui,lazy,60,45,label
+bryson_tiller,Bryson Tiller,US,Louisville,rnb,trap,"lovetrap;melodique",81,81,83,10000000,40,sony,oui,lazy,55,40,label
+daniel_caesar,Daniel Caesar,CA,Toronto,rnb,pop,"voix;guitare",86,86,89,15000000,55,universal,oui,normal,80,50,label
+partynextdoor,PartyNextDoor,CA,Mississauga,rnb,trap,"nuit;auteur",83,83,86,10000000,52,ovo,oui,par_a_coups,60,45,
+100_gecs,100 gecs,US,Saint-Louis,hyperpop,"electro;rock","chaos;duo",80,80,86,1500000,45,warner,oui,par_a_coups,40,65,label
+nettspend,Nettspend,US,Richmond,trap,hyperpop,"jeune;new_jazz",68,68,86,900000,72,universal,oui,normal,25,60,label
+che,Che,US,Atlanta,trap,hyperpop,"rage;new_jazz",70,70,87,500000,70,inde,oui,bourreau,20,55,tout
+osamason,OsamaSon,US,Charleston,trap,hyperpop,"crank;rage",70,70,84,800000,68,warner,oui,bourreau,20,55,label
+xaviersobased,Xaviersobased,US,New York,rap_us,hyperpop,"crank;jerk",66,66,84,400000,64,inde,oui,bourreau,20,50,
+bladee,Bladee,SE,Stockholm,hyperpop,"trap;pop","regalia;drain;culte",82,82,87,2500000,60,inde,oui,bourreau,40,85,
+yung_lean,Yung Lean,SE,Stockholm,rap_us,"hyperpop;rock","cloud;culte",81,81,85,3500000,55,inde,oui,normal,45,80,
+ecco2k,Ecco2k,SE,Stockholm,hyperpop,pop,"voix;drain",78,78,86,800000,48,inde,oui,lazy,40,70,
+bad_bunny,Bad Bunny,PR,San Juan,latin,"trap;pop","reggaeton;stade",93,93,95,75000000,84,inde,oui,bourreau,85,85,
+karol_g,Karol G,CO,Medellín,latin,pop,"reggaeton;tubes",88,88,90,40000000,70,universal,oui,normal,80,70,label
+rosalia,Rosalía,ES,Barcelone,pop,"latin;electro","cameleon;voix",92,92,95,18000000,76,sony,oui,par_a_coups,85,70,label
+peso_pluma,Peso Pluma,MX,Guadalajara,latin,trap,"guitare;viral",82,82,87,25000000,58,inde,oui,bourreau,60,60,
+burna_boy,Burna Boy,NG,Port Harcourt,afro,"rnb;rap_us","afrobeats;stade",90,90,92,15000000,66,warner,oui,normal,75,65,label
+wizkid,Wizkid,NG,Lagos,afro,rnb,"afrobeats;doux",88,88,90,12000000,60,sony,oui,lazy,70,55,label
+rema,Rema,NG,Benin City,afro,"trap;pop","afrobeats;viral",85,85,91,15000000,68,universal,oui,normal,70,60,label
+tems,Tems,NG,Lagos,afro,rnb,"voix;intime",88,88,92,10000000,66,sony,oui,par_a_coups,85,50,label
+ayra_starr,Ayra Starr,NG,Lagos,afro,"pop;rnb","afrobeats;jeune",82,82,90,6000000,64,universal,oui,bourreau,70,55,label
+tyla,Tyla,ZA,Johannesburg,afro,"pop;rnb","amapiano;danse",82,82,90,10000000,70,sony,oui,normal,80,60,label
+central_cee,Central Cee,UK,Londres,drill,"rap_us;trap","drill_uk;viral",86,86,90,15000000,80,sony,oui,bourreau,60,75,label
+dave,Dave,UK,Londres,rap_us,"drill;afro","plume;piano",91,91,94,8000000,72,inde,oui,par_a_coups,65,55,
+stormzy,Stormzy,UK,Londres,rap_us,"drill;rnb","grime;stade",86,86,88,7000000,58,merky,oui,normal,65,65,
+skepta,Skepta,UK,Londres,rap_us,"drill;electro","grime;mode",86,86,87,5000000,56,inde,oui,normal,60,75,
+little_simz,Little Simz,UK,Londres,rap_us,rnb,"plume;concept",90,90,93,3000000,62,inde,oui,bourreau,75,55,
+j_hus,J Hus,UK,Londres,afro,"rap_us;drill","afro_swing",85,85,88,3500000,50,blackbutter,oui,lazy,55,45,
+headie_one,Headie One,UK,Londres,drill,,"drill_uk;rue",80,80,83,2500000,42,sony,oui,normal,35,40,label
+digga_d,Digga D,UK,Londres,drill,,"drill_uk;clash",77,77,82,2000000,45,inde,oui,normal,25,45,label
+aitch,Aitch,UK,Manchester,rap_us,pop,"tubes;charisme",77,77,81,3500000,44,universal,oui,normal,55,50,label
+fredo,Fredo,UK,Londres,rap_us,drill,"rue",76,76,79,1500000,34,since93,oui,lazy,30,35,
+unknown_t,Unknown T,UK,Londres,drill,,"drill_uk",75,75,81,900000,38,universal,oui,normal,25,35,label
+tion_wayne,Tion Wayne,UK,Londres,drill,afro,"tubes",75,75,78,2000000,36,warner,oui,normal,40,35,label
+arrdee,ArrDee,UK,Brighton,drill,pop,"viral;jeune",70,70,77,1500000,32,universal,oui,normal,40,40,label
+loyle_carner,Loyle Carner,UK,Londres,rap_us,rnb,"boom_bap;intime",84,84,87,2500000,48,universal,oui,normal,70,50,label
+lancey_foux,Lancey Foux,UK,Londres,trap,hyperpop,"rage;mode",74,74,82,700000,50,inde,oui,bourreau,30,60,
+jorja_smith,Jorja Smith,UK,Walsall,rnb,pop,"voix;doux",86,86,89,7000000,52,inde,oui,normal,80,50,
+raye,Raye,UK,Londres,pop,rnb,"voix;auteur",89,89,93,9000000,74,inde,oui,bourreau,85,55,
+pinkpantheress,PinkPantheress,UK,Bath,pop,"hyperpop;electro","jersey;viral",84,84,91,9000000,76,warner,oui,normal,75,65,label
+dua_lipa,Dua Lipa,UK,Londres,pop,electro,"danse;tubes",89,89,91,60000000,70,warner,oui,normal,90,75,
+ed_sheeran,Ed Sheeran,UK,Halifax,pop,rock,"guitare;stade",90,90,91,75000000,62,warner,oui,bourreau,90,70,
+charli_xcx,Charli XCX,UK,Cambridge,hyperpop,"pop;electro","club;culte",90,90,93,15000000,82,warner,oui,bourreau,80,85,
+fred_again,Fred again..,UK,Londres,electro,pop,"house;scene",88,88,91,10000000,70,warner,oui,bourreau,75,60,
+king_krule,King Krule,UK,Londres,rock,rnb,"guitare;sombre",83,83,86,1500000,40,xl,oui,lazy,60,55,
+radiohead,Radiohead,UK,Abingdon,rock,electro,"culte;groupe",95,95,95,20000000,55,xl,oui,lazy,85,80,
+metronomy,Metronomy,UK,Totnes,electro,"pop;rock","synthe;groupe",80,80,82,1500000,30,because,oui,normal,65,45,
+ninho,Ninho,FR,Yerres,rap_fr,"trap;afro","tubes;melodique",88,88,90,7000000,70,rec118,oui,bourreau,50,55,
+jul,Jul,FR,Marseille,rap_fr,"pop;electro","prolifique;autotune",85,85,87,8000000,72,dorplatine,oui,bourreau,45,70,
+sch,SCH,FR,Marseille,rap_fr,trap,"sombre;plume",88,88,90,4500000,62,rec118,oui,normal,50,55,
+pnl,PNL,FR,Corbeil-Essonnes,rap_fr,trap,"cloud;duo;rare",90,90,91,6000000,58,qlf,oui,lazy,65,85,
+booba,Booba,FR,Boulogne-Billancourt,rap_fr,trap,"clash;patron",88,88,88,5000000,60,92i,oui,normal,40,70,
+damso,Damso,BE,Bruxelles,rap_fr,"rnb;trap","plume;sombre",91,91,93,6000000,68,inde,oui,par_a_coups,55,60,
+hamza,Hamza,BE,Bruxelles,rap_fr,"rnb;trap","lovetrap;melodique",86,86,90,3500000,66,rec118,oui,bourreau,55,55,
+angele,Angèle,BE,Bruxelles,pop,variete,"synthe;charisme",86,86,89,6000000,54,inde,oui,normal,85,65,
+stromae,Stromae,BE,Bruxelles,pop,"electro;variete","concept;stade",93,93,94,12000000,50,universal,oui,lazy,90,65,
+gazo,Gazo,FR,Saint-Denis,drill,"rap_fr;afro","drill_fr;energie",85,85,88,4500000,72,sony,oui,bourreau,40,55,label
+tiakola,Tiakola,FR,La Courneuve,rap_fr,"afro;rnb","melodique;lovetrap",86,86,91,4000000,78,warner,oui,normal,55,55,label
+niska,Niska,FR,Évry,rap_fr,"trap;afro","energie;tubes",82,82,84,3500000,46,universal,oui,normal,40,45,label
+aya_nakamura,Aya Nakamura,FR,Aulnay-sous-Bois,pop,"afro;rnb","tubes;danse",86,86,88,9000000,66,rec118,oui,normal,75,60,
+orelsan,Orelsan,FR,Caen,rap_fr,"pop;variete","plume;humour",90,90,92,5000000,66,inde,oui,par_a_coups,70,70,label
+nekfeu,Nekfeu,FR,Paris,rap_fr,,"plume;rare",90,90,91,4000000,48,universal,oui,lazy,55,60,label
+lomepal,Lomepal,FR,Paris,rap_fr,"pop;rock","melodique;guitare",85,85,87,3000000,40,inde,oui,normal,60,55,
+laylow,Laylow,FR,Toulouse,rap_fr,"hyperpop;electro","concept;digital",87,87,91,2000000,60,inde,oui,par_a_coups,60,70,
+josman,Josman,FR,Vierzon,rap_fr,"rnb;trap","nuit;melodique",83,83,87,2000000,54,inde,oui,normal,45,50,
+freeze_corleone,Freeze Corleone,FR,Les Lilas,drill,"rap_fr;trap","drill_fr;sombre",84,84,87,2500000,62,inde,oui,par_a_coups,15,65,
+kaaris,Kaaris,FR,Sevran,trap,rap_fr,"energie;trap",82,82,82,2500000,40,defjamfr,oui,normal,30,45,
+kalash_criminel,Kalash Criminel,FR,Sevran,trap,rap_fr,"energie;sombre",80,80,82,1500000,40,inde,oui,normal,25,45,
+leto,Leto,FR,Paris,rap_fr,trap,"melodique;rue",80,80,84,2000000,48,rec118,oui,normal,35,40,
+zola,Zola,FR,Évry,trap,rap_fr,"energie;jeune",80,80,85,2500000,50,awa,oui,par_a_coups,35,50,label
+koba_lad,Koba LaD,FR,Évry,trap,rap_fr,"voix;rue",78,78,82,2500000,44,defjamfr,oui,lazy,25,40,
+naps,Naps,FR,Marseille,rap_fr,pop,"soleil;tubes",77,77,78,2500000,40,inde,oui,normal,45,40,
+sdm,SDM,FR,Clamart,rap_fr,trap,"voix;rue",83,83,87,3000000,66,92i,oui,bourreau,40,45,
+heuss,Heuss L'enfoiré,FR,Villeneuve-la-Garenne,rap_fr,pop,"fete;humour",77,77,78,2500000,42,inde,oui,normal,45,45,label
+soolking,Soolking,DZ,Alger,pop,"rap_fr;afro","melodique;tubes",80,80,82,5000000,46,universal,oui,normal,55,45,label
+dadju,Dadju,FR,Bobigny,rnb,"afro;pop","amour;voix",81,81,83,4500000,48,universal,oui,normal,60,45,label
+tayc,Tayc,FR,Marseille,rnb,afro,"amour;danse",82,82,85,3500000,54,inde,oui,bourreau,60,50,label
+franglish,Franglish,FR,Paris,rnb,"afro;rap_fr","amour;melodique",77,77,80,2000000,44,inde,oui,normal,50,40,
+gims,Gims,FR,Paris,pop,"rap_fr;variete","voix;tubes",86,86,86,9000000,60,sony,oui,bourreau,75,55,label
+vald,Vald,FR,Aulnay-sous-Bois,rap_fr,trap,"decale;plume",85,85,87,3000000,50,inde,oui,par_a_coups,40,60,
+alpha_wann,Alpha Wann,FR,Paris,rap_fr,,"plume;technique",88,88,89,1200000,52,inde,oui,lazy,30,55,
+lacrim,Lacrim,FR,Chevilly-Larue,rap_fr,trap,"rue",79,79,79,2000000,34,inde,oui,normal,25,35,
+rimk,Rim'K,FR,Vitry-sur-Seine,rap_fr,,"ancien;rue",78,78,78,1500000,30,inde,oui,normal,30,35,
+kekra,Kekra,FR,Courbevoie,rap_fr,"electro;drill","masque;uk",82,82,85,900000,44,inde,oui,par_a_coups,35,65,
+ziak,Ziak,FR,,drill,rap_fr,"drill_fr;masque",80,80,85,1500000,52,inde,oui,normal,20,60,
+green_montana,Green Montana,BE,Verviers,rap_fr,"trap;rnb","cloud;melodique",80,80,86,800000,50,92i,oui,normal,35,45,
+fave,Favé,FR,,rap_fr,"afro;rnb","melodique;jeune",76,76,84,1500000,52,sony,oui,normal,45,40,label
+zamdane,Zamdane,FR,Marseille,rap_fr,rnb,"plume;intime",81,81,87,900000,56,inde,oui,normal,50,45,
+la_feve,La Fève,FR,Fontenay-sous-Bois,rap_fr,trap,"plugg;new_wave",82,82,89,900000,66,inde,oui,par_a_coups,35,65,
+khali,Khali,FR,,rap_fr,"hyperpop;trap","new_wave;autotune",78,78,87,400000,58,inde,oui,normal,30,55,
+jolagreen23,Jolagreen23,FR,,trap,rap_fr,"supertrap;new_wave",76,76,87,400000,68,inde,oui,bourreau,25,55,
+tif,Tif,DZ,Alger,rap_fr,"pop;rnb","melodique;intime",79,79,86,1200000,62,inde,oui,normal,55,45,label
+yame,Yamê,FR,,rnb,"rap_fr;afro","voix;piano",83,83,90,1500000,60,inde,oui,normal,70,45,label
+theodora,Theodora,FR,,pop,"afro;hyperpop","danse;viral",80,80,90,2000000,84,inde,oui,bourreau,65,65,
+shay,Shay,BE,Bruxelles,rap_fr,"trap;rnb","charisme;mode",78,78,81,1500000,46,universal,oui,lazy,50,50,label
+wejdene,Wejdene,FR,Saint-Denis,pop,rnb,"viral;jeune",68,68,74,1500000,30,universal,oui,normal,50,40,label
+lala_ace,Lala &ce,FR,Lyon,rap_fr,"rnb;hyperpop","cloud;voix",79,79,85,400000,44,inde,oui,lazy,45,55,
+ronisia,Ronisia,FR,,rnb,"afro;pop","amour;voix",75,75,82,900000,42,sony,oui,normal,55,40,label
+le_juiice,Le Juiice,FR,,trap,rap_fr,"energie;patronne",74,74,80,400000,40,inde,oui,bourreau,30,45,
+justice,Justice,FR,Paris,electro,rock,"french_touch;duo;scene",90,90,91,5000000,60,edbanger,oui,lazy,90,80,
+dj_snake,DJ Snake,FR,Ermont,electro,"pop;latin","tubes;stade",86,86,87,25000000,56,universal,oui,normal,85,60,label
+kavinsky,Kavinsky,FR,Paris,electro,pop,"synthe;nuit",82,82,83,4000000,44,inde,oui,lazy,95,70,
+mr_oizo,Mr. Oizo,FR,Paris,electro,,"decale;french_touch",82,82,82,800000,30,edbanger,oui,par_a_coups,70,50,
+breakbot,Breakbot,FR,,electro,pop,"disco;french_touch",78,78,79,900000,28,edbanger,oui,lazy,75,40,
+myd,Myd,FR,Lille,electro,pop,"house;soleil",78,78,82,600000,34,edbanger,oui,normal,70,40,
+christine_queens,Christine and the Queens,FR,Nantes,pop,"electro;variete","scene;concept",87,87,88,3000000,40,because,oui,par_a_coups,75,55,
+fic_nova_kale,Nova Kalé,FR,Lyon,rap_fr,rnb,"lovetrap;intime",54,72,84,3200,12,,non,oiseau_de_nuit,30,45,
+fic_sixto_vega,Sixto Vega,FR,Marseille,trap,rap_fr,"supertrap;energie",66,70,80,240000,55,fic_beton,non,normal,35,60,
+fic_liha,Liha,BE,Liège,rnb,pop,"voix;pluggnb",58,74,88,8000,18,,non,par_a_coups,60,40,
+fic_kosmo,Kosmo 9,FR,Lille,hyperpop,electro,"glitch;auto_produit",52,68,90,1500,10,,non,bourreau,35,55,
+fic_dz_minuit,Mina Dz,FR,Nanterre,drill,rap_fr,"drill_fr;plume",57,66,79,12000,22,,non,normal,20,35,
+fic_tayo_bleu,Tayo Bleu,UK,Londres,afro,rnb,"afro_swing;danse",61,72,86,45000,30,fic_southside,non,normal,55,45,
+fic_wren,Wren Hollow,UK,Bristol,rock,pop,"guitare;emo",50,62,83,900,6,,non,lazy,65,50,
+fic_jayce_orbit,Jayce Orbit,US,Atlanta,trap,hyperpop,"crank;rage",63,70,88,60000,44,fic_808,non,bourreau,25,60,
+fic_luna_reyes,Luna Reyes,US,Miami,latin,pop,"reggaeton;voix",59,70,85,25000,26,,non,normal,60,45,
+fic_ambre_sol,Ambre Sol,FR,Toulouse,pop,variete,"synthe;refrain",56,64,80,6000,14,,non,normal,70,40,
+fic_kwame_fx,Kwame FX,BE,Bruxelles,afro,rap_fr,"amapiano;soleil",60,68,82,30000,28,fic_velours,non,normal,50,40,
+fic_noctis,Noctis,FR,Paris,electro,hyperpop,"house;nuit",62,70,84,18000,20,,non,par_a_coups,75,35,
+fic_reine_mab,Reine Mab,FR,Rouen,trap,rap_fr,"regalia;charisme",55,72,92,2500,16,,non,bourreau,30,55,
+fic_oslo_k,Oslo K,CH,Genève,rap_fr,trap,"cloud;new_jazz",53,60,78,1200,8,,non,lazy,35,40,
+fic_bambi_riot,Bambi Riot,US,Chicago,hyperpop,rock,"chaos;scene",58,66,87,9000,24,fic_glitch,non,bourreau,30,65,
+irko,Irko,FR,,rap_fr,hyperpop,"underground;a_completer",62,62,84,25000,50,inde,oui,normal,30,45,tout - donne par toi
+bedry,Bedry,FR,,rap_fr,,"underground;a_completer",60,60,84,15000,48,inde,oui,normal,30,45,tout - donne par toi (orthographe ?)
+yassboi,Yassboi,FR,,rap_fr,,"underground;a_completer",60,60,84,15000,48,inde,oui,normal,30,45,tout - donne par toi (orthographe ?)
+ptite_soeur,Ptite Soeur,FR,,rap_fr,hyperpop,"underground;new_wave",66,66,86,60000,62,inde,oui,normal,35,55,niveau et genre
+jeune_morty,Jeune Morty,FR,,rap_fr,trap,"underground;new_wave",65,65,85,50000,58,inde,oui,normal,30,50,niveau et genre
+yvnnis,Yvnnis,FR,,rap_fr,trap,"underground;plume",72,72,86,250000,60,inde,oui,normal,35,45,niveau
+rounhaa,Rounhaa,CH,Genève,rap_fr,"rnb;hyperpop","underground;melodique",73,73,87,200000,58,inde,oui,par_a_coups,40,50,niveau
+winnterzuko,Winnterzuko,FR,,rap_fr,hyperpop,"underground;digital",72,72,87,150000,56,inde,oui,normal,35,55,niveau
+h_jeunecrack,H JeuneCrack,FR,,rap_fr,trap,"underground;plume",74,74,88,250000,64,inde,oui,bourreau,30,50,niveau
+mairo,Mairo,CH,Genève,rap_fr,,"underground;plume",75,75,86,150000,54,inde,oui,normal,30,45,niveau
+luther,Luther,FR,,rap_fr,rnb,"underground;melodique",75,75,88,400000,66,inde,oui,normal,45,50,niveau
+babysolo33,BabySolo33,FR,Bordeaux,rnb,"rap_fr;hyperpop","underground;pluggnb",70,70,86,120000,56,inde,oui,normal,45,50,niveau
+bushi,Bu$hi,FR,Lyon,rap_fr,trap,"underground;plugg",73,73,84,200000,48,inde,oui,par_a_coups,30,50,niveau
+thahomey,thaHomey,FR,,rap_fr,trap,"underground;plugg",70,70,85,100000,54,inde,oui,bourreau,25,50,niveau
+femtogo,Femtogo,FR,,rap_fr,hyperpop,"underground;rage",68,68,86,80000,62,inde,oui,bourreau,25,50,niveau
+asinine,Asinine,FR,,rap_fr,rnb,"underground;intime",70,70,85,100000,52,inde,oui,normal,40,45,niveau
+ajna,Ajna,FR,,rap_fr,trap,"underground;cloud",68,68,84,60000,46,inde,oui,normal,25,45,niveau
+realo,Realo,FR,,rap_fr,trap,"underground;new_wave",67,67,85,50000,50,inde,oui,normal,25,45,tout
+2hollis,2hollis,US,,hyperpop,"electro;trap","underground;club;rage",76,76,90,900000,80,inde,oui,bourreau,50,70,niveau
+lucy_bedroque,Lucy Bedroque,US,,hyperpop,trap,"underground;rage;digital",68,68,88,120000,70,inde,oui,bourreau,30,55,niveau et genre
+rommulas,Rommulas,US,,hyperpop,trap,"underground;digital",66,66,87,70000,66,inde,oui,normal,30,55,niveau et genre
+jane_remover,Jane Remover,US,,hyperpop,"rock;electro","underground;digital;culte",80,80,90,500000,68,inde,oui,bourreau,50,60,niveau
+quinn,quinn,US,,hyperpop,rap_us,"underground;digital",72,72,84,200000,40,inde,oui,par_a_coups,35,45,niveau
+glaive,Glaive,US,,hyperpop,"pop;rock","emo;jeune",75,75,85,900000,44,inde,oui,normal,50,50,niveau et label
+ericdoa,ericdoa,US,,hyperpop,pop,"emo;digital",74,74,83,800000,40,inde,oui,normal,50,45,niveau et label
+underscores,underscores,US,,hyperpop,"pop;rock","auto_produit;concept",80,80,89,400000,60,inde,oui,normal,55,55,niveau
+snow_strippers,Snow Strippers,US,,electro,hyperpop,"club;duo",77,77,86,700000,66,inde,oui,bourreau,50,65,niveau
+bktherula,Bktherula,US,Atlanta,trap,hyperpop,"underground;rage",73,73,84,600000,50,inde,oui,normal,30,50,niveau et label
+lazer_dim_700,Lazer Dim 700,US,,trap,,"underground;crank;sature",68,68,82,400000,62,inde,oui,bourreau,15,50,niveau
+nine_vicious,Nine Vicious,US,Atlanta,trap,hyperpop,"underground;crank",67,67,84,300000,66,inde,oui,bourreau,20,50,niveau
+1oneam,1oneam,US,,trap,hyperpop,"underground;new_jazz",66,66,84,200000,58,inde,oui,normal,20,50,niveau
+yhapojj,Yhapojj,US,,trap,hyperpop,"underground;crank",66,66,83,200000,56,inde,oui,bourreau,20,45,niveau
+molly_santana,Molly Santana,US,,trap,hyperpop,"underground;rage",68,68,85,300000,60,inde,oui,normal,30,55,niveau
+rich_amiri,Rich Amiri,US,Boston,trap,rnb,"plugg;melodique",72,72,84,1200000,52,inde,oui,normal,35,45,niveau et label
+prettifun,prettifun,US,,trap,hyperpop,"underground;new_jazz;jeune",68,68,86,400000,64,inde,oui,bourreau,25,50,niveau
+fakemink,fakemink,UK,Londres,rap_us,hyperpop,"underground;cloud;uk",74,74,90,500000,82,inde,oui,bourreau,40,65,niveau
+esdeekid,EsDeeKid,UK,Liverpool,rap_us,trap,"underground;masque;uk",73,73,88,1500000,86,inde,oui,bourreau,30,65,niveau
+feng,Feng,UK,,rap_us,hyperpop,"underground;uk;jeune",68,68,87,300000,70,inde,oui,normal,35,55,niveau
+jim_legxacy,Jim Legxacy,UK,Londres,rnb,"rap_us;afro","underground;auto_produit;uk",80,80,91,600000,72,xl,oui,par_a_coups,55,55,niveau
+skaiwater,Skaiwater,UK,Nottingham,hyperpop,"rnb;trap","jersey;digital",73,73,85,300000,48,inde,oui,normal,40,50,niveau et label
