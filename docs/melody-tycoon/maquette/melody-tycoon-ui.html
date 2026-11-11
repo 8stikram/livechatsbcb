@@ -1,0 +1,427 @@
+<title>Melody Tycoon — propositions d'interface</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wdth,wght@62..125,300..800&family=Inter+Tight:wght@400;500;600;700&display=swap">
+<style>
+/* Layout : une page sombre neutre qui sert de table de présentation ; au centre, 3 écrans du jeu
+   (Accueil, Studio, Fiche artiste) dessinés une seule fois et habillés par 4 directions. */
+:root{
+  color-scheme:dark;
+  --page:#0d0e10; --page-fg:#ecece8; --page-mute:#9a9b98; --page-line:#2b2c2f; --page-acc:#ecece8;
+  --f-ui:"Inter Tight",system-ui,-apple-system,"Segoe UI",sans-serif;
+  /* jetons de direction (valeurs par défaut = direction A) */
+  --bg:#f3f6fa; --panel:#ffffff; --fg:#1b3764; --mute:#6c7f9b; --line:#d3dce8;
+  --acc:#1f3f73; --acc-fg:#ffffff; --alt:#1f3f73; --alt-fg:#ffffff; --good:#17804f; --bad:#c2413b;
+  --hero:linear-gradient(115deg,#0c2752 0%,#3c6aa6 38%,#a9c6e2 70%,#e6eef6 100%); --hero-fg:#ffffff;
+  --fd:"Inter Tight",system-ui,sans-serif; --fb:"Inter Tight",system-ui,sans-serif;
+  --hw:700; --hs:100%; --ht:-.045em; --hcase:uppercase; --lb:"("; --la:")"; --frame:0px; --frame-c:transparent;
+}
+#stage[data-dir="b"]{
+  --bg:#0a0a0a; --panel:#111111; --fg:#f1f1ee; --mute:#8b8b87; --line:#2a2a28;
+  --acc:#e8e8e3; --acc-fg:#0a0a0a; --alt:#e8e8e3; --alt-fg:#0a0a0a; --good:#a6dcae; --bad:#ff9288;
+  --hero:radial-gradient(120% 140% at 70% 0%,#4a4d4c 0%,#1b1c1c 45%,#0a0a0a 100%); --hero-fg:#f1f1ee;
+  --fd:"Archivo",system-ui,sans-serif; --fb:"Archivo",system-ui,sans-serif;
+  --hw:300; --hs:100%; --ht:-.01em; --hcase:uppercase; --lb:"[ "; --la:" ]";
+}
+#stage[data-dir="c"]{
+  --bg:#0b0b0b; --panel:#151515; --fg:#f5f5f2; --mute:#96968f; --line:#2c2c2a;
+  --acc:#c8f250; --acc-fg:#0b0b0b; --alt:#f5f5f2; --alt-fg:#0b0b0b; --good:#c8f250; --bad:#ff6f61;
+  --hero:radial-gradient(90% 120% at 50% 40%,#2a2a2a 0%,#0b0b0b 70%); --hero-fg:#f5f5f2;
+  --fd:"Anton","Archivo",system-ui,sans-serif; --fb:"Inter Tight",system-ui,sans-serif;
+  --hw:400; --hs:100%; --ht:.005em; --hcase:uppercase; --lb:""; --la:"";
+}
+#stage[data-dir="d"]{
+  --bg:#ffffff; --panel:#ffffff; --fg:#0a0a0a; --mute:#5d5d5a; --line:#0a0a0a;
+  --acc:#0a0a0a; --acc-fg:#ffffff; --alt:#0a0a0a; --alt-fg:#ffffff; --good:#0a7a43; --bad:#c2261d;
+  --hero:#ffffff; --hero-fg:#0a0a0a;
+  --fd:"Archivo",system-ui,sans-serif; --fb:"Archivo",system-ui,sans-serif;
+  --hw:700; --hs:125%; --ht:-.03em; --hcase:uppercase; --lb:""; --la:""; --frame:10px; --frame-c:#0a0a0a;
+}
+
+*{box-sizing:border-box}
+html,body{height:auto}
+body{background:var(--page);color:var(--page-fg);font-family:var(--f-ui);font-size:15px;line-height:1.45;
+  padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+.intro h1{font-size:clamp(26px,4vw,40px);line-height:1.02;letter-spacing:-.03em;margin:0 0 10px;font-weight:700;text-wrap:balance}
+.intro p{margin:0;color:var(--page-mute);max-width:62ch}
+.pick{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.pick button{font:inherit;text-align:left;color:var(--page-fg);background:transparent;border:1px solid var(--page-line);
+  padding:14px 14px 12px;cursor:pointer;display:flex;flex-direction:column;gap:4px;border-radius:2px}
+.pick button b{font-size:17px;letter-spacing:-.01em}
+.pick button span{color:var(--page-mute);font-size:13px}
+.pick button i{font-style:normal;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--page-mute)}
+.pick button[aria-pressed="true"]{background:var(--page-acc);color:#0d0e10;border-color:var(--page-acc)}
+.pick button[aria-pressed="true"] span,.pick button[aria-pressed="true"] i{color:#3a3b3d}
+.pick button:focus-visible,.app button:focus-visible{outline:2px solid #7fb2ff;outline-offset:2px}
+.note{border-left:2px solid var(--page-line);padding-left:14px;color:var(--page-mute);max-width:70ch;margin:0}
+.note b{color:var(--page-fg);font-weight:600}
+.cap{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--page-mute);margin:0 0 10px;font-weight:500}
+#stage{display:flex;flex-direction:column;gap:36px}
+
+/* ---------- le jeu (habillé par les jetons) ---------- */
+.app{background:var(--bg);color:var(--fg);font-family:var(--fb);font-size:14px;border:var(--frame) solid var(--frame-c);
+  outline:1px solid var(--page-line);display:grid;grid-template-columns:minmax(0,1fr);min-width:0;font-variant-numeric:tabular-nums}
+.app button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+.lbl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:500}
+.lbl::before{content:var(--lb)}.lbl::after{content:var(--la)}
+.h{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);text-transform:var(--hcase);line-height:.95;margin:0;text-wrap:balance}
+
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;padding:12px 18px;border-bottom:1px solid var(--line)}
+.brand{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);text-transform:var(--hcase);font-size:20px;margin-right:auto;display:flex;align-items:baseline;gap:10px}
+.brand small{font-family:var(--fb);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);font-weight:500;font-stretch:100%}
+.stat{display:flex;flex-direction:column;gap:1px}
+.stat b{font-size:15px;font-weight:600}
+.tick{border:1px solid var(--line);padding:6px 10px;display:flex;flex-direction:column;gap:1px}
+.nav{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--line);padding:0 10px;scrollbar-width:thin}
+.nav button{padding:11px 10px;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;color:var(--mute);border-bottom:2px solid transparent}
+.nav button[aria-current="page"]{color:var(--fg);border-bottom-color:var(--acc)}
+.body{padding:18px;display:flex;flex-direction:column;gap:18px;min-width:0}
+
+/* héros */
+.hero{position:relative;overflow:hidden;background:var(--hero);color:var(--hero-fg);padding:22px;min-height:230px;display:flex;flex-direction:column;justify-content:space-between;gap:26px}
+.hero .lbl{color:inherit;opacity:.8}
+.hero .h{font-size:clamp(34px,7vw,84px)}
+.hero-row{display:flex;flex-wrap:wrap;gap:14px 28px;align-items:flex-end;justify-content:space-between;position:relative;z-index:2}
+.hero-kpis{display:flex;flex-wrap:wrap;gap:8px 26px}
+.hero-kpis div{display:flex;flex-direction:column}
+.hero-kpis b{font-size:20px;font-weight:600}
+.cta{background:var(--acc)!important;color:var(--acc-fg)!important;padding:11px 16px!important;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:600}
+.dots,.tape,.ghost,.marq{display:none}
+/* A : points lumineux + bandeau défilant */
+[data-dir="a"] .dots{display:block;position:absolute;right:6%;top:14%;width:170px;height:120px;opacity:.9;
+  background:radial-gradient(circle,#fff 0 3px,transparent 3.6px) 0 0/14px 14px;
+  -webkit-mask:linear-gradient(90deg,transparent,#000 30%,#000 70%,transparent);mask:linear-gradient(90deg,transparent,#000 30%,#000 70%,transparent)}
+[data-dir="a"] .marq{display:block;margin:0 -22px -22px;border-top:1px solid rgba(255,255,255,.35);padding:8px 0 4px;white-space:nowrap;overflow:hidden;
+  font-family:var(--fd);font-weight:700;letter-spacing:-.05em;text-transform:uppercase;font-size:clamp(30px,6vw,64px);line-height:1}
+[data-dir="a"] .hero .h{font-size:clamp(22px,3.4vw,34px);max-width:16ch;line-height:1}
+/* B : rubans croisés */
+[data-dir="b"] .tape{display:block;position:absolute;left:-10%;width:120%;background:var(--acc);color:var(--acc-fg);font-size:9.5px;letter-spacing:.2em;
+  text-transform:uppercase;padding:5px 0;white-space:nowrap;overflow:hidden;z-index:1}
+[data-dir="b"] .tape.t1{bottom:54px;transform:rotate(-4deg)}[data-dir="b"] .tape.t2{bottom:30px;transform:rotate(3deg);opacity:.75}
+.hero .h em{font-style:normal;white-space:nowrap}
+[data-dir="b"] .hero{min-height:290px;padding-bottom:104px}[data-dir="b"] .hero .h{font-size:clamp(30px,5.6vw,66px);max-width:14ch}
+[data-dir="b"] .brand{font-stretch:62%;font-weight:700;text-transform:lowercase;font-size:24px;letter-spacing:0}
+/* C : grille + citron */
+[data-dir="c"] .hero{background-image:linear-gradient(90deg,var(--line) 1px,transparent 1px),var(--hero);background-size:25% 100%,auto}
+[data-dir="c"] .hero .h em{font-style:normal;color:var(--acc)}
+[data-dir="c"] .cta,[data-dir="c"] .pill{border-radius:99px}
+[data-dir="c"] .nav button[aria-current="page"]{color:var(--acc)}
+/* D : affiche */
+[data-dir="d"] .ghost{display:block;position:absolute;left:-2%;right:-2%;top:-8px;font-family:var(--fd);font-weight:800;font-stretch:125%;letter-spacing:-.04em;
+  font-size:clamp(60px,15vw,190px);line-height:.8;text-transform:uppercase;white-space:nowrap;color:var(--fg)}
+[data-dir="d"] .hero{padding-top:clamp(70px,15vw,180px);border-bottom:1px solid var(--line)}
+[data-dir="d"] .hero .h{font-size:clamp(18px,2.4vw,26px);font-stretch:110%;max-width:22ch;line-height:1.05}
+[data-dir="d"] .top,[data-dir="d"] .nav{border-bottom-width:2px}
+[data-dir="d"] .tile,[data-dir="d"] .opt,[data-dir="d"] .evt,[data-dir="d"] .card{border-width:2px}
+
+/* tuiles */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.tile{background:var(--panel);border:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.tile.alt{background:var(--alt);color:var(--alt-fg);border-color:var(--alt)}
+.tile.alt .lbl,.tile.alt .mut{color:inherit;opacity:.7}
+.tile h4{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);text-transform:var(--hcase);font-size:22px;line-height:1;margin:0}
+.big{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);font-size:34px;line-height:1}
+.mut{color:var(--mute)}
+.rows{display:flex;flex-direction:column}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:7px 0;border-top:1px solid color-mix(in srgb,currentColor 18%,transparent);align-items:baseline}
+.row span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.up{color:var(--good)}.down{color:var(--bad)}
+.tile.alt .up,.tile.alt .down{color:inherit}
+.spark{width:100%;height:44px;display:block}
+.gauge{height:6px;background:color-mix(in srgb,currentColor 16%,transparent);position:relative}
+.gauge i{position:absolute;inset:0 auto 0 0;background:currentColor}
+.me{font-weight:700}
+
+/* studio */
+.steps{display:flex;gap:0;overflow-x:auto;border:1px solid var(--line)}
+.steps div{flex:1 0 auto;padding:9px 12px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);border-right:1px solid var(--line);white-space:nowrap}
+.steps div:last-child{border-right:0}
+.steps .done{color:var(--fg)}.steps .now{background:var(--acc);color:var(--acc-fg);font-weight:600}
+.studio{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:16px}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.opt{border:1px solid var(--line);background:var(--panel);padding:12px;display:flex;flex-direction:column;gap:8px;text-align:left;min-width:0}
+.opt b{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);text-transform:var(--hcase);font-size:19px;line-height:1}
+.opt .price{font-size:15px;font-weight:600}
+.opt.sel{background:var(--alt);color:var(--alt-fg);border-color:var(--alt)}
+.opt.sel .mut,.opt.sel .lbl{color:inherit;opacity:.72}
+.opt.off{opacity:.42}
+.band{border:1px solid var(--line);background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:14px}
+.range{position:relative;height:10px;background:color-mix(in srgb,var(--fg) 12%,transparent)}
+.range i{position:absolute;top:0;bottom:0;left:61%;width:12%;background:var(--acc)}
+.scale{display:flex;justify-content:space-between;font-size:10.5px;color:var(--mute)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px}
+.evt{border:1px solid var(--line);background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:10px}
+.evt h4{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);text-transform:var(--hcase);font-size:24px;line-height:1;margin:0}
+.react{display:flex;flex-direction:column;gap:6px}
+.react button{border:1px solid var(--line)!important;padding:9px 11px!important;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;text-align:left}
+.react button:first-child{background:var(--acc)!important;color:var(--acc-fg)!important;border-color:var(--acc)!important}
+.pill{display:inline-block;border:1px solid currentColor;padding:2px 8px;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
+
+/* fiche artiste */
+.sheet{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:16px}
+.card{position:relative;overflow:hidden;background:var(--hero);color:var(--hero-fg);border:1px solid var(--line);padding:16px;min-height:300px;display:flex;flex-direction:column;justify-content:space-between;gap:20px}
+.card .lbl{color:inherit;opacity:.8}
+.card .gen{font-family:var(--fd);font-weight:var(--hw);font-stretch:var(--hs);letter-spacing:var(--ht);font-size:clamp(70px,13vw,130px);line-height:.8}
+.card .h{font-size:clamp(26px,4.4vw,44px)}
+.attrs{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px 22px}
+.attr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:baseline}
+.attr .gauge{grid-column:1/-1}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.meta div{border:1px solid var(--line);padding:10px;display:flex;flex-direction:column;gap:3px;background:var(--panel)}
+.meta b{font-size:16px;font-weight:600}
+
+@media (max-width:760px){.studio,.sheet{grid-template-columns:minmax(0,1fr)}.body{padding:14px}.hero{padding:16px}[data-dir="a"] .marq{margin:0 -16px -16px}}
+@media (prefers-reduced-motion:no-preference){[data-dir="a"] .marq span{display:inline-block;animation:slide 26s linear infinite}@keyframes slide{to{transform:translateX(-50%)}}}
+</style>
+
+<div class="wrap">
+  <div class="intro">
+    <h1>Melody Tycoon — 4 propositions d'interface</h1>
+    <p>Les mêmes 3 écrans du jeu (Accueil, création de son, fiche d'artiste), habillés de 4 façons tirées de tes images. Clique sur une direction pour changer tout l'habillage.</p>
+  </div>
+
+  <div class="pick" role="group" aria-label="Choisir une direction">
+    <button type="button" id="dir-a" data-d="a" aria-pressed="true"><i>Direction A</i><b>Glace</b><span>Blanc et bleu nuit, flou, points lumineux</span></button>
+    <button type="button" id="dir-b" data-d="b" aria-pressed="false"><i>Direction B</i><b>Nuit</b><span>Noir et gris, lettres fines, rubans croisés</span></button>
+    <button type="button" id="dir-c" data-d="c" aria-pressed="false"><i>Direction C</i><b>Acide</b><span>Noir, blanc, citron vert, lettres serrées</span></button>
+    <button type="button" id="dir-d" data-d="d" aria-pressed="false"><i>Direction D</i><b>Affiche</b><span>Blanc, cadre noir, lettres géantes</span></button>
+  </div>
+  <p class="note" id="why"></p>
+
+  <div id="stage" data-dir="a">
+
+    <!-- ÉCRAN 1 : ACCUEIL -->
+    <section>
+      <p class="cap">Écran 1 — Accueil</p>
+      <div class="app">
+        <header class="top">
+          <div class="brand">Chimchar Records <small>Label Underground</small></div>
+          <div class="stat"><span class="lbl">Cash</span><b>48 200 €</b></div>
+          <div class="stat"><span class="lbl">Fans</span><b>212 400</b></div>
+          <div class="stat"><span class="lbl">Réputation</span><b>27</b></div>
+          <div class="tick"><span class="lbl">Semaine 12 · Saison 1</span><b>Prochain tick 07:42:10</b></div>
+        </header>
+        <nav class="nav" aria-label="Onglets du jeu">
+          <button type="button" aria-current="page">Accueil</button><button type="button">Effectif</button><button type="button">Recrutement</button><button type="button">Marché</button><button type="button">Studio</button><button type="button">Sorties</button><button type="button">Charts</button><button type="button">Finances</button><button type="button">Staff</button><button type="button">Dynamique</button><button type="button">Merch et tournées</button><button type="button">Événements</button><button type="button">Paramètres</button>
+        </nav>
+        <main class="body">
+          <div class="hero">
+            <div class="ghost" aria-hidden="true">Rue Glacée</div>
+            <div class="dots" aria-hidden="true"></div>
+            <div class="tape t1" aria-hidden="true">Cette nuit ▪▪ Rue Glacée entre 38e du chart Rap FR ▪▪ +2 225 fans ▪▪ Cette nuit ▪▪ Rue Glacée entre 38e du chart Rap FR ▪▪ +2 225 fans ▪▪ Cette nuit ▪▪ Rue Glacée entre 38e du chart Rap FR ▪▪ +2 225 fans</div>
+            <div class="tape t2" aria-hidden="true">Score de hit 78 ▪▪ Hit ▪▪ Nova Kalé ▪▪ Chimchar Records ▪▪ Score de hit 78 ▪▪ Hit ▪▪ Nova Kalé ▪▪ Chimchar Records ▪▪ Score de hit 78 ▪▪ Hit ▪▪ Nova Kalé ▪▪ Chimchar Records</div>
+            <div class="hero-row">
+              <div>
+                <span class="lbl">Cette nuit</span>
+                <h2 class="h">« Rue Glacée » fait <em>72 800</em> streams</h2>
+              </div>
+              <button type="button" class="cta">Créer un son</button>
+            </div>
+            <div class="hero-row">
+              <div class="hero-kpis">
+                <div><span class="lbl">Chart Rap FR</span><b>38e ▲ nouvelle entrée</b></div>
+                <div><span class="lbl">Score de hit</span><b>78 · Hit</b></div>
+                <div><span class="lbl">Nouveaux fans</span><b>+2 225</b></div>
+                <div><span class="lbl">Encaissé</span><b>+291 €</b></div>
+              </div>
+            </div>
+            <div class="marq" aria-hidden="true"><span>Rue Glacée · 38e Rap FR · Nova Kalé · Score de hit 78 · Rue Glacée · 38e Rap FR · Nova Kalé · Score de hit 78 · </span></div>
+          </div>
+
+          <div class="tiles">
+            <div class="tile alt">
+              <span class="lbl">À faire</span>
+              <h4>3 choses t'attendent</h4>
+              <div class="rows">
+                <div class="row"><span>Liha veut un clip</span><span>expire dans 1 tick</span></div>
+                <div class="row"><span>Rapport du scout — Belgique</span><span>4 profils</span></div>
+                <div class="row"><span>Featuring proposé par Tom</span><span>2 500 €</span></div>
+              </div>
+            </div>
+            <div class="tile">
+              <span class="lbl">Trésorerie</span>
+              <div class="big">48 200 €</div>
+              <svg class="spark" viewBox="0 0 200 44" preserveAspectRatio="none" aria-label="Cash sur 8 semaines, en hausse"><polyline fill="none" stroke="currentColor" stroke-width="2" points="0,34 28,36 57,30 85,31 114,22 142,25 171,14 200,9"/></svg>
+              <div class="row"><span class="mut">Prochaine mensualité</span><span>1 530 €</span></div>
+            </div>
+            <div class="tile">
+              <span class="lbl">Classement de la party</span>
+              <div class="rows">
+                <div class="row"><span>1 · Tom — Velvet Nord</span><span>71,4</span></div>
+                <div class="row me"><span>2 · Toi — Chimchar Records</span><span>64,9 <span class="up">▲</span></span></div>
+                <div class="row"><span>3 · Inès — Maison Brume</span><span>58,2</span></div>
+                <div class="row"><span>4 · Karim — 59 Sound</span><span>41,0 <span class="down">▼</span></span></div>
+              </div>
+            </div>
+            <div class="tile">
+              <span class="lbl">Moral du label</span>
+              <div class="big">68</div>
+              <div class="gauge"><i style="width:68%"></i></div>
+              <div class="rows">
+                <div class="row"><span>Sixto Vega</span><span class="down">34 · veut un rôle</span></div>
+                <div class="row"><span>Liha</span><span>52</span></div>
+              </div>
+            </div>
+            <div class="tile">
+              <span class="lbl">Contrats</span>
+              <div class="rows">
+                <div class="row"><span>Nova Kalé</span><span>fin dans 4 semaines</span></div>
+                <div class="row"><span>Mina Dz</span><span>fin dans 7 semaines</span></div>
+                <div class="row"><span>Sixto Vega</span><span>avance : reste 6 200 €</span></div>
+              </div>
+            </div>
+            <div class="tile alt">
+              <span class="lbl">Prochains rendez-vous</span>
+              <div class="rows">
+                <div class="row"><span>Sortie — EP de Liha</span><span>semaine 13</span></div>
+                <div class="row"><span>Festival du Serveur</span><span>semaine 14</span></div>
+                <div class="row"><span>Nuit des Charts</span><span>semaine 14</span></div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <!-- ÉCRAN 2 : STUDIO -->
+    <section>
+      <p class="cap">Écran 2 — Studio, création d'un son (étape 4 sur 5)</p>
+      <div class="app">
+        <header class="top">
+          <div class="brand">Studio <small>Nova Kalé · énergie 78</small></div>
+          <div class="stat"><span class="lbl">Thème</span><b>Rupture</b></div>
+          <div class="stat"><span class="lbl">Beat</span><b>Lovetrap · lease</b></div>
+          <div class="stat"><span class="lbl">Producteur</span><b>Dz Minuit</b></div>
+        </header>
+        <main class="body">
+          <div class="steps" aria-label="Étapes">
+            <div class="done">Artiste ✓</div><div class="done">Thème ✓</div><div class="done">Beat ✓</div><div class="done">Producteur ✓</div><div class="now">Studio</div><div>Featuring</div>
+          </div>
+          <div class="studio">
+            <div class="col">
+              <span class="lbl">Choisis un studio</span>
+              <div class="opts">
+                <button type="button" class="opt"><span class="lbl">Niveau 1 · débrouille</span><b>Home Studio</b><span class="price">0 €</span><span class="mut">Qualité 40 · panne 25 % · pas de délai</span></button>
+                <button type="button" class="opt sel"><span class="lbl">Niveau 2</span><b>Studio de quartier</b><span class="price">1 500 €</span><span class="mut">Qualité 58 · panne 15 % · pas de délai</span></button>
+                <button type="button" class="opt off" disabled><span class="lbl">Niveau 3 · budget dépassé</span><b>Studio pro</b><span class="price">8 000 €</span><span class="mut">Qualité 74 · panne 8 % · +1 semaine</span></button>
+                <button type="button" class="opt off" disabled><span class="lbl">Niveau 4 · budget dépassé</span><b>Studio prestige</b><span class="price">40 000 €</span><span class="mut">Qualité 88 · panne 4 % · +1 semaine</span></button>
+              </div>
+              <div class="evt">
+                <span class="lbl">Embrouille · après le producteur</span>
+                <h4>Le producteur ne répond plus</h4>
+                <span class="mut">Dz Minuit a disparu depuis hier. La session est dans deux jours.</span>
+                <div class="react">
+                  <button type="button"><span>Payer une rallonge — il revient, relation +1</span><b>+270 €</b></button>
+                  <button type="button"><span>Lui mettre la pression — s'il part, producteur tiré au sort</span><b>60 %</b></button>
+                  <button type="button"><span>Attendre — moral de Nova −3</span><b>+1 semaine</b></button>
+                </div>
+              </div>
+            </div>
+            <div class="col">
+              <div class="band">
+                <span class="lbl">Qualité estimée</span>
+                <div class="big">61 – 73</div>
+                <div class="range"><i></i></div>
+                <div class="scale"><span>0</span><span>Correct</span><span>Bon</span><span>Tube</span><span>99</span></div>
+              </div>
+              <div class="band">
+                <span class="lbl">Budget du son</span>
+                <div class="big">3 670 / 4 000 €</div>
+                <div class="gauge"><i style="width:92%"></i></div>
+                <div class="kv">
+                  <span class="mut">Écriture (séance)</span><span>600 €</span>
+                  <span class="mut">Beat (lease)</span><span>400 €</span>
+                  <span class="mut">Producteur + rallonge</span><span>1 170 €</span>
+                  <span class="mut">Studio de quartier</span><span>1 500 €</span>
+                </div>
+              </div>
+              <div class="band">
+                <div class="kv">
+                  <span class="mut">Énergie consommée</span><b>−10</b>
+                  <span class="mut">Délai avant sortie</span><b>aucun</b>
+                  <span class="mut">Choix en débrouille</span><b>0 sur 4</b>
+                </div>
+                <button type="button" class="cta">Valider le studio</button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <!-- ÉCRAN 3 : FICHE ARTISTE -->
+    <section>
+      <p class="cap">Écran 3 — Fiche d'artiste</p>
+      <div class="app">
+        <header class="top">
+          <div class="brand">Effectif <small>5 artistes sur 10</small></div>
+          <span class="pill">Espoir</span><span class="pill">Rap FR</span><span class="pill">Tardif</span>
+        </header>
+        <main class="body">
+          <div class="sheet">
+            <div class="card">
+              <div class="dots" aria-hidden="true"></div>
+              <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+                <div><span class="lbl">Note générale</span><div class="gen">54</div></div>
+                <div style="text-align:right"><span class="lbl">Potentiel</span><div class="big">72 – 84</div></div>
+              </div>
+              <div>
+                <span class="lbl">Lyon · France</span>
+                <h2 class="h">Nova Kalé</h2>
+              </div>
+            </div>
+            <div class="col">
+              <div class="meta">
+                <div><span class="lbl">Énergie</span><b>78 / 100</b></div>
+                <div><span class="lbl">Moral</span><b>67</b></div>
+                <div><span class="lbl">Hype</span><b>19</b></div>
+                <div><span class="lbl">Fans</span><b>5 425</b></div>
+                <div><span class="lbl">Valeur</span><b>9 200 €</b></div>
+                <div><span class="lbl">Contrat</span><b>20 % · 18 mois</b></div>
+              </div>
+              <div class="band">
+                <span class="lbl">Attributs</span>
+                <div class="attrs">
+                  <div class="attr"><span>Écriture</span><b>61</b><div class="gauge"><i style="width:61%"></i></div></div>
+                  <div class="attr"><span>Créativité</span><b>60</b><div class="gauge"><i style="width:60%"></i></div></div>
+                  <div class="attr"><span>Voix</span><b>58</b><div class="gauge"><i style="width:58%"></i></div></div>
+                  <div class="attr"><span>Scène</span><b>44</b><div class="gauge"><i style="width:44%"></i></div></div>
+                  <div class="attr"><span>Discipline</span><b>66</b><div class="gauge"><i style="width:66%"></i></div></div>
+                  <div class="attr"><span>Charisme</span><b>57</b><div class="gauge"><i style="width:57%"></i></div></div>
+                  <div class="attr"><span>Endurance</span><b>72</b><div class="gauge"><i style="width:72%"></i></div></div>
+                  <div class="attr"><span>Production</span><b>35</b><div class="gauge"><i style="width:35%"></i></div></div>
+                </div>
+              </div>
+              <div class="tiles">
+                <div class="tile"><span class="lbl">Compétence signature</span><h4>Refrain contagieux</h4><span class="mut">Streams de découverte +10 %</span></div>
+                <div class="tile"><span class="lbl">Traits connus</span><h4>Anxieuse · Discrète</h4><span class="mut">Pas de clash possible, peu de scandales</span></div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  var why={
+    a:"<b>Glace.</b> Tirée de ton image de lunettes. Fond clair, bleu nuit, grand flou coloré en haut, points lumineux, bandeau qui défile. La plus douce et la plus « premium ».",
+    b:"<b>Nuit.</b> Tirée de tes deux images noires. Tout en noir et gris, lettres fines en majuscules, petites étiquettes entre crochets, rubans qui se croisent. La plus sobre.",
+    c:"<b>Acide.</b> Tirée de ton image de bague. Noir, panneaux blancs, une seule couleur vive, gros titres serrés, lignes de grille. La plus nerveuse.",
+    d:"<b>Affiche.</b> Tirée de ton image noir et blanc au titre géant. Fond blanc, cadre noir épais, un mot énorme en haut de chaque écran. La plus radicale."
+  };
+  var stage=document.getElementById('stage'),note=document.getElementById('why'),btns=document.querySelectorAll('.pick button');
+  function set(d){
+    if(!why[d])d='a';
+    stage.setAttribute('data-dir',d);note.innerHTML=why[d];
+    btns.forEach(function(b){b.setAttribute('aria-pressed',b.dataset.d===d?'true':'false')});
+    try{localStorage.setItem('mt-dir',d)}catch(e){}
+  }
+  btns.forEach(function(b){b.addEventListener('click',function(){set(b.dataset.d)})});
+  var saved='a';try{saved=localStorage.getItem('mt-dir')||'a'}catch(e){}
+  set(saved);
+})();
+</script>
