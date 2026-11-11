@@ -31,6 +31,7 @@ import { Mascot } from "./mascots/Mascot";
 import { personaOf } from "./mascots/persona";
 import { useGameMood } from "./mascots/use-game-mood";
 import "./mascots/worlds";
+import { MelodyScreen } from "./melody/MelodyScreen";
 
 const GAMES: Array<{ kind: GameKind; title: string; rule: string }> = [
   {
@@ -1586,7 +1587,7 @@ const Board = ({
   );
 };
 
-export const GamesScreen = ({
+const PartyGames = ({
   state,
   party,
   active,
@@ -1620,6 +1621,38 @@ export const GamesScreen = ({
         />
       )}
     </MascotEffects.Provider>
+  );
+};
+
+type GamesProps = {
+  state: AppState;
+  party: PartyView;
+  active: boolean;
+  onAnswer: (game: GameView) => void;
+};
+
+// Melody Tycoon sits on top of the party games, only in the party of a Discord server: its world belongs to the server.
+export const GamesScreen = (props: GamesProps) => {
+  const guildId = props.party.guild?.id ?? null;
+  const [tab, setTab] = useState<"party" | "melody">("party");
+  const gameId = props.state.game?.id ?? null;
+  // A party game that starts brings everyone back to it.
+  useEffect(() => {
+    if (gameId) setTab("party");
+  }, [gameId]);
+  if (!guildId) return <PartyGames {...props} />;
+  return (
+    <>
+      <div className="tabs games-switch" role="group" aria-label="Choix du jeu">
+        <button type="button" className={tab === "melody" ? "tab is-active" : "tab"} aria-pressed={tab === "melody"} onClick={() => setTab("melody")}>
+          Melody Tycoon
+        </button>
+        <button type="button" className={tab === "party" ? "tab is-active" : "tab"} aria-pressed={tab === "party"} onClick={() => setTab("party")}>
+          Jeux de party
+        </button>
+      </div>
+      {tab === "melody" ? <MelodyScreen key={guildId} guildId={guildId} active={props.active} /> : <PartyGames {...props} />}
+    </>
   );
 };
 

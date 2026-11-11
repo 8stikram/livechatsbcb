@@ -86,6 +86,32 @@ export const fetchMe = async (accountToken: string, fresh: boolean): Promise<Api
   return me.success ? { ok: true, value: me.data } : { ok: false, error: 'network' };
 };
 
+// Melody Tycoon world of a Discord server. The answer is checked by the server, the screen reads it.
+export const melodyCall = async (
+  accountToken: string,
+  guildId: string,
+  route: 'view' | 'act' | 'preview',
+  body: unknown,
+): Promise<ApiResult<unknown>> => {
+  let response: Response | null = null;
+  const path = `/v1/melody/${guildId}${route === 'view' ? '' : `/${route}`}`;
+  if (route === 'view') {
+    try {
+      response = await fetch(`${SERVER_URL}${path}`, {
+        headers: { authorization: `Bearer ${accountToken}` },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      response = null;
+    }
+  } else {
+    response = await request(path, body ?? {}, accountToken);
+  }
+  if (!response?.ok) return failure(response);
+  const data: unknown = await response.json().catch(() => undefined);
+  return data === undefined ? { ok: false, error: 'network' } : { ok: true, value: data };
+};
+
 export const createParty = async (accountToken: string) =>
   sessionFrom(await request('/v1/parties', {}, accountToken));
 

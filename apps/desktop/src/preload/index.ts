@@ -88,6 +88,7 @@ const api: LiveChatApi = {
   setClean: (clean) => ipcRenderer.invoke(IpcChannel.SetClean, clean),
   setActionKey: (which, key) => ipcRenderer.invoke(IpcChannel.SetActionKey, which, key),
   showMemberMenu: (memberId) => ipcRenderer.invoke(IpcChannel.ShowMemberMenu, memberId),
+  melody: (guildId, route, body) => ipcRenderer.invoke(IpcChannel.MelodyCall, guildId, route, body),
   ignoreMember: (memberId, choice) => ipcRenderer.invoke(IpcChannel.IgnoreMember, memberId, choice),
   assignFileShortcut: (fileId, key, durationMs) => ipcRenderer.invoke(IpcChannel.AssignFileShortcut, fileId, key, durationMs),
   assignSavedShortcut: (savedId, key) => ipcRenderer.invoke(IpcChannel.AssignSavedShortcut, savedId, key),

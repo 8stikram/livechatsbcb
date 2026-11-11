@@ -396,6 +396,10 @@ export type AppState = {
 export type ActionError = ApiErrorCode | 'network' | 'gave_up' | 'cancelled' | 'login_denied' | 'login_timeout';
 export type ActionResult = { ok: true } | { ok: false; error: ActionError };
 
+// Melody Tycoon: the server's answer is passed through as it is, the screen knows its shape.
+export type MelodyRoute = 'view' | 'act' | 'preview';
+export type MelodyCallResult = { ok: true; data: unknown } | { ok: false; error: ActionError };
+
 export type GameSendResult = ActionResult | { ok: false; error: 'too_large' | 'empty' | 'unsupported' };
 
 export type PickResult =
@@ -449,6 +453,7 @@ export const IpcChannel = {
   SetClean: 'clean:set',
   SetActionKey: 'keys:set',
   ShowMemberMenu: 'member:menu',
+  MelodyCall: 'melody:call',
   IgnoreMember: 'member:ignore',
   AssignFileShortcut: 'shortcut:assign-file',
   AssignSavedShortcut: 'shortcut:assign-saved',
@@ -605,6 +610,7 @@ export type LiveChatApi = {
   setClean(clean: boolean): Promise<void>;
   setActionKey(which: ActionKey, key: string | null): Promise<KeyChange>;
   showMemberMenu(memberId: string): Promise<IgnoreChoice | null>;
+  melody(guildId: string, route: MelodyRoute, body?: unknown): Promise<MelodyCallResult>;
   ignoreMember(memberId: string, choice: IgnoreChoice): Promise<void>;
   assignFileShortcut(fileId: string, key: string, durationMs: number): Promise<{ library: LibraryView; change: KeyChange }>;
   assignSavedShortcut(savedId: string, key: string): Promise<{ library: LibraryView; change: KeyChange }>;

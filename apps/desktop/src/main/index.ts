@@ -40,7 +40,8 @@ import {
   type TextPlace,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
-import { IpcChannel, isNewerVersion, keyLabel, DEFAULT_SETTINGS, WHEEL_SIZE, type ActionKey, type KeyChange, type ExternalFiles, type IncomingError, type IncomingResult, type ActionResult, type GameSendResult, type GameInviteView, type GameReactionView, type HiddenReason, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
+import {
+  type MelodyCallResult, IpcChannel, isNewerVersion, keyLabel, DEFAULT_SETTINGS, WHEEL_SIZE, type ActionKey, type KeyChange, type ExternalFiles, type IncomingError, type IncomingResult, type ActionResult, type GameSendResult, type GameInviteView, type GameReactionView, type HiddenReason, type IgnoreChoice, type MemberView, type AppState, type DraftMedia, type DraftSlot, type FileMenuAction, type HistoryView, type PickResult, type PlaybackView, type SavedMenuAction, type SceneFile, type SceneResult } from '../shared/ipc';
 import { registerAppScheme, serveRenderer } from './app-protocol';
 import { loginWithDiscord } from './discord-login';
 import { Library, type SavedFile } from './library';
@@ -1031,6 +1032,16 @@ function start(): void {
   };
 
   handle(IpcChannel.GetState, getState);
+
+  handle(IpcChannel.MelodyCall, async (guildId: unknown, route: unknown, body: unknown): Promise<MelodyCallResult> => {
+    const auth = store.login;
+    if (!auth) return { ok: false, error: 'signed_out' };
+    if (typeof guildId !== 'string' || !/^\d{17,20}$/.test(guildId)) return { ok: false, error: 'invalid_request' };
+    if (route !== 'view' && route !== 'act' && route !== 'preview') return { ok: false, error: 'invalid_request' };
+    const result = await partyApi.melodyCall(auth.token, guildId, route, body);
+    if (!result.ok && result.error === 'signed_out' && store.login?.token === auth.token) signOut('account_expired');
+    return result.ok ? { ok: true, data: result.value } : result;
+  });
 
   handle(IpcChannel.Login, async (): Promise<ActionResult> => {
     if (login || store.login) return { ok: true };

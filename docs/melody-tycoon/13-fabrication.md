@@ -57,3 +57,17 @@ Lecture : le rythme est lent et régulier, aucun label n'explose. **Limites conn
 - **Tests** : 6 tests serveur (accès, actions refusées, fonder, son → sortie → paie au tick, deux joueurs et deux serveurs séparés, heure de Paris). Les tests utilisent une semaine toutes les 1,5 s.
 
 Pas encore dans l'appli : il faut maintenant les écrans (style Nuit Néon jeu vidéo).
+
+## Étape 2 — les écrans dans l'appli (fait)
+
+- Dans **Jeux**, un sélecteur en haut : **Melody Tycoon** | Jeux de party. Il n'apparaît que dans la party d'un serveur Discord. Si un jeu de party démarre, tout le monde revient sur les jeux de party.
+- Style **Nuit Néon jeu vidéo** (noir, violet → rose, cartes, gros boutons, animations, peu de chiffres).
+- **Fonder** : nom du label + choix entre 3 cartes d'artistes débutants.
+- **Accueil** : 3 grandes tuiles (Créer un son avec vinyle qui tourne, Prochaine sortie avec bande croisée, Cette semaine avec streams qui montent et étoiles) + 4 tuiles (classement, effectif, coffre, recrutement).
+- **Effectif** : cartes d'artistes à collectionner, fiche avec radar, énergie, moral, hype, contrat ; boutons Créer un son et Concert (gain affiché).
+- **Studio** : artiste → thème (« en vogue ») → beat (« son style », « va avec le thème ») → équipe (4 niveaux pour écriture, beat, producteur, studio) → titre → révélation de la note. La fourchette de qualité et le prix se mettent à jour à chaque choix.
+- **Sorties** : coffre, choix de la semaine et de la promo ; sons programmés et sortis avec étoiles.
+- **Recrutement** : cartes des artistes libres, bouton Signer avec l'avance, raison si impossible.
+- **Charts** : podium du serveur, top global et top par genre, tes sons en surbrillance.
+- **Banque** : cash, dettes, prêts, emprunter (somme et durée).
+- Pas encore : embrouilles du studio, roue du featuring, négociation, tutoriel. Le serveur Melody n'est pas encore mis en ligne : à faire avec la prochaine version publiée.
