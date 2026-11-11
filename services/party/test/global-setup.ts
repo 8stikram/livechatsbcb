@@ -91,6 +91,9 @@ export default async function setup() {
       'POLL_MS:1500',
       '--var',
       'GAME_SCALE:0.05',
+      // A game week every second and a half, instead of every morning.
+      '--var',
+      'MELODY_TICK_MS:1500',
     ]),
   ];
 

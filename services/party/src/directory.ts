@@ -98,6 +98,7 @@ export class Directory extends DurableObject<Env> {
         guilds TEXT,
         guilds_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS melody_worlds (guild_id TEXT PRIMARY KEY, seen_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS sessions (
         token_hash TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -105,6 +106,23 @@ export class Directory extends DurableObject<Env> {
         last_used INTEGER NOT NULL
       );
     `);
+  }
+
+  // True when this server may have a Melody Tycoon world. Worlds nobody has opened for 30 days free their place.
+  melodySlot(guildId: string): boolean {
+    const now = Date.now();
+    const hour = 60 * 60 * 1000;
+    const [known] = this.ctx.storage.sql.exec<{ seen_at: number }>('SELECT seen_at FROM melody_worlds WHERE guild_id = ?', guildId).toArray();
+    if (known) {
+      if (now - known.seen_at > hour) this.ctx.storage.sql.exec('UPDATE melody_worlds SET seen_at = ? WHERE guild_id = ?', now, guildId);
+      return true;
+    }
+    const [alive] = this.ctx.storage.sql
+      .exec<{ count: number }>('SELECT COUNT(*) AS count FROM melody_worlds WHERE seen_at > ?', now - 30 * 24 * hour)
+      .toArray();
+    if ((alive?.count ?? 0) >= Number(this.env.MELODY_MAX_WORLDS)) return false;
+    this.ctx.storage.sql.exec('INSERT INTO melody_worlds (guild_id, seen_at) VALUES (?, ?)', guildId, now);
+    return true;
   }
 
   openLogin(ip: string, challenge: string, port: number): { ok: true; state: string } | RateLimited {

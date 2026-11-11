@@ -7,7 +7,8 @@
   "durable_objects": {
     "bindings": [
       { "name": "DIRECTORY", "class_name": "Directory" },
-      { "name": "PARTY", "class_name": "Party" }
+      { "name": "PARTY", "class_name": "Party" },
+      { "name": "MELODY", "class_name": "MelodyWorld" }
     ]
   },
   "r2_buckets": [
@@ -20,9 +21,12 @@
     "DISCORD_CLIENT_ID": "1566555946820571397",
     "DISCORD_REFRESH_MS": "300000",
     "POLL_MS": "30000",
-    "GAME_SCALE": "1"
+    "GAME_SCALE": "1",
+    "MELODY_TICK_MS": "0",
+    "MELODY_MAX_WORLDS": "100"
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["Directory", "Party"] }
+    { "tag": "v1", "new_sqlite_classes": ["Directory", "Party"] },
+    { "tag": "v2", "new_sqlite_classes": ["MelodyWorld"] }
   ]
 }

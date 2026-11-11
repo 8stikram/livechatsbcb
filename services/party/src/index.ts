@@ -11,10 +11,11 @@ import {
 } from '@livechatsbcb/protocol';
 import { Directory } from './directory';
 import { AUTHORIZE_URL, LOGIN_SCOPE, exchangeLoginCode } from './discord';
+import { MelodyActionSchema, MelodyPreviewSchema, MelodyWorld } from './melody';
 import { Party, guildPartyId } from './party';
 import { sha256Base64Url } from './tokens';
 
-export { Directory, Party };
+export { Directory, MelodyWorld, Party };
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -150,6 +151,32 @@ const joinGuild = async (request: Request, env: Env, guildId: string): Promise<R
 
   const session: SessionResponse = { partyId, code: null, guild: access.guild, ...added.member };
   return json(session);
+};
+
+// Melody Tycoon: one world per Discord server, open to the members of that server.
+const melody = async (request: Request, env: Env, guildId: string, action: string | undefined): Promise<Response> => {
+  const account = await accountOf(request, env);
+  if (!account) return fail('signed_out', 401);
+
+  const directory = directoryOf(env);
+  const access = await directory.guildAccess(account.id, guildId);
+  if (!access.ok) return fail(access.error, STATUS_BY_ERROR[access.error]);
+  // Keeps the number of living worlds inside what the free plan can carry.
+  if (!(await directory.melodySlot(guildId))) return fail('storage_full', 507);
+
+  const world = env.MELODY.get(env.MELODY.idFromName(guildId));
+  if (request.method === 'GET' && !action) return json(await world.view(guildId, account.id));
+  if (request.method === 'POST' && action === 'preview') {
+    const body = MelodyPreviewSchema.safeParse(await readJson(request));
+    if (!body.success) return fail('invalid_request', 400);
+    return json(await world.preview(guildId, body.data));
+  }
+  if (request.method === 'POST' && action === 'act') {
+    const body = MelodyActionSchema.safeParse(await readJson(request));
+    if (!body.success) return fail('invalid_request', 400);
+    return json(await world.act(guildId, account.id, body.data));
+  }
+  return fail('not_found', 404);
 };
 
 const createParty = async (request: Request, env: Env): Promise<Response> => {
@@ -438,6 +465,9 @@ export default {
 
     const guildRoute = pathname.match(/^\/v1\/guilds\/(\d{17,20})\/join$/);
     if (guildRoute && method === 'POST') return joinGuild(request, env, guildRoute[1]!);
+
+    const melodyRoute = pathname.match(/^\/v1\/melody\/(\d{17,20})(?:\/(act|preview))?$/);
+    if (melodyRoute) return melody(request, env, melodyRoute[1]!, melodyRoute[2]);
 
     const route = pathname.match(/^\/v1\/parties\/([0-9a-f-]{36}|g-\d{17,20})\/(ws|rotate-code|leave)$/);
     if (route) {

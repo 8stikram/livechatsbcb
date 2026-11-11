@@ -47,3 +47,13 @@ Le premier essai suivait le document à la lettre : un label passait Empire en 2
 | Saison 3 | Underground, 271 000 fans, réputation 59 | Underground, 328 000 fans, 1,4 M€ | Maison, 18 000 fans |
 
 Lecture : le rythme est lent et régulier, aucun label n'explose. **Limites connues** : les robots jouent mal (ils ne renouvellent pas les contrats, n'empruntent pas, n'achètent pas d'artistes aux autres), et la débrouille avec beaucoup de concerts rapporte encore plus de cash que l'investissement. À reprendre quand de vrais joueurs testeront.
+
+## Étape 1 — le serveur (fait)
+
+- **Un monde par serveur Discord** : seuls les membres du serveur peuvent l'ouvrir. Chaque membre fonde son label (choix entre 3 débutants), 20 labels au plus par monde.
+- **Actions** : fonder, signer, créer un son (avec aperçu du prix et de la note avant de payer), programmer une sortie, concert, emprunt. Une action refusée par les règles renvoie un message clair et ne change rien.
+- **Le temps avance seul** : une semaine de jeu chaque matin à **6 h (heure de Paris)**, été comme hiver. Après une panne, le monde rattrape au plus 3 semaines.
+- **Rester gratuit** : le monde tient en 4 lignes de stockage ; **100 mondes vivants** au plus ; un monde que personne n'ouvre pendant **30 jours** s'endort (plus de calcul) et libère sa place.
+- **Tests** : 6 tests serveur (accès, actions refusées, fonder, son → sortie → paie au tick, deux joueurs et deux serveurs séparés, heure de Paris). Les tests utilisent une semaine toutes les 1,5 s.
+
+Pas encore dans l'appli : il faut maintenant les écrans (style Nuit Néon jeu vidéo).

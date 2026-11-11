@@ -22,6 +22,8 @@ import {
   type ServerMessage,
   type SessionResponse,
 } from '@livechatsbcb/protocol';
+import type { MelodyResult, MelodyState } from '../src/melody';
+import { nextParisTick } from '../src/melody-time';
 import { seal, sealingKey, unseal } from '../src/tokens';
 import { FakeDiscord } from './fake-discord';
 
@@ -2028,5 +2030,144 @@ describe('Discord servers', () => {
     const fresh = await fetch(`${BASE}/v1/me?fresh=1`, { headers: bearer(friend.token) });
     expect(fresh.status).toBe(200);
     expect(callsTo('GET /api/users/@me/guilds')).toBe(before + 1);
+  });
+});
+
+describe('Melody Tycoon', () => {
+  let guildId: string;
+  let playerId: string;
+
+  const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+  const view = async (token: string, guild = guildId): Promise<MelodyState> => {
+    const response = await fetch(`${QUICK_BASE}/v1/melody/${guild}`, { headers: bearer(token) });
+    expect(response.status).toBe(200);
+    return (await response.json()) as MelodyState;
+  };
+
+  const act = async (token: string, action: unknown): Promise<MelodyResult> => {
+    const response = await post(`/v1/melody/${guildId}/act`, action, bearer(token), QUICK_BASE);
+    expect(response.status).toBe(200);
+    return (await response.json()) as MelodyResult;
+  };
+
+  const found = async (token: string, name: string): Promise<MelodyState> => {
+    const before = await view(token);
+    expect(before.view.label).toBeNull();
+    expect(before.view.starters).toHaveLength(3);
+    const result = await act(token, { type: 'found', name, starterId: before.view.starters[0]!.id });
+    if (!result.ok) throw new Error(result.message);
+    return result;
+  };
+
+  beforeEach(() => {
+    discord.down = false;
+    guildId = discord.addGuild('Serveur musique');
+    playerId = discord.addUser('Patron');
+    discord.addMember(guildId, playerId);
+  });
+
+  it('is closed to people who are not logged in or not on the server', async () => {
+    expect((await fetch(`${QUICK_BASE}/v1/melody/${guildId}`)).status).toBe(401);
+    const stranger = await loginNew('Inconnu', QUICK_BASE);
+    expect((await fetch(`${QUICK_BASE}/v1/melody/${guildId}`, { headers: bearer(stranger.token) })).status).toBe(403);
+    expect((await post(`/v1/melody/${guildId}/act`, { type: 'gig', artistId: 'x' }, bearer(stranger.token), QUICK_BASE)).status).toBe(403);
+  });
+
+  it('refuses what is not a known action', async () => {
+    const player = await loginAs(playerId, QUICK_BASE);
+    expect((await post(`/v1/melody/${guildId}/act`, { type: 'cheat', cash: 1e9 }, bearer(player.token), QUICK_BASE)).status).toBe(400);
+    expect((await post(`/v1/melody/${guildId}/act`, { type: 'loan', amount: -5, weeks: 8 }, bearer(player.token), QUICK_BASE)).status).toBe(400);
+  });
+
+  it('lets a member found a label, then says no without changing anything when the rules refuse', async () => {
+    const player = await loginAs(playerId, QUICK_BASE);
+    const started = await found(player.token, 'Chimchar Records');
+    expect(started.view.label).toMatchObject({ name: 'Chimchar Records', tier: 1, cash: 30_000, tierName: 'Label Maison' });
+    expect(started.view.roster).toHaveLength(1);
+    expect(started.view.starters).toEqual([]);
+    expect(started.nextTickAt).toBeGreaterThan(Date.now() - 2_000);
+
+    const again = await act(player.token, { type: 'found', name: 'Deuxième', starterId: 'x' });
+    expect(again).toMatchObject({ ok: false });
+
+    const artistId = started.view.roster[0]!.id;
+    const tooDear = await act(player.token, {
+      type: 'song', artistId, title: 'Trop cher', themeId: 'rupture', beatId: 'lovetrap',
+      levels: { theme: 4, beat: 3, producer: 4, studio: 4 },
+    });
+    expect(tooDear.ok).toBe(false);
+    if (!tooDear.ok) expect(tooDear.message).toMatch(/budget|cash/);
+    const after = await view(player.token);
+    expect(after.view.label!.cash).toBe(30_000);
+    expect(after.view.songs).toEqual([]);
+  });
+
+  it('records a song, releases it and pays the label at the next tick', async () => {
+    const player = await loginAs(playerId, QUICK_BASE);
+    const started = await found(player.token, 'Nuit Néon');
+    const artist = started.view.roster[0]!;
+    const levels = { theme: 2, beat: 2, producer: 2, studio: 2 };
+
+    const previewed = await post(`/v1/melody/${guildId}/preview`, { artistId: artist.id, themeId: 'rupture', beatId: 'lovetrap', levels }, bearer(player.token), QUICK_BASE);
+    const preview = (await previewed.json()) as { ok: true; preview: { cost: number; qualityMin: number; qualityMax: number; energy: number } };
+    expect(preview.preview.cost).toBe(600 + 400 + 1_000 + 1_500);
+    expect(preview.preview.qualityMax).toBeGreaterThan(preview.preview.qualityMin);
+
+    const recorded = await act(player.token, { type: 'song', artistId: artist.id, title: '  Rue   Glacée ', themeId: 'rupture', beatId: 'lovetrap', levels });
+    if (!recorded.ok) throw new Error(recorded.message);
+    const song = recorded.view.songs[0]!;
+    expect(song).toMatchObject({ title: 'Rue Glacée', state: 'vault' });
+    expect(song.quality).toBeGreaterThanOrEqual(preview.preview.qualityMin);
+    expect(song.quality).toBeLessThanOrEqual(preview.preview.qualityMax);
+    expect(recorded.view.label!.cash).toBe(30_000 - preview.preview.cost);
+    expect(recorded.view.roster[0]!.energy).toBe(artist.energy - preview.preview.energy);
+
+    const scheduled = await act(player.token, { type: 'release', songId: song.id, inWeeks: 1, marketing: ['social_1'] });
+    if (!scheduled.ok) throw new Error(scheduled.message);
+    expect(scheduled.view.songs[0]).toMatchObject({ state: 'scheduled', releaseInWeeks: 1 });
+    const booked = await act(player.token, { type: 'gig', artistId: artist.id });
+    expect(booked.ok).toBe(true);
+
+    let now = scheduled;
+    for (let i = 0; i < 40 && now.view.songs[0]!.state !== 'released'; i += 1) {
+      await pause(250);
+      now = { ok: true, ...(await view(player.token)) };
+    }
+    const released = now.view.songs[0]!;
+    expect(released.state).toBe('released');
+    expect(released.streamsLast).toBeGreaterThan(1_000);
+    expect(now.view.tick).toBeGreaterThan(started.view.tick);
+    expect(now.view.roster[0]!.fans).toBeGreaterThan(artist.fans);
+    expect(now.view.label!.cash).not.toBe(scheduled.view.label!.cash);
+    expect(now.view.charts.global.length).toBeGreaterThan(5);
+  });
+
+  it('gives every member their own label in the same world, and keeps the worlds of two servers apart', async () => {
+    const player = await loginAs(playerId, QUICK_BASE);
+    await found(player.token, 'Premier');
+    const friendId = discord.addUser('Pote');
+    discord.addMember(guildId, friendId);
+    const friend = await loginAs(friendId, QUICK_BASE);
+    const second = await found(friend.token, 'Second');
+    expect(second.view.ranking.map((line) => line.name).sort()).toEqual(['Premier', 'Second']);
+    expect((await act(friend.token, { type: 'found', name: 'premier', starterId: 'x' })).ok).toBe(false);
+
+    const other = discord.addGuild('Autre serveur');
+    discord.addMember(other, playerId);
+    await pause(1_100);
+    const elsewhere = await view(player.token, other);
+    expect(elsewhere.view.label).toBeNull();
+    expect(elsewhere.view.ranking).toEqual([]);
+  });
+});
+
+describe('the daily Melody tick', () => {
+  it('falls at six in the morning in Paris, summer and winter', () => {
+    const at = (iso: string) => new Date(nextParisTick(Date.parse(iso))).toISOString();
+    expect(at('2026-11-11T12:00:00Z')).toBe('2026-11-12T05:00:00.000Z');
+    expect(at('2026-11-12T04:59:00Z')).toBe('2026-11-12T05:00:00.000Z');
+    expect(at('2026-11-12T05:00:00Z')).toBe('2026-11-13T05:00:00.000Z');
+    expect(at('2026-07-01T12:00:00Z')).toBe('2026-07-02T04:00:00.000Z');
   });
 });
