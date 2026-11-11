@@ -2245,7 +2245,7 @@ describe.skipIf(online)('party flow in the real app', () => {
     for (const [index, member] of [host, guest].entries()) {
       await member.control.locator('[data-testid="game"][data-phase="write"]').waitFor();
       await expect.poll(() => member.control.getByTestId('game-task').count()).toBe(2);
-      await member.control.locator('[data-testid="game"] .game-banner [data-testid="mascot"][data-persona="micro"]').waitFor();
+      await member.control.locator('[data-testid="game"] .game-host [data-testid="mascot"][data-persona="micro"]').waitFor();
       if (index === 0) await picture(member.control, 'game-write.png');
       for (const joke of [1, 2]) {
         const field = member.control.getByLabel('Ta blague').first();
@@ -2316,7 +2316,7 @@ describe.skipIf(online)('party flow in the real app', () => {
 
     // Whoever speaks sees the word; the others only know who speaks.
     await host.control.locator('[data-testid="game"][data-phase="write"]').waitFor();
-    await host.control.locator('[data-testid="game"] .game-banner [data-testid="mascot"][data-persona="chrono"]').waitFor();
+    await host.control.locator('[data-testid="game"] .game-host [data-testid="mascot"][data-persona="chrono"]').waitFor();
     await expect.poll(async () => (await host.control.getByTestId('guess-secret').count()) + (await guest.control.getByTestId('guess-secret').count()), { timeout: 20_000 }).toBe(1);
     const talker = (await host.control.getByTestId('guess-secret').count()) === 1 ? host : guest;
     const listener = talker === host ? guest : host;

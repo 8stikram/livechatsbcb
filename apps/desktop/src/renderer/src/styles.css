@@ -6114,3 +6114,80 @@ html.calm body::before {
     font-size: 15px;
   }
 }
+
+/* The host's scene fills the game: the presenter stands on the left, the game plays on the right. */
+.panel.game-main.has-host {
+  padding-left: 41%;
+}
+
+.panel.game-main.has-host > .game-host {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: clip;
+  pointer-events: none;
+}
+
+.panel.game-main.has-host > .game-host > * {
+  position: absolute;
+  top: 50%;
+  left: -30%;
+  height: 150%;
+  min-width: 132%;
+  aspect-ratio: 640 / 400;
+  transform: translateY(-44%);
+}
+
+.panel.game-main.has-host > .game-host::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 34%, var(--host-shade, rgb(8 6 14 / 55%)) 56%);
+}
+
+.panel.game-main.has-host {
+  overflow: clip;
+}
+
+.panel.game-main.has-host > :not(.game-host, .round-banner) {
+  position: relative;
+  z-index: 1;
+}
+
+.panel.game-main.has-host .game-body {
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--host-card, rgb(10 8 16 / 62%));
+  box-shadow: inset 0 0 0 1px var(--line);
+  backdrop-filter: blur(10px);
+}
+
+.panel.world-insp {
+  --host-shade: rgb(222 196 140 / 70%);
+  --host-card: rgb(236 214 160 / 90%);
+}
+
+/* Everything of a step shows at once: it shrinks to fit rather than scroll. */
+.panel.game-main .game-body {
+  scrollbar-width: none;
+}
+
+.game-fit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.game-fit > * {
+  width: 100%;
+}
+
+.panel.game-main.has-host > .round-banner {
+  z-index: 2;
+}
+
+/* Three answers or more go on a second line rather than off the side. */
+.panel.game-main.has-host .game-duel {
+  flex-wrap: wrap;
+  row-gap: 12px;
+}

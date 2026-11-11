@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import {
   GAME_ENTRIES_PER_PLAYER,
   GAME_MIN_ENTRIES,
@@ -367,6 +367,52 @@ const Face = ({
     )}
   </li>
 );
+
+// Shrinks what a game step shows until it fits its box: nothing to scroll for.
+const FIT_FLOOR = 0.55;
+const Fit = ({ children }: { children: ReactNode }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const inner = ref.current;
+    const box = inner?.parentElement;
+    if (!inner || !box) return;
+    const fit = () => {
+      const style = getComputedStyle(box);
+      const room = box.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      if (room < 40) return;
+      const fits = (zoom: number) => {
+        inner.style.zoom = String(zoom);
+        return inner.getBoundingClientRect().height <= room + 1;
+      };
+      if (fits(1)) return;
+      // The biggest size that fits: a smaller one can also change how lines wrap.
+      let low = FIT_FLOOR;
+      let high = 1;
+      for (let pass = 0; pass < 6; pass++) {
+        const mid = (low + high) / 2;
+        if (fits(mid)) low = mid;
+        else high = mid;
+      }
+      inner.style.zoom = String(low);
+    };
+    fit();
+    const sizes = new ResizeObserver(fit);
+    sizes.observe(box);
+    sizes.observe(inner);
+    // Pictures change the height when they load.
+    const loaded = () => fit();
+    inner.addEventListener("load", loaded, true);
+    return () => {
+      sizes.disconnect();
+      inner.removeEventListener("load", loaded, true);
+    };
+  }, []);
+  return (
+    <div ref={ref} className="game-fit">
+      {children}
+    </div>
+  );
+};
 
 // The owner's "Effets dans les jeux" setting, for every mascot of the screen.
 const MascotEffects = createContext(true);
@@ -1422,7 +1468,7 @@ const Board = ({
   const waiting = game.waiting.includes(party.memberId);
   return (
     <section
-      className={`glass panel game-main world-${personaOf(game.kind).id}`}
+      className={`glass panel game-main world-${personaOf(game.kind).id}${game.phase !== "done" ? " has-host" : ""}`}
       style={accentOf(game.kind)}
       aria-labelledby="game-title"
       data-testid="game"
@@ -1462,8 +1508,8 @@ const Board = ({
         )}
       </header>
       {game.phase !== "done" && (
-        <div className="game-banner">
-          <GameMascot game={game} me={party.memberId} frame="banner" reactions={reactions} />
+        <div className="game-host" aria-hidden="true">
+          <GameMascot game={game} me={party.memberId} frame="scene" reactions={reactions} />
         </div>
       )}
       {game.phase !== "done" && <Faces game={game} party={party} />}
@@ -1471,6 +1517,7 @@ const Board = ({
         key={`${game.phase}-${game.round}-${game.entries.map((entry) => entry.id).join()}`}
         className="game-body scroll"
       >
+        <Fit>
         {!playing && game.phase !== "done" ? (
           <div className="game-step">
             <p className="game-ask">
@@ -1501,6 +1548,7 @@ const Board = ({
         ) : (
           <Vote game={game} party={party} />
         )}
+        </Fit>
       </div>
       <RoundBanner game={game} />
       <Reactions game={game} party={party} reactions={reactions} />
