@@ -265,6 +265,40 @@ const whoOf = (party: PartyView, game: GameView, id: string | null): Who | undef
 const nameOf = (party: PartyView, game: GameView, id: string | null): string =>
   whoOf(party, game, id)?.name ?? "Quelqu’un";
 
+// A game card: its mascot's head, still until the pointer comes over it.
+const GameCard = ({ kind, title, rule }: { kind: GameKind; title: string; rule: string }) => {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <article
+      className={`game-card card-${personaOf(kind).id}`}
+      data-testid={`game-card-${kind}`}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+    >
+      <div className="game-card-art game-card-head">
+        <Mascot
+          persona={personaOf(kind).id}
+          mood={hovered ? personaOf(kind).react : "repos"}
+          pulse={0}
+          look={0}
+          effects={false}
+          frame="head"
+          still={!hovered}
+          hold
+        />
+      </div>
+      <h3>{title}</h3>
+      <p className="game-card-rule">{rule}</p>
+      <footer>
+        <span className="count">{GAME_MIN_PLAYERS[kind]} joueurs ou plus</span>
+        <button type="button" className="toy-button small" onClick={() => void window.liveChat.startGame(kind)}>
+          Ouvrir
+        </button>
+      </footer>
+    </article>
+  );
+};
+
 const Picker = ({ party }: { party: PartyView }) => {
   const online = party.members.filter((member) => member.online).length;
   return (
@@ -277,29 +311,7 @@ const Picker = ({ party }: { party: PartyView }) => {
       </h2>
       <div className="game-cards">
         {GAMES.map(({ kind, title, rule }) => (
-          <article
-            key={kind}
-            className="game-card"
-            data-testid={`game-card-${kind}`}
-          >
-            <div className="game-card-art">
-              <GameArt kind={kind} />
-            </div>
-            <h3>{title}</h3>
-            <p className="game-card-rule">{rule}</p>
-            <footer>
-              <span className="count">
-                {GAME_MIN_PLAYERS[kind]} joueurs ou plus
-              </span>
-              <button
-                type="button"
-                className="toy-button small"
-                onClick={() => void window.liveChat.startGame(kind)}
-              >
-                Ouvrir
-              </button>
-            </footer>
-          </article>
+          <GameCard key={kind} kind={kind} title={title} rule={rule} />
         ))}
       </div>
     </section>

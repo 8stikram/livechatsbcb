@@ -58,7 +58,7 @@ export function useGameMood(game: GameView, me: string, reactions: GameReactionV
     } else if (
       game.kind === 'guess' &&
       game.turn === before.turn &&
-      ((game.secret !== null && before.secret !== null && game.secret !== before.secret) || total(game) > total(before))
+      total(game) > total(before)
     ) {
       fire('victoire', lookAt(game, game.turn));
     } else if (

@@ -224,7 +224,7 @@ export function Mascot({ persona: id, mood, pulse, look, effects, frame, still, 
     let raf = 0;
     let last = performance.now();
     const step = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
       last = now;
       lookNow.current += (look - lookNow.current) * Math.min(1, dt * 7);
       if (Math.abs(look - lookNow.current) < 0.001) lookNow.current = look;

@@ -2197,9 +2197,14 @@ describe.skipIf(online)('party flow in the real app', () => {
     });
     for (const member of [host, guest]) await openTab(member, 'Jeux');
     await picture(host.control, 'games.png');
+    // Each card wears its mascot's head, with no effects running.
+    await expect.poll(() => host.control.locator('.game-card [data-testid="mascot"]').count()).toBe(5);
+    expect(await host.control.locator('.game-card canvas').count()).toBe(0);
+    await picture(host.control, 'game-cards.png');
     await host.control.getByTestId('game-card-joke').getByRole('button', { name: 'Ouvrir' }).click();
     // A lobby: the others see it on screen and click to join, the opener launches.
     await guest.stage.getByTestId('game-invite').filter({ hasText: 'Meilleure blague' }).waitFor();
+    await guest.stage.locator('[data-testid="game-invite"] [data-testid="mascot"][data-persona="micro"]').waitFor();
     await picture(guest.stage, 'game-invite.png');
     await guest.control.getByTestId('game-lobby').getByRole('button', { name: 'Rejoindre' }).click();
     await host.control.getByTestId('game-lobby').getByText('Toi').waitFor();
@@ -2376,7 +2381,10 @@ describe.skipIf(online)('party flow in the real app', () => {
     await host.app.evaluate(({ dialog }, files) => {
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: files })) as typeof dialog.showOpenDialog;
     }, [photo]);
-    await host.control.getByRole('button', { name: 'Choisir une image' }).click();
+    // With something already played today, the game takes its pictures from there and skips this step.
+    const choose = host.control.getByRole('button', { name: 'Choisir une image' });
+    await choose.or(phase('write')).first().waitFor({ timeout: 30_000 });
+    if (await choose.isVisible()) await choose.click();
     await phase('write').waitFor({ timeout: 30_000 });
     await host.control.getByTestId('round-banner').waitFor({ state: 'detached' });
     await picture(host.control, 'world-insp-game.png');

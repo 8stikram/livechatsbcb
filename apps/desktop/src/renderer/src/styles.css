@@ -6191,3 +6191,66 @@ html.calm body::before {
   flex-wrap: wrap;
   row-gap: 12px;
 }
+
+/* Mascot heads: on the game cards and on the invite. */
+.game-card-head {
+  flex: none;
+  display: block;
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 4 / 3;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 10px 24px color-mix(in srgb, var(--accent) 28%, transparent);
+  transition: transform 260ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.game-card:hover .game-card-head {
+  transform: scale(1.04) rotate(-1.5deg);
+}
+
+.game-card.card-insp h3 { font: 400 30px/1 'Bebas Neue', 'Geist Variable', sans-serif; letter-spacing: 0.06em; }
+.game-card.card-micro h3 { font: 400 24px/1.1 'Shrikhand', 'Geist Variable', serif; }
+.game-card.card-boum h3 { font: 400 21px/1.1 'Archivo Black', 'Geist Variable', sans-serif; }
+.game-card.card-boule h3 { font: 700 20px/1.15 'Cinzel Decorative', 'Cinzel', Georgia, serif; }
+.game-card.card-chrono h3 { font: 400 30px/1 'Bebas Neue', 'Geist Variable', sans-serif; letter-spacing: 0.06em; }
+
+.poll-banner.game-invite {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  column-gap: 14px;
+  align-items: center;
+  text-align: left;
+}
+
+.game-invite-head {
+  grid-row: 1 / span 3;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.game-invite > :not(.game-invite-head) {
+  grid-column: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-card:hover .game-card-head {
+    transform: none;
+  }
+}
+
+/* Five cards in a narrow window: the button goes under the count rather than off the card. */
+.game-card footer {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.game-invite > :not(.game-invite-head) {
+  justify-self: start;
+  text-align: left;
+}

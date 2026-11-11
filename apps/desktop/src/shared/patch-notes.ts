@@ -16,6 +16,10 @@ export const PATCH_NOTES: PatchNote[] = [
       'Question débile : tu réponds avec un LiveChat avancé, la question déjà écrite dessus. Les résultats s’affichent un par un',
       'Nouveau jeu, Devine Vite : chacun écrit 3 mots (l’app complète). À ton tour, 30 s pour en faire deviner un max : tu cliques « Trouvé ! » puis le nom de celui qui a trouvé, 1 point pour vous deux. « Passer » remet le mot plus loin',
       'Devine Vite en 3 manches avec les mêmes mots : parle librement, puis un seul mot, puis fais deviner avec une image, un GIF ou un son (bibliothèque, images copiées, PC ou Ctrl+V)',
+      'Jeux : chaque jeu a son présentateur animé. Inspecteur Loupe (Undercover), Monsieur Micro (Meilleure blague), Professeur Boum (Question débile), Madame Boule (Qui l’a envoyé ?), Coach Chrono (Devine Vite). Il est en grand dans le jeu, réagit à ce qui se passe, et tu le retrouves sur les cartes, le salon, le podium et l’invitation',
+      'Jeux : chaque jeu a son décor (dossier de police, scène de comédie, labo, tente de voyante, arène). Le duel de blagues est un vrai VS, coin rouge contre coin bleu. Plus de barre défilante : tout tient à l’écran',
+      'Réglages, Général : « Effets dans les jeux » coupe la pluie, la fumée, les éclairs et les secousses autour des persos',
+      'Bibliothèque : bouton ↻ pour relire tes dossiers sans changer d’onglet',
     ],
   },
   {
