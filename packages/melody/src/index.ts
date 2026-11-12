@@ -24,7 +24,7 @@ export {
 } from './world.ts';
 export {
   MAX_PLAYER_LABELS, starterChoices, foundLabel, producerFor, applyAction, buildView, previewSong,
-  type MelodyAction, type MelodyView, type ArtistView, type RosterView, type SongView, type MarketView, type SongPreview,
+  type MelodyAction, type MelodyView, type ArtistView, type RosterView, type SongView, type MarketView, type SongPreview, type LabelCard,
 } from './play.ts';
 export {
   startSession, reactToEvent, cancelSession, offerFeat, useDeal, skipFeat, finishSession, sessionOf, sessionView, guestDemand, guestBonus, guestChoices,
@@ -45,3 +45,8 @@ export {
 export { runTick, type TickReport, type ReleaseReport, type LabelReport } from './tick.ts';
 export { simulate, STRATEGIES, type Strategy, type Snapshot } from './sim.ts';
 export { createRng, rngFor, type Rng } from './rng.ts';
+export {
+  ACADEMY, academyOf, academyView, hiringList, sendScout, hireScout, takeYouth, dropYouth, renameYouth, promoteYouth, tickAcademy, zoneById,
+  type Academy, type Youth, type Scout, type Mission, type ZoneId, type YouthView, type AcademyView,
+} from './academy.ts';
+export { ageOf, salePrice } from './play.ts';

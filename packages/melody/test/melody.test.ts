@@ -5,7 +5,7 @@ import {
   runTick, scheduleRelease, signArtist, simulate, songCost, songEnergy, takeLoan, CATALOG_ARTISTS,
   applyAction, buildView, cancelSession, guestDemand, offerFeat, reactToEvent, startSession,
   makeOffer, openTalk, talkOf, talkBlocked, contractOf, studioOffers, BEATS, THEMES,
-  releaseBlocked, promoViews, secretCombos, trendOf, rollSurprise, langOf, inventTitle,
+  releaseBlocked, promoViews, secretCombos, trendOf, rollSurprise, langOf, inventTitle, academyOf,
 } from '../src/index.ts';
 import type { Artist, World } from '../src/index.ts';
 
@@ -102,6 +102,7 @@ describe('release and tick', () => {
   it('releases a single, pays the label and moves the artist', () => {
     const { world, labelId, artist } = worldWithLabel();
     const label = world.labels[labelId];
+    if (label) label.cash = 30_000;
     const song = createSong(world, labelId, {
       artistId: artist.id, title: 'Rue Glacée', themeId: 'rupture', beatId: 'lovetrap',
       levels: { theme: 2, beat: 2, producer: 2, studio: 2 }, producer: producerOfLevel(2, 1),
@@ -164,7 +165,7 @@ describe('labels', () => {
     const world = createWorld(4);
     const label = addPlayerLabel(world, 'u1', 'Test');
     takeLoan(world, label.id, 20_000, 8);
-    expect(label.cash).toBe(50_000);
+    expect(label.cash).toBe(30_000);
     expect(() => takeLoan(world, label.id, 1_000, 8)).toThrow(GameError);
     label.cash = -40_000;
     let ticks = 0;
@@ -374,8 +375,7 @@ describe('contract talks', () => {
 describe('tutorial', () => {
   const fresh = () => {
     const world = createWorld(42);
-    const starterId = buildView(world, 'u1').starters[0]!.id;
-    applyAction(world, 'u1', { type: 'found', name: 'Tuto Records', starterId });
+    applyAction(world, 'u1', { type: 'found', name: 'Tuto Records' });
     const label = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
     return { world, label };
   };
@@ -384,24 +384,22 @@ describe('tutorial', () => {
     const { world, label } = fresh();
     expect(buildView(world, 'u1').tutorial?.step).toBe('home');
     applyAction(world, 'u1', { type: 'tuto', move: 'next' });
-    expect(buildView(world, 'u1').tutorial?.step).toBe('sign');
+    expect(buildView(world, 'u1').tutorial?.step).toBe('academy');
 
-    // Sign a second artist: even an insult keeps him at the table, and the advance comes back.
-    const target = buildView(world, 'u1').market.filter((m) => m.blocked === null).sort((a, b) => a.advance - b.advance)[0]!;
+    // No artist at the start: the first one comes out of the centre de formation, with a new name.
+    expect(rosterOf(world, label.id)).toHaveLength(0);
+    const youths = buildView(world, 'u1').academy!.youths;
+    expect(youths).toHaveLength(3);
     const cash = label.cash;
-    applyAction(world, 'u1', { type: 'offer', artistId: target.id, offer: { advance: 0, royaltyRate: 0.05, months: 36, weeklyAllowance: 0 } });
-    expect(buildView(world, 'u1').talks).toHaveLength(1);
-    const counter = buildView(world, 'u1').talks[0]?.counter;
-    applyAction(world, 'u1', { type: 'offer', artistId: target.id, offer: counter ?? { advance: Math.round(target.advance * 1.15), royaltyRate: 0.3, months: 12, weeklyAllowance: 0 } });
-    if (buildView(world, 'u1').talks.length) {
-      applyAction(world, 'u1', { type: 'offer', artistId: target.id, offer: buildView(world, 'u1').talks[0]!.counter! });
-    }
-    expect(rosterOf(world, label.id)).toHaveLength(2);
-    expect(label.cash).toBe(cash);
+    applyAction(world, 'u1', { type: 'youth_rename', youthId: youths[0]!.id, name: 'Kid Néon' });
+    applyAction(world, 'u1', { type: 'youth_promote', youthId: youths[0]!.id });
+    const roster = rosterOf(world, label.id);
+    expect(roster.map((a) => a.name)).toEqual(['Kid Néon']);
+    expect(buildView(world, 'u1').academy!.youths).toHaveLength(2);
     expect(buildView(world, 'u1').tutorial?.step).toBe('song');
 
     // The studio: three smooth sessions, one easy embrouille that always works out.
-    const artistId = target.id;
+    const artistId = roster[0]!.id;
     applyAction(world, 'u1', { type: 'studio', artistId, themeId: 'rupture', beatId: 'lovetrap', levels: { theme: 2, beat: 2, producer: 2, studio: 2 } });
     const session = buildView(world, 'u1').session!;
     expect(session.events.map((e) => e.kind)).toEqual(['fluid', 'fluid', 'clash', 'fluid']);
@@ -428,12 +426,13 @@ describe('tutorial', () => {
     expect(buildView(world, 'u1').tutorial).toBeNull();
   });
 
-  it('can be skipped: the game makes and releases a free song', () => {
+  it('can be skipped: the game takes a youth out of the centre, makes and releases a free song', () => {
     const { world, label } = fresh();
     const cash = label.cash;
     applyAction(world, 'u1', { type: 'tuto', move: 'skip' });
     expect(buildView(world, 'u1').tutorial).toBeNull();
     expect(world.songs.filter((s) => s.labelId === label.id && s.state === 'scheduled')).toHaveLength(1);
+    expect(rosterOf(world, label.id)).toHaveLength(1);
     expect(label.cash).toBe(cash);
   });
 });
@@ -442,10 +441,9 @@ describe('featuring between players', () => {
   const twoPlayers = () => {
     const world = createWorld(42);
     for (const [owner, name] of [['u1', 'Alpha Records'], ['u2', 'Beta Records']] as const) {
-      const starterId = buildView(world, owner).starters[0]!.id;
-      applyAction(world, owner, { type: 'found', name, starterId });
-      applyAction(world, owner, { type: 'tuto', move: 'next' });
-      applyAction(world, owner, { type: 'tuto', move: 'next' });
+      applyAction(world, owner, { type: 'found', name });
+      const youth = buildView(world, owner).academy!.youths[0]!;
+      applyAction(world, owner, { type: 'youth_promote', youthId: youth.id });
     }
     // Out of the tutorial for good, without its free song.
     for (const t of Object.values(world.tutorials ?? {})) t.step = 'done';
@@ -476,7 +474,8 @@ describe('featuring between players', () => {
     const dealId = buildView(world, 'u2').featDeals[0]!.id;
     applyAction(world, 'u2', { type: 'feat_answer', dealId, answer: 'accept' });
     a.cash = 100_000;
-    applyAction(world, 'u1', { type: 'studio', artistId: host.id, themeId: 'rupture', beatId: 'lovetrap', levels: { theme: 2, beat: 2, producer: 2, studio: 2 } });
+    const offers = studioOffers(world, a.id, host);
+    applyAction(world, 'u1', { type: 'studio', artistId: host.id, themeId: offers.themes[0]!.id, beatId: offers.beats[0]!.id, levels: { theme: 2, beat: 2, producer: 2, studio: 2 } });
     let session = buildView(world, 'u1').session!;
     for (const event of session.events) if (event.kind === 'clash') applyAction(world, 'u1', { type: 'react', reactionId: event.reactions[0]!.id });
     session = buildView(world, 'u1').session!;
@@ -579,5 +578,86 @@ describe('studio choices and releases', () => {
     const titles = new Set(Array.from({ length: 40 }, () => inventTitle(rng, 'fr', 'rap_fr')));
     expect(titles.size).toBeGreaterThan(20);
     for (const title of titles) expect(title.length).toBeGreaterThan(1);
+  });
+});
+
+describe('centre de formation', () => {
+  const start = () => {
+    const world = createWorld(42);
+    applyAction(world, 'u1', { type: 'found', name: 'Centre Records' });
+    applyAction(world, 'u1', { type: 'tuto', move: 'skip' });
+    const label = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    label.cash = 50_000;
+    return { world, label };
+  };
+
+  it('opens with three youths and a free scout, and hides their true level behind a range', () => {
+    const world = createWorld(42);
+    applyAction(world, 'u1', { type: 'found', name: 'Centre Records' });
+    const view = buildView(world, 'u1');
+    expect(view.roster).toHaveLength(0);
+    expect(view.academy!.youths).toHaveLength(3);
+    expect(view.academy!.scout).toMatchObject({ stars: 1, wage: 0 });
+    expect(view.academy!.hiring).toHaveLength(4);
+    expect(JSON.stringify(view.academy)).not.toContain('"potential"');
+    for (const youth of view.academy!.youths) expect(youth.genMax).toBeGreaterThanOrEqual(youth.genMin);
+  });
+
+  it('sends the scout away, brings talents back, and lets them go if nobody answers', () => {
+    const { world } = start();
+    applyAction(world, 'u1', { type: 'scout_send', zone: 'fr', genre: 'drill' });
+    expect(() => applyAction(world, 'u1', { type: 'scout_send', zone: 'us', genre: null })).toThrow(/mission/);
+    runTick(world);
+    expect(buildView(world, 'u1').academy!.found).toHaveLength(0);
+    runTick(world);
+    const found = buildView(world, 'u1').academy!.found;
+    expect(found.length).toBeGreaterThan(0);
+    expect(found.every((y) => y.genre === 'drill')).toBe(true);
+    applyAction(world, 'u1', { type: 'youth_take', youthId: found[0]!.id });
+    expect(buildView(world, 'u1').academy!.youths).toHaveLength(3);
+    for (let i = 0; i < 4; i += 1) runTick(world);
+    expect(buildView(world, 'u1').academy!.found).toHaveLength(0);
+  });
+
+  it('tightens the range as weeks go by, and grows youths slower than signed artists', () => {
+    const { world, label } = start();
+    const before = buildView(world, 'u1').academy!.youths[0]!;
+    const truth = academyOf(world, label.id).youths.find((y) => y.id === before.id)!;
+    const level = truth.gen;
+    for (let i = 0; i < 20; i += 1) runTick(world);
+    const after = buildView(world, 'u1').academy!.youths.find((y) => y.id === before.id)!;
+    expect(after.genMax - after.genMin).toBeLessThan(before.genMax - before.genMin);
+    expect(after.known).toBeGreaterThan(before.known);
+    expect(truth.gen).toBeGreaterThan(level);
+    expect(truth.gen).toBeLessThan(level + 3);
+  });
+
+  it('hires a scout from the weekly list, renames only youths, and sells an artist for half his value', () => {
+    const { world, label } = start();
+    const scout = buildView(world, 'u1').academy!.hiring[0]!;
+    applyAction(world, 'u1', { type: 'scout_hire', scoutId: scout.id });
+    expect(buildView(world, 'u1').academy!.scout.name).toBe(scout.name);
+    const youth = buildView(world, 'u1').academy!.youths[0]!;
+    expect(() => applyAction(world, 'u1', { type: 'youth_rename', youthId: youth.id, name: 'X' })).toThrow(GameError);
+    applyAction(world, 'u1', { type: 'youth_drop', youthId: youth.id });
+    expect(buildView(world, 'u1').academy!.youths).toHaveLength(1);
+
+    const artist = rosterOf(world, label.id)[0]!;
+    const price = buildView(world, 'u1').roster[0]!.salePrice;
+    const cash = label.cash;
+    applyAction(world, 'u1', { type: 'sell', artistId: artist.id });
+    expect(label.cash).toBe(cash + price);
+    expect(rosterOf(world, label.id)).toHaveLength(0);
+    expect(buildView(world, 'u1').news[0]).toMatch(/vend/);
+  });
+
+  it('shows the stars of the game labels with a padlock, and keeps favourites', () => {
+    const { world } = start();
+    const market = buildView(world, 'u1').market;
+    const locked = market.filter((m) => m.lockedBy !== null);
+    expect(locked.length).toBeGreaterThan(20);
+    expect(locked.every((m) => m.blocked !== null)).toBe(true);
+    applyAction(world, 'u1', { type: 'fav', artistId: locked[0]!.id });
+    expect(buildView(world, 'u1').market.find((m) => m.id === locked[0]!.id)?.fav).toBe(true);
   });
 });

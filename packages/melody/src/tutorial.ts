@@ -7,7 +7,7 @@ import { rosterOf } from './economy.ts';
 import { releaseWeek } from './release.ts';
 import type { Label, World } from './types.ts';
 
-export type TutorialStep = 'home' | 'sign' | 'song' | 'release' | 'results' | 'done';
+export type TutorialStep = 'home' | 'academy' | 'song' | 'release' | 'results' | 'done';
 
 export interface Tutorial {
   step: TutorialStep;
@@ -33,7 +33,7 @@ export const startTutorial = (world: World, labelId: string): void => {
 /** Which actions each step protects (and pays back). */
 const GUARDED: Record<TutorialStep, string[]> = {
   home: [],
-  sign: ['talk', 'offer', 'talk_leave'],
+  academy: ['youth_promote', 'youth_rename'],
   song: ['studio', 'react', 'feat', 'feat_skip', 'studio_cancel', 'song'],
   release: ['release'],
   results: [],
@@ -60,7 +60,7 @@ export const refund = (world: World, label: Label, cashBefore: number): void => 
 export const afterAction = (world: World, label: Label, actionType: string, rosterBefore: number): void => {
   const tutorial = tutorialOf(world, label.id);
   if (!tutorial) return;
-  if (tutorial.step === 'sign' && rosterOf(world, label.id).length > rosterBefore) tutorial.step = 'song';
+  if (tutorial.step === 'academy' && rosterOf(world, label.id).length > rosterBefore) tutorial.step = 'song';
   else if (tutorial.step === 'song' && actionType === 'song') tutorial.step = 'release';
   else if (tutorial.step === 'release' && actionType === 'release') tutorial.step = 'results';
 };
@@ -69,22 +69,25 @@ export const afterAction = (world: World, label: Label, actionType: string, rost
 export const nextStep = (world: World, label: Label): void => {
   const tutorial = tutorialOf(world, label.id);
   if (!tutorial) return;
-  if (tutorial.step === 'home') tutorial.step = 'sign';
+  if (tutorial.step === 'home') tutorial.step = rosterOf(world, label.id).length > 0 ? 'song' : 'academy';
   else if (tutorial.step === 'results') tutorial.step = 'done';
 };
 
 export interface SkipTools {
+  /** Takes the best youth of the centre into the roster. */
+  promote: () => void;
   record: (artistId: string, title: string, themeId: string, beatId: string) => void;
   release: (songId: string, releaseTick: number) => void;
 }
 
-/** "Passer": the game makes a free song with the first artist and releases it next week. */
+/** "Passer": the game takes a youth out of the centre, makes a free song with him and releases it next week. */
 export const skipTutorial = (world: World, label: Label, tools: SkipTools): void => {
   const tutorial = tutorialOf(world, label.id);
   if (!tutorial || tutorial.step === 'done') return;
   if (world.sessions) delete world.sessions[label.id];
   const cash = label.cash;
   try {
+    if (rosterOf(world, label.id).length === 0) tools.promote();
     const mine = world.songs.filter((s) => s.labelId === label.id);
     if (mine.length === 0) {
       const artist = rosterOf(world, label.id)[0];

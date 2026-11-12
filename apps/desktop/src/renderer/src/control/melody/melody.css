@@ -2077,3 +2077,231 @@ img.mt-cover-img {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* centre de formation */
+.mt-input {
+  font: inherit;
+  color: var(--mt-fg);
+  background: var(--mt-panel);
+  border: 1px solid var(--mt-line);
+  padding: 6px 10px;
+  min-width: 0;
+}
+.mt-youths {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.mt-youth {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--mt-panel);
+  border: 1px solid var(--mt-line);
+}
+.mt-youth.is-gem {
+  border-image: var(--mt-grad) 1;
+}
+.mt-youth-art,
+.mt-row-art {
+  position: relative;
+  inset: auto;
+  flex: none;
+  overflow: hidden;
+}
+.mt-youth-art {
+  width: 64px;
+  aspect-ratio: 3 / 4;
+  align-self: flex-start;
+}
+.mt-youth-art::before {
+  font-size: 44px;
+  bottom: 18%;
+}
+.mt-row-art {
+  width: 36px;
+  height: 36px;
+}
+.mt-row-art::before {
+  font-size: 26px;
+}
+.mt-youth-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.mt-youth-note {
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1;
+}
+.mt-youth-name {
+  font-size: 16px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.mt-known {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 4px 0;
+}
+.mt-known small {
+  color: var(--mt-mute);
+  font-size: 11px;
+}
+.mt-youth .mt-acts {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mt-youth .mt-acts .mt-input {
+  flex: 1;
+}
+.mt-mission {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.mt-mission .mt-acts {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mt-scouts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.mt-scout {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: var(--mt-panel);
+  border: 1px solid var(--mt-line);
+}
+.mt-scout.is-mine {
+  border-image: var(--mt-grad) 1;
+  max-width: 360px;
+}
+.mt-scout .mt-ghost {
+  margin-top: 6px;
+  align-self: flex-start;
+}
+.mt-scout-stars {
+  color: var(--mt-warn);
+  letter-spacing: 0.1em;
+}
+
+/* marché */
+.mt-news {
+  padding: 10px 14px;
+  border: 1px solid var(--mt-line);
+  background: var(--mt-panel);
+}
+.mt-news ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+}
+.mt-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mt-filters .mt-input {
+  flex: 1 1 200px;
+}
+.mt-offer {
+  position: relative;
+}
+.mt-offer.is-locked .mt-card {
+  filter: grayscale(0.7) brightness(0.7);
+}
+.mt .mt-fav {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: rgba(11, 10, 16, 0.7);
+  color: var(--mt-mute);
+  font-size: 16px;
+  z-index: 2;
+}
+.mt .mt-fav.is-on {
+  color: var(--mt-warn);
+}
+.mt-lock {
+  text-align: center;
+  font-size: 11px;
+  color: var(--mt-mute);
+  padding: 6px;
+  border: 1px dashed var(--mt-line);
+}
+
+/* label */
+.mt-labels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.mt .mt-labelcard {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--mt-panel);
+  border: 1px solid var(--mt-line);
+  transition: transform 0.2s ease;
+}
+.mt .mt-labelcard:hover {
+  transform: translateY(-3px);
+}
+.mt-labelcard .mt-crest {
+  grid-row: span 2;
+  width: 32px;
+  height: 36px;
+  font-size: 16px;
+}
+.mt .mt-labelcard.is-me {
+  border-image: var(--mt-grad) 1;
+}
+.mt-rows {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mt-rows li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.mt-youth .mt-acts {
+  flex-direction: row;
+  align-items: center;
+}
+.mt-youth .mt-acts > button {
+  padding: 6px 10px;
+  font-size: 10.5px;
+}
+.mt .mt-youth-art::before {
+  font-size: 30px;
+  right: -2px;
+  bottom: 8px;
+}

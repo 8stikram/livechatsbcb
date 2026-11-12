@@ -6,6 +6,8 @@ import { artistValue, catalogueValue, contractOf, debtOf, fansOf, netWorth, play
 import { estimateQuality, producerOfLevel, songCost, songEnergy } from './quality.ts';
 import { experienceBonus, notebookOf, studioOffers, trendOf, type NotebookEntry, type StudioOffers, type Trend } from './craft.ts';
 import { MARKETING } from './release.ts';
+import { academyOf, academyView, dropYouth, hireScout, promoteYouth, renameYouth, sendScout, takeYouth, type AcademyView } from './academy.ts';
+import { countryOf } from './craft.ts';
 import { releaseBlocked } from './world.ts';
 import { createRng, hashString } from './rng.ts';
 import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer, SongLevels, Trends, World } from './types.ts';
@@ -67,34 +69,21 @@ const startingCash = (world: World): number => {
   return Math.round(Math.max(CFG.start.cash, Math.min(0.3 * median, 0.7 * smallest)));
 };
 
-/** Creates the player's label with the beginner he picked, under a free "house" contract. */
-export const foundLabel = (world: World, ownerId: string, name: string, starterId: string): Label => {
+/** Creates the player's label: a name, a little cash and a centre de formation with three youths. */
+export const foundLabel = (world: World, ownerId: string, name: string): Label => {
   const clean = name.trim().replace(/\s+/g, ' ');
   if (clean.length < 2 || clean.length > 28) throw new GameError('Le nom du label doit faire entre 2 et 28 caractères.');
   const players = Object.values(world.labels).filter((l) => l.kind === 'player' && !l.bankrupt);
   if (players.length >= MAX_PLAYER_LABELS) throw new GameError('Ce serveur a déjà le nombre maximum de labels.');
   if (players.some((l) => l.name.toLowerCase() === clean.toLowerCase())) throw new GameError('Un label porte déjà ce nom.');
-  const starter = starterChoices(world, ownerId).find((a) => a.id === starterId);
-  if (!starter) throw new GameError("Choisis un des trois artistes proposés.");
   const cash = startingCash(world);
   const comeback = Object.values(world.labels).some((l) => l.ownerId === ownerId && l.bankrupt);
   const label = addPlayerLabel(world, ownerId, clean);
   // A player back after a bankruptcy knows the game: no tutorial for him.
   if (!comeback) startTutorial(world, label.id);
   label.cash = cash;
-  // A player who comes back after a bankruptcy gets a new beginner under a new id.
-  const id = world.artists[starter.id] ? `${starter.id}_${world.nextId}` : starter.id;
-  world.artists[id] = { ...starter, id };
-  world.contracts.push({
-    artistId: id,
-    labelId: label.id,
-    startTick: world.tick,
-    endTick: world.tick + 72,
-    advance: 0,
-    unrecouped: 0,
-    weeklyAllowance: 0,
-    royaltyRate: 0.2,
-  });
+  // No artist yet: the first one comes out of the centre de formation, which opens with three youths.
+  academyOf(world, label.id);
   return label;
 };
 
@@ -106,7 +95,15 @@ export const producerFor = (world: World, level: 1 | 2 | 3 | 4, beatId: string):
 };
 
 export type MelodyAction =
-  | { type: 'found'; name: string; starterId: string }
+  | { type: 'found'; name: string; starterId?: string }
+  | { type: 'scout_send'; zone: string; genre: string | null }
+  | { type: 'scout_hire'; scoutId: string }
+  | { type: 'youth_take'; youthId: string }
+  | { type: 'youth_drop'; youthId: string }
+  | { type: 'youth_rename'; youthId: string; name: string }
+  | { type: 'youth_promote'; youthId: string }
+  | { type: 'fav'; artistId: string }
+  | { type: 'sell'; artistId: string }
   | { type: 'talk'; artistId: string }
   | { type: 'offer'; artistId: string; offer: Offer }
   | { type: 'talk_leave'; artistId: string }
@@ -135,7 +132,7 @@ const labelOfOwner = (world: World, ownerId: string): Label => {
 /** Runs one action of a player. Throws a GameError with a readable message when the rules say no. */
 export const applyAction = (world: World, ownerId: string, action: MelodyAction): void => {
   if (action.type === 'found') {
-    foundLabel(world, ownerId, action.name, action.starterId);
+    foundLabel(world, ownerId, action.name);
     return;
   }
   const label = labelOfOwner(world, ownerId);
@@ -143,6 +140,10 @@ export const applyAction = (world: World, ownerId: string, action: MelodyAction)
   const cash = label.cash;
   const roster = rosterOf(world, label.id).length;
   runAction(world, label, action);
+  if (action.type === 'offer' && rosterOf(world, label.id).length > roster) {
+    const signed = world.artists[action.artistId];
+    if (signed) marketNews(world, `${signed.name} signe chez ${label.name}.`);
+  }
   if (guarded) refund(world, label, cash);
   afterAction(world, label, action.type, roster);
 };
@@ -164,12 +165,42 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
     case 'tuto':
       if (action.move === 'next') nextStep(world, label);
       else skipTutorial(world, label, {
+        promote: () => {
+          const best = [...academyOf(world, label.id).youths].sort((a, b) => b.gen - a.gen)[0];
+          if (best) promoteYouth(world, label, best.id);
+        },
         record: (artistId, title, themeId, beatId) => {
           const levels = { theme: 1, beat: 1, producer: 1, studio: 1 } as const;
           createSong(world, label.id, { artistId, title, themeId, beatId, levels, producer: producerFor(world, 1, beatId) });
         },
         release: (songId, releaseTick) => void scheduleRelease(world, label.id, songId, releaseTick, []),
       });
+      return;
+    case 'scout_send':
+      sendScout(world, label, action.zone, action.genre);
+      return;
+    case 'scout_hire':
+      hireScout(world, label, action.scoutId);
+      return;
+    case 'youth_take':
+      takeYouth(world, label, action.youthId);
+      return;
+    case 'youth_drop':
+      dropYouth(world, label, action.youthId);
+      return;
+    case 'youth_rename':
+      renameYouth(world, label, action.youthId, action.name);
+      return;
+    case 'youth_promote': {
+      const artist = promoteYouth(world, label, action.youthId);
+      marketNews(world, `${label.name} sort ${artist.name} de son centre de formation.`);
+      return;
+    }
+    case 'fav':
+      toggleFavourite(world, label, action.artistId);
+      return;
+    case 'sell':
+      sellArtist(world, label, action.artistId);
       return;
     case 'talk':
       openTalk(world, label, action.artistId);
@@ -249,6 +280,8 @@ export interface RosterView extends ArtistView {
   lastSong: { id: string; title: string; cover: boolean } | null;
   /** Songs he has made with the label. */
   songsMade: number;
+  /** What the label gets if it sells him. */
+  salePrice: number;
   /** The note his songs turn around, with choices that fit. */
   expectedNote: number;
 }
@@ -291,11 +324,48 @@ export interface SongView {
 }
 
 export interface MarketView extends ArtistView {
+  country: string;
+  age: number;
+  /** Name of the game-run label that holds him: shown with a padlock, cannot be bought. */
+  lockedBy: string | null;
+  fav: boolean;
   advance: number;
   royaltyRate: number;
   /** Why the label cannot sign him right now, or null. */
   blocked: string | null;
 }
+
+export interface LabelCard {
+  id: string;
+  name: string;
+  tierName: string;
+  reputation: number;
+  fans: number;
+  numberOnes: number;
+  top10: number;
+  artists: Array<{ id: string; name: string; genre: GenreId; gen: number; fans: number }>;
+  /** Their five best songs out, by streams. */
+  songs: Array<{ id: string; title: string; artistName: string; streams: number; cover: boolean }>;
+}
+
+const labelCards = (world: World): LabelCard[] =>
+  Object.values(world.labels)
+    .filter((l) => l.kind === 'player' && !l.bankrupt)
+    .map((l) => ({
+      id: l.id,
+      name: l.name,
+      tierName: CFG.tiers.names[l.tier - 1] ?? '',
+      reputation: Math.round(l.reputation),
+      fans: fansOf(world, l.id),
+      numberOnes: l.stats.numberOnes,
+      top10: l.stats.top10Global,
+      artists: rosterOf(world, l.id).map((a) => ({ id: a.id, name: a.name, genre: a.genre, gen: generalRating(a), fans: a.fans })),
+      songs: world.songs
+        .filter((s) => s.labelId === l.id && s.state === 'released')
+        .sort((a, b) => b.streamsTotal - a.streamsTotal)
+        .slice(0, 5)
+        .map((s) => ({ id: s.id, title: s.title, artistName: world.artists[s.artistId]?.name ?? '?', streams: s.streamsTotal, cover: s.cover ?? false })),
+    }));
 
 export interface MelodyView {
   tick: number;
@@ -318,8 +388,12 @@ export interface MelodyView {
     distress: number;
     loans: Pick<Loan, 'kind' | 'remaining' | 'ticksLeft'>[];
   };
-  /** Only when the player has no label yet. */
-  starters: ArtistView[];
+  /** The centre de formation: youths, scout, mission. Null without a label. */
+  academy: AcademyView | null;
+  /** What happened on the market these last weeks. */
+  news: string[];
+  /** The player labels of the server, for the Label tab. Cash stays hidden. */
+  labels: LabelCard[];
   roster: RosterView[];
   songs: SongView[];
   market: MarketView[];
@@ -368,6 +442,64 @@ const artistView = (artist: Artist, viewer: string, width: number): ArtistView =
   };
 };
 
+/** How many free agents and locked stars the market shows (kept small: the whole view travels at each refresh). */
+const MARKET_FREE = 300;
+const MARKET_LOCKED = 120;
+
+/** An age for the market's sort: not a real one, always the same for one artist. */
+export const ageOf = (artist: Pick<Artist, 'id' | 'fans'>): number => {
+  const rng = createRng(hashString(`age:${artist.id}`));
+  return artist.id.startsWith('y_') ? rng.int(17, 20) : rng.int(19, 30) + Math.min(12, Math.round(Math.log10(Math.max(10, artist.fans)) - 3) * 2);
+};
+
+/** The biggest names held by the labels of the game: shown with a padlock. */
+const lockedArtists = (world: World, viewer: string, favs: Set<string>): MarketView[] =>
+  world.contracts
+    .filter((c) => world.labels[c.labelId]?.kind === 'npc' && c.endTick > world.tick)
+    .map((c) => ({ artist: world.artists[c.artistId], label: world.labels[c.labelId] }))
+    .filter((x): x is { artist: Artist; label: Label } => !!x.artist && !!x.label)
+    .sort((a, b) => b.artist.fans - a.artist.fans)
+    .slice(0, MARKET_LOCKED)
+    .map(({ artist, label }) => ({
+      ...artistView(artist, viewer, 20),
+      country: countryOf(artist),
+      age: ageOf(artist),
+      lockedBy: label.name,
+      fav: favs.has(artist.id),
+      advance: 0,
+      royaltyRate: 0,
+      blocked: `Sous contrat chez ${label.name}`,
+    }));
+
+const marketNews = (world: World, text: string): void => {
+  world.marketNews = [...(world.marketNews ?? []), { tick: world.tick, text }].slice(-30);
+};
+
+const MAX_FAVOURITES = 40;
+const toggleFavourite = (world: World, label: Label, artistId: string): void => {
+  if (!world.artists[artistId]) throw new GameError('Artiste introuvable.');
+  const mine = world.favourites?.[label.id] ?? [];
+  const next = mine.includes(artistId) ? mine.filter((id) => id !== artistId) : [...mine, artistId];
+  if (next.length > MAX_FAVOURITES) throw new GameError('Ta liste de favoris est pleine.');
+  world.favourites = { ...world.favourites, [label.id]: next };
+};
+
+/** What the market pays for an artist the label lets go: half of his value. */
+export const salePrice = (artist: Artist): number => Math.round(artistValue(artist) * 0.5);
+
+/** Sells an artist: the contract ends, he is free again, the songs already made stay with the label. */
+const sellArtist = (world: World, label: Label, artistId: string): void => {
+  const artist = world.artists[artistId] ?? (() => { throw new GameError('Artiste introuvable.'); })();
+  if (contractOf(world, artistId)?.labelId !== label.id) throw new GameError(`${artist.name} n'est pas dans ton label.`);
+  if (sessionOf(world, label.id)?.artistId === artistId) throw new GameError('Il est en studio : finis ou quitte la session.');
+  if (tutorialView(world, label.id)) throw new GameError('Finis le tutoriel avant de vendre un artiste.');
+  const price = salePrice(artist);
+  label.cash += price;
+  world.contracts = world.contracts.filter((c) => c.artistId !== artistId);
+  world.gigs = world.gigs.filter((g) => g.artistId !== artistId);
+  marketNews(world, `${label.name} vend ${artist.name} : il est libre.`);
+};
+
 /** Everything one player may see. Hidden numbers (true potential, other labels' cash) never leave the server. */
 export const buildView = (world: World, ownerId: string): MelodyView => {
   const label = Object.values(world.labels).find((l) => l.ownerId === ownerId && !l.bankrupt) ?? null;
@@ -375,17 +507,19 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
   const roster = label ? rosterOf(world, label.id) : [];
   const top = (entries: ChartEntry[], size: number): ChartEntry[] => entries.slice(0, size);
 
+  const favs = new Set(label ? (world.favourites?.[label.id] ?? []) : []);
   const talking = new Set(label ? [...talksOfLabel(world, label.id), ...talkNews(world, label.id)].map((t) => t.artistId) : []);
   const market: MarketView[] = label
     ? freeAgents(world)
         .map((artist) => {
           const expected = expectedOffer(artist);
           const blocked = talkBlocked(world, label, artist) ?? (expected.advance * 0.8 > label.cash ? 'Avance trop chère' : null);
-          return { ...artistView(artist, viewer, 20), advance: expected.advance, royaltyRate: expected.royaltyRate, blocked };
+          return { ...artistView(artist, viewer, 20), country: countryOf(artist), age: ageOf(artist), lockedBy: null as string | null, fav: favs.has(artist.id), advance: expected.advance, royaltyRate: expected.royaltyRate, blocked };
         })
         // Artists the label is talking with stay on top, then the ones it can sign.
         .sort((a, b) => Number(!talking.has(a.id)) - Number(!talking.has(b.id)) || Number(a.blocked !== null) - Number(b.blocked !== null) || b.value - a.value)
-        .slice(0, 60)
+        .slice(0, MARKET_FREE)
+        .concat(lockedArtists(world, viewer, favs))
     : [];
 
   return {
@@ -409,7 +543,9 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
       distress: label.distress,
       loans: world.loans.filter((l) => l.labelId === label.id).map((l) => ({ kind: l.kind, remaining: Math.round(l.remaining), ticksLeft: l.ticksLeft })),
     },
-    starters: label ? [] : starterChoices(world, ownerId).map((a) => artistView(a, viewer, 20)),
+    academy: label ? academyView(world, label.id) : null,
+    news: (world.marketNews ?? []).slice(-8).reverse().map((n) => n.text),
+    labels: labelCards(world),
     roster: roster.map((artist) => {
       const contract = contractOf(world, artist.id);
       const gigsBooked = world.gigs.filter((g) => g.artistId === artist.id).length;
@@ -430,6 +566,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
         offers: label ? studioOffers(world, label.id, artist) : { themes: [], beats: [] },
         lastSong: lastSongOf(world, artist.id),
         songsMade: world.songs.filter((s) => s.artistId === artist.id).length,
+        salePrice: salePrice(artist),
         expectedNote: Math.round(generalRating(artist) + experienceBonus(world, artist)),
       };
     }),

@@ -24,7 +24,15 @@ const COVER_MAX = 40_000;
 const CoverSchema = z.string().max(COVER_MAX).regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/);
 
 export const MelodyActionSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('found'), name: z.string().min(1).max(60), starterId: IdSchema }),
+  z.object({ type: z.literal('found'), name: z.string().min(1).max(60), starterId: IdSchema.optional() }),
+  z.object({ type: z.literal('scout_send'), zone: IdSchema, genre: IdSchema.nullable() }),
+  z.object({ type: z.literal('scout_hire'), scoutId: IdSchema }),
+  z.object({ type: z.literal('youth_take'), youthId: IdSchema }),
+  z.object({ type: z.literal('youth_drop'), youthId: IdSchema }),
+  z.object({ type: z.literal('youth_rename'), youthId: IdSchema, name: z.string().min(1).max(40) }),
+  z.object({ type: z.literal('youth_promote'), youthId: IdSchema }),
+  z.object({ type: z.literal('fav'), artistId: IdSchema }),
+  z.object({ type: z.literal('sell'), artistId: IdSchema }),
   z.object({ type: z.literal('talk'), artistId: IdSchema }),
   z.object({
     type: z.literal('offer'),

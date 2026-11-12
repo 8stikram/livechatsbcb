@@ -5,7 +5,7 @@ export const CFG = {
   ticksPerSeason: 28,
   ticksPerMonth: 4,
 
-  start: { cash: 30_000, reputation: 10 },
+  start: { cash: 10_000, reputation: 10 },
 
   /** An artist with more fans than fameFans[tier - 1] does not sign with a label of that tier. */
   fameFans: [50_000, 500_000, 5_000_000, 25_000_000, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY],

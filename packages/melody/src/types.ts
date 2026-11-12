@@ -258,6 +258,12 @@ export interface World {
   tutorials?: Record<string, import('./tutorial.ts').Tutorial>;
   /** Featuring requests between players. */
   featDeals?: import('./featdeals.ts').FeatDeal[];
+  /** The centre de formation of each label: youths, scout, mission. */
+  academies?: Record<string, import('./academy.ts').Academy>;
+  /** Artists each label keeps an eye on in the market. */
+  favourites?: Record<string, string[]>;
+  /** What happened on the market lately, for everyone's Monday summary. */
+  marketNews?: Array<{ tick: number; text: string }>;
   /** Combos each label found by playing. */
   notebooks?: Record<string, import('./craft.ts').NotebookEntry[]>;
 }

@@ -3,6 +3,7 @@ import { FAMILY_WEIGHTS, energyRegen, generalRating } from './artists.ts';
 import { CFG } from './config.ts';
 import { BEATS, GENRES, THEMES, beatById } from './data/content.ts';
 import { canTierUp, contractOf, debtOf, netWorth, playGig, rosterOf } from './economy.ts';
+import { tickAcademy } from './academy.ts';
 import { tickDeals } from './featdeals.ts';
 import { cleanTalks } from './negotiation.ts';
 import { countryOf, noteCombo } from './craft.ts';
@@ -312,6 +313,7 @@ export const runTick = (world: World): TickReport => {
       earn(reports, label, -(capital + interest));
     }
     world.loans = world.loans.filter((l) => l.labelId !== label.id || (l.ticksLeft > 0 && l.remaining > 0.5));
+    tickAcademy(world, label, (amount) => earn(reports, label, -amount), (text) => report(reports, label).events.push(text));
 
     for (const artist of roster) {
       artist.energy = clamp(artist.energy + energyRegen(artist, tick), 0, 100);
@@ -359,5 +361,6 @@ export const runTick = (world: World): TickReport => {
     if (label && artist && label.kind === 'player' && !label.bankrupt) report(reports, label).events.push(`Le contrat de ${artist.name} est fini : il est libre.`);
   }
   world.contracts = world.contracts.filter((c) => c.endTick > tick);
+  if (world.marketNews) world.marketNews = world.marketNews.filter((n) => n.tick > tick - 3).slice(-30);
   return { tick, releases, labels: reports };
 };

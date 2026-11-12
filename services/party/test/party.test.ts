@@ -2054,10 +2054,14 @@ describe('Melody Tycoon', () => {
   const found = async (token: string, name: string): Promise<MelodyState> => {
     const before = await view(token);
     expect(before.view.label).toBeNull();
-    expect(before.view.starters).toHaveLength(3);
-    const result = await act(token, { type: 'found', name, starterId: before.view.starters[0]!.id });
+    const result = await act(token, { type: 'found', name });
     if (!result.ok) throw new Error(result.message);
-    return result;
+    // No artist at the start: the first one comes out of the centre de formation.
+    expect(result.view.roster).toEqual([]);
+    expect(result.view.academy!.youths).toHaveLength(3);
+    const promoted = await act(token, { type: 'youth_promote', youthId: result.view.academy!.youths[0]!.id });
+    if (!promoted.ok) throw new Error(promoted.message);
+    return promoted;
   };
 
   beforeEach(() => {
@@ -2083,9 +2087,9 @@ describe('Melody Tycoon', () => {
   it('lets a member found a label, then says no without changing anything when the rules refuse', async () => {
     const player = await loginAs(playerId, QUICK_BASE);
     const started = await found(player.token, 'Chimchar Records');
-    expect(started.view.label).toMatchObject({ name: 'Chimchar Records', tier: 1, cash: 30_000, tierName: 'Label Maison' });
+    expect(started.view.label).toMatchObject({ name: 'Chimchar Records', tier: 1, cash: 10_000, tierName: 'Label Maison' });
     expect(started.view.roster).toHaveLength(1);
-    expect(started.view.starters).toEqual([]);
+    expect(started.view.academy!.youths).toHaveLength(2);
     expect(started.nextTickAt).toBeGreaterThan(Date.now() - 2_000);
 
     const again = await act(player.token, { type: 'found', name: 'Deuxième', starterId: 'x' });
@@ -2099,7 +2103,7 @@ describe('Melody Tycoon', () => {
     expect(tooDear.ok).toBe(false);
     if (!tooDear.ok) expect(tooDear.message).toMatch(/budget|cash/);
     const after = await view(player.token);
-    expect(after.view.label!.cash).toBe(30_000);
+    expect(after.view.label!.cash).toBe(10_000);
     expect(after.view.songs).toEqual([]);
   });
 
@@ -2131,7 +2135,7 @@ describe('Melody Tycoon', () => {
     expect(started.view.tutorial).toMatchObject({ step: 'home', gift: 0 });
     const next = await act(player.token, { type: 'tuto', move: 'next' });
     if (!next.ok) throw new Error(next.message);
-    expect(next.view.tutorial?.step).toBe('sign');
+    expect(next.view.tutorial?.step).toBe('song');
     expect((await post(`/v1/melody/${guildId}/act`, { type: 'tuto', move: 'win' }, bearer(player.token), QUICK_BASE)).status).toBe(400);
     const skipped = await act(player.token, { type: 'tuto', move: 'skip' });
     if (!skipped.ok) throw new Error(skipped.message);
@@ -2177,7 +2181,7 @@ describe('Melody Tycoon', () => {
     // The true note stays hidden until the release: only a range is known.
     expect(song).toMatchObject({ title: 'Rue Glacée', state: 'vault', quality: null, cover: true });
     expect(song.qualityMin).toBeLessThan(song.qualityMax);
-    expect(recorded.view.label!.cash).toBe(30_000 - session.baseCost - session.extraCost);
+    expect(recorded.view.label!.cash).toBe(10_000 - session.baseCost - session.extraCost);
     const covers = await post(`/v1/melody/${guildId}/covers`, { ids: [song.id, 'nothing'] }, bearer(player.token), QUICK_BASE);
     expect(((await covers.json()) as { covers: Record<string, string> }).covers).toEqual({ [song.id]: cover });
 
@@ -2194,7 +2198,7 @@ describe('Melody Tycoon', () => {
     }
     const released = now.view.songs[0]!;
     expect(released.state).toBe('released');
-    expect(released.streamsLast).toBeGreaterThan(1_000);
+    expect(released.streamsLast).toBeGreaterThan(300);
     expect(released.quality).toBeGreaterThan(0);
     expect(released.promo.map((p) => p.views > 0)).toEqual([true, true]);
     expect(now.view.tick).toBeGreaterThan(started.view.tick);

@@ -28,6 +28,9 @@ import {
   type TutorialView,
   type NotebookEntry,
   type Trend,
+  type YouthView,
+  type MarketView,
+  type LabelCard,
 } from '@livechatsbcb/melody';
 import type { MelodyRoute } from '../../../../shared/ipc';
 import { LibraryPicker, type Shelf } from '../LibraryPicker';
@@ -39,14 +42,16 @@ import './melody.css';
 type MelodyState = { view: MelodyView; nextTickAt: number };
 type Answer<T> = { ok: true; data: T } | { ok: false; message: string };
 type Levels = { theme: 1 | 2 | 3 | 4; beat: 1 | 2 | 3 | 4; producer: 1 | 2 | 3 | 4; studio: 1 | 2 | 3 | 4 };
-type Tab = 'home' | 'squad' | 'studio' | 'releases' | 'market' | 'charts' | 'bank';
+type Tab = 'home' | 'squad' | 'studio' | 'releases' | 'academy' | 'market' | 'labels' | 'charts' | 'bank';
 
 const TABS: Array<{ id: Tab; name: string }> = [
   { id: 'home', name: 'Accueil' },
   { id: 'squad', name: 'Effectif' },
   { id: 'studio', name: 'Studio' },
   { id: 'releases', name: 'Sorties' },
-  { id: 'market', name: 'Recrutement' },
+  { id: 'academy', name: 'Recrutement' },
+  { id: 'market', name: 'Marché' },
+  { id: 'labels', name: 'Label' },
   { id: 'charts', name: 'Charts' },
   { id: 'bank', name: 'Banque' },
 ];
@@ -172,8 +177,7 @@ const ArtistCard = ({
 
 const FoundLabel = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
   const [name, setName] = useState('');
-  const [starter, setStarter] = useState<string | null>(null);
-  const ready = name.trim().length >= 2 && starter !== null && !busy;
+  const ready = name.trim().length >= 2 && !busy;
   return (
     <div className="mt-found mt-in">
       <div className="mt-found-head">
@@ -181,26 +185,21 @@ const FoundLabel = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: M
         <h2 className="mt-h">
           Fonde <span className="mt-gt">ton label</span>
         </h2>
-        <p className="mt-sub">Tu commences avec un petit budget et un artiste débutant. Choisis-le bien : c’est ta première pépite.</p>
+        <p className="mt-sub">Juste un nom pour commencer. Ton premier artiste, tu iras le chercher dans ton centre de formation.</p>
       </div>
       <label className="mt-field">
         <Label>Nom du label</Label>
-        <input value={name} maxLength={28} placeholder="Chimchar Records" onChange={(event) => setName(event.target.value)} />
+        <input
+          value={name}
+          maxLength={28}
+          placeholder="Chimchar Records"
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && ready) onAct({ type: 'found', name: name.trim() });
+          }}
+        />
       </label>
-      <Label>Ton premier artiste</Label>
-      <div className="mt-deck mt-deck-3">
-        {view.starters.map((artist) => (
-          <ArtistCard key={artist.id} artist={artist} pressed={starter === artist.id} onClick={() => setStarter(artist.id)}>
-            <span className="mt-card-sub">Potentiel {artist.potentialMin} – {artist.potentialMax}</span>
-          </ArtistCard>
-        ))}
-      </div>
-      <button
-        type="button"
-        className="mt-go mt-go-big"
-        disabled={!ready}
-        onClick={() => starter && onAct({ type: 'found', name: name.trim(), starterId: starter })}
-      >
+      <button type="button" className="mt-go mt-go-big" disabled={!ready} onClick={() => onAct({ type: 'found', name: name.trim() })}>
         Créer le label
       </button>
     </div>
@@ -216,7 +215,7 @@ const Home = ({ view, onGo }: { view: MelodyView; onGo: (tab: Tab) => void }) =>
   const vault = view.songs.filter((song) => song.state === 'vault').length;
   const place = view.ranking.findIndex((line) => line.labelId === view.label?.id) + 1;
   const ahead = place > 1 ? view.ranking[place - 2] : undefined;
-  const signable = view.market.filter((artist) => artist.blocked === null).length;
+  const signable = view.market.filter((artist) => artist.blocked === null).length + (view.academy?.youths.length ?? 0);
   const tape = next ? `Prochaine sortie ▪▪ dans ${next.releaseInWeeks} semaine${next.releaseInWeeks === 1 ? '' : 's'} ▪▪ ` : 'Rien de programmé ▪▪ ';
   return (
     <div className="mt-view mt-in">
@@ -224,7 +223,7 @@ const Home = ({ view, onGo }: { view: MelodyView; onGo: (tab: Tab) => void }) =>
       <div className="mt-hub">
         <button type="button" className="mt-tile mt-t-create" data-tuto="hub-studio" onClick={() => onGo('studio')}>
           <span className="mt-vinyl" aria-hidden="true" />
-          <Label>{rested === 0 ? 'Tes artistes sont fatigués' : `${rested} artiste${rested > 1 ? 's ont' : ' a'} de l’énergie`}</Label>
+          <Label>{view.roster.length === 0 ? 'Pas encore d’artiste' : rested === 0 ? 'Tes artistes sont fatigués' : `${rested} artiste${rested > 1 ? 's ont' : ' a'} de l’énergie`}</Label>
           <span className="mt-h">
             Créer <span className="mt-gt">un son</span>
           </span>
@@ -356,6 +355,16 @@ const Radar = ({ attrs }: { attrs: RosterView['attrs'] }) => {
   );
 };
 
+// Two clicks to sell: the first one says what it costs.
+const SellButton = ({ name, price, busy, onSell }: { name: string; price: number; busy: boolean; onSell: () => void }) => {
+  const [sure, setSure] = useState(false);
+  return (
+    <button type="button" className={`mt-ghost${sure ? ' mt-warn' : ''}`} disabled={busy} onBlur={() => setSure(false)} onClick={() => (sure ? onSell() : setSure(true))}>
+      {sure ? `Sûr ? ${name} part pour ${money(price)}` : `Vendre · ${money(price)}`}
+    </button>
+  );
+};
+
 const Squad = ({
   view,
   picked,
@@ -377,6 +386,15 @@ const Squad = ({
 }) => {
   const artist = view.roster.find((a) => a.id === picked) ?? view.roster[0];
   const free = (view.label?.maxArtists ?? 0) - view.roster.length;
+  if (view.roster.length === 0) {
+    return (
+      <div className="mt-view mt-in">
+        <button type="button" className="mt-empty" onClick={() => onGo('academy')}>
+          Pas encore d’artiste. <b>Va au centre de formation</b>
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="mt-view mt-in">
       <div className="mt-squad">
@@ -385,7 +403,7 @@ const Squad = ({
             <ArtistCard key={a.id} artist={a} energy={a.energy} pressed={a.id === artist?.id} onClick={() => onPick(a.id)} />
           ))}
           {free > 0 && (
-            <button type="button" className="mt-card mt-card-add" onClick={() => onGo('market')}>
+            <button type="button" className="mt-card mt-card-add" onClick={() => onGo('academy')}>
               <b>+</b>
               {free} place{free > 1 ? 's' : ''} libre{free > 1 ? 's' : ''}
             </button>
@@ -464,6 +482,7 @@ const Squad = ({
                   Renouveler le contrat
                 </button>
               )}
+              <SellButton key={artist.id} name={artist.name} price={artist.salePrice} busy={busy} onSell={() => onAct({ type: 'sell', artistId: artist.id })} />
             </div>
             {artist.gigsBooked > 0 && (
               <span className="mt-sub">
@@ -1926,14 +1945,15 @@ const guideLine = (tutorial: TutorialView, tab: Tab, talk: MelodyView['talks'][n
       return [
         { text: 'Bienvenue dans ton label ! Ici, ton cash. Pendant le tutoriel, tout ce que tu dépenses t’est rendu.', target: 'cash', next: 'Suivant' },
         { text: 'Le cœur du jeu : créer des sons avec tes artistes.', target: 'hub-studio', next: 'Suivant' },
-        { text: 'Les charts : ta place face aux autres labels du serveur. On commence ?', target: 'nav-charts', next: 'C’est parti' },
+        { text: 'L’onglet Label : les autres labels du serveur, le classement et les featurings. On commence ?', target: 'nav-labels', next: 'C’est parti' },
       ][Math.min(tour, 2)]!;
-    case 'sign':
-      if (talking && talk?.counter) return { text: 'Son agent fait une contre-offre : « Il veut… » sous chaque ligne. Accepte-la, ou tente mieux.', target: 'accept' };
-      if (talking && talk) return { text: 'Règle l’avance, les royalties et la durée, puis fais ton offre. Son agent va répondre.', target: 'offer' };
-      if (talking) return { text: 'Bien joué ! Passons au studio.', target: 'talk-done' };
-      if (tab === 'market') return { text: 'Choisis un artiste qui te plaît et clique sur Négocier.', target: 'sign' };
-      return { text: 'Un label, c’est une équipe. Signe un deuxième artiste dans Recrutement.', target: 'nav-market' };
+    case 'academy':
+      if (tab === 'academy')
+        return {
+          text: 'Voici tes trois jeunes. Leur note est une fourchette : plus tu les gardes, mieux tu les connais. Tu peux en renommer un, puis clique sur « Faire signer » : il devient ton premier artiste.',
+          target: 'promote',
+        };
+      return { text: 'Tu n’as pas encore d’artiste. Ton centre de formation a trois jeunes : va dans Recrutement.', target: 'nav-academy' };
     case 'song':
       if (tab !== 'studio') return { text: 'Crée ton premier son. Direction le Studio !', target: 'nav-studio' };
       return {
@@ -2182,7 +2202,462 @@ const OtherPlayers = ({ view, onAct, busy }: { view: MelodyView; onAct: (action:
   );
 };
 
-/* ---------------------------------- Market ---------------------------------- */
+/* ---------------------------------- Centre de formation ---------------------------------- */
+
+const SCOUT_STARS = (stars: number): string => '★'.repeat(stars) + '☆'.repeat(Math.max(0, 5 - stars));
+
+// A youth of the centre: his level is a range until the label knows him well.
+const YouthCard = ({ youth, children }: { youth: YouthView; children?: ReactNode }) => (
+  <div className={`mt-youth${youth.gem ? ' is-gem' : ''}`}>
+    <span className="mt-art mt-youth-art" data-i={initials(youth.name)} style={{ '--hue': hueOf(youth.id) } as CSSProperties} aria-hidden="true" />
+    <div className="mt-youth-body">
+      <span className="mt-youth-note" title="Sa note : plus tu le connais, plus la fourchette se resserre.">
+        {youth.genMin === youth.genMax ? youth.genMin : `${youth.genMin}–${youth.genMax}`}
+      </span>
+      <b className="mt-youth-name">
+        {youth.name} {youth.gem && <span className="mt-hot mt-hot-ok">Pépite</span>}
+      </b>
+      <span className="mt-sub">
+        {genreName(youth.genre)} · {youth.age} ans · {youth.city}
+      </span>
+      <span className="mt-sub">
+        Potentiel {youth.potentialMin === youth.potentialMax ? youth.potentialMin : `${youth.potentialMin} – ${youth.potentialMax}`}
+      </span>
+      <span className="mt-known">
+        <Meter value={youth.known} />
+        <small>Connu à {youth.known} %</small>
+      </span>
+      {children}
+    </div>
+  </div>
+);
+
+const YouthActions = ({ youth, full, onAct, busy, first }: { youth: YouthView; full: boolean; onAct: (action: MelodyAction) => void; busy: boolean; first: boolean }) => {
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState(youth.name);
+  const [leaving, setLeaving] = useState(false);
+  if (renaming) {
+    return (
+      <div className="mt-acts">
+        <input className="mt-input" value={name} maxLength={24} aria-label="Nouveau nom" onChange={(event) => setName(event.target.value)} />
+        <button
+          type="button"
+          className="mt-go"
+          disabled={busy || name.trim().length < 2}
+          onClick={() => {
+            onAct({ type: 'youth_rename', youthId: youth.id, name: name.trim() });
+            setRenaming(false);
+          }}
+        >
+          OK
+        </button>
+        <button type="button" className="mt-ghost" onClick={() => setRenaming(false)}>
+          Retour
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-acts">
+      <button
+        type="button"
+        className="mt-go"
+        data-tuto={first ? 'promote' : undefined}
+        disabled={busy || full}
+        title={full ? 'Ton effectif est complet' : 'Il rejoint ton effectif, contrat maison gratuit'}
+        onClick={() => onAct({ type: 'youth_promote', youthId: youth.id })}
+      >
+        Faire signer
+      </button>
+      <button type="button" className="mt-ghost" disabled={busy} onClick={() => setRenaming(true)}>
+        Renommer
+      </button>
+      <button
+        type="button"
+        className="mt-ghost"
+        disabled={busy}
+        onClick={() => (leaving ? onAct({ type: 'youth_drop', youthId: youth.id }) : setLeaving(true))}
+        onBlur={() => setLeaving(false)}
+      >
+        {leaving ? 'Sûr ? Il part' : 'Libérer'}
+      </button>
+    </div>
+  );
+};
+
+const Academy = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const academy = view.academy;
+  const [zone, setZone] = useState<string>('fr');
+  const [genre, setGenre] = useState<string>('');
+  if (!academy) return null;
+  const full = view.roster.length >= (view.label?.maxArtists ?? 0);
+  const roomLeft = academy.places - academy.youths.length;
+  const cost = academy.zones.find((z) => z.id === zone)?.cost ?? 0;
+  return (
+    <div className="mt-view mt-in">
+      {academy.found.length > 0 && (
+        <section className="mt-section mt-found-talents">
+          <Label>{academy.scout.name} a trouvé</Label>
+          <div className="mt-youths">
+            {academy.found.map((youth) => (
+              <YouthCard key={youth.id} youth={youth}>
+                <span className="mt-sub">Répond sous {youth.answerIn} sem., sinon il part ailleurs.</span>
+                <div className="mt-acts">
+                  <button type="button" className="mt-go" disabled={busy || roomLeft <= 0} onClick={() => onAct({ type: 'youth_take', youthId: youth.id })}>
+                    {roomLeft <= 0 ? 'Centre plein' : 'Prendre au centre'}
+                  </button>
+                  <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'youth_drop', youthId: youth.id })}>
+                    Non merci
+                  </button>
+                </div>
+              </YouthCard>
+            ))}
+          </div>
+        </section>
+      )}
+      <section className="mt-section">
+        <div className="mt-bar">
+          <Label>
+            Centre de formation · {academy.youths.length} / {academy.places} places
+          </Label>
+          <span className="mt-sub">{full ? 'Effectif complet : monte de palier pour en faire signer un.' : 'Ils progressent seuls, moins vite qu’en pro.'}</span>
+        </div>
+        {academy.youths.length === 0 ? (
+          <span className="mt-sub">Le centre est vide. Envoie ton recruteur chercher des talents.</span>
+        ) : (
+          <div className="mt-youths">
+            {academy.youths.map((youth, i) => (
+              <YouthCard key={youth.id} youth={youth}>
+                <YouthActions key={youth.name} youth={youth} full={full} onAct={onAct} busy={busy} first={i === 0} />
+              </YouthCard>
+            ))}
+          </div>
+        )}
+      </section>
+      <section className="mt-section">
+        <Label>Ton recruteur</Label>
+        <div className="mt-scout is-mine">
+          <span className="mt-scout-stars" aria-label={`${academy.scout.stars} étoiles sur 5`}>
+            {SCOUT_STARS(academy.scout.stars)}
+          </span>
+          <b>{academy.scout.name}</b>
+          <span className="mt-sub">
+            « {academy.scout.rank} » · {academy.scout.wage > 0 ? `${money(academy.scout.wage)} / sem.` : 'gratuit'}
+          </span>
+        </div>
+        {academy.mission ? (
+          <span className="mt-toast">
+            En mission : {academy.mission.zoneName}
+            {academy.mission.genre ? `, ${genreName(academy.mission.genre)}` : ''}. Retour dans {academy.mission.weeksLeft} semaine{academy.mission.weeksLeft > 1 ? 's' : ''}.
+          </span>
+        ) : (
+          <div className="mt-mission">
+            <Label>Où l’envoyer ?</Label>
+            <div className="mt-chips">
+              {academy.zones.map((z) => (
+                <button key={z.id} type="button" className="mt-chipbtn" aria-pressed={zone === z.id} onClick={() => setZone(z.id)}>
+                  {z.name} · {z.cost ? money(z.cost) : 'gratuit'}
+                </button>
+              ))}
+            </div>
+            <div className="mt-acts">
+              <select className="mt-select" aria-label="Genre cherché" value={genre} onChange={(event) => setGenre(event.target.value)}>
+                <option value="">Tous les genres</option>
+                {Object.entries(GENRES).map(([id, g]) => (
+                  <option key={id} value={id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="mt-go"
+                disabled={busy || cost > (view.label?.cash ?? 0)}
+                onClick={() => onAct({ type: 'scout_send', zone, genre: genre || null })}
+              >
+                Envoyer en mission · 2 semaines
+              </button>
+            </div>
+            <span className="mt-sub">Plus il a d’étoiles, plus il ramène de talents, et des meilleurs. Les pépites sont rares.</span>
+          </div>
+        )}
+      </section>
+      <section className="mt-section">
+        <Label>Recruteurs dispo cette semaine</Label>
+        <div className="mt-scouts">
+          {academy.hiring.map((scout) => (
+            <div key={scout.id} className="mt-scout">
+              <span className="mt-scout-stars" aria-label={`${scout.stars} étoiles sur 5`}>
+                {SCOUT_STARS(scout.stars)}
+              </span>
+              <b>{scout.name}</b>
+              <span className="mt-sub">« {scout.rank} »</span>
+              <span className="mt-sub">{money(scout.wage)} / semaine</span>
+              <button
+                type="button"
+                className="mt-ghost"
+                disabled={busy || academy.mission !== null || scout.wage > (view.label?.cash ?? 0)}
+                title={academy.mission ? 'Attends le retour de ton recruteur' : `Remplace ${academy.scout.name}`}
+                onClick={() => onAct({ type: 'scout_hire', scoutId: scout.id })}
+              >
+                Engager
+              </button>
+            </div>
+          ))}
+        </div>
+        <span className="mt-sub">La liste change chaque semaine.</span>
+      </section>
+    </div>
+  );
+};
+
+/* ---------------------------------- Marché des transferts ---------------------------------- */
+
+type MarketSort = 'gen' | 'fans' | 'age' | 'price';
+const MARKET_SORTS: Record<MarketSort, { name: string; by: (a: MarketView, b: MarketView) => number }> = {
+  gen: { name: 'Note', by: (a, b) => b.gen - a.gen },
+  fans: { name: 'Fans', by: (a, b) => b.fans - a.fans },
+  age: { name: 'Âge', by: (a, b) => a.age - b.age },
+  price: { name: 'Prix', by: (a, b) => a.advance - b.advance },
+};
+// Free artists first: the ones under contract elsewhere come after, with their padlock.
+const freeFirst = (a: MarketView, b: MarketView): number => (a.lockedBy ? 1 : 0) - (b.lockedBy ? 1 : 0);
+const COUNTRIES: Record<string, string> = {
+  FR: 'France', BE: 'Belgique', CH: 'Suisse', CA: 'Canada', US: 'États-Unis', UK: 'Royaume-Uni', DE: 'Allemagne', ES: 'Espagne', NL: 'Pays-Bas', SE: 'Suède',
+  RU: 'Russie', KR: 'Corée du Sud', JM: 'Jamaïque', NG: 'Nigeria', DZ: 'Algérie', MA: 'Maroc', CI: 'Côte d’Ivoire', SN: 'Sénégal', CM: 'Cameroun', CD: 'RD Congo',
+  MX: 'Mexique', CO: 'Colombie', PR: 'Porto Rico', BR: 'Brésil', AR: 'Argentine', IT: 'Italie', JP: 'Japon', GB: 'Royaume-Uni',
+};
+const countryName = (code: string): string => COUNTRIES[code] ?? code;
+const MAX_PRICES = [0, 2_000, 10_000, 50_000, 250_000];
+const PAGE = 36;
+
+const TransferMarket = ({ view, onTalk, onAct, busy }: { view: MelodyView; onTalk: (artistId: string) => void; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const [search, setSearch] = useState('');
+  const [genre, setGenre] = useState('');
+  const [country, setCountry] = useState('');
+  const [maxPrice, setMaxPrice] = useState(0);
+  const [sort, setSort] = useState<MarketSort>('gen');
+  const [favs, setFavs] = useState(false);
+  const [locked, setLocked] = useState(true);
+  const [page, setPage] = useState(1);
+  const full = view.roster.length >= (view.label?.maxArtists ?? 0);
+  const talking = new Set(view.talks.map((t) => t.artistId));
+  const countries = useMemo(() => [...new Set(view.market.map((m) => m.country))].sort((a, b) => countryName(a).localeCompare(countryName(b), 'fr')), [view.market]);
+  const needle = search.trim().toLowerCase();
+  const list = view.market
+    .filter((a) => !needle || a.name.toLowerCase().includes(needle))
+    .filter((a) => !genre || a.genre === genre)
+    .filter((a) => !country || a.country === country)
+    .filter((a) => !maxPrice || (a.lockedBy === null && a.advance <= maxPrice))
+    .filter((a) => !favs || a.fav)
+    .filter((a) => locked || a.lockedBy === null)
+    .sort((a, b) => freeFirst(a, b) || MARKET_SORTS[sort].by(a, b));
+  return (
+    <div className="mt-view mt-in">
+      {view.news.length > 0 && (
+        <section className="mt-news" aria-label="Nouvelles du marché">
+          <Label>Nouvelles du marché</Label>
+          <ul>
+            {view.news.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <div className="mt-filters">
+        <input className="mt-input" type="search" placeholder="Chercher un artiste" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
+        <select className="mt-select" aria-label="Genre" value={genre} onChange={(event) => { setGenre(event.target.value); setPage(1); }}>
+          <option value="">Tous les genres</option>
+          {Object.entries(GENRES).map(([id, g]) => (
+            <option key={id} value={id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
+        <select className="mt-select" aria-label="Pays" value={country} onChange={(event) => { setCountry(event.target.value); setPage(1); }}>
+          <option value="">Tous les pays</option>
+          {countries.map((c) => (
+            <option key={c} value={c}>
+              {countryName(c)}
+            </option>
+          ))}
+        </select>
+        <select className="mt-select" aria-label="Prix maximum" value={maxPrice} onChange={(event) => { setMaxPrice(Number(event.target.value)); setPage(1); }}>
+          {MAX_PRICES.map((p) => (
+            <option key={p} value={p}>
+              {p ? `Avance max ${money(p)}` : 'Tous les prix'}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="mt-bar">
+        <div className="mt-chips">
+          {(Object.keys(MARKET_SORTS) as MarketSort[]).map((key) => (
+            <button key={key} type="button" className="mt-chipbtn" aria-pressed={sort === key} onClick={() => setSort(key)}>
+              {MARKET_SORTS[key].name}
+            </button>
+          ))}
+          <button type="button" className="mt-chipbtn" aria-pressed={favs} onClick={() => setFavs(!favs)}>
+            ★ Favoris
+          </button>
+          <button type="button" className="mt-chipbtn" aria-pressed={locked} onClick={() => setLocked(!locked)}>
+            🔒 Sous contrat
+          </button>
+        </div>
+        <Label>{full ? 'Effectif complet' : `${(view.label?.maxArtists ?? 0) - view.roster.length} place(s) libre(s)`}</Label>
+      </div>
+      <div className="mt-deck">
+        {list.slice(0, page * PAGE).map((artist) => (
+          <div key={artist.id} className={`mt-offer${artist.lockedBy ? ' is-locked' : ''}`}>
+            <ArtistCard artist={artist}>
+              <span className="mt-card-sub">
+                {countryName(artist.country)} · {artist.age} ans · {compact(artist.fans)} fans
+              </span>
+            </ArtistCard>
+            <button
+              type="button"
+              className={`mt-fav${artist.fav ? ' is-on' : ''}`}
+              aria-pressed={artist.fav}
+              aria-label={artist.fav ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+              disabled={busy}
+              onClick={() => onAct({ type: 'fav', artistId: artist.id })}
+            >
+              ★
+            </button>
+            {artist.lockedBy ? (
+              <span className="mt-lock">🔒 {artist.lockedBy}</span>
+            ) : (
+              <button type="button" className="mt-go" disabled={busy || full || artist.blocked !== null} onClick={() => onTalk(artist.id)}>
+                {artist.blocked ?? (talking.has(artist.id) ? 'Reprendre la discussion' : `Négocier · ~${money(artist.advance)}`)}
+              </button>
+            )}
+          </div>
+        ))}
+        {list.length === 0 && <span className="mt-sub">Personne ne correspond à ces filtres.</span>}
+      </div>
+      {list.length > page * PAGE && (
+        <button type="button" className="mt-ghost" onClick={() => setPage(page + 1)}>
+          Voir plus ({list.length - page * PAGE})
+        </button>
+      )}
+    </div>
+  );
+};
+
+/* ---------------------------------- Label (the other players) ---------------------------------- */
+
+const LabelPage = ({ card, onClose }: { card: LabelCard; onClose: () => void }) => (
+  <div className="mt-panel mt-in">
+    <div className="mt-ptop">
+      <div className="mt-crest" aria-hidden="true">
+        {card.name[0]?.toUpperCase()}
+      </div>
+      <div>
+        <Label>{card.tierName}</Label>
+        <h2 className="mt-h">{card.name}</h2>
+      </div>
+    </div>
+    <div className="mt-pills">
+      <span className="mt-pill">{compact(card.fans)} fans</span>
+      <span className="mt-pill">Réputation {card.reputation}</span>
+      <span className="mt-pill">
+        {card.numberOnes} n°1 · {card.top10} top 10
+      </span>
+    </div>
+    <Label>Artistes</Label>
+    <ul className="mt-rows">
+      {card.artists.map((a) => (
+        <li key={a.id}>
+          <span className="mt-art mt-row-art" data-i={initials(a.name)} style={{ '--hue': hueOf(a.id) } as CSSProperties} aria-hidden="true" />
+          <b>{a.name}</b>
+          <span className="mt-sub">
+            {genreName(a.genre)} · note {a.gen} · {compact(a.fans)} fans
+          </span>
+        </li>
+      ))}
+      {card.artists.length === 0 && <li className="mt-sub">Pas encore d’artiste.</li>}
+    </ul>
+    <Label>Meilleurs sons</Label>
+    <ul className="mt-rows">
+      {card.songs.map((s) => (
+        <li key={s.id}>
+          <Cover id={s.id} className="mt-row-art" />
+          <b>{s.title}</b>
+          <span className="mt-sub">
+            {s.artistName} · {compact(s.streams)} streams
+          </span>
+        </li>
+      ))}
+      {card.songs.length === 0 && <li className="mt-sub">Aucun son sorti.</li>}
+    </ul>
+    <div className="mt-acts">
+      <button type="button" className="mt-ghost" onClick={onClose}>
+        Retour
+      </button>
+    </div>
+  </div>
+);
+
+const LabelsTab = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const [opened, setOpened] = useState<string | null>(null);
+  const mine = view.label?.id;
+  const card = view.labels.find((l) => l.id === opened);
+  if (card) return <LabelPage card={card} onClose={() => setOpened(null)} />;
+  const podium = view.ranking.slice(0, 5);
+  return (
+    <div className="mt-view mt-in">
+      <section className="mt-section">
+        <Label>Classement du serveur · saison {view.season}</Label>
+        <div className="mt-podium">
+          {podium.map((line, i) => (
+            <button
+              key={line.labelId}
+              type="button"
+              className={`mt-step${line.labelId === mine ? ' is-me' : ''}`}
+              style={{ '--h': `${100 - i * 16}%` } as CSSProperties}
+              onClick={() => setOpened(line.labelId)}
+            >
+              <span className="mt-step-name">{line.name}</span>
+              <span className="mt-step-bar">
+                <b>{i + 1}</b>
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+      <section className="mt-section">
+        <Label>Labels du serveur</Label>
+        <div className="mt-labels">
+          {view.labels.map((l) => (
+            <button key={l.id} type="button" className={`mt-labelcard${l.id === mine ? ' is-me' : ''}`} onClick={() => setOpened(l.id)}>
+              <span className="mt-crest" aria-hidden="true">
+                {l.name[0]?.toUpperCase()}
+              </span>
+              <b>{l.name}</b>
+              <span className="mt-sub">
+                {l.tierName} · {l.artists.length} artiste{l.artists.length > 1 ? 's' : ''} · {compact(l.fans)} fans
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+      {view.featDeals.length > 0 && (
+        <section className="mt-deals" aria-label="Featurings avec les autres joueurs">
+          <Label>Featurings entre joueurs</Label>
+          {view.featDeals.map((deal) => (
+            <DealRow key={`${deal.id}:${deal.fee}:${deal.status}`} deal={deal} onAct={onAct} busy={busy} />
+          ))}
+        </section>
+      )}
+      <section className="mt-section">
+        <Label>Artistes des autres joueurs</Label>
+        <OtherPlayers view={view} onAct={onAct} busy={busy} />
+      </section>
+    </div>
+  );
+};
+
+/* ---------------------------------- Market (old) ---------------------------------- */
 
 const Market = ({
   view,
@@ -2262,22 +2737,8 @@ const Charts = ({ view }: { view: MelodyView }) => {
   const [players, setPlayers] = useState(false);
   const entries = (chart === 'global' ? view.charts.global : (view.charts.genres[chart] ?? [])).filter((e) => !players || e.player).slice(0, 20);
   const mine = view.label?.id;
-  const podium = view.ranking.slice(0, 5);
   return (
     <div className="mt-view mt-in">
-      <section className="mt-section">
-        <Label>Classement du serveur · saison {view.season}</Label>
-        <div className="mt-podium">
-          {podium.map((line, i) => (
-            <div key={line.labelId} className={`mt-step${line.labelId === mine ? ' is-me' : ''}`} style={{ '--h': `${100 - i * 16}%` } as CSSProperties}>
-              <span className="mt-step-name">{line.name}</span>
-              <span className="mt-step-bar">
-                <b>{i + 1}</b>
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
       <section className="mt-section">
         <div className="mt-chips">
           <button type="button" className="mt-chipbtn" aria-pressed={chart === 'global'} onClick={() => setChart('global')}>
@@ -2456,6 +2917,10 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'tuto' && action.move === 'skip') say('Tutoriel passé. Ton premier son est programmé.');
       if (action.type === 'gig') say('Concert réservé : il se joue à la fin de la semaine.');
       if (action.type === 'loan') say('Prêt accordé.');
+      if (action.type === 'youth_promote') say('Il signe ! Il est dans ton effectif.');
+      if (action.type === 'scout_send') say('Ton recruteur part en mission. Retour dans 2 semaines.');
+      if (action.type === 'scout_hire') say('Nouveau recruteur engagé.');
+      if (action.type === 'sell') say('Artiste vendu.');
       return answer.data.view;
     },
     [guildId, say],
@@ -2595,7 +3060,9 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
             <Studio key={studioKey} guildId={guildId} view={view} artistId={studioArtist} onArtist={setStudioArtist} onAct={act} onGo={go} busy={busy} />
           )}
           {!talkWith && tab === 'releases' && <Releases view={view} onAct={run} busy={busy} onGo={go} />}
-          {!talkWith && tab === 'market' && <Market view={view} onTalk={(id) => void openTalk(id)} onAct={run} busy={busy} />}
+          {!talkWith && tab === 'academy' && <Academy view={view} onAct={run} busy={busy} />}
+          {!talkWith && tab === 'market' && <TransferMarket view={view} onTalk={(id) => void openTalk(id)} onAct={run} busy={busy} />}
+          {!talkWith && tab === 'labels' && <LabelsTab view={view} onAct={run} busy={busy} />}
           {!talkWith && tab === 'charts' && <Charts view={view} />}
           {!talkWith && tab === 'bank' && <Bank view={view} onAct={run} busy={busy} />}
         </>

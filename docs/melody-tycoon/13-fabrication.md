@@ -162,3 +162,13 @@ Choix du propriétaire : la note vient des **choix**, pas de l'argent ; c'est la
 - **Feats** : prix de base doublé, puis multiplié selon l'écart de fans avec ton artiste (jusqu'à ×20). Irko avec un débutant : ~24 000 €. Entre égaux : ~4 000 €. La carte explique pourquoi c'est cher.
 - **Sorties** : bilan de la semaine (streams, argent, meilleur son, courbe sur 12 semaines), tri (récents, streams, argent) et filtre par artiste. Sur chaque son : streams et argent au total ; le détail (semaine, coût, bénéfice) est dans la page du son.
 - **Effectif** : « ses sons tournent autour de X ».
+
+## Étape 7 ter — recrutement, marché et onglet Label (fait)
+
+- **Début** : on donne juste le nom du label (10 000 € en caisse). Pas d'artiste au départ.
+- **Centre de formation** (onglet Recrutement) : 3 jeunes au départ, 12 places. Leur note et leur potentiel sont des fourchettes qui se resserrent avec le temps (« connu à X % »). Ils progressent seuls, moins vite qu'en pro. Pépite rare, visible quand on les connaît assez. On peut les renommer, les libérer, ou les **faire signer** (contrat maison gratuit, 72 semaines).
+- **Tutoriel** : après l'accueil, il envoie au centre de formation faire signer un jeune, puis au studio.
+- **Recruteur** : 1 gratuit (1 ★). Mission de 2 semaines dans une zone (France gratuit, autres 200 à 400 €), genre au choix. Il ramène 1 à 4 talents ; on a 3 semaines pour les prendre. Chaque semaine, 4 recruteurs à engager (1 à 5 ★, 50 à 3 000 €/semaine), noms rigolos.
+- **Marché** : recherche, genre, pays, avance max ; tri note, fans, âge, prix ; favoris ; artistes sous contrat chez un label montrés avec un cadenas (après les libres) ; nouvelles du marché.
+- **Vendre** un artiste : dans l'Effectif, pour la moitié de sa valeur (pas pendant le tutoriel ni en studio).
+- **Onglet Label** : classement du serveur, fiches des labels (artistes, meilleurs sons), featurings entre joueurs, artistes des autres joueurs. Le classement n'est plus dans Charts.

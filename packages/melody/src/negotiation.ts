@@ -266,7 +266,8 @@ export const makeOffer = (world: World, label: Label, artistId: string, raw: Off
   };
   if (talk.counter && meets(offer, talk.counter)) return deal();
   const score = offerScore(talk, offer, label.reputation, grudge);
-  const guided = tutorialStep(world, label.id) === 'sign';
+  // No contract talks in the tutorial any more: the first artist comes from the centre de formation.
+  const guided = false;
   if (score < 40 && !guided) {
     say('vexed', line(world, talk, 'vexed'));
     closeTalk(world, talk, TALK.grudgeTicks, true);
