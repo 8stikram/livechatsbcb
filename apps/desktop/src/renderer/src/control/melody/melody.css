@@ -23,7 +23,8 @@
   color: var(--mt-fg);
   border: 1px solid var(--mt-line);
   border-radius: 14px;
-  overflow: hidden;
+  /* clip, not hidden: the studio button can stay stuck at the bottom of the window. */
+  overflow: clip;
   font-family: 'Archivo Variable', var(--font);
   font-size: 14px;
   line-height: 1.4;
@@ -1369,6 +1370,26 @@ button.mt-song:not(:disabled):hover {
   }
 }
 
+/* studio: the confirm button stays at the bottom of the screen */
+.mt-sticky-go {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 0 -4px;
+  padding: 12px 4px;
+  background: linear-gradient(to top, var(--mt-bg) 70%, transparent);
+}
+.mt-sticky-go .mt-go {
+  align-self: center;
+}
+.mt-sticky-go .mt-sub {
+  flex: 1 1 200px;
+}
+
 /* featuring between players */
 .mt-switch {
   display: flex;
@@ -1483,7 +1504,9 @@ button.mt-song:not(:disabled):hover {
   right: 24px;
   bottom: 24px;
   z-index: 50;
-  width: min(360px, calc(100vw - 48px));
+  /* Half the window at most, so it never hides the studio button on the left. */
+  width: min(360px, calc(50vw - 40px));
+  min-width: 220px;
   background: var(--mt-panel2);
   border: 2px solid var(--mt-a1);
   box-shadow: 0 18px 50px -12px rgba(0, 0, 0, 0.8);

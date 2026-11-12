@@ -906,15 +906,26 @@ const Studio = ({
             </div>
           </div>
         ))}
-        <span className="mt-sub">Moins tu paies, plus il y a d’embrouilles en studio.</span>
-        <button
-          type="button"
-          className="mt-go mt-go-big"
-          disabled={busy || !preview || preview.cost > cap || (artist?.energy ?? 0) < (preview?.energy ?? 0)}
-          onClick={() => void enter()}
-        >
-          Entrer en cabine · {preview ? money(preview.cost) : '…'}
-        </button>
+        {/* Always in sight at the bottom, with why it is grey when it is. */}
+        <div className="mt-sticky-go">
+          <button
+            type="button"
+            className="mt-go mt-go-big"
+            disabled={busy || !preview || preview.cost > cap || (artist?.energy ?? 0) < (preview?.energy ?? 0)}
+            onClick={() => void enter()}
+          >
+            Entrer en cabine · {preview ? money(preview.cost) : '…'}
+          </button>
+          <span className="mt-sub">
+            {!preview
+              ? 'Calcul du prix…'
+              : preview.cost > cap
+                ? 'Trop cher pour le budget de ton palier : baisse un choix.'
+                : (artist?.energy ?? 0) < preview.energy
+                  ? `${artist?.name ?? 'Ton artiste'} n’a pas assez d’énergie : prends des choix moins lourds ou attends la semaine prochaine.`
+                  : 'Moins tu paies, plus il y a d’embrouilles en studio.'}
+          </span>
+        </div>
       </>
     );
   } else if (step === 4 && session) {
