@@ -9,6 +9,7 @@ import { tickTransfers } from './transfers.ts';
 import { tickClashes } from './clash.ts';
 import { tickProjects } from './projects.ts';
 import { tickSeason } from './seasons.ts';
+import { coachBoost, crowdBoost, gigEnergy, tickStaff } from './staff.ts';
 import { tickTours } from './tours.ts';
 import { cleanTalks } from './negotiation.ts';
 import { countryOf, noteCombo } from './craft.ts';
@@ -98,10 +99,10 @@ const earn = (reports: Record<string, LabelReport>, label: Label, amount: number
   else line.costs -= amount;
 };
 
-const growArtist = (artist: Artist, active: boolean, rng: Rng): void => {
+const growArtist = (artist: Artist, active: boolean, rng: Rng, coach = 1): void => {
   const gen = generalRating(artist);
   const margin = clamp((artist.potential - gen) / 20, 0.1, 1);
-  artist.growth += 0.25 * (active ? 1 : 0) * clamp(artist.morale / 60, 0.2, 1.5) * margin;
+  artist.growth += 0.25 * (active ? 1 : 0) * clamp(artist.morale / 60, 0.2, 1.5) * margin * coach;
   while (artist.growth >= 1) {
     artist.growth -= 1;
     const weights = FAMILY_WEIGHTS[GENRES[artist.genre].family];
@@ -293,11 +294,12 @@ export const runTick = (world: World): TickReport => {
   for (const gig of world.gigs.filter((g) => g.tick === tick)) {
     const artist = world.artists[gig.artistId];
     const label = world.labels[gig.labelId];
-    if (!artist || !label || label.bankrupt || artist.energy < CFG.energy.gig) continue;
+    const tiring = gigEnergy(world, label?.id ?? '');
+    if (!artist || !label || label.bankrupt || artist.energy < tiring) continue;
     const already = gigsPlayed.get(artist.id) ?? 0;
     gigsPlayed.set(artist.id, already + 1);
-    const result = playGig(artist, already);
-    artist.energy -= CFG.energy.gig;
+    const result = playGig(artist, already, crowdBoost(world, label.id));
+    artist.energy -= tiring;
     artist.fans += Math.round(result.audience * CFG.fans.gigGain);
     artist.lastActiveTick = tick;
     activeArtists.add(artist.id);
@@ -345,7 +347,7 @@ export const runTick = (world: World): TickReport => {
       if (idle > CFG.hype.idleTicks) artist.hype = Math.max(0, artist.hype - CFG.hype.idlePenalty);
       if (idle > CFG.fans.idleTicks) artist.fans = Math.round(artist.fans * (1 - CFG.fans.idleLoss));
       if (artist.energy < 20) artist.morale = clamp(artist.morale + CFG.morale.lowEnergy, 0, 100);
-      growArtist(artist, activeArtists.has(artist.id) || artist.lastActiveTick >= tick - 1, rng);
+      growArtist(artist, activeArtists.has(artist.id) || artist.lastActiveTick >= tick - 1, rng, coachBoost(world, label.id, artist.id));
     }
 
     if (label.cash < 0) {
@@ -377,6 +379,15 @@ export const runTick = (world: World): TickReport => {
     const label = world.labels[labelId];
     if (label && label.kind === 'player' && !label.bankrupt) report(reports, label).events.push(text);
   };
+  // The staff: wages, stars, poaching, and a word now and then.
+  tickStaff(
+    world,
+    (labelId, amount) => {
+      const label = world.labels[labelId];
+      if (label) earn(reports, label, amount);
+    },
+    tell,
+  );
   tickDeals(world, tell);
   tickTransfers(world, tell);
   tickClashes(world, tell);

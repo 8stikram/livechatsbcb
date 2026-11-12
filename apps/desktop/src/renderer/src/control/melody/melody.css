@@ -225,6 +225,16 @@
 .mt-nav button:hover {
   color: var(--mt-fg);
 }
+.mt-navdot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  vertical-align: 2px;
+  border-radius: 50%;
+  background: var(--mt-bad);
+  animation: mt-pulse 1.4s ease-in-out infinite;
+}
 .mt-nav button[aria-current='page'] {
   color: var(--mt-fg);
   font-weight: 700;
@@ -2195,6 +2205,73 @@ img.mt-cover-img {
 .mt-scout-stars {
   color: var(--mt-warn);
   letter-spacing: 0.1em;
+}
+
+/* staff */
+.mt-staff-jobs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+.mt-staff-job {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  background: var(--mt-panel);
+  border: 1px solid var(--mt-line);
+  border-image: var(--mt-grad) 1;
+}
+.mt-staff-job.is-empty {
+  border-image: none;
+  border-style: dashed;
+  justify-content: center;
+}
+.mt-staff-job.is-empty b {
+  color: var(--mt-mute);
+}
+.mt-staff-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.mt-staff-effect {
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.mt-staff-job .mt-select {
+  align-self: stretch;
+}
+.mt-staff-job .mt-acts {
+  margin-top: auto;
+  padding-top: 4px;
+}
+.mt-staff-cand .mt-deal-art {
+  margin-bottom: 4px;
+}
+.mt-staff-offer {
+  padding: 14px;
+  border: 1px solid var(--mt-warn);
+  background: var(--mt-panel);
+}
+.mt-staff-out {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.mt-danger {
+  border: 1px solid var(--mt-bad) !important;
+  color: var(--mt-bad) !important;
+  padding: 10px 14px !important;
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.mt-danger:disabled,
+.mt-chipbtn:disabled {
+  opacity: 0.4;
 }
 
 /* marché */

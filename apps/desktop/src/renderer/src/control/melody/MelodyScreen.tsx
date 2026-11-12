@@ -46,6 +46,9 @@ import {
   type TourView,
   TROPHY_NAMES,
   type SeasonResult,
+  ROLE_NAMES,
+  type StaffRole,
+  type StaffView,
 } from '@livechatsbcb/melody';
 import type { MelodyRoute } from '../../../../shared/ipc';
 import { LibraryPicker, type Shelf } from '../LibraryPicker';
@@ -58,7 +61,7 @@ import './melody.css';
 type MelodyState = { view: MelodyView; nextTickAt: number };
 type Answer<T> = { ok: true; data: T } | { ok: false; message: string };
 type Levels = { theme: 1 | 2 | 3 | 4; beat: 1 | 2 | 3 | 4; producer: 1 | 2 | 3 | 4; studio: 1 | 2 | 3 | 4 };
-type Tab = 'home' | 'squad' | 'studio' | 'releases' | 'academy' | 'market' | 'labels' | 'charts' | 'bank';
+type Tab = 'home' | 'squad' | 'studio' | 'releases' | 'academy' | 'staff' | 'market' | 'labels' | 'charts' | 'bank';
 
 const TABS: Array<{ id: Tab; name: string }> = [
   { id: 'home', name: 'Accueil' },
@@ -66,6 +69,7 @@ const TABS: Array<{ id: Tab; name: string }> = [
   { id: 'studio', name: 'Studio' },
   { id: 'releases', name: 'Sorties' },
   { id: 'academy', name: 'Recrutement' },
+  { id: 'staff', name: 'Staff' },
   { id: 'market', name: 'Marché' },
   { id: 'labels', name: 'Label' },
   { id: 'charts', name: 'Charts' },
@@ -2156,7 +2160,7 @@ const TourPlanner = ({ view, artist, onAct, onClose, busy }: { view: MelodyView;
   const [merch, setMerch] = useState(true);
   const others = view.roster.filter((a) => a.id !== artist.id);
   const partner = others.find((a) => a.id === partnerId) ?? view.tourGuests.find((g) => g.id === partnerId);
-  const quote = tourQuote(artist.fans, artist.hype, dates, merch, partner?.fans ?? 0, view.tourGuests.some((g) => g.id === partnerId));
+  const quote = tourQuote(artist.fans, artist.hype, dates, merch, partner?.fans ?? 0, view.tourGuests.some((g) => g.id === partnerId), view.crowdBoost);
   const cost = quote.setup + quote.merchCost;
   return (
     <div className="mt-tourplan">
@@ -3156,6 +3160,206 @@ const Academy = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: Melo
   );
 };
 
+/* ---------------------------------- Staff ---------------------------------- */
+
+const STAFF_RAISE = (raise: number): string => `+${Math.round(raise * 100)} %`;
+
+// One job of the label: who holds it, what he brings, the coach's artist, and the door.
+const StaffJob = ({ job, view, onAct, busy }: { job: StaffView['jobs'][number]; view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const [sure, setSure] = useState(false);
+  const member = job.member;
+  if (!member)
+    return (
+      <div className="mt-staff-job is-empty">
+        <Label>{job.name}</Label>
+        <b>Poste libre</b>
+        <span className="mt-sub">{job.about}</span>
+      </div>
+    );
+  const fee = member.wage * (view.staff?.fireWeeks ?? 2);
+  return (
+    <div className="mt-staff-job">
+      <div className="mt-staff-head">
+        <Avatar id={`staff:${member.name}`} className="mt-deal-art" />
+        <span className="mt-deal-text">
+          <Label>{job.name}</Label>
+          <b>{member.name}</b>
+          <span className="mt-scout-stars" aria-label={`${member.stars} étoiles sur 5`}>
+            {SCOUT_STARS(member.stars)}
+          </span>
+        </span>
+      </div>
+      <span className="mt-sub">« {member.rank} » · {money(member.wage)} / semaine</span>
+      <span className="mt-staff-effect">{member.effect}</span>
+      <span className="mt-sub">{member.nextStarIn === null ? 'Au sommet : 5 étoiles.' : `Prochaine étoile dans ${member.nextStarIn} semaine${member.nextStarIn > 1 ? 's' : ''}.`}</span>
+      {job.role === 'coach' && (
+        <select
+          className="mt-select"
+          aria-label="Artiste suivi par le coach"
+          value={member.focusId ?? ''}
+          disabled={busy}
+          onChange={(event) => onAct({ type: 'staff_focus', artistId: event.target.value || null })}
+        >
+          <option value="">Suit tout le monde pareil</option>
+          {view.roster.map((artist) => (
+            <option key={artist.id} value={artist.id}>
+              Suit de près : {artist.name}
+            </option>
+          ))}
+        </select>
+      )}
+      <div className="mt-acts">
+        {sure ? (
+          <>
+            <button type="button" className="mt-danger" disabled={busy || fee > (view.label?.cash ?? 0)} onClick={() => onAct({ type: 'staff_fire', role: job.role })}>
+              Oui, licencier · {money(fee)}
+            </button>
+            <button type="button" className="mt-ghost" onClick={() => setSure(false)}>
+              Non
+            </button>
+          </>
+        ) : (
+          <button type="button" className="mt-ghost" disabled={busy} onClick={() => setSure(true)}>
+            Licencier
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const StaffTab = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const staff = view.staff;
+  if (!staff) return null;
+  const cash = view.label?.cash ?? 0;
+  const holder = (role: StaffRole) => staff.jobs.find((j) => j.role === role)?.member ?? null;
+  return (
+    <div className="mt-view mt-in">
+      {staff.offersIn.map((offer) => (
+        <section key={offer.id} className="mt-section mt-staff-offer" aria-label="Offre de débauchage">
+          <Label>Tentative de débauchage</Label>
+          <span>
+            <b>{offer.fromName}</b> veut te prendre <b>{offer.name}</b>, ton {ROLE_NAMES[offer.role].toLowerCase()}, pour {money(offer.wage)} / semaine.
+          </span>
+          <span className="mt-sub">
+            Aligne-toi pour le garder, ou laisse-le partir. Sans réponse dans {offer.weeksLeft} semaine{offer.weeksLeft > 1 ? 's' : ''}, il part.
+          </span>
+          <div className="mt-acts">
+            <button type="button" className="mt-go" disabled={busy} onClick={() => onAct({ type: 'staff_poach_answer', offerId: offer.id, match: true })}>
+              Je m’aligne · {money(offer.wage)} / sem.
+            </button>
+            <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'staff_poach_answer', offerId: offer.id, match: false })}>
+              Le laisser partir
+            </button>
+          </div>
+        </section>
+      ))}
+      <section className="mt-section">
+        <div className="mt-bar">
+          <Label>Ton staff</Label>
+          <span className="mt-sub">{staff.wages > 0 ? `Salaires : ${money(staff.wages)} / semaine` : 'Personne pour l’instant'}</span>
+        </div>
+        <div className="mt-staff-jobs">
+          {staff.jobs.map((job) => (
+            <StaffJob key={`${job.role}:${job.member?.name ?? ''}`} job={job} view={view} onAct={onAct} busy={busy} />
+          ))}
+        </div>
+        <span className="mt-sub">Chacun gagne une étoile après une saison chez toi. Licencier coûte {staff.fireWeeks} semaines de salaire.</span>
+      </section>
+      <section className="mt-section">
+        <Label>Candidats de la semaine</Label>
+        {staff.candidates.length === 0 ? (
+          <span className="mt-sub">Plus personne cette semaine. Nouvelle liste la semaine prochaine.</span>
+        ) : (
+          <div className="mt-scouts">
+            {staff.candidates.map((c) => {
+              const current = holder(c.role);
+              const fee = current ? current.wage * staff.fireWeeks : 0;
+              return (
+                <div key={c.id} className="mt-scout mt-staff-cand">
+                  <Avatar id={`staff:${c.name}`} className="mt-deal-art" />
+                  <Label>{c.roleName}</Label>
+                  <span className="mt-scout-stars" aria-label={`${c.stars} étoiles sur 5`}>
+                    {SCOUT_STARS(c.stars)}
+                  </span>
+                  <b>{c.name}</b>
+                  <span className="mt-sub">« {c.rank} »</span>
+                  <span className="mt-staff-effect">{c.effect}</span>
+                  <span className="mt-sub">{money(c.wage)} / semaine</span>
+                  <button
+                    type="button"
+                    className="mt-ghost"
+                    disabled={busy || fee + c.wage > cash}
+                    title={current ? `${current.name} part : ${money(fee)}` : undefined}
+                    onClick={() => onAct({ type: 'staff_hire', candidateId: c.id })}
+                  >
+                    {current ? `Remplacer ${current.name.split(' ')[0]} · ${money(fee)}` : 'Engager'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <span className="mt-sub">La liste change chaque semaine.</span>
+      </section>
+      <section className="mt-section">
+        <Label>Débauchage entre amis</Label>
+        {staff.offersOut.length > 0 && (
+          <ul className="mt-rows">
+            {staff.offersOut.map((offer) => (
+              <li key={offer.id} className="mt-staff-out">
+                <span>
+                  Offre à <b>{offer.name}</b> ({offer.toName}) · {money(offer.wage)} / sem. · réponse sous {offer.weeksLeft} sem.
+                </span>
+                <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'staff_poach_cancel', offerId: offer.id })}>
+                  Retirer
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {staff.rivals.length === 0 ? (
+          <span className="mt-sub">Tes potes n’ont pas encore de staff à débaucher.</span>
+        ) : (
+          <div className="mt-scouts">
+            {staff.rivals.map((r) => (
+              <div key={`${r.labelId}:${r.role}`} className="mt-scout">
+                <Label>
+                  {r.roleName} · {r.labelName}
+                </Label>
+                <span className="mt-scout-stars" aria-label={`${r.stars} étoiles sur 5`}>
+                  {SCOUT_STARS(r.stars)}
+                </span>
+                <b>{r.name}</b>
+                <span className="mt-sub">Payé {money(r.wage)} / semaine chez eux</span>
+                {r.blocked ? (
+                  <span className="mt-sub">{r.blocked}</span>
+                ) : (
+                  <div className="mt-chips">
+                    {r.raises.map((option) => (
+                      <button
+                        key={option.raise}
+                        type="button"
+                        className="mt-chipbtn"
+                        disabled={busy || option.wage > cash}
+                        title={`Il te coûterait ${money(option.wage)} / semaine`}
+                        onClick={() => onAct({ type: 'staff_poach', labelId: r.labelId, role: r.role, raise: option.raise })}
+                      >
+                        {STAFF_RAISE(option.raise)} · {money(option.wage)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <span className="mt-sub">Propose une augmentation : son label a 2 semaines pour s’aligner, sinon il vient chez toi et remplace celui qui tenait le poste.</span>
+      </section>
+    </div>
+  );
+};
+
 /* ---------------------------------- Marché des transferts ---------------------------------- */
 
 type MarketSort = 'gen' | 'fans' | 'age' | 'price';
@@ -3819,6 +4023,12 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'youth_promote') say('Il signe ! Il est dans ton effectif.');
       if (action.type === 'scout_send') say('Ton recruteur part en mission. Retour dans 2 semaines.');
       if (action.type === 'scout_hire') say('Nouveau recruteur engagé.');
+      if (action.type === 'staff_hire') say('Bienvenue dans le staff !');
+      if (action.type === 'staff_fire') say('Il a vidé son bureau.');
+      if (action.type === 'staff_focus') say(action.artistId ? 'Le coach a un nouveau chouchou.' : 'Le coach suit tout le monde pareil.');
+      if (action.type === 'staff_poach') say('Offre envoyée. Ils ont 2 semaines pour s’aligner.');
+      if (action.type === 'staff_poach_answer') say(action.match ? 'Tu t’alignes : il reste chez toi.' : 'Il fait ses cartons.');
+      if (action.type === 'staff_poach_cancel') say('Offre retirée.');
       if (action.type === 'sell') say('Artiste vendu.');
       if (action.type === 'transfer_ask') say('Offre envoyée.');
       if (action.type === 'transfer_answer' && action.answer === 'accept') say('Accord des labels. L’artiste doit encore signer.');
@@ -3947,6 +4157,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
             {TABS.map((t) => (
               <button key={t.id} type="button" data-tuto={`nav-${t.id}`} aria-current={tab === t.id ? 'page' : undefined} onClick={() => go(t.id)}>
                 {t.name}
+                {t.id === 'staff' && (view.staff?.offersIn.length ?? 0) > 0 && <i className="mt-navdot" aria-label="On veut débaucher ton staff" />}
               </button>
             ))}
           </nav>
@@ -3988,6 +4199,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
           )}
           {!talkWith && tab === 'releases' && <Releases view={view} onAct={run} busy={busy} onGo={go} />}
           {!talkWith && tab === 'academy' && <Academy view={view} onAct={run} busy={busy} />}
+          {!talkWith && tab === 'staff' && <StaffTab view={view} onAct={run} busy={busy} />}
           {!talkWith && tab === 'market' && <TransferMarket view={view} onTalk={(id) => void openTalk(id)} onAct={run} busy={busy} />}
           {!talkWith && tab === 'labels' && <LabelsTab view={view} onAct={run} onTalk={(id) => void openTalk(id)} onCeremony={() => setReplay(true)} busy={busy} />}
           {!talkWith && tab === 'charts' && <Charts view={view} />}

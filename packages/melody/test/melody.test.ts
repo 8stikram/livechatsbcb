@@ -6,8 +6,9 @@ import {
   applyAction, buildView, cancelSession, guestDemand, offerFeat, reactToEvent, startSession,
   makeOffer, openTalk, talkOf, talkBlocked, contractOf, studioOffers, BEATS, THEMES,
   releaseBlocked, promoViews, secretCombos, trendOf, rollSurprise, langOf, inventTitle, academyOf, LOOKS, lookOf, parseLook, seasonsOf,
+  STAFF, staffOf, staffWage, coachBoost, producerShare, houseProducer, viewsBoost, crowdBoost, gigEnergy,
 } from '../src/index.ts';
-import type { Artist, World } from '../src/index.ts';
+import type { Artist, StaffMember, World } from '../src/index.ts';
 
 const starter = (world: World): Artist => {
   const artist = world.artists.fic_nova_kale;
@@ -998,5 +999,164 @@ describe('saisons', () => {
     expect(result.ranking.map((r) => r.labelId)).toEqual([big.id, small.id]);
     expect(result.labels[small.id]!.cash).toBeGreaterThanOrEqual(10_000);
     expect(buildView(world, 'u2').seasonInfo.last!.labels[small.id]!.place).toBe(2);
+  });
+});
+
+describe('staff', () => {
+  const hire = (world: World, user: string, role: string): StaffMember => {
+    const view = buildView(world, user).staff!;
+    const candidate = view.candidates.find((c) => c.role === role)!;
+    applyAction(world, user, { type: 'staff_hire', candidateId: candidate.id });
+    const labelId = buildView(world, user).label!.id;
+    return staffOf(world, labelId).find((m) => m.role === role)!;
+  };
+
+  const twoPlayers = (): { world: World; a: string; b: string } => {
+    const world = createWorld(11);
+    for (const [user, name] of [['u1', 'Label Un'], ['u2', 'Label Deux']] as const) {
+      applyAction(world, user, { type: 'found', name });
+      applyAction(world, user, { type: 'tuto', move: 'skip' });
+    }
+    const a = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    const b = Object.values(world.labels).find((l) => l.ownerId === 'u2')!;
+    a.cash = 500_000;
+    b.cash = 500_000;
+    return { world, a: a.id, b: b.id };
+  };
+
+  it('offers six candidates a week, at least one per job, and a hired one leaves the list', () => {
+    const { world, labelId } = worldWithLabel();
+    world.labels[labelId]!.cash = 500_000;
+    const view = buildView(world, 'u1').staff!;
+    expect(view.candidates).toHaveLength(6);
+    for (const role of STAFF.roles) expect(view.candidates.some((c) => c.role === role), role).toBe(true);
+    expect(view.jobs.map((j) => j.member)).toEqual([null, null, null, null]);
+    const first = view.candidates[0]!;
+    applyAction(world, 'u1', { type: 'staff_hire', candidateId: first.id });
+    const after = buildView(world, 'u1').staff!;
+    expect(after.candidates).toHaveLength(5);
+    expect(after.jobs.find((j) => j.role === first.role)!.member).toMatchObject({ name: first.name, stars: first.stars });
+    expect(() => applyAction(world, 'u1', { type: 'staff_hire', candidateId: first.id })).toThrow(/plus disponible/);
+  });
+
+  it('pays the wages each week, and two weeks of wage to let someone go or replace him', () => {
+    const { world, labelId } = worldWithLabel();
+    const label = world.labels[labelId]!;
+    label.cash = 500_000;
+    const coach = hire(world, 'u1', 'coach');
+    const wage = staffWage(coach, label.tier);
+    expect(buildView(world, 'u1').staff!.wages).toBe(wage);
+    runTick(world);
+    // A new list each week: the next coach replaces the first one, who costs two weeks of wage to leave.
+    const next = buildView(world, 'u1').staff!.candidates.find((c) => c.role === 'coach')!;
+    const cash = label.cash;
+    applyAction(world, 'u1', { type: 'staff_hire', candidateId: next.id });
+    expect(label.cash).toBe(cash - wage * STAFF.fireWeeks);
+    expect(staffOf(world, labelId).filter((m) => m.role === 'coach')).toHaveLength(1);
+    expect(staffOf(world, labelId)[0]!.name).toBe(next.name);
+    const newWage = staffWage(staffOf(world, labelId)[0]!, label.tier);
+    const before = label.cash;
+    applyAction(world, 'u1', { type: 'staff_fire', role: 'coach' });
+    expect(label.cash).toBe(before - newWage * STAFF.fireWeeks);
+    expect(staffOf(world, labelId)).toHaveLength(0);
+    expect(() => applyAction(world, 'u1', { type: 'staff_fire', role: 'coach' })).toThrow(/Personne/);
+  });
+
+  it('makes the artists progress faster, more for the one the coach follows', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    world.labels[labelId]!.cash = 500_000;
+    expect(coachBoost(world, labelId, artist.id)).toBe(1);
+    const coach = hire(world, 'u1', 'coach');
+    coach.stars = 3;
+    expect(coachBoost(world, labelId, artist.id)).toBeCloseTo(1.3);
+    applyAction(world, 'u1', { type: 'staff_focus', artistId: artist.id });
+    expect(coachBoost(world, labelId, artist.id)).toBeCloseTo(1.9);
+    expect(coachBoost(world, labelId, 'someone_else')).toBeCloseTo(1.3);
+    const stranger = Object.keys(world.artists).find((id) => !contractOf(world, id))!;
+    expect(() => applyAction(world, 'u1', { type: 'staff_focus', artistId: stranger })).toThrow(/pas dans ton label/);
+    applyAction(world, 'u1', { type: 'staff_focus', artistId: null });
+    expect(coach.focusId).toBeNull();
+  });
+
+  it('makes the producer cheaper, the promos bigger, and the concerts fuller and less tiring', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    world.labels[labelId]!.cash = 500_000;
+    const producer = producerOfLevel(3);
+    expect(houseProducer(world, labelId, producer).price).toBe(producer.price);
+    expect(viewsBoost(world, labelId)).toBe(1);
+    expect(crowdBoost(world, labelId)).toBe(1);
+    expect(gigEnergy(world, labelId)).toBe(CFG.energy.gig);
+    for (const role of STAFF.roles) hire(world, 'u1', role).stars = 4;
+    expect(producerShare(world, labelId)).toBeCloseTo(0.2);
+    expect(houseProducer(world, labelId, producer).price).toBe(Math.round(producer.price * 0.2));
+    staffOf(world, labelId).find((m) => m.role === 'producer')!.stars = 5;
+    expect(houseProducer(world, labelId, producer).price).toBe(0);
+    expect(viewsBoost(world, labelId)).toBeCloseTo(1.6);
+    expect(crowdBoost(world, labelId)).toBeCloseTo(1.2);
+    expect(gigEnergy(world, labelId)).toBeLessThan(CFG.energy.gig);
+    expect(playGig(artist, 0, 1.2).audience).toBeGreaterThanOrEqual(playGig(artist, 0, 1).audience);
+    expect(buildView(world, 'u1').crowdBoost).toBeCloseTo(1.2);
+  });
+
+  it('gives a star after a season at the label, and the staff talks now and then', () => {
+    const { world, labelId } = worldWithLabel();
+    world.labels[labelId]!.cash = 2_000_000;
+    const booker = hire(world, 'u1', 'booker');
+    booker.stars = 2;
+    let quotes = 0;
+    let star = false;
+    for (let i = 0; i < STAFF.starTicks; i += 1) {
+      const events = runTick(world).labels[labelId]!.events;
+      if (events.some((e) => e.includes('pris du galon'))) star = true;
+      quotes += events.filter((e) => e.startsWith('«')).length;
+    }
+    expect(star).toBe(true);
+    expect(booker.stars).toBe(3);
+    expect(quotes).toBeGreaterThan(0);
+  });
+
+  it('lets a friend poach a staff member: match the raise to keep him, or he leaves', () => {
+    const { world, a, b } = twoPlayers();
+    const coach = hire(world, 'u1', 'coach');
+    expect(() => applyAction(world, 'u2', { type: 'staff_poach', labelId: a, role: 'coach', raise: 0.5 })).toThrow(/attends un peu/);
+    coach.shieldUntil = 0;
+    expect(() => applyAction(world, 'u2', { type: 'staff_poach', labelId: a, role: 'coach', raise: 0.3 })).toThrow(/augmentations proposées/);
+    expect(() => applyAction(world, 'u2', { type: 'staff_poach', labelId: a, role: 'booker', raise: 0.5 })).toThrow(/Personne/);
+    expect(() => applyAction(world, 'u1', { type: 'staff_poach', labelId: a, role: 'coach', raise: 0.5 })).toThrow(/introuvable/);
+    expect(buildView(world, 'u2').staff!.rivals).toHaveLength(1);
+    applyAction(world, 'u2', { type: 'staff_poach', labelId: a, role: 'coach', raise: 0.5 });
+    expect(world.marketNews!.at(-1)!.text).toContain('veut débaucher');
+    expect(buildView(world, 'u1').staff!.offersIn).toHaveLength(1);
+    expect(buildView(world, 'u2').staff!.offersOut).toHaveLength(1);
+    expect(buildView(world, 'u2').staff!.rivals[0]!.blocked).toBeTruthy();
+    // Matching keeps him, with the raise, and nobody can try again for a while.
+    applyAction(world, 'u1', { type: 'staff_poach_answer', offerId: buildView(world, 'u1').staff!.offersIn[0]!.id, match: true });
+    expect(coach.premium).toBe(0.5);
+    expect(staffOf(world, a)).toHaveLength(1);
+    expect(world.staffOffers).toHaveLength(0);
+    expect(() => applyAction(world, 'u2', { type: 'staff_poach', labelId: a, role: 'coach', raise: 0.2 })).toThrow(/attends un peu/);
+    // Refusing lets him go, with the new raise on top.
+    coach.shieldUntil = 0;
+    applyAction(world, 'u2', { type: 'staff_poach', labelId: a, role: 'coach', raise: 0.2 });
+    applyAction(world, 'u1', { type: 'staff_poach_answer', offerId: world.staffOffers![0]!.id, match: false });
+    expect(staffOf(world, a)).toHaveLength(0);
+    expect(staffOf(world, b)[0]).toMatchObject({ name: coach.name, premium: 0.7, focusId: null });
+    expect(world.marketNews!.at(-1)!.text).toContain('Débauchage');
+  });
+
+  it('moves the member when nobody answers in two weeks, and lets the offer be taken back', () => {
+    const { world, a, b } = twoPlayers();
+    hire(world, 'u2', 'community').shieldUntil = 0;
+    applyAction(world, 'u1', { type: 'staff_poach', labelId: b, role: 'community', raise: 1 });
+    applyAction(world, 'u1', { type: 'staff_poach_cancel', offerId: world.staffOffers![0]!.id });
+    expect(world.staffOffers).toHaveLength(0);
+    applyAction(world, 'u1', { type: 'staff_poach', labelId: b, role: 'community', raise: 1 });
+    runTick(world);
+    expect(staffOf(world, b)).toHaveLength(1);
+    const events = runTick(world).labels;
+    expect(staffOf(world, b)).toHaveLength(0);
+    expect(staffOf(world, a)[0]!.premium).toBe(1);
+    expect(events[a]!.events.some((e) => e.includes('rejoint ton staff'))).toBe(true);
+    expect(events[b]!.events.some((e) => e.includes('est parti chez'))).toBe(true);
   });
 });

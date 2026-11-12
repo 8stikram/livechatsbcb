@@ -23,6 +23,7 @@ const IdSchema = z.string().min(1).max(64);
 const COVER_MAX = 40_000;
 const CoverSchema = z.string().max(COVER_MAX).regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/);
 
+const StaffRoleSchema = z.enum(['coach', 'producer', 'community', 'booker']);
 export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('found'), name: z.string().min(1).max(60), starterId: IdSchema.optional() }),
   z.object({ type: z.literal('scout_send'), zone: IdSchema, genre: IdSchema.nullable() }),
@@ -66,6 +67,12 @@ export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('tour_cancel'), tourId: IdSchema }),
   z.object({ type: z.literal('season_goals'), goals: z.array(z.string().min(1).max(20)).min(1).max(3) }),
   z.object({ type: z.literal('season_seen') }),
+  z.object({ type: z.literal('staff_hire'), candidateId: IdSchema }),
+  z.object({ type: z.literal('staff_fire'), role: StaffRoleSchema }),
+  z.object({ type: z.literal('staff_focus'), artistId: IdSchema.nullable() }),
+  z.object({ type: z.literal('staff_poach'), labelId: IdSchema, role: StaffRoleSchema, raise: z.number().min(0).max(1) }),
+  z.object({ type: z.literal('staff_poach_answer'), offerId: IdSchema, match: z.boolean() }),
+  z.object({ type: z.literal('staff_poach_cancel'), offerId: IdSchema }),
   z.object({ type: z.literal('studio'), artistId: IdSchema, themeId: IdSchema, beatId: IdSchema, levels: LevelsSchema }),
   z.object({ type: z.literal('react'), reactionId: IdSchema }),
   z.object({ type: z.literal('feat'), guestId: IdSchema, offer: z.number().min(1).max(1e9) }),

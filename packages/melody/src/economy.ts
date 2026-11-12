@@ -62,8 +62,9 @@ export interface GigResult {
 }
 
 /** One concert at home: the game picks the venue that earns the most. */
-export const playGig = (artist: Artist, alreadyThisWeek = 0): GigResult => {
+export const playGig = (artist: Artist, alreadyThisWeek = 0, crowd = 1): GigResult => {
   const demand =
+    crowd *
     CFG.live.demandFactor * Math.sqrt(artist.fans) * (0.5 + artist.hype / 50) * Math.max(0.25, 1 - CFG.live.repeatPenalty * alreadyThisWeek);
   let best: GigResult | null = null;
   for (const venue of CFG.live.venues) {

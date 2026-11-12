@@ -272,6 +272,9 @@ export interface World {
   clashes?: import('./clash.ts').Clash[];
   projects?: import('./projects.ts').Project[];
   tours?: import('./tours.ts').Tour[];
+  /** The staff of each label, and the offers players make to each other's staff. */
+  staff?: Record<string, import('./staff.ts').StaffMember[]>;
+  staffOffers?: import('./staff.ts').StaffOffer[];
   /** The season being played, its goals, and the past seasons. */
   seasons?: import('./seasons.ts').Seasons;
   /** Tick of the last shade of each label (one a week). */

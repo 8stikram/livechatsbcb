@@ -237,3 +237,18 @@ Choix du propriétaire : saison de **4 vraies semaines** (28 semaines de jeu), *
 - **Palmarès** : sur la fiche de chaque label, sa place et ses trophées saison par saison (12 saisons gardées).
 - **Après** : rien n'est remis à zéro sauf les compteurs de saison. De nouveaux objectifs sont proposés tout de suite.
 - Un label qui arrive en cours de saison reçoit ses objectifs à son arrivée.
+
+## Étape 13 — staff (fait)
+
+Choix du propriétaire : **les 4 postes essentiels**, embauche **comme les recruteurs** (candidats à étoiles aux noms drôles, liste qui change chaque semaine), **salaire chaque semaine**, et tous les plus (coach attitré, staff qui progresse, débauchage entre amis, petites phrases).
+
+- **Onglet Staff** : 4 postes, une personne chacun. Licencier coûte 2 semaines de salaire. Engager quelqu'un sur un poste déjà pris remplace l'ancien (même prix de départ).
+- **Salaires** : 50 à 3 000 € par semaine selon les étoiles, × le palier du label.
+- **Coach** : les artistes progressent 10 % plus vite par étoile. Celui qu'il suit de près (au choix) : 30 % par étoile.
+- **Producteur maison** : le producteur du studio coûte 20 % de moins par étoile. Gratuit à 5 étoiles.
+- **Community manager** : +15 % de vues par étoile sur toutes les promos.
+- **Booker** : +5 % de public par étoile en concert et en tournée, et 5 % d'énergie en moins par concert.
+- **Progression** : une étoile de plus après une saison (28 semaines) au label, avec un nouveau titre.
+- **Débauchage entre amis** : on propose +20 %, +50 % ou +100 % de salaire au staff d'un autre joueur. Son label a 2 semaines pour s'aligner (il garde la personne, plus chère) ou la laisser partir. Sans réponse, elle part. Après une arrivée ou un alignement, personne ne peut la débaucher pendant 4 semaines. Un point rouge sur l'onglet Staff prévient le joueur visé.
+- **Petites phrases** : une semaine sur trois environ, quelqu'un du staff dit une bêtise dans le bilan de la semaine.
+- Limites (gratuité) : 3 offres en cours par label, 100 par serveur.

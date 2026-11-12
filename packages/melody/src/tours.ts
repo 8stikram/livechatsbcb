@@ -6,6 +6,7 @@ import { CFG } from './config.ts';
 import { contractOf, rosterOf } from './economy.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
 import type { Artist, Label, World } from './types.ts';
+import { crowdBoost } from './staff.ts';
 import { GameError } from './world.ts';
 
 const fail = (message: string): never => {
@@ -101,8 +102,8 @@ export interface TourQuote {
 
 /** What a tour would look like, before announcing it. */
 /** split: the co-headliner is another player's artist, whose label takes half the money. */
-export const tourQuote = (fans: number, hype: number, dates: number, merch: boolean, partnerFans = 0, split = false): TourQuote => {
-  const venue = bestVenue(dateDemand(fans + partnerFans, hype));
+export const tourQuote = (fans: number, hype: number, dates: number, merch: boolean, partnerFans = 0, split = false, crowd = 1): TourQuote => {
+  const venue = bestVenue(dateDemand(fans + partnerFans, hype) * crowd);
   const setup = Math.round(venue.fixed * TOURS.setupShare * dates);
   const items = Math.round(venue.audience * TOURS.merchBuy * dates);
   const merchCost = merch ? items * TOURS.merchCost : 0;
@@ -148,7 +149,7 @@ export const announceTour = (
     openerId = opener.id;
   }
   if (toursOf(world).length >= TOURS.maxPerWorld) fail('Trop de tournées sur ce serveur. Réessaie la semaine prochaine.');
-  const quote = tourQuote(artist.fans, artist.hype, dates, request.merch ?? false, partnerFans);
+  const quote = tourQuote(artist.fans, artist.hype, dates, request.merch ?? false, partnerFans, false, crowdBoost(world, label.id));
   const cost = quote.setup + quote.merchCost;
   if (cost > label.cash) fail(`Pas assez de cash : la tournée coûte ${cost.toLocaleString('fr-FR')} € à monter.`);
   label.cash -= cost;
@@ -270,7 +271,7 @@ export const tickTours = (
     let merch = 0;
     let crowd = 0;
     for (let i = 0; i < tonight; i += 1) {
-      const venue = bestVenue(dateDemand(artist.fans + (partner?.fans ?? 0), artist.hype) * rng.range(0.85, 1.15));
+      const venue = bestVenue(dateDemand(artist.fans + (partner?.fans ?? 0), artist.hype) * crowdBoost(world, label.id) * rng.range(0.85, 1.15));
       crowd += venue.audience;
       money += venue.profit > 0 ? venue.profit * CFG.live.labelShare : venue.profit;
       if (tour.merch && tour.merchStock > 0) {

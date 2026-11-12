@@ -4,6 +4,7 @@ import { CFG } from './config.ts';
 import { trendBoost } from './craft.ts';
 import { beatById, coherence } from './data/content.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
+import { viewsBoost } from './staff.ts';
 import type { Artist, PromoResult, Song, Trends, World } from './types.ts';
 
 const R = CFG.release;
@@ -133,7 +134,10 @@ export const hitWord = (hitScore: number): string => {
 /** What a release does its first week: shared by the weekly tick and the tutorial's forecast. */
 export const releaseWeek = (world: World, song: Song, artist: Artist, tick: number, rivals: number): { week: FirstWeek; promo: PromoResult[] } => {
   const feat = song.featArtistId ? world.artists[song.featArtistId] : undefined;
-  const promo = song.marketingIds ? promoViews(song.marketingIds, artist, rngFor(world.seed, tick, `promo:${song.id}`)) : [];
+  const views = viewsBoost(world, song.labelId);
+  const promo = song.marketingIds
+    ? promoViews(song.marketingIds, artist, rngFor(world.seed, tick, `promo:${song.id}`)).map((p) => ({ ...p, views: Math.round(p.views * views) }))
+    : [];
   const reach = song.marketingIds ? promo.reduce((sum, p) => sum + p.views, 0) : song.marketingReach;
   const genres = [artist.genre, ...beatById(song.beatId).genres];
   const fit = clamp(publicFit(artist, song.themeId, song.beatId, world.trends) * trendBoost(world, tick, genres, song.themeId, song.beatId), 0.5, 2.2);

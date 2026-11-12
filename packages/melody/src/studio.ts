@@ -6,6 +6,7 @@ import { CFG } from './config.ts';
 import { GENRES, beatById } from './data/content.ts';
 import { contractOf } from './economy.ts';
 import { onTour } from './tours.ts';
+import { houseProducer } from './staff.ts';
 import { estimateQuality, featChance, featDemand, producerOfLevel, songCost, songEnergy } from './quality.ts';
 import { clamp, rngFor } from './rng.ts';
 import type { Artist, Label, SessionEvent, SongLevels, StudioSession, StudioStage, World } from './types.ts';
@@ -472,7 +473,7 @@ const contextOf = (world: World, session: StudioSession): Context => {
   return {
     artist,
     levels: session.levels,
-    baseCost: songCost(session.levels, producerOfLevel(session.levels.producer), tierOfArtist(world, session.artistId)),
+    baseCost: songCost(session.levels, houseProducer(world, contractOf(world, session.artistId)?.labelId ?? '', producerOfLevel(session.levels.producer)), tierOfArtist(world, session.artistId)),
     featFee: session.feat?.fee ?? 0,
   };
 };
@@ -521,7 +522,7 @@ export const startSession = (world: World, label: Label, request: { artistId: st
     if (!offers.themes.some((t) => t.id === request.themeId)) fail('Ce thème n’est pas proposé cette semaine.');
     if (!offers.beats.some((b) => b.id === request.beatId)) fail('Ce beat n’est pas proposé cette semaine.');
   }
-  const cost = songCost(request.levels, producerOfLevel(request.levels.producer), label.tier);
+  const cost = songCost(request.levels, houseProducer(world, label.id, producerOfLevel(request.levels.producer)), label.tier);
   const cap = CFG.tiers.songBudgetCap[label.tier - 1] ?? 15_000;
   if (cost > cap) fail('Ce son dépasse le budget autorisé pour ton palier.');
   if (cost > label.cash) fail('Pas assez de cash pour ce son.');
@@ -644,7 +645,7 @@ export const guestChoices = (world: World, label: Label, session: StudioSession)
   if (!host) return [];
   const family = GENRES[host.genre].family;
   const near = new Set([host.genre, ...GENRES[host.genre].neighbours]);
-  const base = songCost(session.levels, producerOfLevel(session.levels.producer), label.tier);
+  const base = songCost(session.levels, houseProducer(world, label.id, producerOfLevel(session.levels.producer)), label.tier);
   const cap = CFG.tiers.songBudgetCap[label.tier - 1] ?? 15_000;
   const budget = Math.max(0, Math.min(label.cash - base - session.cost, cap - base));
   const affordable = Object.values(world.artists)
@@ -671,7 +672,7 @@ export const offerFeat = (world: World, label: Label, guestId: string, offer: nu
   const blocked = guestBlocked(world, label.id, guest);
   if (blocked) fail(`${guest.name} : ${blocked.toLowerCase()}.`);
   const host = world.artists[session.artistId] ?? fail('Artiste introuvable.');
-  const base = songCost(session.levels, producerOfLevel(session.levels.producer), label.tier);
+  const base = songCost(session.levels, houseProducer(world, label.id, producerOfLevel(session.levels.producer)), label.tier);
   const price = Math.round(offer);
   if (price < 1) fail('Propose une somme.');
   if (base + session.cost + price > label.cash) fail('Pas assez de cash pour cette offre.');

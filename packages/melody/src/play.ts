@@ -14,6 +14,7 @@ import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer,
 import { GameError, addPlayerLabel, bookGig, createSong, expectedOffer, freeAgents, scheduleRelease, takeLoan, type Offer } from './world.ts';
 import { addDeluxe, createProject, projectsView, type ProjectKind, type ProjectView } from './projects.ts';
 import { announceTour, answerTourInvite, cancelTour, tourGuests, toursView, type TourView } from './tours.ts';
+import { answerPoach, cancelPoach, crowdBoost, fireStaff, focusCoach, hireStaff, houseProducer, poachStaff, staffView, type StaffRole, type StaffView } from './staff.ts';
 import { enterSeason, honoursOf, pickGoals, seasonView, watchCeremony, type Honour, type SeasonView } from './seasons.ts';
 import { answerClash, answerInterview, clashesView, interviewView, refuseClash, rivalsView, shadeView, startClash, throwShade, type ClashView, type InterviewView, type RivalView, type ShadeView, type Tone } from './clash.ts';
 import { answerTransfer, askTransfer, cancelTransfer, clauseOf, setClause, transfersView, type TransferView } from './transfers.ts';
@@ -142,6 +143,12 @@ export type MelodyAction =
   | { type: 'tour_cancel'; tourId: string }
   | { type: 'season_goals'; goals: string[] }
   | { type: 'season_seen' }
+  | { type: 'staff_hire'; candidateId: string }
+  | { type: 'staff_fire'; role: StaffRole }
+  | { type: 'staff_focus'; artistId: string | null }
+  | { type: 'staff_poach'; labelId: string; role: StaffRole; raise: number }
+  | { type: 'staff_poach_answer'; offerId: string; match: boolean }
+  | { type: 'staff_poach_cancel'; offerId: string }
   | { type: 'loan'; amount: number; weeks: 8 | 16 | 24 };
 
 const labelOfOwner = (world: World, ownerId: string): Label => {
@@ -281,7 +288,7 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
       if (title.length === 0) throw new GameError('Donne un titre à ce son.');
       const session = sessionOf(world, label.id);
       if (!session) throw new GameError("Tu n'es pas en studio.");
-      finishSession(world, label, title, producerFor(world, session.levels.producer, session.beatId));
+      finishSession(world, label, title, houseProducer(world, label.id, producerFor(world, session.levels.producer, session.beatId)));
       const made = world.songs[world.songs.length - 1];
       if (made && made.labelId === label.id) made.cover = typeof action.cover === 'string' && action.cover.length > 0;
       return;
@@ -312,6 +319,24 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
       return;
     case 'season_seen':
       watchCeremony(world, label);
+      return;
+    case 'staff_hire':
+      hireStaff(world, label, action.candidateId);
+      return;
+    case 'staff_fire':
+      fireStaff(world, label, action.role);
+      return;
+    case 'staff_focus':
+      focusCoach(world, label, action.artistId);
+      return;
+    case 'staff_poach':
+      poachStaff(world, label, action.labelId, action.role, action.raise);
+      return;
+    case 'staff_poach_answer':
+      answerPoach(world, label, action.offerId, action.match);
+      return;
+    case 'staff_poach_cancel':
+      cancelPoach(world, label, action.offerId);
       return;
     case 'loan':
       takeLoan(world, label.id, action.amount, action.weeks);
@@ -457,6 +482,10 @@ export interface MelodyView {
   weekOfSeason: number;
   /** Goals of the season, and the last season's results. */
   seasonInfo: SeasonView;
+  /** The label's staff, the candidates of the week, and the poaching between players. */
+  staff: StaffView | null;
+  /** Crowd bonus of the booker, for the tour quote. */
+  crowdBoost: number;
   trends: Trends;
   label: null | {
     id: string;
@@ -627,6 +656,8 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     season: Math.floor(world.tick / CFG.ticksPerSeason) + 1,
     weekOfSeason: (world.tick % CFG.ticksPerSeason) + 1,
     seasonInfo: seasonView(world, label ?? undefined),
+    staff: label ? staffView(world, label) : null,
+    crowdBoost: label ? crowdBoost(world, label.id) : 1,
     trends: world.trends,
     label: label && {
       id: label.id,
@@ -650,7 +681,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     roster: roster.map((artist) => {
       const contract = contractOf(world, artist.id);
       const gigsBooked = world.gigs.filter((g) => g.artistId === artist.id).length;
-      const gig = playGig(artist, gigsBooked);
+      const gig = playGig(artist, gigsBooked, label ? crowdBoost(world, label.id) : 1);
       return {
         ...artistView(artist, viewer, 12),
         attrs: artist.attrs,
@@ -756,7 +787,7 @@ const lastSongOf = (world: World, artistId: string): RosterView['lastSong'] => {
 
 const sessionOfLabel = (world: World, label: Label): SessionView | null => {
   const session = sessionOf(world, label.id);
-  return session ? sessionView(world, label, producerFor(world, session.levels.producer, session.beatId)) : null;
+  return session ? sessionView(world, label, houseProducer(world, label.id, producerFor(world, session.levels.producer, session.beatId))) : null;
 };
 
 export interface SongPreview {
@@ -771,7 +802,7 @@ export interface SongPreview {
 export const previewSong = (world: World, artistId: string, themeId: string, beatId: string, levels: SongLevels): SongPreview => {
   const artist = world.artists[artistId];
   if (!artist) throw new GameError('Artiste introuvable.');
-  const producer = producerFor(world, levels.producer, beatId);
+  const producer = houseProducer(world, contractOf(world, artistId)?.labelId ?? '', producerFor(world, levels.producer, beatId));
   const estimate = estimateQuality({ artist, themeId, beatId, levels, producer, experience: experienceBonus(world, artist) });
   return {
     cost: songCost(levels, producer, world.labels[contractOf(world, artistId)?.labelId ?? '']?.tier ?? 3),
