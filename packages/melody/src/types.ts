@@ -101,6 +101,8 @@ export interface Contract {
   unrecouped: number;
   weeklyAllowance: number;
   royaltyRate: number;
+  /** Price at which another player can buy him without asking (transfers between players). */
+  releaseClause?: number;
 }
 
 export type LabelKind = 'player' | 'npc';
@@ -258,6 +260,7 @@ export interface World {
   tutorials?: Record<string, import('./tutorial.ts').Tutorial>;
   /** Featuring requests between players. */
   featDeals?: import('./featdeals.ts').FeatDeal[];
+  transfers?: import('./transfers.ts').Transfer[];
   /** The centre de formation of each label: youths, scout, mission. */
   academies?: Record<string, import('./academy.ts').Academy>;
   /** Artists each label keeps an eye on in the market. */

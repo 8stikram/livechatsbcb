@@ -3,7 +3,7 @@
 // Once accepted the fee is paid, and the deal can be used in the studio for four weeks, without the wheel.
 import { generalRating } from './artists.ts';
 import { featDemand } from './quality.ts';
-import { contractOf } from './economy.ts';
+import { artistValue, contractOf } from './economy.ts';
 import type { Artist, GenreId, Label, World } from './types.ts';
 import { GameError } from './world.ts';
 
@@ -226,6 +226,12 @@ export interface OtherArtistView {
   demand: number;
   /** A request of this label is already open for him. */
   asked: boolean;
+  /** Price to buy him without asking, or null. */
+  clause: number | null;
+  /** This label already made a transfer offer for him. */
+  bidding: boolean;
+  /** A rough idea of his worth, to start a transfer offer. */
+  value: number;
 }
 
 /** The artists of the other players, to ask for a featuring. */
@@ -245,6 +251,9 @@ export const otherArtists = (world: World, labelId: string): OtherArtistView[] =
       labelName: label.name,
       demand: featDemand(artist),
       asked: asked.has(artist.id),
+      clause: contractOf(world, artist.id)?.releaseClause ?? null,
+      bidding: (world.transfers ?? []).some((t) => (t.status === 'pending' || t.status === 'agreed') && t.buyerId === labelId && t.artistId === artist.id),
+      value: artistValue(artist),
     }))
     .sort((a, b) => b.fans - a.fans)
     .slice(0, 60);

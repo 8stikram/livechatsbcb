@@ -12,6 +12,7 @@ import { releaseBlocked } from './world.ts';
 import { createRng, hashString } from './rng.ts';
 import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer, SongLevels, Trends, World } from './types.ts';
 import { GameError, addPlayerLabel, bookGig, createSong, expectedOffer, freeAgents, scheduleRelease, takeLoan, type Offer } from './world.ts';
+import { answerTransfer, askTransfer, cancelTransfer, clauseOf, setClause, transfersView, type TransferView } from './transfers.ts';
 import { answerDeal, askFeat, cancelDeal, dealsView, otherArtists, type FeatDealView, type OtherArtistView } from './featdeals.ts';
 import { afterAction, isGuarded, nextStep, refund, skipTutorial, startTutorial, tutorialView, type TutorialView } from './tutorial.ts';
 import { leaveTalk, makeOffer, openTalk, talkBlocked, talkNews, talksOfLabel, type TalkNews, type TalkView } from './negotiation.ts';
@@ -111,6 +112,10 @@ export type MelodyAction =
   | { type: 'feat_ask'; guestId: string; fee: number }
   | { type: 'feat_answer'; dealId: string; answer: 'accept' | 'refuse' | 'counter'; fee?: number }
   | { type: 'feat_cancel'; dealId: string }
+  | { type: 'transfer_ask'; artistId: string; fee: number }
+  | { type: 'transfer_answer'; transferId: string; answer: 'accept' | 'refuse' | 'counter'; fee?: number }
+  | { type: 'transfer_cancel'; transferId: string }
+  | { type: 'clause'; artistId: string; amount: number | null }
   | { type: 'feat_deal'; dealId: string }
   | { type: 'studio'; artistId: string; themeId: string; beatId: string; levels: SongLevels }
   | { type: 'react'; reactionId: string }
@@ -158,6 +163,18 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
       return;
     case 'feat_cancel':
       cancelDeal(world, label, action.dealId);
+      return;
+    case 'transfer_ask':
+      askTransfer(world, label, action.artistId, action.fee);
+      return;
+    case 'transfer_answer':
+      answerTransfer(world, label, action.transferId, action.answer, action.fee);
+      return;
+    case 'transfer_cancel':
+      cancelTransfer(world, label, action.transferId);
+      return;
+    case 'clause':
+      setClause(world, label, action.artistId, action.amount);
       return;
     case 'feat_deal':
       useDeal(world, label, action.dealId);
@@ -282,6 +299,8 @@ export interface RosterView extends ArtistView {
   songsMade: number;
   /** What the label gets if it sells him. */
   salePrice: number;
+  /** Release clause the label put on him, or null. */
+  clause: number | null;
   /** The note his songs turn around, with choices that fit. */
   expectedNote: number;
 }
@@ -405,6 +424,7 @@ export interface MelodyView {
   tutorial: TutorialView | null;
   /** Featuring requests with other players, sent and received. */
   featDeals: FeatDealView[];
+  transfers: TransferView[];
   /** The artists of the other players of the server. */
   others: OtherArtistView[];
   /** Contract talks open this week. */
@@ -484,6 +504,9 @@ const toggleFavourite = (world: World, label: Label, artistId: string): void => 
   world.favourites = { ...world.favourites, [label.id]: next };
 };
 
+/** Weeks an artist stays before the label can sell him. */
+const SELL_AFTER = 8;
+
 /** What the market pays for an artist the label lets go: half of his value. */
 export const salePrice = (artist: Artist): number => Math.round(artistValue(artist) * 0.5);
 
@@ -493,6 +516,9 @@ const sellArtist = (world: World, label: Label, artistId: string): void => {
   if (contractOf(world, artistId)?.labelId !== label.id) throw new GameError(`${artist.name} n'est pas dans ton label.`);
   if (sessionOf(world, label.id)?.artistId === artistId) throw new GameError('Il est en studio : finis ou quitte la session.');
   if (tutorialView(world, label.id)) throw new GameError('Finis le tutoriel avant de vendre un artiste.');
+  // No quick flip: an artist signed (or promoted from the academy) stays at least a few weeks.
+  const since = world.tick - (contractOf(world, artistId)?.startTick ?? 0);
+  if (since < SELL_AFTER) throw new GameError(`${artist.name} vient de signer : tu pourras le vendre dans ${SELL_AFTER - since} semaine${SELL_AFTER - since > 1 ? 's' : ''}.`);
   const price = salePrice(artist);
   label.cash += price;
   world.contracts = world.contracts.filter((c) => c.artistId !== artistId);
@@ -567,6 +593,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
         lastSong: lastSongOf(world, artist.id),
         songsMade: world.songs.filter((s) => s.artistId === artist.id).length,
         salePrice: salePrice(artist),
+        clause: clauseOf(world, artist.id),
         expectedNote: Math.round(generalRating(artist) + experienceBonus(world, artist)),
       };
     }),
@@ -616,6 +643,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     talks: label ? talksOfLabel(world, label.id) : [],
     tutorial: label ? tutorialView(world, label.id) : null,
     featDeals: label ? dealsView(world, label.id) : [],
+    transfers: label ? transfersView(world, label.id) : [],
     others: label ? otherArtists(world, label.id) : [],
     talkNews: label ? talkNews(world, label.id) : [],
     trend: trendOf(world),
@@ -662,7 +690,7 @@ export const previewSong = (world: World, artistId: string, themeId: string, bea
   const producer = producerFor(world, levels.producer, beatId);
   const estimate = estimateQuality({ artist, themeId, beatId, levels, producer, experience: experienceBonus(world, artist) });
   return {
-    cost: songCost(levels, producer),
+    cost: songCost(levels, producer, world.labels[contractOf(world, artistId)?.labelId ?? '']?.tier ?? 3),
     energy: songEnergy(levels, false, artist),
     qualityMin: estimate.min,
     qualityMax: estimate.max,

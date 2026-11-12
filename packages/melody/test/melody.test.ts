@@ -643,6 +643,8 @@ describe('centre de formation', () => {
     expect(buildView(world, 'u1').academy!.youths).toHaveLength(1);
 
     const artist = rosterOf(world, label.id)[0]!;
+    expect(() => applyAction(world, 'u1', { type: 'sell', artistId: artist.id })).toThrow(/vient de signer/);
+    contractOf(world, artist.id)!.startTick -= 8;
     const price = buildView(world, 'u1').roster[0]!.salePrice;
     const cash = label.cash;
     applyAction(world, 'u1', { type: 'sell', artistId: artist.id });
@@ -659,5 +661,73 @@ describe('centre de formation', () => {
     expect(locked.every((m) => m.blocked !== null)).toBe(true);
     applyAction(world, 'u1', { type: 'fav', artistId: locked[0]!.id });
     expect(buildView(world, 'u1').market.find((m) => m.id === locked[0]!.id)?.fav).toBe(true);
+  });
+});
+
+describe('transferts entre joueurs', () => {
+  const twoLabels = () => {
+    const world = createWorld(42);
+    for (const [user, name] of [['u1', 'Acheteur Records'], ['u2', 'Vendeur Records']] as const) {
+      applyAction(world, user, { type: 'found', name });
+      applyAction(world, user, { type: 'tuto', move: 'skip' });
+    }
+    const buyer = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    const seller = Object.values(world.labels).find((l) => l.ownerId === 'u2')!;
+    buyer.cash = 100_000;
+    seller.cash = 5_000;
+    const artist = rosterOf(world, seller.id)[0]!;
+    return { world, buyer, seller, artist };
+  };
+  const generous = (artist: Artist) => {
+    const e = expectedOffer(artist);
+    return { advance: Math.round(e.advance * 1.5) + 500, royaltyRate: Math.min(0.5, e.royaltyRate * 1.5), months: 12 as const, weeklyAllowance: 100 };
+  };
+
+  it('agrees a price with counter-offers, then pays only when the artist signs', () => {
+    const { world, buyer, seller, artist } = twoLabels();
+    applyAction(world, 'u1', { type: 'transfer_ask', artistId: artist.id, fee: 1 });
+    const offer = buildView(world, 'u2').transfers[0]!;
+    expect(offer).toMatchObject({ direction: 'received', myTurn: true, fee: 1 });
+    applyAction(world, 'u2', { type: 'transfer_answer', transferId: offer.id, answer: 'counter', fee: 9_000 });
+    expect(() => applyAction(world, 'u2', { type: 'transfer_answer', transferId: offer.id, answer: 'accept' })).toThrow(/pas à toi/);
+    applyAction(world, 'u1', { type: 'transfer_answer', transferId: offer.id, answer: 'accept' });
+    expect(buildView(world, 'u1').transfers[0]!.status).toBe('agreed');
+    expect(buyer.cash).toBe(100_000);
+    expect(contractOf(world, artist.id)!.labelId).toBe(seller.id);
+    expect(world.marketNews!.at(-1)!.text).toMatch(/9\s000/);
+
+    const mood = applyAction(world, 'u1', { type: 'offer', artistId: artist.id, offer: generous(artist) });
+    void mood;
+    expect(contractOf(world, artist.id)!.labelId).toBe(buyer.id);
+    expect(seller.cash).toBe(5_000 + 9_000);
+    expect(buildView(world, 'u1').transfers[0]!.status).toBe('done');
+    expect(world.marketNews!.some((n) => n.text.startsWith('Transfert'))).toBe(true);
+  });
+
+  it('lets the release clause skip the seller, and keeps others away from a signed artist', () => {
+    const { world, artist } = twoLabels();
+    expect(talkBlocked(world, Object.values(world.labels).find((l) => l.ownerId === 'u1')!, artist)).toBe('Déjà sous contrat');
+    applyAction(world, 'u2', { type: 'clause', artistId: artist.id, amount: 20_000 });
+    expect(buildView(world, 'u1').others.find((o) => o.id === artist.id)!.clause).toBe(20_000);
+    applyAction(world, 'u1', { type: 'transfer_ask', artistId: artist.id, fee: 20_000 });
+    expect(buildView(world, 'u1').transfers[0]).toMatchObject({ status: 'agreed', byClause: true });
+  });
+
+  it('drops an unsigned agreement after two weeks, and the artist stays', () => {
+    const { world, seller, artist } = twoLabels();
+    applyAction(world, 'u2', { type: 'clause', artistId: artist.id, amount: 100 });
+    applyAction(world, 'u1', { type: 'transfer_ask', artistId: artist.id, fee: 100 });
+    runTick(world);
+    runTick(world);
+    expect(buildView(world, 'u1').transfers[0]!.status).toBe('expired');
+    expect(contractOf(world, artist.id)!.labelId).toBe(seller.id);
+  });
+});
+
+describe('prix du studio', () => {
+  it('makes a small label pay small prices', () => {
+    const levels = { theme: 3, beat: 3, producer: 3, studio: 3 } as const;
+    const producer = producerOfLevel(3);
+    expect(songCost(levels, producer, 1)).toBeLessThan(songCost(levels, producer, 3) / 5);
   });
 });

@@ -2154,7 +2154,8 @@ describe('Melody Tycoon', () => {
 
     const previewed = await post(`/v1/melody/${guildId}/preview`, { artistId: artist.id, themeId, beatId, levels }, bearer(player.token), QUICK_BASE);
     const preview = (await previewed.json()) as { ok: true; preview: { cost: number; qualityMin: number; qualityMax: number; energy: number } };
-    expect(preview.preview.cost).toBe(600 + 400 + 1_000 + 1_500);
+    // A small label pays 15 % of the full studio prices.
+    expect(preview.preview.cost).toBe(Math.round((600 + 400 + 1_000 + 1_500) * 0.15));
     expect(preview.preview.qualityMax).toBeGreaterThan(preview.preview.qualityMin);
 
     // In the booth: one event after each choice, every embrouille answered, then no featuring.

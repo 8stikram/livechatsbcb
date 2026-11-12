@@ -50,6 +50,8 @@ export const CFG = {
     studioDelay: [0, 0, 1, 1],
     producerLevel: [48, 57, 63, 68],
     producerPrice: [0, 1_000, 5_500, 40_000],
+    /** Studio prices follow the size of the label: a small label pays small-label prices. */
+    tierPrice: [0.15, 0.4, 1, 1, 1, 1],
   },
 
   release: {

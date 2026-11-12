@@ -172,3 +172,13 @@ Choix du propriétaire : la note vient des **choix**, pas de l'argent ; c'est la
 - **Marché** : recherche, genre, pays, avance max ; tri note, fans, âge, prix ; favoris ; artistes sous contrat chez un label montrés avec un cadenas (après les libres) ; nouvelles du marché.
 - **Vendre** un artiste : dans l'Effectif, pour la moitié de sa valeur (pas pendant le tutoriel ni en studio).
 - **Onglet Label** : classement du serveur, fiches des labels (artistes, meilleurs sons), featurings entre joueurs, artistes des autres joueurs. Le classement n'est plus dans Charts.
+
+## Étape 8 — transferts entre joueurs (fait)
+
+- **Offre** : dans l'onglet Label, sur un artiste d'un ami, « Faire une offre de transfert ». Prix libre (même 1 €).
+- **Contre-offres** : le vendeur accepte, refuse ou propose un autre prix ; ça repart dans l'autre sens jusqu'à un oui ou un non. 2 semaines pour répondre.
+- **Accord des labels** : l'acheteur a ensuite 2 semaines pour **négocier un nouveau contrat** avec l'artiste (même écran que pour un artiste libre). L'argent ne bouge que s'il signe : prix du transfert au vendeur, avance à l'artiste, son ancien contrat s'arrête.
+- **Clause de rachat** : dans l'Effectif, le joueur peut mettre un prix sur son artiste. Une offre à ce prix passe sans son accord.
+- **Fil de la party** : l'accord et le transfert apparaissent dans les nouvelles du marché, avec le montant.
+- **Vente** : on ne peut plus vendre un artiste dans ses 8 premières semaines (sinon un jeune du centre signé gratuitement se revendait tout de suite).
+- **Prix du studio selon le palier** : Label Maison paie 15 % des prix, Underground 40 %, ensuite plein tarif. Un son « plume reconnue » + beat exclusif + producteur reconnu + studio pro coûte ~3 000 € au lieu de 20 000 €.

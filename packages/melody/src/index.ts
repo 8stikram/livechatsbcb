@@ -5,7 +5,7 @@ export { GENRES, GENRE_IDS, BEATS, THEMES, beatById, coherence } from './data/co
 export { CATALOG_ARTISTS, CATALOG_LABELS } from './data/catalog.gen.ts';
 export { artistFromCatalog, artisticSkill, generalRating, genreAffinity, energyRegen } from './artists.ts';
 export {
-  estimateQuality, rollQuality, qualityWord, songCost, songDelay, songEnergy, producerOfLevel, featDemand, featChance,
+  estimateQuality, rollQuality, qualityWord, songCost, priceScale, songDelay, songEnergy, producerOfLevel, featDemand, featChance,
   type SongPlan, type QualityEstimate,
 } from './quality.ts';
 export { MARKETING, marketingById, publicFit, firstWeek, hitWord, buzzOf, promoViews, releaseWeek, type FirstWeek, type FirstWeekInput } from './release.ts';
@@ -42,6 +42,10 @@ export {
   DEALS, askFeat, answerDeal, cancelDeal, usableDeals, dealsView, otherArtists, tickDeals,
   type FeatDeal, type DealStatus, type FeatDealView, type OtherArtistView,
 } from './featdeals.ts';
+export {
+  TRANSFERS, askTransfer, answerTransfer, cancelTransfer, completeTransfer, setClause, clauseOf, agreedTransfer, transfersView, tickTransfers,
+  type Transfer, type TransferStatus, type TransferView,
+} from './transfers.ts';
 export { runTick, type TickReport, type ReleaseReport, type LabelReport } from './tick.ts';
 export { simulate, STRATEGIES, type Strategy, type Snapshot } from './sim.ts';
 export { createRng, rngFor, type Rng } from './rng.ts';

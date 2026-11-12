@@ -2,6 +2,7 @@
 // counter-offers and grudges. Also used to renew the contract of an artist already in the label.
 // Every draw comes from the world's seed: asking twice gives the same answer.
 import { generalRating } from './artists.ts';
+import { agreedTransfer, completeTransfer } from './transfers.ts';
 import { CFG } from './config.ts';
 import { contractOf, fameTier, rosterOf } from './economy.ts';
 import { clamp, rngFor } from './rng.ts';
@@ -74,7 +75,11 @@ export const talkBlocked = (world: World, label: Label, artist: Artist): string 
     return `Ne répond plus (${weeks} sem.)`;
   }
   if (contract) {
-    if (contract.labelId !== label.id) return 'Déjà sous contrat';
+    if (contract.labelId !== label.id) {
+      if (!agreedTransfer(world, label.id, artist.id)) return 'Déjà sous contrat';
+      const max = CFG.tiers.maxArtists[label.tier - 1] ?? 5;
+      return rosterOf(world, label.id).length >= max ? 'Effectif complet' : null;
+    }
     if (contract.endTick - world.tick > TALK.renewWindow) return 'Contrat encore long';
     return null;
   }
@@ -219,9 +224,13 @@ const signTalk = (world: World, label: Label, talk: Talk, offer: Offer): void =>
   const contract = contractOf(world, talk.artistId);
   if (talk.renewal) {
     if (!contract || contract.labelId !== label.id) fail(`${artist.name} n'est plus dans ton label.`);
-  } else if (contract) fail(`${artist.name} vient de signer ailleurs.`);
+  } else if (contract) {
+    // Bought from another player: the fee is paid and his old contract ends here.
+    completeTransfer(world, label, talk.artistId);
+  }
+  if (offer.advance > label.cash) fail("Pas assez de cash pour payer l'avance après le transfert.");
   label.cash -= offer.advance;
-  if (contract) {
+  if (talk.renewal && contract) {
     contract.endTick = Math.max(contract.endTick, world.tick) + offer.months * CFG.ticksPerMonth;
     contract.advance += offer.advance;
     contract.unrecouped += offer.advance;
@@ -324,6 +333,8 @@ export interface TalkView {
   last: Talk['last'];
   /** A rough idea of what he wants: the posted price, not the hidden one. */
   hint: Offer;
+  /** Price agreed with his current label (transfer between players), paid when he signs. 0 otherwise. */
+  transferFee: number;
 }
 
 export const talkView = (world: World, talk: Talk): TalkView => {
@@ -339,6 +350,7 @@ export const talkView = (world: World, talk: Talk): TalkView => {
     counter: talk.counter,
     last: talk.last,
     hint: artist ? expectedOffer(artist) : talk.expect,
+    transferFee: agreedTransfer(world, talk.labelId, talk.artistId)?.fee ?? 0,
   };
 };
 

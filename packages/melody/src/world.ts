@@ -166,7 +166,7 @@ export const createSong = (world: World, labelId: string, request: SongRequest):
   const artist = artistOf(world, request.artistId);
   if (contractOf(world, artist.id)?.labelId !== labelId) return fail(`${artist.name} n'est pas dans ton label.`);
   const feat = request.featArtistId ? artistOf(world, request.featArtistId) : null;
-  const planned = songCost(request.levels, request.producer) + (request.featFee ?? 0);
+  const planned = songCost(request.levels, request.producer, label.tier) + (request.featFee ?? 0);
   // What studio events cost on top may go past the budget of the tier: it is only taken from the cash.
   const cost = planned + (request.eventCost ?? 0);
   const cap = CFG.tiers.songBudgetCap[label.tier - 1] ?? 15_000;

@@ -5,6 +5,7 @@ import { BEATS, GENRES, THEMES, beatById } from './data/content.ts';
 import { canTierUp, contractOf, debtOf, netWorth, playGig, rosterOf } from './economy.ts';
 import { tickAcademy } from './academy.ts';
 import { tickDeals } from './featdeals.ts';
+import { tickTransfers } from './transfers.ts';
 import { cleanTalks } from './negotiation.ts';
 import { countryOf, noteCombo } from './craft.ts';
 import { firstWeek, releaseWeek } from './release.ts';
@@ -351,10 +352,12 @@ export const runTick = (world: World): TickReport => {
     report(reports, label).cash = Math.round(label.cash);
   }
 
-  tickDeals(world, (labelId, text) => {
+  const tell = (labelId: string, text: string): void => {
     const label = world.labels[labelId];
     if (label && label.kind === 'player' && !label.bankrupt) report(reports, label).events.push(text);
-  });
+  };
+  tickDeals(world, tell);
+  tickTransfers(world, tell);
   for (const contract of world.contracts.filter((c) => c.endTick <= tick)) {
     const label = world.labels[contract.labelId];
     const artist = world.artists[contract.artistId];

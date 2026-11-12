@@ -2305,3 +2305,19 @@ img.mt-cover-img {
   right: -2px;
   bottom: 8px;
 }
+
+/* transferts */
+.mt-money {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mt-money .mt-input {
+  width: 120px;
+}
+.mt-clause {
+  flex-wrap: wrap;
+}
+.mt-deal.is-agreed {
+  border-color: var(--mt-ok);
+}

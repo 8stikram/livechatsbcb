@@ -463,12 +463,15 @@ const memoryOf = (world: World) => (world.featMemory ??= {});
 
 export const sessionOf = (world: World, labelId: string): StudioSession | null => world.sessions?.[labelId] ?? null;
 
+/** Tier of the label that has this artist: it sets the studio prices. */
+const tierOfArtist = (world: World, artistId: string): number => world.labels[contractOf(world, artistId)?.labelId ?? '']?.tier ?? 3;
+
 const contextOf = (world: World, session: StudioSession): Context => {
   const artist = world.artists[session.artistId] ?? fail('Artiste introuvable.');
   return {
     artist,
     levels: session.levels,
-    baseCost: songCost(session.levels, producerOfLevel(session.levels.producer)),
+    baseCost: songCost(session.levels, producerOfLevel(session.levels.producer), tierOfArtist(world, session.artistId)),
     featFee: session.feat?.fee ?? 0,
   };
 };
@@ -516,7 +519,7 @@ export const startSession = (world: World, label: Label, request: { artistId: st
     if (!offers.themes.some((t) => t.id === request.themeId)) fail('Ce thème n’est pas proposé cette semaine.');
     if (!offers.beats.some((b) => b.id === request.beatId)) fail('Ce beat n’est pas proposé cette semaine.');
   }
-  const cost = songCost(request.levels, producerOfLevel(request.levels.producer));
+  const cost = songCost(request.levels, producerOfLevel(request.levels.producer), label.tier);
   const cap = CFG.tiers.songBudgetCap[label.tier - 1] ?? 15_000;
   if (cost > cap) fail('Ce son dépasse le budget autorisé pour ton palier.');
   if (cost > label.cash) fail('Pas assez de cash pour ce son.');
@@ -639,7 +642,7 @@ export const guestChoices = (world: World, label: Label, session: StudioSession)
   if (!host) return [];
   const family = GENRES[host.genre].family;
   const near = new Set([host.genre, ...GENRES[host.genre].neighbours]);
-  const base = songCost(session.levels, producerOfLevel(session.levels.producer));
+  const base = songCost(session.levels, producerOfLevel(session.levels.producer), label.tier);
   const cap = CFG.tiers.songBudgetCap[label.tier - 1] ?? 15_000;
   const budget = Math.max(0, Math.min(label.cash - base - session.cost, cap - base));
   const affordable = Object.values(world.artists)
@@ -666,7 +669,7 @@ export const offerFeat = (world: World, label: Label, guestId: string, offer: nu
   const blocked = guestBlocked(world, label.id, guest);
   if (blocked) fail(`${guest.name} : ${blocked.toLowerCase()}.`);
   const host = world.artists[session.artistId] ?? fail('Artiste introuvable.');
-  const base = songCost(session.levels, producerOfLevel(session.levels.producer));
+  const base = songCost(session.levels, producerOfLevel(session.levels.producer), label.tier);
   const price = Math.round(offer);
   if (price < 1) fail('Propose une somme.');
   if (base + session.cost + price > label.cash) fail('Pas assez de cash pour cette offre.');
@@ -845,7 +848,7 @@ export const sessionView = (world: World, label: Label, producer: SongRequest['p
     }),
     qualityMin: estimate.min,
     qualityMax: estimate.max,
-    baseCost: songCost(session.levels, producer),
+    baseCost: songCost(session.levels, producer, label.tier),
     extraCost: session.cost + (session.feat?.fee ?? 0),
     energy: Math.max(0, songEnergy(session.levels, session.feat !== null, artist) - session.energy),
     delayWeeks: session.delay + (session.levels.studio >= 3 ? 1 : 0),

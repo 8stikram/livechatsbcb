@@ -34,12 +34,15 @@ export interface SongPlan {
   experience?: number;
 }
 
-/** Price of the four paid choices. A custom beat (level 4) costs half the producer's price. */
-export const songCost = (levels: SongLevels, producer: Producer): number =>
-  at(Q.themePrice, levels.theme) +
-  (levels.beat === 4 ? producer.price * 0.5 : at(Q.beatPrice, levels.beat)) +
-  producer.price +
-  at(Q.studioPrice, levels.studio);
+/** How much of the full studio prices a label of this tier pays. */
+export const priceScale = (tier = 3): number => Q.tierPrice[tier - 1] ?? 1;
+
+/** Price of the four paid choices. A custom beat (level 4) costs half the producer's price. Small labels pay less. */
+export const songCost = (levels: SongLevels, producer: Producer, tier = 3): number =>
+  Math.round(
+    (at(Q.themePrice, levels.theme) + (levels.beat === 4 ? producer.price * 0.5 : at(Q.beatPrice, levels.beat)) + producer.price + at(Q.studioPrice, levels.studio)) *
+      priceScale(tier),
+  );
 
 export const songDelay = (levels: SongLevels): number => at(Q.studioDelay, levels.studio);
 
