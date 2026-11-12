@@ -223,6 +223,10 @@ export interface World {
   sessions?: Record<string, StudioSession>;
   /** Featuring talks per label and guest: tries this week, and how long he refuses after an insult. */
   featMemory?: Record<string, { tick: number; tries: number; closedUntil: number }>;
+  /** Contract talks open this week, per label and artist. */
+  talks?: Record<string, import('./negotiation.ts').Talk>;
+  /** How each artist remembers a label's talks: closed until, grudge, last words. */
+  talkMemory?: Record<string, import('./negotiation.ts').TalkMemory>;
 }
 
 export type StudioStage = 'theme' | 'beat' | 'producer' | 'studio' | 'feat';

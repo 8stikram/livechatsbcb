@@ -3,6 +3,7 @@ import { FAMILY_WEIGHTS, energyRegen, generalRating } from './artists.ts';
 import { CFG } from './config.ts';
 import { BEATS, GENRES, THEMES, beatById } from './data/content.ts';
 import { canTierUp, contractOf, debtOf, netWorth, playGig, rosterOf } from './economy.ts';
+import { cleanTalks } from './negotiation.ts';
 import { firstWeek, publicFit } from './release.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
 import type { Artist, ChartEntry, GenreId, Label, Song, World } from './types.ts';
@@ -105,6 +106,8 @@ export const runTick = (world: World): TickReport => {
   const releases: ReleaseReport[] = [];
   const players = Object.values(world.labels).filter((l) => l.kind === 'player' && !l.bankrupt);
   const activeArtists = new Set<string>();
+
+  cleanTalks(world);
 
   if (tick % CFG.ticksPerMonth === 1) rollTrends(world, rngFor(world.seed, tick, 'trends'));
 
@@ -321,6 +324,11 @@ export const runTick = (world: World): TickReport => {
     report(reports, label).cash = Math.round(label.cash);
   }
 
+  for (const contract of world.contracts.filter((c) => c.endTick <= tick)) {
+    const label = world.labels[contract.labelId];
+    const artist = world.artists[contract.artistId];
+    if (label && artist && label.kind === 'player' && !label.bankrupt) report(reports, label).events.push(`Le contrat de ${artist.name} est fini : il est libre.`);
+  }
   world.contracts = world.contracts.filter((c) => c.endTick > tick);
   return { tick, releases, labels: reports };
 };

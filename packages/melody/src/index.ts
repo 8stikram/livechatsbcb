@@ -25,6 +25,10 @@ export {
   startSession, reactToEvent, cancelSession, offerFeat, skipFeat, finishSession, sessionOf, sessionView, guestDemand, guestBonus, guestChoices,
   type SessionView, type SessionEventView, type GuestView,
 } from './studio.ts';
+export {
+  CONTRACT_MONTHS, TALK, openTalk, makeOffer, leaveTalk, offerScore, talkOf, talkBlocked, talkView, talksOfLabel, talkNews, cleanTalks,
+  type Talk, type TalkMemory, type TalkView, type TalkNews, type Clause, type Mood,
+} from './negotiation.ts';
 export { runTick, type TickReport, type ReleaseReport, type LabelReport } from './tick.ts';
 export { simulate, STRATEGIES, type Strategy, type Snapshot } from './sim.ts';
 export { createRng, rngFor, type Rng } from './rng.ts';

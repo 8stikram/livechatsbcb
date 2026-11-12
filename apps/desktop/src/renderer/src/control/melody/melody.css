@@ -1369,6 +1369,214 @@ button.mt-song:not(:disabled):hover {
   }
 }
 
+/* contract talks */
+.mt-talk {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(0, 2fr);
+  gap: 16px;
+  align-items: start;
+}
+.mt-talk-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.mt-talk-side .mt-card {
+  cursor: default;
+}
+.mt-bubble {
+  position: relative;
+  background: var(--mt-panel2);
+  border: 2px solid var(--mt-line);
+  padding: 12px 14px;
+  animation: mt-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.mt-bubble::before {
+  content: '';
+  position: absolute;
+  left: 22px;
+  top: -9px;
+  width: 14px;
+  height: 14px;
+  background: inherit;
+  border-left: inherit;
+  border-top: inherit;
+  rotate: 45deg;
+}
+.mt-bubble p {
+  margin: 4px 0 0;
+  font-size: 16px;
+  line-height: 1.3;
+}
+.mt-bubble.is-deal,
+.mt-bubble.is-counter {
+  border-color: var(--mt-ok);
+}
+.mt-bubble.is-deal .mt-lbl,
+.mt-bubble.is-counter .mt-lbl {
+  color: var(--mt-ok);
+}
+.mt-bubble.is-dry,
+.mt-bubble.is-lock,
+.mt-bubble.is-tired {
+  border-color: var(--mt-warn);
+}
+.mt-bubble.is-dry .mt-lbl,
+.mt-bubble.is-lock .mt-lbl,
+.mt-bubble.is-tired .mt-lbl {
+  color: var(--mt-warn);
+}
+.mt-bubble.is-cold,
+.mt-bubble.is-vexed {
+  border-color: var(--mt-bad);
+  animation: mt-shake 0.4s ease both;
+}
+.mt-bubble.is-cold .mt-lbl,
+.mt-bubble.is-vexed .mt-lbl {
+  color: var(--mt-bad);
+}
+@keyframes mt-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  50% {
+    transform: translateX(5px);
+  }
+  75% {
+    transform: translateX(-3px);
+  }
+}
+.mt-patience {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mt-hearts {
+  display: flex;
+  gap: 6px;
+}
+.mt-hearts i {
+  width: 22px;
+  height: 20px;
+  background: var(--mt-panel2);
+  clip-path: path('M11 19 L2 10 A5 5 0 0 1 11 3.5 A5 5 0 0 1 20 10 Z');
+  transition: background 0.3s, transform 0.3s;
+}
+.mt-hearts i.lit {
+  background: var(--mt-a2);
+}
+.mt-hearts i:not(.lit) {
+  transform: scale(0.85);
+}
+.mt-table .mt-h {
+  font-size: clamp(24px, 3.4vw, 36px);
+}
+.mt-clauses {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.mt-clause {
+  border: 1px solid var(--mt-line);
+  background: var(--mt-bg);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.mt-clause.is-lock {
+  border-color: var(--mt-warn);
+}
+.mt-stepper {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 6px;
+}
+.mt-stepper b {
+  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mt-stepper button {
+  height: 40px;
+  border: 1px solid var(--mt-line) !important;
+  font-size: 20px !important;
+  text-align: center !important;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.mt-stepper button:hover {
+  border-color: var(--mt-fg) !important;
+}
+.mt-stepper button:active {
+  transform: scale(0.92);
+}
+.mt-monthpick {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+.mt-monthpick button {
+  height: 40px;
+  border: 1px solid var(--mt-line) !important;
+  text-align: center !important;
+  font-weight: 700;
+}
+.mt-monthpick button[aria-pressed='true'] {
+  background: var(--mt-grad) !important;
+  border-color: transparent !important;
+}
+.mt-clause-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 20px;
+}
+.mt-want,
+.mt-lockb {
+  font-size: 11px;
+  padding: 2px 8px;
+  font-weight: 600;
+}
+.mt-want {
+  background: color-mix(in srgb, var(--mt-ok) 18%, transparent);
+  color: var(--mt-ok);
+}
+.mt-lockb {
+  background: color-mix(in srgb, var(--mt-warn) 18%, transparent);
+  color: var(--mt-warn);
+}
+.mt-badtext {
+  color: var(--mt-bad);
+}
+.mt-end {
+  align-items: flex-start;
+}
+.mt-end.is-deal {
+  border-color: var(--mt-ok);
+}
+.mt-end.is-deal .mt-h {
+  background: var(--mt-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@media (max-width: 900px) {
+  .mt-talk,
+  .mt-clauses {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .calm .mt *,
 .calm .mt {
   animation: none !important;

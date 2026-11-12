@@ -81,3 +81,22 @@ Pas encore dans l'appli : il faut maintenant les écrans (style Nuit Néon jeu v
 - Les surcoûts des embrouilles peuvent dépasser le budget du palier : ils sont pris seulement sur le cash.
 - On peut quitter l'onglet en pleine session : on retrouve la cabine en revenant.
 - Pas encore : relation avec les invités, featuring avec l'artiste d'un autre joueur, négociation de contrats, tutoriel.
+
+## Étape 4 — négociation des contrats (fait)
+
+- **Recrutement** : le bouton devient « Négocier · ~prix affiché ». Il ouvre la **table de négociation** : la carte de l'artiste, la bulle de son agent, sa **patience** en cœurs (3 à 5) et 6 tours au plus.
+- 4 clauses avec des boutons − / + : **avance**, **royalties**, **durée** (6, 12, 18, 24 ou 36 mois), **salaire par semaine**.
+- Le **vrai prix est caché** : entre 85 et 120 % du prix affiché. Chaque artiste a **un point bloquant** (avance mini, royalties mini, durée maxi ou salaire mini), révélé la première fois qu'on le casse.
+- Réponses de l'agent (note sur 100) :
+  - 100 ou plus : **signé** ;
+  - 80 à 99 : **contre-offre** (« Il veut … » sous chaque clause, bouton « Accepter sa contre-offre ») ;
+  - 60 à 79 : pas content, −1 cœur ;
+  - 40 à 59 : vexé, −2 cœurs ;
+  - moins de 40 : **il s'en va**, plus de discussion pendant 28 semaines (et −20 points aux discussions suivantes) ;
+  - point bloquant cassé : −1 cœur la première fois, −2 ensuite.
+  - Plus de cœurs ou 6 tours : on réessaie dans 4 semaines.
+- Ce qui compte : avance (45 pts), royalties (35), salaire (10), contrat plus court que voulu (+3 par 6 mois) ou plus long (−5 par 6 mois), réputation du label (de −7 à +17).
+- **Renouvellement** : dans l'effectif, bouton « Renouveler le contrat » quand il reste 8 semaines ou moins. Un artiste de mauvaise humeur demande plus, un artiste heureux moins. Un renouvellement signé rallonge le contrat et donne +10 de moral ; une insulte coûte −10 de moral.
+- Quand un contrat finit, le rapport de la semaine le dit et l'artiste redevient libre.
+- **Pas de triche** : le vrai prix et le point bloquant restent sur le serveur, tirés de la graine du monde. Revenir la même semaine donne le même agent.
+- Pas encore : tutoriel, featuring avec l'artiste d'un autre joueur. Toujours pas en ligne ni dans une version publiée.

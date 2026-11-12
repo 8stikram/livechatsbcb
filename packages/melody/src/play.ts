@@ -2,11 +2,12 @@
 import { artistFromCatalog, generalRating } from './artists.ts';
 import { CFG } from './config.ts';
 import { GENRES } from './data/content.ts';
-import { artistValue, catalogueValue, contractOf, debtOf, fameTier, fansOf, netWorth, playGig, ranking, rosterOf, type RankingLine } from './economy.ts';
+import { artistValue, catalogueValue, contractOf, debtOf, fansOf, netWorth, playGig, ranking, rosterOf, type RankingLine } from './economy.ts';
 import { estimateQuality, producerOfLevel, songCost, songEnergy } from './quality.ts';
-import { clamp, createRng, hashString } from './rng.ts';
+import { createRng, hashString } from './rng.ts';
 import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer, SongLevels, Trends, World } from './types.ts';
-import { GameError, addPlayerLabel, bookGig, expectedOffer, freeAgents, scheduleRelease, signArtist, takeLoan, type Offer } from './world.ts';
+import { GameError, addPlayerLabel, bookGig, expectedOffer, freeAgents, scheduleRelease, takeLoan, type Offer } from './world.ts';
+import { leaveTalk, makeOffer, openTalk, talkBlocked, talkNews, talksOfLabel, type TalkNews, type TalkView } from './negotiation.ts';
 import { cancelSession, finishSession, offerFeat, reactToEvent, sessionOf, sessionView, skipFeat, startSession, type SessionView } from './studio.ts';
 
 export const MAX_PLAYER_LABELS = 20;
@@ -98,7 +99,9 @@ export const producerFor = (world: World, level: 1 | 2 | 3 | 4, beatId: string):
 
 export type MelodyAction =
   | { type: 'found'; name: string; starterId: string }
-  | { type: 'sign'; artistId: string; advance: number; royaltyRate: number }
+  | { type: 'talk'; artistId: string }
+  | { type: 'offer'; artistId: string; offer: Offer }
+  | { type: 'talk_leave'; artistId: string }
   | { type: 'studio'; artistId: string; themeId: string; beatId: string; levels: SongLevels }
   | { type: 'react'; reactionId: string }
   | { type: 'feat'; guestId: string; offer: number }
@@ -123,13 +126,15 @@ export const applyAction = (world: World, ownerId: string, action: MelodyAction)
   }
   const label = labelOfOwner(world, ownerId);
   switch (action.type) {
-    case 'sign': {
-      const artist = world.artists[action.artistId];
-      if (!artist) throw new GameError('Artiste introuvable.');
-      const offer: Offer = { ...expectedOffer(artist), advance: Math.max(0, Math.round(action.advance)), royaltyRate: clamp(action.royaltyRate, 0.1, 0.5) };
-      signArtist(world, label.id, action.artistId, offer);
+    case 'talk':
+      openTalk(world, label, action.artistId);
       return;
-    }
+    case 'offer':
+      makeOffer(world, label, action.artistId, action.offer);
+      return;
+    case 'talk_leave':
+      leaveTalk(world, label, action.artistId);
+      return;
     case 'studio':
       startSession(world, label, action);
       return;
@@ -186,6 +191,9 @@ export interface RosterView extends ArtistView {
   weeksLeft: number;
   unrecouped: number;
   royaltyRate: number;
+  weeklyAllowance: number;
+  /** Why the contract cannot be renewed now, or null. */
+  renewBlocked: string | null;
   gigsBooked: number;
   nextGig: { venue: string; audience: number; profit: number };
 }
@@ -244,6 +252,10 @@ export interface MelodyView {
   charts: { global: ChartEntry[]; genres: Record<string, ChartEntry[]> };
   /** The song being recorded, with its events and featuring talks. */
   session: SessionView | null;
+  /** Contract talks open this week. */
+  talks: TalkView[];
+  /** Talks that ended this week, with the agent's last words. */
+  talkNews: TalkNews[];
 }
 
 /** What a label knows of a potential: a range around the truth, always the same for one label and one artist. */
@@ -276,19 +288,16 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
   const roster = label ? rosterOf(world, label.id) : [];
   const top = (entries: ChartEntry[], size: number): ChartEntry[] => entries.slice(0, size);
 
+  const talking = new Set(label ? [...talksOfLabel(world, label.id), ...talkNews(world, label.id)].map((t) => t.artistId) : []);
   const market: MarketView[] = label
     ? freeAgents(world)
         .map((artist) => {
           const expected = expectedOffer(artist);
-          const blocked =
-            fameTier(artist) > label.tier || (generalRating(artist) >= 80 && label.tier < 3)
-              ? 'Trop connu pour ton palier'
-              : expected.advance > label.cash
-                ? 'Avance trop chère'
-                : null;
+          const blocked = talkBlocked(world, label, artist) ?? (expected.advance * 0.8 > label.cash ? 'Avance trop chère' : null);
           return { ...artistView(artist, viewer, 20), advance: expected.advance, royaltyRate: expected.royaltyRate, blocked };
         })
-        .sort((a, b) => Number(a.blocked !== null) - Number(b.blocked !== null) || b.value - a.value)
+        // Artists the label is talking with stay on top, then the ones it can sign.
+        .sort((a, b) => Number(!talking.has(a.id)) - Number(!talking.has(b.id)) || Number(a.blocked !== null) - Number(b.blocked !== null) || b.value - a.value)
         .slice(0, 60)
     : [];
 
@@ -327,6 +336,8 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
         weeksLeft: (contract?.endTick ?? world.tick) - world.tick,
         unrecouped: Math.round(contract?.unrecouped ?? 0),
         royaltyRate: contract?.royaltyRate ?? 0,
+        weeklyAllowance: contract?.weeklyAllowance ?? 0,
+        renewBlocked: label ? talkBlocked(world, label, artist) : null,
         gigsBooked,
         nextGig: { venue: gig.venue, audience: gig.audience, profit: Math.round(gig.profit * (gig.profit > 0 ? CFG.live.labelShare : 1)) },
       };
@@ -358,6 +369,8 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
       genres: Object.fromEntries(Object.entries(world.charts.genres).map(([genre, entries]) => [genre, top(entries, 20)])),
     },
     session: label ? sessionOfLabel(world, label) : null,
+    talks: label ? talksOfLabel(world, label.id) : [],
+    talkNews: label ? talkNews(world, label.id) : [],
   };
 };
 

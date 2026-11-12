@@ -2103,6 +2103,28 @@ describe('Melody Tycoon', () => {
     expect(after.view.songs).toEqual([]);
   });
 
+  it('talks a contract with an agent without ever showing what he really wants', async () => {
+    const player = await loginAs(playerId, QUICK_BASE);
+    const started = await found(player.token, 'Agent Records');
+    const target = started.view.market.find((m) => m.blocked === null);
+    expect(target).toBeDefined();
+    const opened = await act(player.token, { type: 'talk', artistId: target!.id });
+    if (!opened.ok) throw new Error(opened.message);
+    expect(opened.view.talks).toHaveLength(1);
+    expect(JSON.stringify(opened.view)).not.toContain('"expect"');
+    expect(JSON.stringify(opened.view)).not.toContain('lockValue');
+
+    const odd = { type: 'offer', artistId: target!.id, offer: { advance: 0, royaltyRate: 0.05, months: 7, weeklyAllowance: 0 } };
+    expect((await post(`/v1/melody/${guildId}/act`, odd, bearer(player.token), QUICK_BASE)).status).toBe(400);
+    const insult = await act(player.token, { type: 'offer', artistId: target!.id, offer: { advance: 0, royaltyRate: 0.05, months: 36, weeklyAllowance: 0 } });
+    if (!insult.ok) throw new Error(insult.message);
+    expect(insult.view.talks).toEqual([]);
+    expect(insult.view.talkNews[0]).toMatchObject({ artistId: target!.id, mood: 'vexed' });
+    expect(insult.view.label!.cash).toBe(started.view.label!.cash);
+    const again = await act(player.token, { type: 'talk', artistId: target!.id });
+    expect(again).toMatchObject({ ok: false });
+  });
+
   it('records a song, releases it and pays the label at the next tick', async () => {
     const player = await loginAs(playerId, QUICK_BASE);
     const started = await found(player.token, 'Nuit Néon');

@@ -4,6 +4,7 @@ import {
   expectedOffer, featChance, featDemand, firstWeek, freeAgents, generalRating, playGig, producerOfLevel, ranking, rosterOf,
   runTick, scheduleRelease, signArtist, simulate, songCost, songEnergy, takeLoan, CATALOG_ARTISTS,
   applyAction, buildView, cancelSession, guestDemand, offerFeat, reactToEvent, startSession,
+  makeOffer, openTalk, talkOf, talkBlocked, contractOf,
 } from '../src/index.ts';
 import type { Artist, World } from '../src/index.ts';
 
@@ -255,5 +256,98 @@ describe('studio sessions', () => {
     expect(session.feat).not.toBeNull();
     expect(session.featDone).toBe(true);
     expect(session.guests).toEqual([]);
+  });
+});
+
+describe('contract talks', () => {
+  // A small free agent this label may sign, and the label with cash to spare.
+  const table = () => {
+    const world = createWorld(42);
+    const label = addPlayerLabel(world, 'u1', 'Chimchar Records');
+    label.cash = 500_000;
+    const artist = freeAgents(world)
+      .filter((a) => a.fans <= CFG.fameFans[0]! && generalRating(a) < 80)
+      .sort((a, b) => expectedOffer(a).advance - expectedOffer(b).advance)[0]!;
+    return { world, label, artist };
+  };
+
+  it('draws the same agent twice the same week, and hides what he wants', () => {
+    const { world, label, artist } = table();
+    const talk = openTalk(world, label, artist.id);
+    const copy = structuredClone(talk);
+    delete world.talks;
+    expect(openTalk(world, label, artist.id)).toEqual(copy);
+    expect(talk.patience).toBeGreaterThanOrEqual(3);
+    expect(talk.patience).toBeLessThanOrEqual(5);
+    const view = buildView(world, 'u1');
+    expect(view.talks).toHaveLength(1);
+    expect(JSON.stringify(view.talks)).not.toContain('expect');
+    expect(view.talks[0]?.lock).toBeNull();
+  });
+
+  it('answers a fair offer with a counter-offer that signs when accepted', () => {
+    const { world, label, artist } = table();
+    const talk = openTalk(world, label, artist.id);
+    // Gives exactly what he wants except a weak advance: close, not enough.
+    const offer = { ...talk.expect, advance: Math.round(talk.expect.advance * 0.95) };
+    if (talk.lock === 'advance') offer.advance = Math.max(offer.advance, talk.lockValue);
+    const mood = makeOffer(world, label, artist.id, offer);
+    expect(mood).toBe('counter');
+    const counter = talkOf(world, label.id, artist.id)?.counter;
+    expect(counter).toBeTruthy();
+    const cash = label.cash;
+    expect(makeOffer(world, label, artist.id, counter!)).toBe('deal');
+    expect(contractOf(world, artist.id)?.labelId).toBe(label.id);
+    expect(label.cash).toBe(cash - counter!.advance);
+    expect(buildView(world, 'u1').talkNews[0]?.mood).toBe('deal');
+  });
+
+  it('reveals the blocking point, loses patience, then closes the door', () => {
+    const { world, label, artist } = table();
+    const talk = openTalk(world, label, artist.id);
+    const fair = { ...talk.expect, advance: talk.expect.advance * 1.3, royaltyRate: talk.expect.royaltyRate * 1.3 };
+    const broken =
+      talk.lock === 'months' ? { ...fair, months: 36 }
+      : talk.lock === 'advance' ? { ...fair, advance: talk.lockValue - 100, royaltyRate: talk.expect.royaltyRate * 1.5 }
+      : talk.lock === 'royaltyRate' ? { ...fair, royaltyRate: talk.lockValue - 0.01, advance: talk.expect.advance * 1.5 }
+      : { ...fair, weeklyAllowance: talk.lockValue - 10 };
+    const patience = talk.patience;
+    expect(makeOffer(world, label, artist.id, broken)).toBe('lock');
+    expect(talk.patience).toBe(patience - 1);
+    expect(buildView(world, 'u1').talks[0]?.lock?.clause).toBe(talk.lock);
+
+    // An insult: he leaves and will not talk for a month.
+    expect(makeOffer(world, label, artist.id, { advance: 0, royaltyRate: 0.05, months: 36, weeklyAllowance: 0 })).toBe('vexed');
+    expect(talkOf(world, label.id, artist.id)).toBeUndefined();
+    expect(() => openTalk(world, label, artist.id)).toThrow(/ne répond plus/);
+    expect(talkBlocked(world, label, artist)).toMatch(/Ne répond plus/);
+    expect(buildView(world, 'u1').talkNews[0]).toMatchObject({ artistId: artist.id, mood: 'vexed', closedFor: 28 });
+  });
+
+  it('lets the label renew a contract near its end only', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    const label = world.labels[labelId]!;
+    label.cash = 500_000;
+    expect(() => openTalk(world, label, artist.id)).toThrow(/contrat encore long/);
+    const contract = contractOf(world, artist.id)!;
+    world.tick = contract.endTick - 3;
+    const talk = openTalk(world, label, artist.id);
+    expect(talk.renewal).toBe(true);
+    const generous = { advance: talk.expect.advance * 1.5, royaltyRate: Math.min(0.5, talk.expect.royaltyRate * 1.5), months: 12, weeklyAllowance: talk.expect.weeklyAllowance * 2 };
+    const end = contract.endTick;
+    expect(makeOffer(world, label, artist.id, generous)).toBe('deal');
+    expect(contract.endTick).toBe(end + 12 * CFG.ticksPerMonth);
+    expect(world.contracts.filter((c) => c.artistId === artist.id)).toHaveLength(1);
+  });
+
+  it('goes through the player actions and forgets old talks with the weekly tick', () => {
+    const { world, label, artist } = table();
+    applyAction(world, 'u1', { type: 'talk', artistId: artist.id });
+    expect(buildView(world, 'u1').talks).toHaveLength(1);
+    applyAction(world, 'u1', { type: 'talk_leave', artistId: artist.id });
+    expect(buildView(world, 'u1').talks).toHaveLength(0);
+    openTalk(world, label, artist.id);
+    for (let i = 0; i < 4; i += 1) runTick(world);
+    expect(world.talks?.[`${label.id}:${artist.id}`]).toBeUndefined();
   });
 });
