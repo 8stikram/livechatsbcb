@@ -227,6 +227,8 @@ export interface World {
   talks?: Record<string, import('./negotiation.ts').Talk>;
   /** How each artist remembers a label's talks: closed until, grudge, last words. */
   talkMemory?: Record<string, import('./negotiation.ts').TalkMemory>;
+  /** The guided first week of each new label. */
+  tutorials?: Record<string, import('./tutorial.ts').Tutorial>;
 }
 
 export type StudioStage = 'theme' | 'beat' | 'producer' | 'studio' | 'feat';

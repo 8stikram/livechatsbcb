@@ -2125,6 +2125,21 @@ describe('Melody Tycoon', () => {
     expect(again).toMatchObject({ ok: false });
   });
 
+  it('starts new labels on a tutorial they can skip', async () => {
+    const player = await loginAs(playerId, QUICK_BASE);
+    const started = await found(player.token, 'Tuto Records');
+    expect(started.view.tutorial).toMatchObject({ step: 'home', gift: 0 });
+    const next = await act(player.token, { type: 'tuto', move: 'next' });
+    if (!next.ok) throw new Error(next.message);
+    expect(next.view.tutorial?.step).toBe('sign');
+    expect((await post(`/v1/melody/${guildId}/act`, { type: 'tuto', move: 'win' }, bearer(player.token), QUICK_BASE)).status).toBe(400);
+    const skipped = await act(player.token, { type: 'tuto', move: 'skip' });
+    if (!skipped.ok) throw new Error(skipped.message);
+    expect(skipped.view.tutorial).toBeNull();
+    expect(skipped.view.songs.filter((s) => s.state === 'scheduled')).toHaveLength(1);
+    expect((await view(player.token)).view.songs).toHaveLength(1);
+  });
+
   it('records a song, releases it and pays the label at the next tick', async () => {
     const player = await loginAs(playerId, QUICK_BASE);
     const started = await found(player.token, 'Nuit Néon');

@@ -351,3 +351,70 @@ describe('contract talks', () => {
     expect(world.talks?.[`${label.id}:${artist.id}`]).toBeUndefined();
   });
 });
+
+describe('tutorial', () => {
+  const fresh = () => {
+    const world = createWorld(42);
+    const starterId = buildView(world, 'u1').starters[0]!.id;
+    applyAction(world, 'u1', { type: 'found', name: 'Tuto Records', starterId });
+    const label = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    return { world, label };
+  };
+
+  it('guides a new label through a protected first week, money given back', () => {
+    const { world, label } = fresh();
+    expect(buildView(world, 'u1').tutorial?.step).toBe('home');
+    applyAction(world, 'u1', { type: 'tuto', move: 'next' });
+    expect(buildView(world, 'u1').tutorial?.step).toBe('sign');
+
+    // Sign a second artist: even an insult keeps him at the table, and the advance comes back.
+    const target = buildView(world, 'u1').market.filter((m) => m.blocked === null).sort((a, b) => a.advance - b.advance)[0]!;
+    const cash = label.cash;
+    applyAction(world, 'u1', { type: 'offer', artistId: target.id, offer: { advance: 0, royaltyRate: 0.05, months: 36, weeklyAllowance: 0 } });
+    expect(buildView(world, 'u1').talks).toHaveLength(1);
+    const counter = buildView(world, 'u1').talks[0]?.counter;
+    applyAction(world, 'u1', { type: 'offer', artistId: target.id, offer: counter ?? { advance: Math.round(target.advance * 1.15), royaltyRate: 0.3, months: 12, weeklyAllowance: 0 } });
+    if (buildView(world, 'u1').talks.length) {
+      applyAction(world, 'u1', { type: 'offer', artistId: target.id, offer: buildView(world, 'u1').talks[0]!.counter! });
+    }
+    expect(rosterOf(world, label.id)).toHaveLength(2);
+    expect(label.cash).toBe(cash);
+    expect(buildView(world, 'u1').tutorial?.step).toBe('song');
+
+    // The studio: three smooth sessions, one easy embrouille that always works out.
+    const artistId = target.id;
+    applyAction(world, 'u1', { type: 'studio', artistId, themeId: 'rupture', beatId: 'lovetrap', levels: { theme: 2, beat: 2, producer: 2, studio: 2 } });
+    const session = buildView(world, 'u1').session!;
+    expect(session.events.map((e) => e.kind)).toEqual(['fluid', 'fluid', 'clash', 'fluid']);
+    applyAction(world, 'u1', { type: 'react', reactionId: 'pressure' });
+    expect(buildView(world, 'u1').session!.events[2]?.result).toMatch(/débarque/);
+    // The featuring wheel says yes by the second try.
+    const guest = buildView(world, 'u1').session!.guests.at(-1)!;
+    applyAction(world, 'u1', { type: 'feat', guestId: guest.id, offer: Math.max(1, Math.round(guest.demand * 0.3)) });
+    if (!buildView(world, 'u1').session!.featDone) {
+      applyAction(world, 'u1', { type: 'feat', guestId: guest.id, offer: Math.max(1, Math.round(guest.demand * 0.6)) });
+    }
+    expect(buildView(world, 'u1').session!.featDone).toBe(true);
+    applyAction(world, 'u1', { type: 'song', title: 'Premier tube' });
+    expect(label.cash).toBe(cash);
+    expect(buildView(world, 'u1').tutorial?.step).toBe('release');
+
+    const song = world.songs.find((s) => s.labelId === label.id)!;
+    applyAction(world, 'u1', { type: 'release', songId: song.id, inWeeks: Math.max(1, song.availableTick - world.tick), marketing: ['social_1'] });
+    const view = buildView(world, 'u1');
+    expect(view.tutorial?.step).toBe('results');
+    expect(view.tutorial?.preview?.streams).toBeGreaterThan(0);
+    expect(label.cash).toBe(cash);
+    applyAction(world, 'u1', { type: 'tuto', move: 'next' });
+    expect(buildView(world, 'u1').tutorial).toBeNull();
+  });
+
+  it('can be skipped: the game makes and releases a free song', () => {
+    const { world, label } = fresh();
+    const cash = label.cash;
+    applyAction(world, 'u1', { type: 'tuto', move: 'skip' });
+    expect(buildView(world, 'u1').tutorial).toBeNull();
+    expect(world.songs.filter((s) => s.labelId === label.id && s.state === 'scheduled')).toHaveLength(1);
+    expect(label.cash).toBe(cash);
+  });
+});

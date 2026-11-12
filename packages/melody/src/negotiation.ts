@@ -6,6 +6,7 @@ import { CFG } from './config.ts';
 import { contractOf, fameTier, rosterOf } from './economy.ts';
 import { clamp, rngFor } from './rng.ts';
 import type { Artist, Label, World } from './types.ts';
+import { tutorialStep } from './tutorial.ts';
 import { GameError, expectedOffer, type Offer } from './world.ts';
 
 const fail = (message: string): never => {
@@ -265,7 +266,8 @@ export const makeOffer = (world: World, label: Label, artistId: string, raw: Off
   };
   if (talk.counter && meets(offer, talk.counter)) return deal();
   const score = offerScore(talk, offer, label.reputation, grudge);
-  if (score < 40) {
+  const guided = tutorialStep(world, label.id) === 'sign';
+  if (score < 40 && !guided) {
     say('vexed', line(world, talk, 'vexed'));
     closeTalk(world, talk, TALK.grudgeTicks, true);
     if (talk.renewal) {
@@ -291,6 +293,10 @@ export const makeOffer = (world: World, label: Label, artistId: string, raw: Off
     mood = say('cold', line(world, talk, 'cold'));
   }
   if (mood !== 'cold') talk.counter = counterOffer(talk, offer, label.reputation, grudge);
+  if (guided) {
+    talk.patience = Math.max(1, talk.patience);
+    talk.rounds = Math.min(talk.rounds, TALK.maxRounds - 1);
+  }
   if (talk.patience <= 0 || talk.rounds >= TALK.maxRounds) {
     say('tired', line(world, talk, 'tired'));
     closeTalk(world, talk, TALK.retryTicks, false);

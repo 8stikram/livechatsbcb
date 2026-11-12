@@ -6,7 +6,8 @@ import { artistValue, catalogueValue, contractOf, debtOf, fansOf, netWorth, play
 import { estimateQuality, producerOfLevel, songCost, songEnergy } from './quality.ts';
 import { createRng, hashString } from './rng.ts';
 import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer, SongLevels, Trends, World } from './types.ts';
-import { GameError, addPlayerLabel, bookGig, expectedOffer, freeAgents, scheduleRelease, takeLoan, type Offer } from './world.ts';
+import { GameError, addPlayerLabel, bookGig, createSong, expectedOffer, freeAgents, scheduleRelease, takeLoan, type Offer } from './world.ts';
+import { afterAction, isGuarded, nextStep, refund, skipTutorial, startTutorial, tutorialView, type TutorialView } from './tutorial.ts';
 import { leaveTalk, makeOffer, openTalk, talkBlocked, talkNews, talksOfLabel, type TalkNews, type TalkView } from './negotiation.ts';
 import { cancelSession, finishSession, offerFeat, reactToEvent, sessionOf, sessionView, skipFeat, startSession, type SessionView } from './studio.ts';
 
@@ -72,7 +73,10 @@ export const foundLabel = (world: World, ownerId: string, name: string, starterI
   const starter = starterChoices(world, ownerId).find((a) => a.id === starterId);
   if (!starter) throw new GameError("Choisis un des trois artistes proposés.");
   const cash = startingCash(world);
+  const comeback = Object.values(world.labels).some((l) => l.ownerId === ownerId && l.bankrupt);
   const label = addPlayerLabel(world, ownerId, clean);
+  // A player back after a bankruptcy knows the game: no tutorial for him.
+  if (!comeback) startTutorial(world, label.id);
   label.cash = cash;
   // A player who comes back after a bankruptcy gets a new beginner under a new id.
   const id = world.artists[starter.id] ? `${starter.id}_${world.nextId}` : starter.id;
@@ -102,6 +106,7 @@ export type MelodyAction =
   | { type: 'talk'; artistId: string }
   | { type: 'offer'; artistId: string; offer: Offer }
   | { type: 'talk_leave'; artistId: string }
+  | { type: 'tuto'; move: 'next' | 'skip' }
   | { type: 'studio'; artistId: string; themeId: string; beatId: string; levels: SongLevels }
   | { type: 'react'; reactionId: string }
   | { type: 'feat'; guestId: string; offer: number }
@@ -125,7 +130,26 @@ export const applyAction = (world: World, ownerId: string, action: MelodyAction)
     return;
   }
   const label = labelOfOwner(world, ownerId);
+  const guarded = isGuarded(world, label.id, action.type);
+  const cash = label.cash;
+  const roster = rosterOf(world, label.id).length;
+  runAction(world, label, action);
+  if (guarded) refund(world, label, cash);
+  afterAction(world, label, action.type, roster);
+};
+
+const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { type: 'found' }>): void => {
   switch (action.type) {
+    case 'tuto':
+      if (action.move === 'next') nextStep(world, label);
+      else skipTutorial(world, label, {
+        record: (artistId, title, themeId, beatId) => {
+          const levels = { theme: 1, beat: 1, producer: 1, studio: 1 } as const;
+          createSong(world, label.id, { artistId, title, themeId, beatId, levels, producer: producerFor(world, 1, beatId) });
+        },
+        release: (songId, releaseTick) => void scheduleRelease(world, label.id, songId, releaseTick, []),
+      });
+      return;
     case 'talk':
       openTalk(world, label, action.artistId);
       return;
@@ -252,6 +276,8 @@ export interface MelodyView {
   charts: { global: ChartEntry[]; genres: Record<string, ChartEntry[]> };
   /** The song being recorded, with its events and featuring talks. */
   session: SessionView | null;
+  /** The guided first week, while it runs. */
+  tutorial: TutorialView | null;
   /** Contract talks open this week. */
   talks: TalkView[];
   /** Talks that ended this week, with the agent's last words. */
@@ -370,6 +396,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     },
     session: label ? sessionOfLabel(world, label) : null,
     talks: label ? talksOfLabel(world, label.id) : [],
+    tutorial: label ? tutorialView(world, label.id) : null,
     talkNews: label ? talkNews(world, label.id) : [],
   };
 };

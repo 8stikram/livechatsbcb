@@ -100,3 +100,20 @@ Pas encore dans l'appli : il faut maintenant les écrans (style Nuit Néon jeu v
 - Quand un contrat finit, le rapport de la semaine le dit et l'artiste redevient libre.
 - **Pas de triche** : le vrai prix et le point bloquant restent sur le serveur, tirés de la graine du monde. Revenir la même semaine donne le même agent.
 - Pas encore : tutoriel, featuring avec l'artiste d'un autre joueur. Toujours pas en ligne ni dans une version publiée.
+
+## Étape 5 — tutoriel (fait)
+
+Version courte, avec ce qui existe déjà (le scouting viendra plus tard). Choix du propriétaire : tout protégé, une bulle simple (pas de mascotte), un bouton « Passer ».
+
+- Démarre pour chaque **nouveau** label. Pas de tutoriel pour un joueur qui revient après une faillite, ni pour les labels déjà créés.
+- Une **bulle** en bas à droite dit quoi faire, et un **cadre lumineux** entoure le bouton à cliquer. Le reste de l'écran est assombri, mais on peut toujours cliquer partout.
+- Étapes :
+  1. **Accueil** : ton cash, la tuile Créer un son, les Charts (3 bulles, bouton Suivant).
+  2. **Signer un 2e artiste** : Recrutement → Négocier → faire une offre → accepter la contre-offre. Pendant cette étape, l'agent ne part jamais, même après une insulte.
+  3. **Créer un son** : 3 sessions qui roulent et une embrouille facile avec le producteur (le pari réussit toujours). Au featuring, pas d'insulte possible et la roue dit oui au 2e essai au plus tard.
+  4. **Programmer la sortie** : Sorties → ton son → semaine et promo → Programmer.
+  5. **Aperçu** : streams, fans et argent attendus la première semaine, plus le total offert par le tutoriel. Bouton Terminer.
+- **Argent rendu** : tout ce que coûtent ces étapes est rendu, jusqu'à 40 000 € au total. Le salaire par semaine d'un contrat n'est pas rendu.
+- **Passer** : le jeu crée un son gratuit avec ton premier artiste et le sort la semaine suivante.
+- L'étape est gardée sur le serveur : on reprend où on en était.
+- Toujours pas en ligne ni dans une version publiée.

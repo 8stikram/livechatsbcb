@@ -8,6 +8,7 @@ import { contractOf } from './economy.ts';
 import { estimateQuality, featChance, featDemand, producerOfLevel, songCost, songEnergy } from './quality.ts';
 import { clamp, rngFor } from './rng.ts';
 import type { Artist, Label, SessionEvent, SongLevels, StudioSession, StudioStage, World } from './types.ts';
+import { tutorialStep } from './tutorial.ts';
 import { GameError, createSong, type SongRequest } from './world.ts';
 
 const fail = (message: string): never => {
@@ -317,7 +318,17 @@ export const startSession = (world: World, label: Label, request: { artistId: st
   const index = recordedThisWeek(world, label.id);
   const events: SessionEvent[] = [];
   let clashes = 0;
-  for (const stage of STAGES) {
+  // The tutorial: smooth sessions around one easy embrouille with the producer.
+  const guided = tutorialStep(world, label.id) === 'song';
+  if (guided) {
+    events.push(
+      { stage: 'theme', kind: 'fluid', cardId: 'flow', reaction: null, result: fluidById('flow').text },
+      { stage: 'beat', kind: 'fluid', cardId: 'vibe', reaction: null, result: fluidById('vibe').text },
+      { stage: 'producer', kind: 'clash', cardId: 'ghost', reaction: null, result: null },
+      { stage: 'studio', kind: 'fluid', cardId: 'express', reaction: null, result: fluidById('express').text },
+    );
+  }
+  for (const stage of guided ? [] : STAGES) {
     const rng = rngFor(world.seed, world.tick, `studio:${label.id}:${artist.id}:${index}:${stage}`);
     if (rng.next() < clashChance(artist, request.levels[stage], clashes)) {
       clashes += 1;
@@ -359,7 +370,7 @@ export const reactToEvent = (world: World, label: Label, reactionId: string): vo
   const ctx = contextOf(world, session);
   if (reaction.roll) {
     const rng = rngFor(world.seed, session.tick, `react:${label.id}:${session.artistId}:${session.index}:${event.stage}:${reaction.id}`);
-    const won = rng.next() < reaction.roll.chance(ctx);
+    const won = tutorialStep(world, label.id) === 'song' || rng.next() < reaction.roll.chance(ctx);
     const effect = won ? reaction.roll.success(ctx) : reaction.roll.failure(ctx);
     apply(session, effect);
     event.result = `${won ? reaction.roll.successText : reaction.roll.failureText}${Object.keys(effect).length ? ` ${describe(effect, ctx)}.` : ''}`;
@@ -445,26 +456,34 @@ export const offerFeat = (world: World, label: Label, guestId: string, offer: nu
   const demand = guestDemand(world, label.id, guest);
   const memory = memoryFor(world, label.id, guest.id);
   const chance = featChance(price, demand, 0, label.reputation, guestBonus(host, guest));
+  // The tutorial: no insult possible, and the second try always works.
+  const guided = tutorialStep(world, label.id) === 'song';
+  if (chance === null && guided) {
+    memoryOf(world)[memoryKey(label.id, guest.id)] = { ...memory, tries: memory.tries + 1 };
+    session.lastOffer = { guestId: guest.id, offer: price, chance: 0, roll: null, outcome: 'refused' };
+    return;
+  }
   if (chance === null) {
     // Insulted before the wheel even turns: he refuses everything for four weeks.
     memoryOf(world)[memoryKey(label.id, guest.id)] = { ...memory, closedUntil: world.tick + CFG.ticksPerMonth };
     session.lastOffer = { guestId: guest.id, offer: price, chance: 0, roll: null, outcome: 'vexed' };
     return;
   }
-  const roll = rngFor(world.seed, world.tick, `feat:${label.id}:${guest.id}:${memory.tries}`).next();
+  const drawn = rngFor(world.seed, world.tick, `feat:${label.id}:${guest.id}:${memory.tries}`).next();
+  const roll = guided && memory.tries >= 1 ? Math.min(drawn, chance * 0.9) : drawn;
   if (roll < chance) {
     if (host.energy < songEnergy(session.levels, true, host)) fail(`${host.name} n'a pas assez d'énergie pour un featuring.`);
     session.feat = { guestId: guest.id, fee: price };
     session.featDone = true;
     session.lastOffer = { guestId: guest.id, offer: price, chance, roll, outcome: 'accepted' };
     // One time in four, the guest asks for more once in the booth.
-    if (rngFor(world.seed, world.tick, `greedy:${label.id}:${guest.id}`).next() < 0.25) {
+    if (!guided && rngFor(world.seed, world.tick, `greedy:${label.id}:${guest.id}`).next() < 0.25) {
       session.events.push({ stage: 'feat', kind: 'clash', cardId: 'greedy', reaction: null, result: null });
     }
     memoryOf(world)[memoryKey(label.id, guest.id)] = { ...memory, tries: memory.tries + 1 };
     return;
   }
-  const vexed = price < demand * 0.6;
+  const vexed = !guided && price < demand * 0.6;
   memoryOf(world)[memoryKey(label.id, guest.id)] = { ...memory, tries: memory.tries + 1, closedUntil: vexed ? world.tick + 1 : memory.closedUntil };
   session.lastOffer = { guestId: guest.id, offer: price, chance, roll, outcome: vexed ? 'vexed' : 'refused' };
 };

@@ -34,6 +34,7 @@ export const MelodyActionSchema = z.discriminatedUnion('type', [
     }),
   }),
   z.object({ type: z.literal('talk_leave'), artistId: IdSchema }),
+  z.object({ type: z.literal('tuto'), move: z.enum(['next', 'skip']) }),
   z.object({ type: z.literal('studio'), artistId: IdSchema, themeId: IdSchema, beatId: IdSchema, levels: LevelsSchema }),
   z.object({ type: z.literal('react'), reactionId: IdSchema }),
   z.object({ type: z.literal('feat'), guestId: IdSchema, offer: z.number().min(1).max(1e9) }),
@@ -165,7 +166,7 @@ export class MelodyWorld extends DurableObject<Env> {
       throw error;
     }
     this.world = draft;
-    this.save(action.type === 'song' || action.type === 'release' ? ['core', 'artists', 'songs'] : ['core', 'artists']);
+    this.save(action.type === 'song' || action.type === 'release' || action.type === 'tuto' ? ['core', 'artists', 'songs'] : ['core', 'artists']);
     return { ok: true, ...this.state(draft, userId, nextTickAt) };
   }
 

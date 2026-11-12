@@ -29,6 +29,10 @@ export {
   CONTRACT_MONTHS, TALK, openTalk, makeOffer, leaveTalk, offerScore, talkOf, talkBlocked, talkView, talksOfLabel, talkNews, cleanTalks,
   type Talk, type TalkMemory, type TalkView, type TalkNews, type Clause, type Mood,
 } from './negotiation.ts';
+export {
+  TUTORIAL_GIFT_CAP, tutorialOf, tutorialStep, tutorialView, startTutorial, skipTutorial,
+  type Tutorial, type TutorialStep, type TutorialView,
+} from './tutorial.ts';
 export { runTick, type TickReport, type ReleaseReport, type LabelReport } from './tick.ts';
 export { simulate, STRATEGIES, type Strategy, type Snapshot } from './sim.ts';
 export { createRng, rngFor, type Rng } from './rng.ts';

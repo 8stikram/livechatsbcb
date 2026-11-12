@@ -22,6 +22,7 @@ import {
   type SessionView,
   type SongPreview,
   type SongView,
+  type TutorialView,
 } from '@livechatsbcb/melody';
 import type { MelodyRoute } from '../../../../shared/ipc';
 import { errorMessage } from '../messages';
@@ -213,7 +214,7 @@ const Home = ({ view, onGo }: { view: MelodyView; onGo: (tab: Tab) => void }) =>
   return (
     <div className="mt-view mt-in">
       <div className="mt-hub">
-        <button type="button" className="mt-tile mt-t-create" onClick={() => onGo('studio')}>
+        <button type="button" className="mt-tile mt-t-create" data-tuto="hub-studio" onClick={() => onGo('studio')}>
           <span className="mt-vinyl" aria-hidden="true" />
           <Label>{rested === 0 ? 'Tes artistes sont fatigués' : `${rested} artiste${rested > 1 ? 's ont' : ' a'} de l’énergie`}</Label>
           <span className="mt-h">
@@ -1126,6 +1127,7 @@ const ReleasePlanner = ({ song, cash, onAct, onClose, busy }: { song: SongView; 
         <button
           type="button"
           className="mt-go mt-go-big"
+          data-tuto="release-go"
           disabled={busy || total > cash}
           onClick={() => onAct({ type: 'release', songId: song.id, inWeeks: weeks, marketing: promo })}
         >
@@ -1177,7 +1179,7 @@ const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (actio
             Coffre vide. <b>Crée un son</b>
           </button>
         ) : (
-          <div className="mt-songs">
+          <div className="mt-songs" data-tuto="vault">
             {vault.map((s) => (
               <SongTile key={s.id} song={s} onClick={() => setPlanning(s.id)} />
             ))}
@@ -1382,11 +1384,11 @@ const Negotiation = ({
               {offer.advance > cash && <b className="mt-badtext"> · pas assez de cash</b>}
             </span>
             <div className="mt-acts">
-              <button type="button" className="mt-go mt-go-big" disabled={busy || offer.advance > cash} onClick={() => void send(offer)}>
+              <button type="button" className="mt-go mt-go-big" data-tuto="offer" disabled={busy || offer.advance > cash} onClick={() => void send(offer)}>
                 Faire l’offre
               </button>
               {counter && (
-                <button type="button" className="mt-go" disabled={busy || counter.advance > cash} onClick={() => void send(counter)}>
+                <button type="button" className="mt-go" data-tuto="accept" disabled={busy || counter.advance > cash} onClick={() => void send(counter)}>
                   Accepter sa contre-offre
                 </button>
               )}
@@ -1413,13 +1415,130 @@ const Negotiation = ({
                   ? `${artist.name} ne te parlera plus pendant ${news.closedFor} semaine${news.closedFor > 1 ? 's' : ''}.${view.roster.some((a) => a.id === artistId) ? ' Il partira à la fin de son contrat.' : ''}`
                   : 'La table est vide.'}
             </p>
-            <button type="button" className="mt-go mt-go-big" onClick={() => onClose(news?.mood === 'deal')}>
+            <button type="button" className="mt-go mt-go-big" data-tuto="talk-done" onClick={() => onClose(news?.mood === 'deal')}>
               {news?.mood === 'deal' ? 'Voir mon effectif' : 'Retour'}
             </button>
           </div>
         )}
       </div>
     </div>
+  );
+};
+
+/* ---------------------------------- Tutorial ---------------------------------- */
+
+type GuideLine = { text: ReactNode; target: string | null; next?: string };
+
+// What the guide says, and which button it lights up, for the step and the screen the player is on.
+const guideLine = (tutorial: TutorialView, tab: Tab, talk: MelodyView['talks'][number] | null, talking: boolean, tour: number): GuideLine => {
+  switch (tutorial.step) {
+    case 'home':
+      return [
+        { text: 'Bienvenue dans ton label ! Ici, ton cash. Pendant le tutoriel, tout ce que tu dépenses t’est rendu.', target: 'cash', next: 'Suivant' },
+        { text: 'Le cœur du jeu : créer des sons avec tes artistes.', target: 'hub-studio', next: 'Suivant' },
+        { text: 'Les charts : ta place face aux autres labels du serveur. On commence ?', target: 'nav-charts', next: 'C’est parti' },
+      ][Math.min(tour, 2)]!;
+    case 'sign':
+      if (talking && talk?.counter) return { text: 'Son agent fait une contre-offre : « Il veut… » sous chaque ligne. Accepte-la, ou tente mieux.', target: 'accept' };
+      if (talking && talk) return { text: 'Règle l’avance, les royalties et la durée, puis fais ton offre. Son agent va répondre.', target: 'offer' };
+      if (talking) return { text: 'Bien joué ! Passons au studio.', target: 'talk-done' };
+      if (tab === 'market') return { text: 'Choisis un artiste qui te plaît et clique sur Négocier.', target: 'sign' };
+      return { text: 'Un label, c’est une équipe. Signe un deuxième artiste dans Recrutement.', target: 'nav-market' };
+    case 'song':
+      if (tab !== 'studio') return { text: 'Crée ton premier son. Direction le Studio !', target: 'nav-studio' };
+      return {
+        text: 'Choisis un artiste, un thème, un beat puis ton équipe. Une embrouille va arriver : pas de panique. Au featuring, la roue dira oui au deuxième essai.',
+        target: null,
+      };
+    case 'release':
+      if (tab !== 'releases') return { text: 'Ton son est au coffre. Va dans Sorties pour le programmer.', target: 'nav-releases' };
+      return { text: 'Clique sur ton son, choisis la semaine et un peu de promo, puis Programmer.', target: 'release-go,vault' };
+    case 'results': {
+      const p = tutorial.preview;
+      return {
+        text: p ? (
+          <>
+            Aperçu : « {p.title} » de {p.artistName} sort dans {p.inWeeks} semaine{p.inWeeks > 1 ? 's' : ''}. Première semaine : environ{' '}
+            <b>{fmt(p.streams)} streams</b>, <b>+{fmt(p.newFans)} fans</b> et <b>{money(p.money)}</b>. Le tutoriel t’a offert {money(tutorial.gift)}. À toi de jouer !
+          </>
+        ) : (
+          'Ton label est lancé. À toi de jouer !'
+        ),
+        target: null,
+        next: 'Terminer',
+      };
+    }
+    default:
+      return { text: '', target: null };
+  }
+};
+
+// The guide: a ring around the button to press, the rest dimmed but still usable, and a bubble.
+const Guide = ({
+  tutorial,
+  tab,
+  talkWith,
+  view,
+  onAct,
+  busy,
+}: {
+  tutorial: TutorialView;
+  tab: Tab;
+  talkWith: string | null;
+  view: MelodyView;
+  onAct: (action: MelodyAction) => Promise<MelodyView | null>;
+  busy: boolean;
+}) => {
+  const [tour, setTour] = useState(0);
+  const [ring, setRing] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const talk = talkWith ? (view.talks.find((t) => t.artistId === talkWith) ?? null) : null;
+  const line = guideLine(tutorial, tab, talk, talkWith !== null, tour);
+  const target = line.target;
+
+  // Follows the target while the screen changes under it.
+  useEffect(() => {
+    const place = () => {
+      // The first name found wins: "release-go,vault" lights the button once the planner is open.
+      const node = target ? target.split(",").map((t) => document.querySelector(`.mt [data-tuto="${t}"]`)).find(Boolean) : null;
+      const root = node?.closest('.mt');
+      if (!node || !root) return setRing(null);
+      const a = node.getBoundingClientRect();
+      const b = root.getBoundingClientRect();
+      setRing((old) => {
+        const next = { x: a.left - b.left - 6, y: a.top - b.top - 6, w: a.width + 12, h: a.height + 12 };
+        return old && old.x === next.x && old.y === next.y && old.w === next.w && old.h === next.h ? old : next;
+      });
+    };
+    place();
+    const timer = setInterval(place, 250);
+    return () => clearInterval(timer);
+  }, [target]);
+
+  const next = () => {
+    if (tutorial.step === 'home' && tour < 2) setTour(tour + 1);
+    else void onAct({ type: 'tuto', move: 'next' });
+  };
+
+  return (
+    <>
+      {ring && <div className="mt-spot" style={{ left: ring.x, top: ring.y, width: ring.w, height: ring.h }} aria-hidden="true" />}
+      <aside className="mt-guide" aria-live="polite" key={`${tutorial.step}:${tour}:${target ?? ''}`}>
+        <Label>Tutoriel</Label>
+        <p>{line.text}</p>
+        <div className="mt-acts">
+          {line.next && (
+            <button type="button" className="mt-go" disabled={busy} onClick={next}>
+              {line.next}
+            </button>
+          )}
+          {tutorial.step !== 'results' && (
+            <button type="button" className="mt-skip" disabled={busy} onClick={() => void onAct({ type: 'tuto', move: 'skip' })}>
+              Passer le tutoriel
+            </button>
+          )}
+        </div>
+      </aside>
+    </>
   );
 };
 
@@ -1446,7 +1565,13 @@ const Market = ({ view, onTalk, busy }: { view: MelodyView; onTalk: (artistId: s
                 Pot. {artist.potentialMin}–{artist.potentialMax} · {compact(artist.fans)} fans
               </span>
             </ArtistCard>
-            <button type="button" className="mt-go" disabled={busy || full || artist.blocked !== null} onClick={() => onTalk(artist.id)}>
+            <button
+              type="button"
+              className="mt-go"
+              data-tuto={artist.blocked === null ? 'sign' : undefined}
+              disabled={busy || full || artist.blocked !== null}
+              onClick={() => onTalk(artist.id)}
+            >
               {artist.blocked ?? (talking.has(artist.id) ? 'Reprendre la discussion' : `Négocier · ~${money(artist.advance)}`)}
             </button>
           </div>
@@ -1646,6 +1771,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       setState(answer.data);
       if (action.type === 'found') say('Ton label est né. Au boulot !');
       if (action.type === 'release') say('Sortie programmée.');
+      if (action.type === 'tuto' && action.move === 'skip') say('Tutoriel passé. Ton premier son est programmé.');
       if (action.type === 'gig') say('Concert réservé : il se joue à la fin de la semaine.');
       if (action.type === 'loan') say('Prêt accordé.');
       return answer.data.view;
@@ -1684,7 +1810,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
             </i>
           </span>
         </div>
-        <div className="mt-chip">
+        <div className="mt-chip" data-tuto="cash">
           <Coin />
           <div>
             <b>{money(label.cash)}</b>
@@ -1743,7 +1869,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
         <>
           <nav className="mt-nav" aria-label="Onglets de Melody Tycoon">
             {TABS.map((t) => (
-              <button key={t.id} type="button" aria-current={tab === t.id ? 'page' : undefined} onClick={() => go(t.id)}>
+              <button key={t.id} type="button" data-tuto={`nav-${t.id}`} aria-current={tab === t.id ? 'page' : undefined} onClick={() => go(t.id)}>
                 {t.name}
               </button>
             ))}
@@ -1790,6 +1916,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
           {!talkWith && tab === 'bank' && <Bank view={view} onAct={run} busy={busy} />}
         </>
       )}
+      {view.label && view.tutorial && <Guide tutorial={view.tutorial} tab={tab} talkWith={talkWith} view={view} onAct={act} busy={busy} />}
       {toast && (
         <div className={`mt-snack${toast.bad ? ' is-bad' : ''}`} role="status">
           {toast.text}
