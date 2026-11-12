@@ -2503,3 +2503,22 @@ img.mt-cover-img {
 .mt-tourlog .is-fun span {
   color: var(--mt-a2);
 }
+
+/* Avatars: a black silhouette in front of a coloured sun */
+.mt-av {
+  background: hsl(var(--hue) 75% 52%);
+}
+.mt .mt-av::before {
+  content: none;
+}
+.mt-av svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* On a card, the note sits on the top of the avatar: darken it a little there too. */
+.mt-card > .mt-av::after {
+  background: linear-gradient(180deg, rgba(11, 10, 16, 0.6) 0, transparent 34%, transparent 52%, rgba(11, 10, 16, 0.94) 90%);
+}

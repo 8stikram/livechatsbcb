@@ -60,6 +60,8 @@ export {
 } from './tours.ts';
 export { runTick, type TickReport, type ReleaseReport, type LabelReport } from './tick.ts';
 export { simulate, STRATEGIES, type Strategy, type Snapshot } from './sim.ts';
+export { HAIRS, HATS, FACES, lookOf, parseLook, type Look, type Hair, type Hat, type Face } from './avatar.ts';
+export { LOOKS } from './data/looks.ts';
 export { createRng, rngFor, type Rng } from './rng.ts';
 export {
   ACADEMY, academyOf, academyView, hiringList, sendScout, hireScout, takeYouth, dropYouth, renameYouth, promoteYouth, tickAcademy, zoneById,

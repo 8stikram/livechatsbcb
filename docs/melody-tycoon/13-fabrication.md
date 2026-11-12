@@ -214,3 +214,14 @@ Tout est dans l'onglet **Label**. Ce qui se gagne ou se perd : des fans et du bu
 - **Tournée commune** : avec un autre de tes artistes, ou celui d'un ami (il doit accepter dans son onglet Label ; son label touche la moitié de l'argent).
 - **Première partie** : un de tes artistes ouvre les concerts et gagne des fans.
 - Un artiste vendu en tournée : la tournée s'arrête.
+
+## Étape 11 — avatars (fait)
+
+Style choisi par le propriétaire parmi 3 maquettes (néon, pixel, silhouette) : **la silhouette**. Une ombre noire devant un soleil de couleur, sans visage.
+
+- **Aucun visage dessiné**, donc aucune ressemblance avec une vraie personne (risque R4). On ne montre que ce qu'on voit de loin : coiffure, chapeau, lunettes, barbe, chaîne, guitare, groupe.
+- **Vrais artistes** : 303 ont leur vraie dégaine, écrite à la main dans `packages/melody/src/data/looks.ts` (une ligne par artiste, facile à corriger). Exemples : Daft Punk casqués, Kalash Criminel et Ziak en cagoule, Ariana Grande en queue-de-cheval, Mozart en perruque, SCH cheveux longs et lunettes noires.
+- **Les autres** (artistes inventés, jeunes du centre, vrais artistes pas encore écrits) : une dégaine tirée de leur nom et de leur genre. Toujours la même pour le même artiste. Un rappeur drill a souvent une cagoule ou une capuche, un métalleux les cheveux longs, un DJ un casque.
+- **Humeur visible** sur tes artistes : une croix rouge de colère quand le moral est sous 35, des « Z » quand l'énergie est sous 25.
+- **Où** : toutes les cartes d'artiste (Effectif, studio, marché, négociation, autres joueurs), le centre de formation, les offres de featuring et de transfert, les invitations en tournée, la fiche des labels.
+- Rien ne change côté serveur : l'avatar se dessine dans l'appli.

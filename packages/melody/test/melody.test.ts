@@ -5,7 +5,7 @@ import {
   runTick, scheduleRelease, signArtist, simulate, songCost, songEnergy, takeLoan, CATALOG_ARTISTS,
   applyAction, buildView, cancelSession, guestDemand, offerFeat, reactToEvent, startSession,
   makeOffer, openTalk, talkOf, talkBlocked, contractOf, studioOffers, BEATS, THEMES,
-  releaseBlocked, promoViews, secretCombos, trendOf, rollSurprise, langOf, inventTitle, academyOf,
+  releaseBlocked, promoViews, secretCombos, trendOf, rollSurprise, langOf, inventTitle, academyOf, LOOKS, lookOf, parseLook,
 } from '../src/index.ts';
 import type { Artist, World } from '../src/index.ts';
 
@@ -902,5 +902,27 @@ describe('tournées', () => {
     for (let i = 0; i < 3; i += 1) runTick(world);
     expect(buildView(world, 'u1').tours[0]!.partnerStatus).toBe('accepted');
     expect(b.cash).not.toBe(cashB);
+  });
+});
+
+describe('avatars', () => {
+  it('gives every written look valid words and a real artist of the catalogue', () => {
+    const ids = new Set(CATALOG_ARTISTS.map((a) => a.id));
+    for (const [id, text] of Object.entries(LOOKS)) {
+      expect(ids.has(id), id).toBe(true);
+      expect(() => parseLook(text), id).not.toThrow();
+    }
+    expect(lookOf('daft_punk')).toMatchObject({ hat: 'helmet', group: true });
+    expect(lookOf('ariana_grande').hair).toBe('ponytail');
+  });
+
+  it('draws the same look for the same artist, by genre, and never glasses on a hidden face', () => {
+    expect(lookOf('y_p3_y1', 'metal')).toEqual(lookOf('y_p3_y1', 'metal'));
+    const looks = Array.from({ length: 300 }, (_, i) => lookOf('someone_' + i, 'drill'));
+    expect(looks.some((l) => l.hat === 'cagoule')).toBe(true);
+    expect(looks.every((l) => l.hat !== 'cagoule' || (l.face === null && !l.beard))).toBe(true);
+    expect(new Set(looks.map((l) => l.hair + ' ' + l.hat)).size).toBeGreaterThan(10);
+    const metal = Array.from({ length: 300 }, (_, i) => lookOf('someone_' + i, 'metal'));
+    expect(metal.filter((l) => l.hair === 'long').length).toBeGreaterThan(100);
   });
 });

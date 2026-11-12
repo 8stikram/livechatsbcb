@@ -49,6 +49,7 @@ import type { MelodyRoute } from '../../../../shared/ipc';
 import { LibraryPicker, type Shelf } from '../LibraryPicker';
 import { useClipboardShelf } from '../ClipboardShelf';
 import { errorMessage } from '../messages';
+import { Avatar, AvatarGenres, hueOf, moodOf } from './Avatar';
 import '@fontsource-variable/archivo/wdth.css';
 import './melody.css';
 
@@ -85,20 +86,6 @@ const ask = async <T,>(guildId: string, route: MelodyRoute, body?: unknown): Pro
   if (data && data.ok === false) return { ok: false, message: data.message ?? 'Action refusée.' };
   return { ok: true, data: data as T };
 };
-
-const hueOf = (id: string): number => {
-  let hash = 0;
-  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) % 360;
-  return hash;
-};
-
-const initials = (name: string): string =>
-  name
-    .split(/\s+/)
-    .map((part) => part[0] ?? '')
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
 
 const useNow = (every: number): number => {
   const [now, setNow] = useState(() => Date.now());
@@ -172,7 +159,7 @@ const ArtistCard = ({
   children?: ReactNode;
 }) => (
   <button type="button" className="mt-card" aria-pressed={pressed ?? false} onClick={onClick}>
-    <span className="mt-art" data-i={initials(artist.name)} style={{ '--hue': hueOf(artist.id) } as CSSProperties} />
+    <Avatar id={artist.id} genre={artist.genre} mood={'morale' in artist ? moodOf(artist as RosterView) : null} />
     <span className="mt-note">
       {artist.gen}
       <small>{genreName(artist.genre)}</small>
@@ -2083,7 +2070,7 @@ const TourBlock = ({ view, artist, onAct, busy }: { view: MelodyView; artist: Ro
 // A friend invites one of my artists on his tour.
 const TourInvite = ({ tour, onAct, busy }: { tour: TourView; onAct: (action: MelodyAction) => void; busy: boolean }) => (
   <div className="mt-deal is-turn">
-    <span className="mt-art mt-deal-art" data-i={initials(tour.artistName)} style={{ '--hue': hueOf(tour.artistId) } as CSSProperties} aria-hidden="true" />
+    <Avatar id={tour.artistId} className="mt-deal-art" />
     <div className="mt-deal-text">
       <Label>Tournée commune</Label>
       <b>
@@ -2491,7 +2478,7 @@ const DealRow = ({ deal, onAct, busy }: { deal: FeatDealView; onAct: (action: Me
         : `${DEAL_STATUS[deal.status]} · ${money(deal.fee)}`;
   return (
     <div className={`mt-deal is-${deal.status}${deal.myTurn ? ' is-turn' : ''}`}>
-      <span className="mt-art mt-deal-art" data-i={initials(deal.guestName)} style={{ '--hue': hueOf(deal.guestId) } as CSSProperties} aria-hidden="true" />
+      <Avatar id={deal.guestId} className="mt-deal-art" />
       <div className="mt-deal-text">
         <Label>{sent ? 'Demande envoyée' : 'Demande reçue'}</Label>
         <b>{who}</b>
@@ -2589,7 +2576,7 @@ const TransferRow = ({ deal, onAct, onTalk, busy }: { deal: TransferView; onAct:
         : `${TRANSFER_STATUS[deal.status]} · ${money(deal.fee)}`;
   return (
     <div className={`mt-deal is-${deal.status}${deal.myTurn ? ' is-turn' : ''}`}>
-      <span className="mt-art mt-deal-art" data-i={initials(deal.artistName)} style={{ '--hue': hueOf(deal.artistId) } as CSSProperties} aria-hidden="true" />
+      <Avatar id={deal.artistId} className="mt-deal-art" />
       <div className="mt-deal-text">
         <Label>{sent ? 'Offre envoyée' : 'Offre reçue'}</Label>
         <b>{who}</b>
@@ -2788,7 +2775,7 @@ const SCOUT_STARS = (stars: number): string => '★'.repeat(stars) + '☆'.repea
 // A youth of the centre: his level is a range until the label knows him well.
 const YouthCard = ({ youth, children }: { youth: YouthView; children?: ReactNode }) => (
   <div className={`mt-youth${youth.gem ? ' is-gem' : ''}`}>
-    <span className="mt-art mt-youth-art" data-i={initials(youth.name)} style={{ '--hue': hueOf(youth.id) } as CSSProperties} aria-hidden="true" />
+    <Avatar id={youth.id} genre={youth.genre} className="mt-youth-art" />
     <div className="mt-youth-body">
       <span className="mt-youth-note" title="Sa note : plus tu le connais, plus la fourchette se resserre.">
         {youth.genMin === youth.genMax ? youth.genMin : `${youth.genMin}–${youth.genMax}`}
@@ -3309,7 +3296,7 @@ const LabelPage = ({ card, onClose }: { card: LabelCard; onClose: () => void }) 
     <ul className="mt-rows">
       {card.artists.map((a) => (
         <li key={a.id}>
-          <span className="mt-art mt-row-art" data-i={initials(a.name)} style={{ '--hue': hueOf(a.id) } as CSSProperties} aria-hidden="true" />
+          <Avatar id={a.id} genre={a.genre} className="mt-row-art" />
           <b>{a.name}</b>
           <span className="mt-sub">
             {genreName(a.genre)} · note {a.gen} · {compact(a.fans)} fans
@@ -3654,6 +3641,16 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
 
   const view = state?.view;
   const coversVersion = useCovers(guildId, view);
+  // Genres of the artists the catalogue does not know (the youths), for their avatars.
+  const avatarGenres = useMemo(() => {
+    const genres = new Map<string, string>();
+    if (!view) return genres;
+    for (const a of view.roster) genres.set(a.id, a.genre);
+    for (const a of view.others) genres.set(a.id, a.genre);
+    for (const y of view.academy?.youths ?? []) genres.set(y.id, y.genre);
+    for (const l of view.labels) for (const a of l.artists) genres.set(a.id, a.genre);
+    return genres;
+  }, [view]);
   const top = useMemo(() => {
     if (!view?.label) return null;
     const label = view.label;
@@ -3715,6 +3712,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
 
   return (
     <CoversContext.Provider value={coversVersion}>
+    <AvatarGenres.Provider value={avatarGenres}>
     <section className="mt" aria-label="Melody Tycoon">
       {top}
       <div className="mt-clockbar">
@@ -3788,6 +3786,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       )}
       {view.label && active && !view.tutorial && <HitMoment view={view} />}
     </section>
+    </AvatarGenres.Provider>
     </CoversContext.Provider>
   );
 };
