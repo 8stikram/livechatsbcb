@@ -117,3 +117,18 @@ Version courte, avec ce qui existe déjà (le scouting viendra plus tard). Choix
 - **Passer** : le jeu crée un son gratuit avec ton premier artiste et le sort la semaine suivante.
 - L'étape est gardée sur le serveur : on reprend où on en était.
 - Toujours pas en ligne ni dans une version publiée.
+
+## Étape 6 — featuring entre joueurs (fait)
+
+Choix du propriétaire : accord **avant** le studio, accepter / refuser / autre prix, **cachet seul** (pas de part des streams), bonus **+2 de qualité** quand deux joueurs travaillent ensemble.
+
+- **Recrutement** : deux listes, « Artistes libres » et « Chez les autres joueurs ». Sur un artiste d'un autre joueur : **Proposer un featuring**, avec le cachet à régler par − / + (le départ est le prix qu'il demanderait à un inconnu).
+- En haut de Recrutement, le bloc **Featurings entre joueurs** montre les demandes envoyées et reçues.
+  - Celui dont c'est le tour peut **accepter**, **refuser** ou proposer **un autre prix**. Le prix fait des allers-retours jusqu'à un oui ou un non.
+  - Pas de réponse sous **2 semaines** : c'est non (le rapport de la semaine le dit).
+  - On peut annuler sa demande tant que l'autre n'a pas répondu.
+- **Oui** : le cachet est payé tout de suite au label de l'invité. L'**accord** reste valable **4 semaines** (non remboursé s'il ne sert pas).
+- **Studio** : à l'étape Featuring, l'accord apparaît en premier (« Accord avec … · déjà payé · +2 qualité »). Un clic et l'invité est sur le son, sans roue. Quitter la cabine garde l'accord.
+- L'invité dépense **10 d'énergie** quand le son est enregistré (refusé s'il est trop fatigué) et gagne une part des nouveaux fans quand le son sort.
+- Une seule demande ouverte par artiste et par label, 10 au plus par label et 300 par serveur (pour rester dans le gratuit).
+- Toujours pas en ligne ni dans une version publiée.

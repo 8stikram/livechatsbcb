@@ -7,9 +7,10 @@ import { estimateQuality, producerOfLevel, songCost, songEnergy } from './qualit
 import { createRng, hashString } from './rng.ts';
 import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer, SongLevels, Trends, World } from './types.ts';
 import { GameError, addPlayerLabel, bookGig, createSong, expectedOffer, freeAgents, scheduleRelease, takeLoan, type Offer } from './world.ts';
+import { answerDeal, askFeat, cancelDeal, dealsView, otherArtists, type FeatDealView, type OtherArtistView } from './featdeals.ts';
 import { afterAction, isGuarded, nextStep, refund, skipTutorial, startTutorial, tutorialView, type TutorialView } from './tutorial.ts';
 import { leaveTalk, makeOffer, openTalk, talkBlocked, talkNews, talksOfLabel, type TalkNews, type TalkView } from './negotiation.ts';
-import { cancelSession, finishSession, offerFeat, reactToEvent, sessionOf, sessionView, skipFeat, startSession, type SessionView } from './studio.ts';
+import { cancelSession, finishSession, offerFeat, useDeal, reactToEvent, sessionOf, sessionView, skipFeat, startSession, type SessionView } from './studio.ts';
 
 export const MAX_PLAYER_LABELS = 20;
 
@@ -107,6 +108,10 @@ export type MelodyAction =
   | { type: 'offer'; artistId: string; offer: Offer }
   | { type: 'talk_leave'; artistId: string }
   | { type: 'tuto'; move: 'next' | 'skip' }
+  | { type: 'feat_ask'; guestId: string; fee: number }
+  | { type: 'feat_answer'; dealId: string; answer: 'accept' | 'refuse' | 'counter'; fee?: number }
+  | { type: 'feat_cancel'; dealId: string }
+  | { type: 'feat_deal'; dealId: string }
   | { type: 'studio'; artistId: string; themeId: string; beatId: string; levels: SongLevels }
   | { type: 'react'; reactionId: string }
   | { type: 'feat'; guestId: string; offer: number }
@@ -140,6 +145,18 @@ export const applyAction = (world: World, ownerId: string, action: MelodyAction)
 
 const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { type: 'found' }>): void => {
   switch (action.type) {
+    case 'feat_ask':
+      askFeat(world, label, action.guestId, action.fee);
+      return;
+    case 'feat_answer':
+      answerDeal(world, label, action.dealId, action.answer, action.fee);
+      return;
+    case 'feat_cancel':
+      cancelDeal(world, label, action.dealId);
+      return;
+    case 'feat_deal':
+      useDeal(world, label, action.dealId);
+      return;
     case 'tuto':
       if (action.move === 'next') nextStep(world, label);
       else skipTutorial(world, label, {
@@ -278,6 +295,10 @@ export interface MelodyView {
   session: SessionView | null;
   /** The guided first week, while it runs. */
   tutorial: TutorialView | null;
+  /** Featuring requests with other players, sent and received. */
+  featDeals: FeatDealView[];
+  /** The artists of the other players of the server. */
+  others: OtherArtistView[];
   /** Contract talks open this week. */
   talks: TalkView[];
   /** Talks that ended this week, with the agent's last words. */
@@ -397,6 +418,8 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     session: label ? sessionOfLabel(world, label) : null,
     talks: label ? talksOfLabel(world, label.id) : [],
     tutorial: label ? tutorialView(world, label.id) : null,
+    featDeals: label ? dealsView(world, label.id) : [],
+    others: label ? otherArtists(world, label.id) : [],
     talkNews: label ? talkNews(world, label.id) : [],
   };
 };

@@ -8,6 +8,7 @@ import { contractOf } from './economy.ts';
 import { estimateQuality, featChance, featDemand, producerOfLevel, songCost, songEnergy } from './quality.ts';
 import { clamp, rngFor } from './rng.ts';
 import type { Artist, Label, SessionEvent, SongLevels, StudioSession, StudioStage, World } from './types.ts';
+import { DEALS, checkDealGuest, spendDeal, usableDeals } from './featdeals.ts';
 import { tutorialStep } from './tutorial.ts';
 import { GameError, createSong, type SongRequest } from './world.ts';
 
@@ -488,6 +489,21 @@ export const offerFeat = (world: World, label: Label, guestId: string, offer: nu
   session.lastOffer = { guestId: guest.id, offer: price, chance, roll, outcome: vexed ? 'vexed' : 'refused' };
 };
 
+/** Puts the guest of an accepted deal with another player on the song: already paid, no wheel. */
+export const useDeal = (world: World, label: Label, dealId: string): void => {
+  const session = openSession(world, label);
+  if (pending(session)) fail("Règle d'abord ce qui se passe en studio.");
+  if (session.featDone) fail('Le featuring est déjà réglé pour ce son.');
+  const guest = checkDealGuest(world, label, dealId);
+  const host = world.artists[session.artistId] ?? fail('Artiste introuvable.');
+  if (guest.id === host.id) fail('Un artiste ne peut pas être son propre invité.');
+  if (host.energy < songEnergy(session.levels, true, host)) fail(`${host.name} n'a pas assez d'énergie pour un featuring.`);
+  session.feat = { guestId: guest.id, fee: 0, dealId };
+  session.featDone = true;
+  // Two players working together: the song gets a little better.
+  session.quality += DEALS.friendship;
+};
+
 export const skipFeat = (world: World, label: Label): void => {
   const session = openSession(world, label);
   if (pending(session)) fail("Règle d'abord ce qui se passe en studio.");
@@ -499,6 +515,7 @@ export const finishSession = (world: World, label: Label, title: string, produce
   const session = openSession(world, label);
   if (pending(session)) fail("Règle d'abord ce qui se passe en studio.");
   if (!session.featDone) fail('Choisis un featuring ou passe cette étape.');
+  if (session.feat?.dealId) spendDeal(world, label, session.feat.dealId);
   const request: SongRequest = {
     artistId: session.artistId,
     title,
@@ -540,6 +557,9 @@ export interface GuestView {
   demand: number;
   bonus: number;
   blocked: string | null;
+  /** A deal with another player: already paid, no wheel. */
+  dealId: string | null;
+  labelName: string | null;
 }
 
 export interface SessionView {
@@ -610,7 +630,24 @@ export const sessionView = (world: World, label: Label, producer: SongRequest['p
     lastOffer: session.lastOffer ? { ...session.lastOffer, guestName: lastGuest?.name ?? '?' } : null,
     guests: session.featDone
       ? []
-      : guestChoices(world, label, session).map((guest) => ({
+      : [
+          ...usableDeals(world, label.id)
+            .map((deal) => ({ deal, guest: world.artists[deal.guestId] }))
+            .filter((x): x is { deal: typeof x.deal; guest: Artist } => !!x.guest && x.guest.id !== artist.id)
+            .map(({ deal, guest }) => ({
+              id: guest.id,
+              name: guest.name,
+              genre: guest.genre,
+              gen: Math.round(artisticSkill(guest.attrs, GENRES[guest.genre].family)),
+              fans: guest.fans,
+              real: guest.real,
+              demand: deal.fee,
+              bonus: 0,
+              blocked: guest.energy < DEALS.guestEnergy ? 'Trop fatigué cette semaine' : null,
+              dealId: deal.id,
+              labelName: world.labels[deal.toLabelId]?.name ?? null,
+            })),
+          ...guestChoices(world, label, session).map((guest) => ({
           id: guest.id,
           name: guest.name,
           genre: guest.genre,
@@ -620,6 +657,9 @@ export const sessionView = (world: World, label: Label, producer: SongRequest['p
           demand: guestDemand(world, label.id, guest),
           bonus: guestBonus(artist, guest),
           blocked: guestBlocked(world, label.id, guest),
+          dealId: null,
+          labelName: null,
         })),
+        ],
   };
 };

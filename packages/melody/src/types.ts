@@ -229,6 +229,8 @@ export interface World {
   talkMemory?: Record<string, import('./negotiation.ts').TalkMemory>;
   /** The guided first week of each new label. */
   tutorials?: Record<string, import('./tutorial.ts').Tutorial>;
+  /** Featuring requests between players. */
+  featDeals?: import('./featdeals.ts').FeatDeal[];
 }
 
 export type StudioStage = 'theme' | 'beat' | 'producer' | 'studio' | 'feat';
@@ -257,7 +259,8 @@ export interface StudioSession {
   delay: number;
   morale: number;
   energy: number;
-  feat: { guestId: string; fee: number } | null;
+  /** dealId when the guest comes from a deal with another player (already paid). */
+  feat: { guestId: string; fee: number; dealId?: string } | null;
   featDone: boolean;
   lastOffer: { guestId: string; offer: number; chance: number; roll: number | null; outcome: 'accepted' | 'refused' | 'vexed' } | null;
 }

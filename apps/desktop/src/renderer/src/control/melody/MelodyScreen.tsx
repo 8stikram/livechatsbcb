@@ -11,6 +11,8 @@ import {
   hitWord,
   qualityWord,
   type ArtistView,
+  type FeatDealView,
+  type OtherArtistView,
   type Clause,
   type Mood,
   type Offer,
@@ -608,13 +610,19 @@ const Featuring = ({
               <ArtistCard
                 artist={{ id: g.id, name: g.name, real: g.real, genre: g.genre as ArtistView['genre'], gen: g.gen, potentialMin: 0, potentialMax: 0, fans: g.fans, hype: 0, value: 0 }}
                 onClick={() => {
-                  if (g.blocked) return;
+                  if (g.blocked || busy) return;
+                  if (g.dealId) {
+                    void onAct({ type: 'feat_deal', dealId: g.dealId }).then((next) => next && onDone());
+                    return;
+                  }
                   setPicked(g);
                   setShare(100);
                   setSaid(null);
                 }}
               >
-                <span className="mt-card-sub">{g.blocked ?? `Demande ${money(g.demand)}`}</span>
+                <span className={`mt-card-sub${g.dealId ? ' mt-dealtag' : ''}`}>
+                  {g.blocked ?? (g.dealId ? `Accord avec ${g.labelName} · déjà payé · +2 qualité` : `Demande ${money(g.demand)}`)}
+                </span>
               </ArtistCard>
             </div>
           ))}
@@ -1542,15 +1550,196 @@ const Guide = ({
   );
 };
 
+/* ---------------------------------- Featuring between players ---------------------------------- */
+
+// A price with − / + buttons, steps of 10 % of where it started.
+const FeeStepper = ({ value, start, onChange, label }: { value: number; start: number; onChange: (fee: number) => void; label: string }) => {
+  const step = Math.max(50, Math.round((start * 0.1) / 50) * 50);
+  return (
+    <div className="mt-stepper mt-fee">
+      <button type="button" aria-label={`Baisser : ${label}`} onClick={() => onChange(Math.max(step, value - step))}>
+        −
+      </button>
+      <b>{money(value)}</b>
+      <button type="button" aria-label={`Monter : ${label}`} onClick={() => onChange(value + step)}>
+        +
+      </button>
+    </div>
+  );
+};
+
+const DEAL_STATUS: Record<FeatDealView['status'], string> = {
+  pending: 'En attente',
+  accepted: 'Accepté',
+  refused: 'Refusé',
+  expired: 'Expiré',
+  used: 'Utilisé',
+  cancelled: 'Annulé',
+};
+
+// One request, sent or received, with the buttons of whoever must answer.
+const DealRow = ({ deal, onAct, busy }: { deal: FeatDealView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const [countering, setCountering] = useState(false);
+  const [fee, setFee] = useState(deal.fee);
+  const sent = deal.direction === 'sent';
+  const who = sent ? `${deal.guestName} (${deal.otherLabel})` : `${deal.otherLabel} veut ${deal.guestName}`;
+  const weeks = `${deal.weeksLeft} sem.`;
+  const line =
+    deal.status === 'pending'
+      ? deal.myTurn
+        ? sent
+          ? `Contre-offre : ${money(deal.fee)}. Réponds sous ${weeks}`
+          : `Propose ${money(deal.fee)}. Réponds sous ${weeks}`
+        : `${money(deal.fee)} · en attente de réponse (${weeks})`
+      : deal.status === 'accepted'
+        ? sent
+          ? `Accord à ${money(deal.fee)} : utilisable au studio pendant ${weeks}`
+          : `Accepté : ${money(deal.fee)} encaissés`
+        : `${DEAL_STATUS[deal.status]} · ${money(deal.fee)}`;
+  return (
+    <div className={`mt-deal is-${deal.status}${deal.myTurn ? ' is-turn' : ''}`}>
+      <span className="mt-art mt-deal-art" data-i={initials(deal.guestName)} style={{ '--hue': hueOf(deal.guestId) } as CSSProperties} aria-hidden="true" />
+      <div className="mt-deal-text">
+        <Label>{sent ? 'Demande envoyée' : 'Demande reçue'}</Label>
+        <b>{who}</b>
+        <span className="mt-sub">{line}</span>
+      </div>
+      <div className="mt-acts mt-deal-acts">
+        {deal.myTurn && !countering && (
+          <>
+            <button type="button" className="mt-go" disabled={busy} onClick={() => onAct({ type: 'feat_answer', dealId: deal.id, answer: 'accept' })}>
+              {sent ? `Payer ${money(deal.fee)}` : 'Accepter'}
+            </button>
+            <button type="button" className="mt-ghost" disabled={busy} onClick={() => setCountering(true)}>
+              Autre prix
+            </button>
+            <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'feat_answer', dealId: deal.id, answer: 'refuse' })}>
+              {sent ? 'Laisser tomber' : 'Refuser'}
+            </button>
+          </>
+        )}
+        {deal.myTurn && countering && (
+          <>
+            <FeeStepper value={fee} start={deal.fee} onChange={setFee} label="ton prix" />
+            <button
+              type="button"
+              className="mt-go"
+              disabled={busy || fee === deal.fee}
+              onClick={() => {
+                onAct({ type: 'feat_answer', dealId: deal.id, answer: 'counter', fee });
+                setCountering(false);
+              }}
+            >
+              Envoyer
+            </button>
+            <button type="button" className="mt-ghost" onClick={() => setCountering(false)}>
+              Retour
+            </button>
+          </>
+        )}
+        {sent && deal.status === 'pending' && !deal.myTurn && (
+          <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'feat_cancel', dealId: deal.id })}>
+            Annuler
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// The artists of the other players, each with a "Proposer un featuring" button and its price.
+const OtherPlayers = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const [asking, setAsking] = useState<OtherArtistView | null>(null);
+  const [fee, setFee] = useState(0);
+  if (view.others.length === 0) return <span className="mt-sub">Aucun autre joueur n’a encore de label sur ce serveur.</span>;
+  return (
+    <div className="mt-deck">
+      {view.others.map((artist) => (
+        <div key={artist.id} className="mt-offer">
+          <ArtistCard
+            artist={{ id: artist.id, name: artist.name, real: artist.real, genre: artist.genre, gen: artist.gen, potentialMin: 0, potentialMax: 0, fans: artist.fans, hype: 0, value: 0 }}
+          >
+            <span className="mt-card-sub">
+              {artist.labelName} · {compact(artist.fans)} fans
+            </span>
+          </ArtistCard>
+          {asking?.id === artist.id ? (
+            <div className="mt-ask">
+              <FeeStepper value={fee} start={artist.demand} onChange={setFee} label="cachet proposé" />
+              <button
+                type="button"
+                className="mt-go"
+                disabled={busy || fee > (view.label?.cash ?? 0)}
+                onClick={() => {
+                  onAct({ type: 'feat_ask', guestId: artist.id, fee });
+                  setAsking(null);
+                }}
+              >
+                Envoyer · {money(fee)}
+              </button>
+              <button type="button" className="mt-ghost" onClick={() => setAsking(null)}>
+                Annuler
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="mt-go"
+              disabled={busy || artist.asked}
+              onClick={() => {
+                setAsking(artist);
+                setFee(Math.max(100, Math.round(artist.demand / 100) * 100));
+              }}
+            >
+              {artist.asked ? 'Demande en cours' : 'Proposer un featuring'}
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 /* ---------------------------------- Market ---------------------------------- */
 
-const Market = ({ view, onTalk, busy }: { view: MelodyView; onTalk: (artistId: string) => void; busy: boolean }) => {
+const Market = ({
+  view,
+  onTalk,
+  onAct,
+  busy,
+}: {
+  view: MelodyView;
+  onTalk: (artistId: string) => void;
+  onAct: (action: MelodyAction) => void;
+  busy: boolean;
+}) => {
+  const [list, setList] = useState<'free' | 'players'>('free');
   const full = view.roster.length >= (view.label?.maxArtists ?? 0);
   const [only, setOnly] = useState(true);
   const shown = view.market.filter((a) => !only || a.blocked === null).slice(0, 24);
   const talking = new Set(view.talks.map((t) => t.artistId));
   return (
     <div className="mt-view mt-in">
+      {view.featDeals.length > 0 && (
+        <section className="mt-deals" aria-label="Featurings avec les autres joueurs">
+          <Label>Featurings entre joueurs</Label>
+          {view.featDeals.map((deal) => (
+            <DealRow key={`${deal.id}:${deal.fee}:${deal.status}`} deal={deal} onAct={onAct} busy={busy} />
+          ))}
+        </section>
+      )}
+      <div className="mt-switch" role="group" aria-label="Liste d’artistes">
+        <button type="button" className="mt-chipbtn" aria-pressed={list === 'free'} onClick={() => setList('free')}>
+          Artistes libres
+        </button>
+        <button type="button" className="mt-chipbtn" aria-pressed={list === 'players'} onClick={() => setList('players')}>
+          Chez les autres joueurs
+        </button>
+      </div>
+      {list === 'players' ? (
+        <OtherPlayers view={view} onAct={onAct} busy={busy} />
+      ) : (
+      <>
       <div className="mt-bar">
         <Label>{full ? 'Effectif complet : monte de palier pour signer plus' : `${(view.label?.maxArtists ?? 0) - view.roster.length} place(s) libre(s)`}</Label>
         <button type="button" className="mt-chipbtn" aria-pressed={only} onClick={() => setOnly(!only)}>
@@ -1578,6 +1767,8 @@ const Market = ({ view, onTalk, busy }: { view: MelodyView; onTalk: (artistId: s
         ))}
         {shown.length === 0 && <span className="mt-sub">Personne n’est signable pour l’instant. Reviens la semaine prochaine.</span>}
       </div>
+      </>
+      )}
     </div>
   );
 };
@@ -1771,6 +1962,9 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       setState(answer.data);
       if (action.type === 'found') say('Ton label est né. Au boulot !');
       if (action.type === 'release') say('Sortie programmée.');
+      if (action.type === 'feat_ask') say('Demande envoyée. L’autre joueur a 2 semaines pour répondre.');
+      if (action.type === 'feat_answer') say(action.answer === 'accept' ? 'Accord conclu. Le cachet est payé.' : action.answer === 'counter' ? 'Ton prix est envoyé.' : 'Demande refusée.');
+      if (action.type === 'feat_deal') say('L’invité est sur le son !');
       if (action.type === 'tuto' && action.move === 'skip') say('Tutoriel passé. Ton premier son est programmé.');
       if (action.type === 'gig') say('Concert réservé : il se joue à la fin de la semaine.');
       if (action.type === 'loan') say('Prêt accordé.');
@@ -1911,7 +2105,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
             <Studio key={studioKey} guildId={guildId} view={view} artistId={studioArtist} onArtist={setStudioArtist} onAct={act} onGo={go} busy={busy} />
           )}
           {!talkWith && tab === 'releases' && <Releases view={view} onAct={run} busy={busy} onGo={go} />}
-          {!talkWith && tab === 'market' && <Market view={view} onTalk={(id) => void openTalk(id)} busy={busy} />}
+          {!talkWith && tab === 'market' && <Market view={view} onTalk={(id) => void openTalk(id)} onAct={run} busy={busy} />}
           {!talkWith && tab === 'charts' && <Charts view={view} />}
           {!talkWith && tab === 'bank' && <Bank view={view} onAct={run} busy={busy} />}
         </>

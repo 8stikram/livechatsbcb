@@ -22,7 +22,7 @@ export {
   type MelodyAction, type MelodyView, type ArtistView, type RosterView, type SongView, type MarketView, type SongPreview,
 } from './play.ts';
 export {
-  startSession, reactToEvent, cancelSession, offerFeat, skipFeat, finishSession, sessionOf, sessionView, guestDemand, guestBonus, guestChoices,
+  startSession, reactToEvent, cancelSession, offerFeat, useDeal, skipFeat, finishSession, sessionOf, sessionView, guestDemand, guestBonus, guestChoices,
   type SessionView, type SessionEventView, type GuestView,
 } from './studio.ts';
 export {
@@ -33,6 +33,10 @@ export {
   TUTORIAL_GIFT_CAP, tutorialOf, tutorialStep, tutorialView, startTutorial, skipTutorial,
   type Tutorial, type TutorialStep, type TutorialView,
 } from './tutorial.ts';
+export {
+  DEALS, askFeat, answerDeal, cancelDeal, usableDeals, dealsView, otherArtists, tickDeals,
+  type FeatDeal, type DealStatus, type FeatDealView, type OtherArtistView,
+} from './featdeals.ts';
 export { runTick, type TickReport, type ReleaseReport, type LabelReport } from './tick.ts';
 export { simulate, STRATEGIES, type Strategy, type Snapshot } from './sim.ts';
 export { createRng, rngFor, type Rng } from './rng.ts';

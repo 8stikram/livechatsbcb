@@ -3,6 +3,7 @@ import { FAMILY_WEIGHTS, energyRegen, generalRating } from './artists.ts';
 import { CFG } from './config.ts';
 import { BEATS, GENRES, THEMES, beatById } from './data/content.ts';
 import { canTierUp, contractOf, debtOf, netWorth, playGig, rosterOf } from './economy.ts';
+import { tickDeals } from './featdeals.ts';
 import { cleanTalks } from './negotiation.ts';
 import { firstWeek, publicFit } from './release.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
@@ -157,6 +158,8 @@ export const runTick = (world: World): TickReport => {
     song.hitScore = week.hitScore;
     song.weeksOut = 0;
     artist.fans += week.newFans + (feat ? Math.round(feat.fans * 0.02 * Math.min(1, week.streams / Math.max(1, feat.fans))) : 0);
+    // The guest gets a share of the new listeners too.
+    if (feat) feat.fans += Math.round(week.newFans * 0.3);
     artist.hype = clamp(artist.hype + week.hypeChange, 0, 100);
     artist.lastReleaseTick = tick;
     artist.lastActiveTick = tick;
@@ -324,6 +327,10 @@ export const runTick = (world: World): TickReport => {
     report(reports, label).cash = Math.round(label.cash);
   }
 
+  tickDeals(world, (labelId, text) => {
+    const label = world.labels[labelId];
+    if (label && label.kind === 'player' && !label.bankrupt) report(reports, label).events.push(text);
+  });
   for (const contract of world.contracts.filter((c) => c.endTick <= tick)) {
     const label = world.labels[contract.labelId];
     const artist = world.artists[contract.artistId];

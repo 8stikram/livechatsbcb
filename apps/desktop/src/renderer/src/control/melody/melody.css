@@ -1369,6 +1369,100 @@ button.mt-song:not(:disabled):hover {
   }
 }
 
+/* featuring between players */
+.mt-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mt-deals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mt-deal {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  background: var(--mt-panel);
+  border: 1px solid var(--mt-line);
+  padding: 10px 12px;
+  animation: mt-in 0.28s ease both;
+}
+.mt-deal.is-turn {
+  border-color: var(--mt-a2);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--mt-a2) 40%, transparent), 0 10px 30px -14px var(--mt-a2);
+}
+.mt-deal.is-accepted {
+  border-color: var(--mt-ok);
+}
+.mt-deal.is-refused,
+.mt-deal.is-expired,
+.mt-deal.is-cancelled,
+.mt-deal.is-used {
+  opacity: 0.6;
+}
+.mt-deal-art {
+  position: relative;
+  inset: auto;
+  width: 52px;
+  height: 52px;
+  overflow: hidden;
+}
+.mt-deal-art::before {
+  font-size: 40px;
+  right: 2px;
+  bottom: 6px;
+}
+.mt-deal-art::after {
+  display: none;
+}
+.mt-deal-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mt-deal-text b {
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mt-deal-acts {
+  justify-content: flex-end;
+}
+.mt-fee {
+  min-width: 170px;
+}
+.mt-fee b {
+  font-size: 16px;
+}
+.mt-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mt-ask .mt-go,
+.mt-ask .mt-ghost {
+  align-self: stretch;
+  text-align: center;
+}
+.mt-dealtag {
+  color: var(--mt-ok) !important;
+  font-weight: 600;
+}
+@media (max-width: 900px) {
+  .mt-deal {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+  .mt-deal-acts {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
 /* tutorial guide */
 .mt-spot {
   position: absolute;

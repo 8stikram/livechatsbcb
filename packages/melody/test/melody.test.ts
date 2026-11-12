@@ -418,3 +418,73 @@ describe('tutorial', () => {
     expect(label.cash).toBe(cash);
   });
 });
+
+describe('featuring between players', () => {
+  const twoPlayers = () => {
+    const world = createWorld(42);
+    for (const [owner, name] of [['u1', 'Alpha Records'], ['u2', 'Beta Records']] as const) {
+      const starterId = buildView(world, owner).starters[0]!.id;
+      applyAction(world, owner, { type: 'found', name, starterId });
+      applyAction(world, owner, { type: 'tuto', move: 'next' });
+      applyAction(world, owner, { type: 'tuto', move: 'next' });
+    }
+    // Out of the tutorial for good, without its free song.
+    for (const t of Object.values(world.tutorials ?? {})) t.step = 'done';
+    const [a, b] = ['u1', 'u2'].map((o) => Object.values(world.labels).find((l) => l.ownerId === o)!);
+    return { world, a: a!, b: b!, guest: rosterOf(world, b!.id)[0]!, host: rosterOf(world, a!.id)[0]! };
+  };
+
+  it('goes back and forth on the price, then pays the owner on a yes', () => {
+    const { world, a, b, guest } = twoPlayers();
+    expect(buildView(world, 'u1').others.map((o) => o.id)).toContain(guest.id);
+    applyAction(world, 'u1', { type: 'feat_ask', guestId: guest.id, fee: 1_000 });
+    expect(() => applyAction(world, 'u1', { type: 'feat_ask', guestId: guest.id, fee: 2_000 })).toThrow(/déjà une demande/);
+    const deal = buildView(world, 'u2').featDeals[0]!;
+    expect(deal).toMatchObject({ direction: 'received', myTurn: true, fee: 1_000, otherLabel: 'Alpha Records' });
+    expect(() => applyAction(world, 'u1', { type: 'feat_answer', dealId: deal.id, answer: 'accept' })).toThrow(/pas à toi/);
+    applyAction(world, 'u2', { type: 'feat_answer', dealId: deal.id, answer: 'counter', fee: 1_500 });
+    expect(buildView(world, 'u1').featDeals[0]).toMatchObject({ myTurn: true, fee: 1_500 });
+    const [cashA, cashB] = [a.cash, b.cash];
+    applyAction(world, 'u1', { type: 'feat_answer', dealId: deal.id, answer: 'accept' });
+    expect(a.cash).toBe(cashA - 1_500);
+    expect(b.cash).toBe(cashB + 1_500);
+    expect(buildView(world, 'u1').featDeals[0]).toMatchObject({ status: 'accepted', weeksLeft: 4 });
+  });
+
+  it('puts the guest on the song without the wheel, with the friendship bonus', () => {
+    const { world, a, guest, host } = twoPlayers();
+    applyAction(world, 'u1', { type: 'feat_ask', guestId: guest.id, fee: 800 });
+    const dealId = buildView(world, 'u2').featDeals[0]!.id;
+    applyAction(world, 'u2', { type: 'feat_answer', dealId, answer: 'accept' });
+    a.cash = 100_000;
+    applyAction(world, 'u1', { type: 'studio', artistId: host.id, themeId: 'rupture', beatId: 'lovetrap', levels: { theme: 2, beat: 2, producer: 2, studio: 2 } });
+    let session = buildView(world, 'u1').session!;
+    for (const event of session.events) if (event.kind === 'clash') applyAction(world, 'u1', { type: 'react', reactionId: event.reactions[0]!.id });
+    session = buildView(world, 'u1').session!;
+    expect(session.guests[0]).toMatchObject({ id: guest.id, dealId, labelName: 'Beta Records' });
+    const before = world.sessions![a.id]!.quality;
+    applyAction(world, 'u1', { type: 'feat_deal', dealId });
+    expect(world.sessions![a.id]!.quality).toBe(before + 2);
+    const energy = guest.energy;
+    const cash = a.cash;
+    applyAction(world, 'u1', { type: 'song', title: 'Ensemble' });
+    const song = world.songs.find((s) => s.labelId === a.id)!;
+    expect(song.featArtistId).toBe(guest.id);
+    expect(guest.energy).toBe(energy - 10);
+    expect(a.cash).toBe(cash - session.baseCost - session.extraCost);
+    expect(buildView(world, 'u1').featDeals[0]?.status).toBe('used');
+  });
+
+  it('counts silence as a no after two weeks', () => {
+    const { world, a, guest } = twoPlayers();
+    applyAction(world, 'u1', { type: 'feat_ask', guestId: guest.id, fee: 500 });
+    runTick(world);
+    expect(buildView(world, 'u1').featDeals[0]?.status).toBe('pending');
+    const report = runTick(world);
+    expect(buildView(world, 'u1').featDeals[0]?.status).toBe('expired');
+    expect(report.labels[a.id]?.events.join(' ')).toMatch(/c'est non/);
+    runTick(world);
+    runTick(world);
+    expect(world.featDeals).toHaveLength(0);
+  });
+});

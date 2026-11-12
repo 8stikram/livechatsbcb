@@ -2211,6 +2211,31 @@ describe('Melody Tycoon', () => {
     expect(elsewhere.view.label).toBeNull();
     expect(elsewhere.view.ranking).toEqual([]);
   });
+
+  it('lets two members agree on a featuring, the fee going to the guest’s label', async () => {
+    const player = await loginAs(playerId, QUICK_BASE);
+    const mine = await found(player.token, 'Maison');
+    const friendId = discord.addUser('Voisin');
+    discord.addMember(guildId, friendId);
+    const friend = await loginAs(friendId, QUICK_BASE);
+    const theirs = await found(friend.token, 'Voisins');
+    const guestId = mine.view.roster[0]!.id;
+    expect(theirs.view.others.map((o) => o.id)).toContain(guestId);
+
+    const asked = await act(friend.token, { type: 'feat_ask', guestId, fee: 700 });
+    if (!asked.ok) throw new Error(asked.message);
+    const received = (await view(player.token)).view.featDeals[0]!;
+    expect(received).toMatchObject({ direction: 'received', myTurn: true, fee: 700, otherLabel: 'Voisins' });
+    const stranger = await act(friend.token, { type: 'feat_answer', dealId: received.id, answer: 'accept' });
+    expect(stranger).toMatchObject({ ok: false });
+    const before = (await view(player.token)).view.label!.cash;
+    const yes = await act(player.token, { type: 'feat_answer', dealId: received.id, answer: 'accept' });
+    if (!yes.ok) throw new Error(yes.message);
+    expect(yes.view.featDeals[0]?.status).toBe('accepted');
+    expect(yes.view.label!.cash).toBeGreaterThanOrEqual(before + 700 - 1_000);
+    const after = (await view(friend.token)).view.featDeals[0];
+    expect(after).toMatchObject({ direction: 'sent', status: 'accepted' });
+  });
 });
 
 describe('the daily Melody tick', () => {
