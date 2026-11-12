@@ -219,6 +219,203 @@ const CARDS: CardDef[] = [
     ],
   },
   {
+    id: 'phone_notes',
+    stage: 'theme',
+    title: 'Les paroles sont dans son ancien téléphone',
+    text: 'Écran cassé, aucune sauvegarde. Il jure que c’était son meilleur couplet.',
+    reactions: [
+      { id: 'repair', text: 'Payer la réparation express', effect: () => ({ cost: 250 }) },
+      {
+        id: 'memory',
+        text: 'Réécrire de mémoire',
+        roll: { chance: discipline, success: () => ({ quality: 1 }), failure: () => ({ quality: -2 }), successText: 'La version de mémoire est encore meilleure.', failureText: 'Il ne se rappelle que du refrain.' },
+      },
+      {
+        id: 'freestyle',
+        text: 'Freestyle direct',
+        roll: { chance: fifty, success: () => ({ quality: 3 }), failure: () => ({ quality: -3 }), successText: 'Une prise, pas une retouche.', failureText: 'Il rime « téléphone » avec « téléphone ».' },
+      },
+    ],
+  },
+  {
+    id: 'ex',
+    stage: 'theme',
+    title: 'Il veut dédier le son à son ex',
+    text: '« Faut qu’elle sache. » Elle l’a bloqué partout.',
+    reactions: [
+      { id: 'let', text: 'Le laisser faire', effect: () => ({ morale: 5, quality: -1 }) },
+      {
+        id: 'phone',
+        text: 'Lui confisquer le téléphone',
+        roll: { chance: discipline, success: () => ({}), failure: () => ({ morale: -6 }), successText: 'Il souffle, puis il bosse.', failureText: 'Il boude en regardant ses stories.' },
+      },
+      { id: 'eat', text: 'L’emmener manger pour oublier', effect: () => ({ cost: 60, morale: 3 }) },
+    ],
+  },
+  {
+    id: 'cousin',
+    stage: 'theme',
+    title: 'Son cousin veut écrire le refrain',
+    text: '« Il a fait un BTS com’, il s’y connaît. »',
+    reactions: [
+      {
+        id: 'accept',
+        text: 'Laisser le cousin essayer',
+        roll: { chance: fifty, success: () => ({ quality: 2 }), failure: () => ({ quality: -3 }), successText: 'Le cousin a un vrai don.', failureText: 'Le refrain parle de son BTS.' },
+      },
+      { id: 'refuse', text: 'Refuser poliment', effect: () => ({ morale: -3 }) },
+      { id: 'taxi', text: 'Payer le taxi du cousin', effect: () => ({ cost: 100 }) },
+    ],
+  },
+  {
+    id: 'type_beat',
+    stage: 'beat',
+    title: 'Le beat vient de YouTube',
+    text: '« Free for profit » était écrit… dans le titre seulement.',
+    reactions: [
+      { id: 'licence', text: 'Acheter la licence', effect: () => ({ cost: 250 }) },
+      { id: 'redo', text: 'Le faire refaire à l’oreille', effect: () => ({ quality: -1 }) },
+      {
+        id: 'gamble',
+        text: 'Tenter le coup',
+        roll: { chance: fifty, success: () => ({}), failure: () => ({ cost: 1_500 }), successText: 'Personne ne réclame rien.', failureText: 'Le beatmaker de 16 ans a un avocat. 1 500 €.' },
+      },
+    ],
+  },
+  {
+    id: 'usb',
+    stage: 'beat',
+    title: 'La clé USB est restée dans le Uber',
+    text: 'Toutes les pistes sont dessus. Le chauffeur s’appelle Didier.',
+    reactions: [
+      {
+        id: 'call',
+        text: 'Rappeler Didier',
+        roll: { chance: fifty, success: () => ({}), failure: () => ({ delay: 1 }), successText: 'Didier fait demi-tour. Cinq étoiles.', failureText: 'Didier est déjà à l’aéroport.' },
+      },
+      { id: 'redo', text: 'Refaire le beat de tête', effect: () => ({ quality: -2 }) },
+      { id: 'pay', text: 'Payer la course retour', effect: () => ({ cost: 80 }) },
+    ],
+  },
+  {
+    id: 'bpm',
+    stage: 'beat',
+    title: 'Il veut le beat « plus rapide mais plus lent »',
+    text: 'Le producteur a arrêté de cligner des yeux.',
+    reactions: [
+      { id: 'search', text: 'Les laisser chercher', effect: () => ({ energy: -5, quality: 1 }) },
+      {
+        id: 'decide',
+        text: 'Trancher toi-même',
+        roll: { chance: fifty, success: () => ({ quality: 2 }), failure: () => ({ quality: -2 }), successText: 'Tout le monde fait semblant d’avoir eu l’idée.', failureText: 'Maintenant personne n’aime le beat.' },
+      },
+      { id: 'keep', text: 'Garder la première version', effect: () => ({ morale: -3 }) },
+    ],
+  },
+  {
+    id: 'late',
+    stage: 'producer',
+    title: 'Le producteur a quatre heures de retard',
+    text: '« J’suis en route », envoyé depuis son lit.',
+    reactions: [
+      {
+        id: 'bill',
+        text: 'Lui faire la morale',
+        roll: { chance: fifty, success: () => ({ quality: 1 }), failure: () => ({ quality: -2 }), successText: 'Il s’excuse et bosse double.', failureText: 'Il bosse en faisant la tête.' },
+      },
+      { id: 'food', text: 'Commander à manger en attendant', effect: () => ({ cost: 70, morale: 3 }) },
+      { id: 'start', text: 'Commencer sans lui', effect: () => ({ quality: -2 }) },
+    ],
+  },
+  {
+    id: 'tag',
+    stage: 'producer',
+    title: 'Le producteur veut son tag trois fois',
+    text: 'Au début, au milieu, et « au cas où ».',
+    reactions: [
+      { id: 'accept', text: 'Accepter les trois tags', effect: () => ({ quality: -1 }) },
+      {
+        id: 'one',
+        text: 'Négocier un seul tag',
+        roll: { chance: fifty, success: () => ({}), failure: () => ({ morale: -4 }), successText: 'Un tag, bien placé.', failureText: 'Il boude derrière sa console, l’ambiance retombe.' },
+      },
+      { id: 'pay', text: 'Payer pour zéro tag', effect: () => ({ cost: 400, quality: 1 }) },
+    ],
+  },
+  {
+    id: 'update',
+    stage: 'producer',
+    title: 'Son ordi fait une mise à jour',
+    text: '« Ne pas éteindre. 12 %. » Depuis une heure.',
+    reactions: [
+      { id: 'wait', text: 'Attendre', effect: () => ({ energy: -5 }) },
+      { id: 'rent', text: 'Louer un autre ordi', effect: () => ({ cost: 150 }) },
+      {
+        id: 'phone',
+        text: 'Enregistrer sur le téléphone',
+        roll: { chance: fifty, success: () => ({ quality: 2 }), failure: () => ({ quality: -3 }), successText: 'Le grain du téléphone fait tout le charme.', failureText: 'Ça sonne comme un vocal WhatsApp.' },
+      },
+    ],
+  },
+  {
+    id: 'mom',
+    stage: 'studio',
+    title: 'Sa mère appelle en pleine prise',
+    text: 'Troisième appel. Elle veut savoir s’il a mangé.',
+    reactions: [
+      { id: 'answer', text: 'Le laisser répondre', effect: () => ({ morale: 4, energy: -3 }) },
+      {
+        id: 'keep',
+        text: 'Garder la sonnerie dans le son',
+        roll: { chance: fifty, success: () => ({ quality: 2 }), failure: () => ({ quality: -2 }), successText: 'La sonnerie devient le gimmick du son.', failureText: 'Non. Juste non.' },
+      },
+      { id: 'plane', text: 'Mode avion', effect: () => ({ morale: -2 }) },
+    ],
+  },
+  {
+    id: 'food',
+    stage: 'studio',
+    title: 'La commande est arrivée',
+    text: 'Tacos trois viandes, pile avant le refrain.',
+    reactions: [
+      { id: 'break', text: 'Pause repas', effect: () => ({ energy: 4, quality: -1 }) },
+      {
+        id: 'finish',
+        text: 'Finir la prise d’abord',
+        roll: { chance: discipline, success: () => ({ quality: 1 }), failure: () => ({ morale: -4 }), successText: 'Prise parfaite, tacos mérité.', failureText: 'Il rappe en fixant le sac. Ça s’entend.' },
+      },
+    ],
+  },
+  {
+    id: 'aircon',
+    stage: 'studio',
+    title: 'La clim s’entend sur la prise',
+    text: 'Un souffle continu derrière la voix. 34 degrés dehors.',
+    reactions: [
+      { id: 'off', text: 'Couper la clim', effect: () => ({ energy: -6 }) },
+      { id: 'booth', text: 'Payer une cabine mieux isolée', effect: () => ({ cost: 200 }) },
+      {
+        id: 'texture',
+        text: '« C’est de la texture »',
+        roll: { chance: fifty, success: () => ({ quality: 1 }), failure: () => ({ quality: -3 }), successText: 'On dirait un effet voulu.', failureText: 'On dirait une clim.' },
+      },
+    ],
+  },
+  {
+    id: 'story',
+    stage: 'studio',
+    title: 'Il filme toute la session en story',
+    text: 'Le refrain est déjà sur Insta.',
+    reactions: [
+      {
+        id: 'let',
+        text: 'Le laisser filmer',
+        roll: { chance: fifty, success: () => ({ morale: 3 }), failure: () => ({ quality: -2 }), successText: 'Les fans réclament déjà le son.', failureText: 'Tout le monde connaît le refrain avant la sortie.' },
+      },
+      { id: 'take', text: 'Lui prendre le téléphone', effect: () => ({ morale: -4 }) },
+    ],
+  },
+  {
     id: 'greedy',
     stage: 'feat',
     title: 'L’invité demande plus',
@@ -246,6 +443,8 @@ const fluidById = (id: string) => FLUIDS.find((f) => f.id === id) ?? fail('Évé
 
 /** Base chance of trouble by level of the choice: the cheap options break more often. */
 const RISK = [0.28, 0.2, 0.13, 0.08];
+/** Share of the sessions with two embrouilles instead of one. */
+const TWO_CLASHES = 0.35;
 const STAGES: Array<Exclude<StudioStage, 'feat'>> = ['theme', 'beat', 'producer', 'studio'];
 
 const clashChance = (artist: Artist, level: number, clashesSoFar: number): number => {
@@ -336,9 +535,19 @@ export const startSession = (world: World, label: Label, request: { artistId: st
       { stage: 'studio', kind: 'fluid', cardId: 'express', reaction: null, result: fluidById('express').text },
     );
   }
+  // Every session has one embrouille, sometimes two: the cheap choices are the ones that break most.
+  const plan = rngFor(world.seed, world.tick, `studio:${label.id}:${artist.id}:${index}:plan`);
+  const troubled = new Set<string>();
+  const wanted = guided ? 0 : plan.next() < TWO_CLASHES ? 2 : 1;
+  while (troubled.size < wanted) {
+    const left = STAGES.filter((stage) => !troubled.has(stage));
+    const weights = left.map((stage) => clashChance(artist, request.levels[stage], 0));
+    let roll = plan.next() * weights.reduce((sum, w) => sum + w, 0);
+    troubled.add(left.find((_, i) => (roll -= weights[i] ?? 0) < 0) ?? left[0]!);
+  }
   for (const stage of guided ? [] : STAGES) {
     const rng = rngFor(world.seed, world.tick, `studio:${label.id}:${artist.id}:${index}:${stage}`);
-    if (rng.next() < clashChance(artist, request.levels[stage], clashes)) {
+    if (troubled.has(stage)) {
       clashes += 1;
       const card = rng.pick(CARDS.filter((c) => c.stage === stage));
       events.push({ stage, kind: 'clash', cardId: card.id, reaction: null, result: null });
