@@ -59,6 +59,11 @@ export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('clash'), targetLabelId: IdSchema, artistId: IdSchema }),
   z.object({ type: z.literal('clash_answer'), clashId: IdSchema, artistId: IdSchema }),
   z.object({ type: z.literal('clash_refuse'), clashId: IdSchema }),
+  z.object({ type: z.literal('project'), artistId: IdSchema, kind: z.enum(['ep', 'album']), title: z.string().min(1).max(60), songIds: z.array(IdSchema).min(1).max(16), inWeeks: z.number().int().min(1).max(8), cover: CoverSchema.optional() }),
+  z.object({ type: z.literal('deluxe'), projectId: IdSchema, songIds: z.array(IdSchema).min(1).max(6) }),
+  z.object({ type: z.literal('tour'), artistId: IdSchema, dates: z.number().int().min(4).max(20), partnerId: IdSchema.nullable().optional(), openerId: IdSchema.nullable().optional(), merch: z.boolean().optional() }),
+  z.object({ type: z.literal('tour_answer'), tourId: IdSchema, accept: z.boolean() }),
+  z.object({ type: z.literal('tour_cancel'), tourId: IdSchema }),
   z.object({ type: z.literal('studio'), artistId: IdSchema, themeId: IdSchema, beatId: IdSchema, levels: LevelsSchema }),
   z.object({ type: z.literal('react'), reactionId: IdSchema }),
   z.object({ type: z.literal('feat'), guestId: IdSchema, offer: z.number().min(1).max(1e9) }),
@@ -189,18 +194,24 @@ export class MelodyWorld extends DurableObject<Env> {
     // The rules change the world in place: work on a copy so a refused action leaves nothing behind.
     const draft = structuredClone(world);
     // The picture stays out of the world: the rules only learn that there is one.
-    const cover = action.type === 'song' ? action.cover : undefined;
+    const cover = action.type === 'song' || action.type === 'project' ? action.cover : undefined;
     const before = draft.songs.length;
+    const projectsBefore = draft.projects?.length ?? 0;
     try {
-      applyAction(draft, userId, action.type === 'song' && cover ? { ...action, cover: 'yes' } : action);
+      applyAction(draft, userId, (action.type === 'song' || action.type === 'project') && cover ? { ...action, cover: 'yes' } : action);
     } catch (error) {
       if (error instanceof GameError) return { ok: false, message: error.message };
       throw error;
     }
     this.world = draft;
-    const made = draft.songs.length > before ? draft.songs[draft.songs.length - 1] : undefined;
+    const made = action.type === 'song' && draft.songs.length > before ? draft.songs[draft.songs.length - 1] : undefined;
     if (cover && made?.cover) this.keepCover(made.id, cover);
-    this.save(action.type === 'song' || action.type === 'release' || action.type === 'tuto' ? ['core', 'artists', 'songs'] : ['core', 'artists']);
+    // A project cover is kept under the project's id, like a song's.
+    const project = action.type === 'project' && (draft.projects?.length ?? 0) > projectsBefore ? draft.projects!.at(-1) : undefined;
+    if (cover && project?.cover) this.keepCover(project.id, cover);
+    // Disstracks and projects touch the songs too.
+    const songsChanged = ['song', 'release', 'tuto', 'project', 'deluxe', 'clash', 'clash_answer'].includes(action.type);
+    this.save(songsChanged ? ['core', 'artists', 'songs'] : ['core', 'artists']);
     return { ok: true, ...this.state(draft, userId, nextTickAt) };
   }
 

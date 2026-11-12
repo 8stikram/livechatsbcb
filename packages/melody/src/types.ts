@@ -186,6 +186,10 @@ export interface Song {
   history?: number[];
   /** A disstrack: the label it goes after. */
   diss?: string;
+  /** The EP or album it belongs to. */
+  projectId?: string;
+  /** First-week boost of a project track, spent at the release. */
+  boost?: number;
 }
 
 export interface PromoResult {
@@ -266,6 +270,8 @@ export interface World {
   featDeals?: import('./featdeals.ts').FeatDeal[];
   transfers?: import('./transfers.ts').Transfer[];
   clashes?: import('./clash.ts').Clash[];
+  projects?: import('./projects.ts').Project[];
+  tours?: import('./tours.ts').Tour[];
   /** Tick of the last shade of each label (one a week). */
   shades?: Record<string, number>;
   /** This week's interview answers of each label. */

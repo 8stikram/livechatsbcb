@@ -12,6 +12,8 @@ import { releaseBlocked } from './world.ts';
 import { createRng, hashString } from './rng.ts';
 import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer, SongLevels, Trends, World } from './types.ts';
 import { GameError, addPlayerLabel, bookGig, createSong, expectedOffer, freeAgents, scheduleRelease, takeLoan, type Offer } from './world.ts';
+import { addDeluxe, createProject, projectsView, type ProjectKind, type ProjectView } from './projects.ts';
+import { announceTour, answerTourInvite, cancelTour, tourGuests, toursView, type TourView } from './tours.ts';
 import { answerClash, answerInterview, clashesView, interviewView, refuseClash, rivalsView, shadeView, startClash, throwShade, type ClashView, type InterviewView, type RivalView, type ShadeView, type Tone } from './clash.ts';
 import { answerTransfer, askTransfer, cancelTransfer, clauseOf, setClause, transfersView, type TransferView } from './transfers.ts';
 import { answerDeal, askFeat, cancelDeal, dealsView, otherArtists, type FeatDealView, type OtherArtistView } from './featdeals.ts';
@@ -132,6 +134,11 @@ export type MelodyAction =
   | { type: 'song'; title: string; cover?: string }
   | { type: 'release'; songId: string; inWeeks: number; marketing: string[] }
   | { type: 'gig'; artistId: string }
+  | { type: 'project'; artistId: string; kind: ProjectKind; title: string; songIds: string[]; inWeeks: number; cover?: string }
+  | { type: 'deluxe'; projectId: string; songIds: string[] }
+  | { type: 'tour'; artistId: string; dates: number; partnerId?: string | null; openerId?: string | null; merch?: boolean }
+  | { type: 'tour_answer'; tourId: string; accept: boolean }
+  | { type: 'tour_cancel'; tourId: string }
   | { type: 'loan'; amount: number; weeks: 8 | 16 | 24 };
 
 const labelOfOwner = (world: World, ownerId: string): Label => {
@@ -280,6 +287,21 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
     case 'gig':
       bookGig(world, label.id, action.artistId);
       return;
+    case 'project':
+      createProject(world, label, { ...action, cover: !!action.cover });
+      return;
+    case 'deluxe':
+      addDeluxe(world, label, action.projectId, action.songIds);
+      return;
+    case 'tour':
+      announceTour(world, label, action);
+      return;
+    case 'tour_answer':
+      answerTourInvite(world, label, action.tourId, action.accept);
+      return;
+    case 'tour_cancel':
+      cancelTour(world, label, action.tourId);
+      return;
     case 'loan':
       takeLoan(world, label.id, action.amount, action.weeks);
       return;
@@ -352,6 +374,10 @@ export interface SongView {
   releaseInWeeks: number | null;
   streamsLast: number;
   streamsTotal: number;
+  /** The EP or album it is on, or null. */
+  projectId: string | null;
+  /** A disstrack. */
+  diss: boolean;
   /** What its streams have paid since the release, and what it cost to make and promote. */
   earned: number;
   spent: number;
@@ -451,6 +477,9 @@ export interface MelodyView {
   featDeals: FeatDealView[];
   transfers: TransferView[];
   clashes: ClashView[];
+  projects: ProjectView[];
+  tours: TourView[];
+  tourGuests: Array<{ id: string; name: string; labelName: string; fans: number }>;
   rivals: RivalView[];
   interview: InterviewView | null;
   shade: ShadeView | null;
@@ -653,6 +682,8 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
             releaseInWeeks: s.releaseTick !== null && s.state === 'scheduled' ? s.releaseTick - world.tick : null,
             streamsLast: s.streamsLast,
             streamsTotal: s.streamsTotal,
+            projectId: s.projectId ?? null,
+            diss: !!s.diss,
             earned: Math.round(s.streamsTotal * CFG.release.payPerStream),
             spent: Math.round(s.cost + s.marketingCost),
             releasedTick: s.state === 'released' ? s.releaseTick : null,
@@ -674,6 +705,9 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     featDeals: label ? dealsView(world, label.id) : [],
     transfers: label ? transfersView(world, label.id) : [],
     clashes: label ? clashesView(world, label.id) : [],
+    projects: label ? projectsView(world, label.id) : [],
+    tours: label ? toursView(world, label.id) : [],
+    tourGuests: label ? tourGuests(world, label.id) : [],
     rivals: label ? rivalsView(world, label.id) : [],
     interview: label ? interviewView(world, label) : null,
     shade: label ? shadeView(world, label) : null,

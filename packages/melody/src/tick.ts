@@ -7,6 +7,8 @@ import { tickAcademy } from './academy.ts';
 import { tickDeals } from './featdeals.ts';
 import { tickTransfers } from './transfers.ts';
 import { tickClashes } from './clash.ts';
+import { tickProjects } from './projects.ts';
+import { tickTours } from './tours.ts';
 import { cleanTalks } from './negotiation.ts';
 import { countryOf, noteCombo } from './craft.ts';
 import { firstWeek, releaseWeek } from './release.ts';
@@ -153,7 +155,10 @@ export const runTick = (world: World): TickReport => {
     const rivals =
       due.filter((o) => o !== song && (world.artists[o.artistId]?.fans ?? 0) > artist.fans && songGenre(o, artist) === genre).length +
       world.npcSongs.filter((n) => n.weeks === 0 && n.genre === genre && n.streams > artist.fans * 6).length;
-    const { week, promo } = releaseWeek(world, song, artist, tick, rivals);
+    const { week: raw, promo } = releaseWeek(world, song, artist, tick, rivals);
+    // A track of an EP or an album: the fans listen to the whole project the first week.
+    const week = song.boost ? { ...raw, streams: Math.round(raw.streams * song.boost), newFans: Math.round(raw.newFans * song.boost) } : raw;
+    delete song.boost;
     song.promo = promo;
     song.marketingReach = promo.reduce((sum, p) => sum + p.views, 0) || song.marketingReach;
     song.state = 'released';
@@ -300,6 +305,20 @@ export const runTick = (world: World): TickReport => {
   }
   world.gigs = world.gigs.filter((g) => g.tick > tick);
 
+  // 5 bis. Tours on the road.
+  const touring = tickTours(
+    world,
+    (labelId, amount) => {
+      const label = world.labels[labelId];
+      if (label) earn(reports, label, amount);
+    },
+    (labelId, text) => {
+      const label = world.labels[labelId];
+      if (label && label.kind === 'player' && !label.bankrupt) report(reports, label).events.push(text);
+    },
+  );
+  for (const id of touring) activeArtists.add(id);
+
   // 6. Costs, loans, artists, bankruptcy, tiers.
   for (const label of players) {
     const roster = rosterOf(world, label.id);
@@ -360,6 +379,9 @@ export const runTick = (world: World): TickReport => {
   tickDeals(world, tell);
   tickTransfers(world, tell);
   tickClashes(world, tell);
+  tickProjects(world, tell, (text) => {
+    world.marketNews = [...(world.marketNews ?? []), { tick: world.tick, text }];
+  });
   for (const contract of world.contracts.filter((c) => c.endTick <= tick)) {
     const label = world.labels[contract.labelId];
     const artist = world.artists[contract.artistId];

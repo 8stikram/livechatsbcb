@@ -50,6 +50,14 @@ export {
   CLASH, startClash, answerClash, refuseClash, throwShade, answerInterview, interviewView, shadeView, clashesView, rivalsView, rivalsOf, tickClashes,
   type Clash, type ClashStatus, type Tone, type ClashView, type RivalView, type InterviewView, type ShadeView,
 } from './clash.ts';
+export {
+  PROJECTS, projectCost, createProject, addDeluxe, projectsView, tickProjects,
+  type Project, type ProjectKind, type ProjectView,
+} from './projects.ts';
+export {
+  TOURS, tourQuote, announceTour, answerTourInvite, cancelTour, tourOf, onTour, toursView, tourGuests, tickTours,
+  type Tour, type TourState, type TourView, type TourQuote,
+} from './tours.ts';
 export { runTick, type TickReport, type ReleaseReport, type LabelReport } from './tick.ts';
 export { simulate, STRATEGIES, type Strategy, type Snapshot } from './sim.ts';
 export { createRng, rngFor, type Rng } from './rng.ts';

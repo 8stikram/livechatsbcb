@@ -194,3 +194,23 @@ Tout est dans l'onglet **Label**. Ce qui se gagne ou se perd : des fans et du bu
 - **Se dégonfler** (refuser ou ne pas répondre) : −3 de réputation et du buzz en moins, et tout le monde le sait.
 - **Labels du jeu** : ils répondent 2 fois sur 3, sinon ils se dégonflent.
 - **Historique** : victoires et défaites de clash sur la fiche de chaque label. Tout passe dans les nouvelles du marché.
+
+## Étape 10 — EP, albums et tournées (fait)
+
+**Projets** (onglet Sorties, « Monter un projet ») :
+
+- **EP** : 3 à 6 sons d'un même artiste. **Album** : 8 à 16 sons. Au plus 2 sons déjà sortis (les singles annonce), le reste inédit.
+- Tous les sons sortent **la même semaine**, 1 à 8 semaines plus tard. Première semaine : +20 % de streams pour un EP, +40 % pour un album.
+- Pochette au choix (comme pour un son). Coût du mix et du pressage selon le palier : un EP coûte 300 € au Label Maison, un album 1 200 €.
+- La semaine de sortie : une note (moyenne des sons) et une annonce dans les nouvelles du marché. Un album noté 75 ou plus : +3 de réputation.
+- **Deluxe** : une fois par album, dans les 10 semaines après sa sortie. 3 à 6 sons inédits en plus, qui sortent la semaine suivante. L'album repart comme en deuxième semaine.
+
+**Tournées** (Effectif, fiche de l'artiste, « Organiser une tournée ») :
+
+- 4 à 20 dates, 2 par semaine. Annoncée 2 semaines avant le départ. Le montage (et le stock de merch) se paie à l'annonce. L'écran montre la salle visée, le public par date et le gain estimé.
+- Pendant la tournée : pas de studio, pas de concert seul. Mais chaque semaine du buzz (+3), des fans, de l'argent.
+- **Chaque semaine une histoire** : bonne (toute la salle chante, un invité surprise…), mauvaise (embrouille avec la sécu, voix cassée…) ou drôle. Les plus grosses passent dans les nouvelles du marché. Les histoires sensibles (un discours politique sifflé, par exemple) ne touchent que les artistes inventés, jamais les vrais (risque R4).
+- **Merch** : 12 % du public achète. Ça rapporte en plus.
+- **Tournée commune** : avec un autre de tes artistes, ou celui d'un ami (il doit accepter dans son onglet Label ; son label touche la moitié de l'argent).
+- **Première partie** : un de tes artistes ouvre les concerts et gagne des fans.
+- Un artiste vendu en tournée : la tournée s'arrête.

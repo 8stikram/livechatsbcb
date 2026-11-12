@@ -37,6 +37,13 @@ import {
   type InterviewView,
   type RivalView,
   type Tone,
+  PROJECTS,
+  TOURS,
+  projectCost,
+  tourQuote,
+  type ProjectKind,
+  type ProjectView,
+  type TourView,
 } from '@livechatsbcb/melody';
 import type { MelodyRoute } from '../../../../shared/ipc';
 import { LibraryPicker, type Shelf } from '../LibraryPicker';
@@ -392,6 +399,15 @@ const Squad = ({
 }) => {
   const artist = view.roster.find((a) => a.id === picked) ?? view.roster[0];
   const free = (view.label?.maxArtists ?? 0) - view.roster.length;
+  // On the road this week: no studio, no single concert.
+  const touring =
+    !!artist &&
+    view.tours.some(
+      (t) =>
+        (t.state === 'announced' || t.state === 'running') &&
+        t.startsIn <= 1 &&
+        (t.artistId === artist.id || t.openerId === artist.id || (t.partnerId === artist.id && t.partnerStatus !== 'refused')),
+    );
   if (view.roster.length === 0) {
     return (
       <div className="mt-view mt-in">
@@ -469,13 +485,13 @@ const Squad = ({
               </div>
             </div>
             <div className="mt-acts">
-              <button type="button" className="mt-go" onClick={() => onStudio(artist.id)}>
-                Créer un son
+              <button type="button" className="mt-go" disabled={touring} onClick={() => onStudio(artist.id)}>
+                {touring ? 'En tournée' : 'Créer un son'}
               </button>
               <button
                 type="button"
                 className="mt-ghost"
-                disabled={busy || artist.gigsBooked >= 3}
+                disabled={busy || touring || artist.gigsBooked >= 3}
                 onClick={() => onAct({ type: 'gig', artistId: artist.id })}
                 title={`${artist.nextGig.venue} · ${fmt(artist.nextGig.audience)} personnes`}
               >
@@ -496,6 +512,7 @@ const Squad = ({
                 {artist.gigsBooked} concert{artist.gigsBooked > 1 ? 's' : ''} prévu{artist.gigsBooked > 1 ? 's' : ''} cette semaine.
               </span>
             )}
+            <TourBlock key={`t${artist.id}`} view={view} artist={artist} onAct={onAct} busy={busy} />
           </div>
         )}
       </div>
@@ -532,6 +549,7 @@ const useCovers = (guildId: string, view: MelodyView | undefined): number => {
     if (!view) return [];
     const ids = [
       ...view.songs.filter((s) => s.cover).map((s) => s.id),
+      ...view.projects.filter((p) => p.cover).map((p) => p.id),
       ...view.roster.flatMap((a) => (a.lastSong?.cover ? [a.lastSong.id] : [])),
       ...view.charts.global.flatMap((e) => (e.cover && e.songId ? [e.songId] : [])),
       ...Object.values(view.charts.genres).flatMap((list) => list.flatMap((e) => (e.cover && e.songId ? [e.songId] : []))),
@@ -1631,13 +1649,18 @@ const PAY_PER_STREAM = CFG.release.payPerStream;
 const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean; onGo: (tab: Tab) => void }) => {
   const [planning, setPlanning] = useState<string | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
+  const [sort, setSort] = useState<SongSort>('recent');
+  const [only, setOnly] = useState('');
+  const [making, setMaking] = useState(false);
+  const [deluxeOf, setDeluxeOf] = useState<string | null>(null);
   const song = view.songs.find((s) => s.id === planning && s.state === 'vault');
   const page = view.songs.find((s) => s.id === opened);
   if (page) return <SongPage song={page} onClose={() => setOpened(null)} />;
+  if (making) return <ProjectMaker view={view} onAct={onAct} onClose={() => setMaking(false)} busy={busy} />;
+  const deluxe = view.projects.find((p) => p.id === deluxeOf);
+  if (deluxe) return <DeluxeMaker view={view} project={deluxe} onAct={onAct} onClose={() => setDeluxeOf(null)} busy={busy} />;
   const vault = view.songs.filter((s) => s.state === 'vault');
   const scheduled = view.songs.filter((s) => s.state === 'scheduled').sort((a, b) => (a.releaseInWeeks ?? 0) - (b.releaseInWeeks ?? 0));
-  const [sort, setSort] = useState<SongSort>('recent');
-  const [only, setOnly] = useState('');
   const out = view.songs.filter((s) => s.state === 'released');
   const artists = [...new Map(out.map((s) => [s.artistId, s.artistName])).entries()];
   const released = out.filter((s) => !only || s.artistId === only).sort(SONG_SORTS[sort].by);
@@ -1657,6 +1680,23 @@ const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (actio
           <div className="mt-songs" data-tuto="vault">
             {vault.map((s) => (
               <SongTile key={s.id} song={s} onClick={() => setPlanning(s.id)} />
+            ))}
+          </div>
+        )}
+      </section>
+      <section className="mt-section">
+        <div className="mt-bar">
+          <Label>Projets · EP et albums</Label>
+          <button type="button" className="mt-ghost" disabled={busy || view.roster.length === 0} onClick={() => setMaking(true)}>
+            Monter un projet
+          </button>
+        </div>
+        {view.projects.length === 0 ? (
+          <span className="mt-sub">Rassemble 3 à 6 sons pour un EP, 8 à 16 pour un album. Ils sortent la même semaine, avec plus de streams.</span>
+        ) : (
+          <div className="mt-projects">
+            {view.projects.map((p) => (
+              <ProjectCard key={p.id} project={p} onDeluxe={() => setDeluxeOf(p.id)} />
             ))}
           </div>
         )}
@@ -1725,6 +1765,344 @@ const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (actio
     </div>
   );
 };
+
+/* ---------------------------------- Projets (EP, album, deluxe) ---------------------------------- */
+
+const KIND_NAME: Record<ProjectKind, string> = { ep: 'EP', album: 'Album' };
+
+// One song to tick in a project.
+const TrackPick = ({ song, on, onToggle }: { song: SongView; on: boolean; onToggle: () => void }) => (
+  <label className={`mt-track${on ? ' is-on' : ''}`}>
+    <input type="checkbox" checked={on} onChange={onToggle} />
+    <Cover id={song.id} className="mt-song-art mt-track-art" />
+    <span>
+      <b>{song.title}</b>
+      <span className="mt-sub">
+        {song.state === 'released' ? `Déjà sorti · ${compact(song.streamsTotal)} streams` : song.readyInWeeks > 0 ? `Prêt dans ${song.readyInWeeks} sem.` : 'Inédit, au coffre'}
+      </span>
+    </span>
+  </label>
+);
+
+const ProjectMaker = ({ view, onAct, onClose, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; onClose: () => void; busy: boolean }) => {
+  const candidates = (artistId: string) =>
+    view.songs.filter((s) => s.artistId === artistId && s.projectId === null && !s.diss && (s.state === 'vault' || s.state === 'released'));
+  const firstArtist = view.roster.find((a) => candidates(a.id).some((s) => s.state === 'vault'))?.id ?? view.roster[0]?.id ?? '';
+  const [artistId, setArtistId] = useState(firstArtist);
+  const [kind, setKind] = useState<ProjectKind>('ep');
+  const [title, setTitle] = useState('');
+  const [picked, setPicked] = useState<string[]>([]);
+  const [weeks, setWeeks] = useState(2);
+  const [cover, setCover] = useState<string | null>(null);
+  const songs = candidates(artistId);
+  const rules = PROJECTS[kind];
+  const singles = picked.filter((id) => songs.find((s) => s.id === id)?.state === 'released').length;
+  const cost = projectCost(kind, view.label?.tier ?? 1);
+  const toggle = (id: string) => setPicked((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+  const problem =
+    picked.length < rules.min || picked.length > rules.max
+      ? `Un ${rules.name} a ${rules.min} à ${rules.max} sons (tu en as ${picked.length}).`
+      : singles > PROJECTS.maxSingles
+        ? `Au plus ${PROJECTS.maxSingles} sons déjà sortis.`
+        : singles === picked.length
+          ? 'Il faut au moins un son inédit.'
+          : title.trim().length === 0
+            ? 'Donne un titre.'
+            : cost > (view.label?.cash ?? 0)
+              ? 'Pas assez de cash.'
+              : null;
+  return (
+    <div className="mt-panel mt-in mt-maker">
+      <Label>Nouveau projet</Label>
+      <div className="mt-acts">
+        <select
+          className="mt-select"
+          aria-label="Artiste"
+          value={artistId}
+          onChange={(event) => {
+            setArtistId(event.target.value);
+            setPicked([]);
+          }}
+        >
+          {view.roster.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+        {(['ep', 'album'] as const).map((k) => (
+          <button key={k} type="button" className="mt-chipbtn" aria-pressed={kind === k} onClick={() => setKind(k)}>
+            {PROJECTS[k].name} · {PROJECTS[k].min} à {PROJECTS[k].max} sons · +{Math.round((PROJECTS[k].boost - 1) * 100)} % de streams
+          </button>
+        ))}
+      </div>
+      <input className="mt-input" placeholder="Titre du projet" maxLength={60} value={title} onChange={(event) => setTitle(event.target.value)} />
+      <Label>
+        Sons · {picked.length} choisi{picked.length > 1 ? 's' : ''}
+      </Label>
+      {songs.length === 0 ? (
+        <span className="mt-sub">Pas de son libre pour cet artiste. Passe au studio.</span>
+      ) : (
+        <div className="mt-tracks">
+          {songs.map((s) => (
+            <TrackPick key={s.id} song={s} on={picked.includes(s.id)} onToggle={() => toggle(s.id)} />
+          ))}
+        </div>
+      )}
+      <span className="mt-sub">Jusqu’à {PROJECTS.maxSingles} sons déjà sortis peuvent servir de singles annonce.</span>
+      <Label>Sortie</Label>
+      <div className="mt-chips">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((w) => (
+          <button key={w} type="button" className="mt-chipbtn" aria-pressed={weeks === w} onClick={() => setWeeks(w)}>
+            {w === 1 ? 'Semaine prochaine' : `Dans ${w} sem.`}
+          </button>
+        ))}
+      </div>
+      <Label>Pochette</Label>
+      <CoverPicker value={cover} onChange={setCover} />
+      <span className="mt-sub">Mix, master et pressage : {money(cost)}.</span>
+      {problem && <span className="mt-sub mt-warn">{problem}</span>}
+      <div className="mt-acts">
+        <button
+          type="button"
+          className="mt-go"
+          disabled={busy || problem !== null}
+          onClick={() => {
+            onAct({ type: 'project', artistId, kind, title: title.trim(), songIds: picked, inWeeks: weeks, cover: cover ?? undefined });
+            onClose();
+          }}
+        >
+          Programmer le {rules.name}
+        </button>
+        <button type="button" className="mt-ghost" onClick={onClose}>
+          Retour
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const DeluxeMaker = ({ view, project, onAct, onClose, busy }: { view: MelodyView; project: ProjectView; onAct: (action: MelodyAction) => void; onClose: () => void; busy: boolean }) => {
+  const [picked, setPicked] = useState<string[]>([]);
+  const songs = view.songs.filter((s) => s.artistId === project.artistId && s.state === 'vault' && s.projectId === null && !s.diss);
+  const cost = projectCost('deluxe', view.label?.tier ?? 1);
+  const ok = picked.length >= PROJECTS.deluxe.min && picked.length <= PROJECTS.deluxe.max && cost <= (view.label?.cash ?? 0);
+  return (
+    <div className="mt-panel mt-in mt-maker">
+      <Label>Deluxe de « {project.title} »</Label>
+      <span className="mt-sub">
+        Ajoute {PROJECTS.deluxe.min} à {PROJECTS.deluxe.max} sons inédits. Ils sortent la semaine prochaine et l’album repart comme en deuxième semaine. Coût : {money(cost)}.
+      </span>
+      {songs.length === 0 ? (
+        <span className="mt-sub">Pas de son inédit pour {project.artistName}. Passe au studio.</span>
+      ) : (
+        <div className="mt-tracks">
+          {songs.map((s) => (
+            <TrackPick key={s.id} song={s} on={picked.includes(s.id)} onToggle={() => setPicked((l) => (l.includes(s.id) ? l.filter((x) => x !== s.id) : [...l, s.id]))} />
+          ))}
+        </div>
+      )}
+      <div className="mt-acts">
+        <button
+          type="button"
+          className="mt-go"
+          disabled={busy || !ok}
+          onClick={() => {
+            onAct({ type: 'deluxe', projectId: project.id, songIds: picked });
+            onClose();
+          }}
+        >
+          Sortir la deluxe
+        </button>
+        <button type="button" className="mt-ghost" onClick={onClose}>
+          Retour
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const ProjectCard = ({ project, onDeluxe }: { project: ProjectView; onDeluxe: () => void }) => (
+  <div className="mt-project">
+    <Cover id={project.id} className="mt-song-art mt-project-art" />
+    <div className="mt-project-text">
+      <Label>
+        {KIND_NAME[project.kind]} · {project.artistName}
+      </Label>
+      <b>{project.title}</b>
+      <span className="mt-sub">
+        {project.state === 'scheduled'
+          ? `Sort dans ${project.weeksLeft} semaine${project.weeksLeft > 1 ? 's' : ''} · ${project.tracks.length} sons`
+          : `${project.tracks.length} sons · note ${project.quality} · ${compact(project.streamsTotal)} streams`}
+      </span>
+      {project.canDeluxe && (
+        <button type="button" className="mt-ghost" onClick={onDeluxe}>
+          Ajouter une deluxe
+        </button>
+      )}
+    </div>
+  </div>
+);
+
+/* ---------------------------------- Tournées ---------------------------------- */
+
+const MOOD_ICON: Record<'good' | 'bad' | 'fun', string> = { good: '▲', bad: '▼', fun: '◆' };
+
+const TourCard = ({ tour, onAct, busy }: { tour: TourView; onAct: (action: MelodyAction) => void; busy: boolean }) => (
+  <div className={`mt-tour is-${tour.state}`}>
+    <div className="mt-bar">
+      <Label>
+        {tour.state === 'announced' ? `Tournée annoncée · départ dans ${tour.startsIn} sem.` : tour.state === 'running' ? `En tournée · ${tour.played} / ${tour.dates} dates` : tour.state === 'done' ? 'Tournée finie' : 'Tournée annulée'}
+      </Label>
+      {tour.mine && tour.state === 'announced' && (
+        <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'tour_cancel', tourId: tour.id })}>
+          Annuler
+        </button>
+      )}
+    </div>
+    <span className="mt-sub">
+      {tour.partnerName && <>Avec {tour.partnerName}{tour.partnerStatus === 'pending' ? ' (en attente de réponse)' : tour.partnerStatus === 'refused' ? ' (a dit non)' : ''} · </>}
+      {tour.openerName && <>Première partie : {tour.openerName} · </>}
+      {tour.merch ? 'Merch en vente' : 'Sans merch'}
+    </span>
+    {tour.played > 0 && (
+      <div className="mt-pills">
+        <span className="mt-pill">{compact(tour.totals.audience)} personnes</span>
+        <span className="mt-pill">+{compact(tour.totals.fans)} fans</span>
+        <span className="mt-pill">{money(tour.totals.money)}</span>
+        {tour.merch && <span className="mt-pill">merch {money(tour.totals.merch)}</span>}
+      </div>
+    )}
+    <ul className="mt-tourlog">
+      {[...tour.log].reverse().map((line, i) => (
+        <li key={i} className={`is-${line.mood}`}>
+          <span aria-hidden="true">{MOOD_ICON[line.mood]}</span> {line.text}
+        </li>
+      ))}
+    </ul>
+  </div>
+);
+
+const TourPlanner = ({ view, artist, onAct, onClose, busy }: { view: MelodyView; artist: RosterView; onAct: (action: MelodyAction) => void; onClose: () => void; busy: boolean }) => {
+  const [dates, setDates] = useState(6);
+  const [partnerId, setPartnerId] = useState('');
+  const [openerId, setOpenerId] = useState('');
+  const [merch, setMerch] = useState(true);
+  const others = view.roster.filter((a) => a.id !== artist.id);
+  const partner = others.find((a) => a.id === partnerId) ?? view.tourGuests.find((g) => g.id === partnerId);
+  const quote = tourQuote(artist.fans, artist.hype, dates, merch, partner?.fans ?? 0, view.tourGuests.some((g) => g.id === partnerId));
+  const cost = quote.setup + quote.merchCost;
+  return (
+    <div className="mt-tourplan">
+      <Label>Tournée de {artist.name}</Label>
+      <div className="mt-big">
+        {dates} dates <span className="mt-mute">· {Math.ceil(dates / TOURS.datesPerWeek)} semaines</span>
+      </div>
+      <input type="range" min={TOURS.minDates} max={TOURS.maxDates} value={dates} aria-label="Nombre de dates" onChange={(event) => setDates(Number(event.target.value))} />
+      <div className="mt-acts">
+        <select className="mt-select" aria-label="Tournée commune" value={partnerId} onChange={(event) => setPartnerId(event.target.value)}>
+          <option value="">Seul en tête d’affiche</option>
+          {others.length > 0 && (
+            <optgroup label="Mes artistes">
+              {others.map((a) => (
+                <option key={a.id} value={a.id} disabled={a.id === openerId}>
+                  Avec {a.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {view.tourGuests.length > 0 && (
+            <optgroup label="Artistes de mes amis (ils doivent accepter)">
+              {view.tourGuests.map((g) => (
+                <option key={g.id} value={g.id}>
+                  Avec {g.name} · {g.labelName}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+        <select className="mt-select" aria-label="Première partie" value={openerId} onChange={(event) => setOpenerId(event.target.value)}>
+          <option value="">Pas de première partie</option>
+          {others.map((a) => (
+            <option key={a.id} value={a.id} disabled={a.id === partnerId}>
+              Première partie : {a.name}
+            </option>
+          ))}
+        </select>
+        <label className="mt-check">
+          <input type="checkbox" checked={merch} onChange={(event) => setMerch(event.target.checked)} />
+          Merch
+        </label>
+      </div>
+      <span className="mt-sub">
+        Salles : {quote.venue} · ~{fmt(quote.audiencePerDate)} personnes par date. Montage {money(quote.setup)}
+        {merch ? ` + stock de merch ${money(quote.merchCost)}` : ''}. Gain estimé : {quote.expected >= 0 ? '+' : ''}
+        {money(quote.expected)}, hors surprises.
+      </span>
+      <span className="mt-sub">Départ dans {TOURS.notice} semaines. Pendant la tournée : pas de studio ni de concert seul, mais du buzz chaque semaine.</span>
+      <div className="mt-acts">
+        <button
+          type="button"
+          className="mt-go"
+          disabled={busy || cost > (view.label?.cash ?? 0) || artist.energy < TOURS.minEnergy}
+          onClick={() => {
+            onAct({ type: 'tour', artistId: artist.id, dates, partnerId: partnerId || null, openerId: openerId || null, merch });
+            onClose();
+          }}
+        >
+          Annoncer · {money(cost)}
+        </button>
+        <button type="button" className="mt-ghost" onClick={onClose}>
+          Retour
+        </button>
+      </div>
+      {artist.energy < TOURS.minEnergy && <span className="mt-sub mt-warn">Il lui faut au moins {TOURS.minEnergy} d’énergie.</span>}
+    </div>
+  );
+};
+
+// The tour block of one artist in the squad: his tour, or the button to plan one.
+const TourBlock = ({ view, artist, onAct, busy }: { view: MelodyView; artist: RosterView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const [planning, setPlanning] = useState(false);
+  const tour = view.tours.find((t) => (t.state === 'announced' || t.state === 'running') && (t.artistId === artist.id || t.openerId === artist.id || (t.partnerId === artist.id && t.partnerStatus !== 'refused')));
+  const last = view.tours.find((t) => t.artistId === artist.id && t.mine);
+  if (tour) return <TourCard tour={tour} onAct={onAct} busy={busy} />;
+  if (planning) return <TourPlanner view={view} artist={artist} onAct={onAct} onClose={() => setPlanning(false)} busy={busy} />;
+  return (
+    <>
+      {last && <TourCard tour={last} onAct={onAct} busy={busy} />}
+      <div className="mt-acts">
+        <button type="button" className="mt-ghost" disabled={busy} onClick={() => setPlanning(true)}>
+          Organiser une tournée
+        </button>
+      </div>
+    </>
+  );
+};
+
+// A friend invites one of my artists on his tour.
+const TourInvite = ({ tour, onAct, busy }: { tour: TourView; onAct: (action: MelodyAction) => void; busy: boolean }) => (
+  <div className="mt-deal is-turn">
+    <span className="mt-art mt-deal-art" data-i={initials(tour.artistName)} style={{ '--hue': hueOf(tour.artistId) } as CSSProperties} aria-hidden="true" />
+    <div className="mt-deal-text">
+      <Label>Tournée commune</Label>
+      <b>
+        {tour.artistName} invite {tour.partnerName}
+      </b>
+      <span className="mt-sub">
+        {tour.dates} dates, départ dans {tour.startsIn} sem. Ton label touche la moitié de l’argent. {tour.partnerName} ne pourra pas aller au studio pendant.
+      </span>
+    </div>
+    <div className="mt-acts mt-deal-acts">
+      <button type="button" className="mt-go" disabled={busy} onClick={() => onAct({ type: 'tour_answer', tourId: tour.id, accept: true })}>
+        Accepter
+      </button>
+      <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'tour_answer', tourId: tour.id, accept: false })}>
+        Refuser
+      </button>
+    </div>
+  </div>
+);
 
 /* ---------------------------------- Talks ---------------------------------- */
 
@@ -2988,6 +3366,16 @@ const LabelsTab = ({ view, onAct, onTalk, busy }: { view: MelodyView; onAct: (ac
           ))}
         </div>
       </section>
+      {view.tours.some((t) => !t.mine && t.partnerStatus === 'pending') && (
+        <section className="mt-deals" aria-label="Invitations en tournée">
+          <Label>Invitations en tournée</Label>
+          {view.tours
+            .filter((t) => !t.mine && t.partnerStatus === 'pending')
+            .map((t) => (
+              <TourInvite key={t.id} tour={t} onAct={onAct} busy={busy} />
+            ))}
+        </section>
+      )}
       {view.clashes.length > 0 && (
         <section className="mt-deals" aria-label="Clashs">
           <Label>Clashs</Label>
@@ -3237,6 +3625,15 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'clash_refuse') say('Tu te dégonfles… ta réputation en prend un coup.');
       if (action.type === 'shade') say('Pique envoyée. Regarde les nouvelles du marché.');
       if (action.type === 'clause') say(action.amount === null ? 'Clause retirée.' : 'Clause enregistrée.');
+      if (action.type === 'project') {
+        say(`${PROJECTS[action.kind].name} programmé.`);
+        const made = answer.data.view.projects.find((p) => p.title === action.title.trim() && p.artistId === action.artistId && p.state === 'scheduled');
+        if (made && action.cover) rememberCover(made.id, action.cover);
+      }
+      if (action.type === 'deluxe') say('Deluxe programmée pour la semaine prochaine.');
+      if (action.type === 'tour') say(action.partnerId ? 'Tournée annoncée. L’invité doit accepter.' : 'Tournée annoncée !');
+      if (action.type === 'tour_answer') say(action.accept ? 'C’est parti pour la tournée commune.' : 'Invitation refusée.');
+      if (action.type === 'tour_cancel') say('Tournée annulée.');
       return answer.data.view;
     },
     [guildId, say],

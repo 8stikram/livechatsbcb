@@ -280,6 +280,8 @@ export const bookGig = (world: World, labelId: string, artistId: string): void =
   const booked = world.gigs.filter((g) => g.artistId === artistId).length;
   if (artist.energy < CFG.energy.gig * (booked + 1)) return fail(`${artist.name} n'a pas assez d'énergie pour ce concert.`);
   if (booked >= 3) return fail('Trois concerts par semaine au maximum.');
+  if ((world.tours ?? []).some((t) => (t.state === 'announced' || t.state === 'running') && t.startTick <= world.tick + 1 && (t.artistId === artistId || t.partner?.artistId === artistId || t.openerId === artistId)))
+    return fail(`${artist.name} est en tournée.`);
   world.gigs.push({ labelId, artistId, tick: world.tick + 1 });
 };
 

@@ -5,6 +5,7 @@ import { artisticSkill, generalRating } from './artists.ts';
 import { CFG } from './config.ts';
 import { GENRES, beatById } from './data/content.ts';
 import { contractOf } from './economy.ts';
+import { onTour } from './tours.ts';
 import { estimateQuality, featChance, featDemand, producerOfLevel, songCost, songEnergy } from './quality.ts';
 import { clamp, rngFor } from './rng.ts';
 import type { Artist, Label, SessionEvent, SongLevels, StudioSession, StudioStage, World } from './types.ts';
@@ -512,6 +513,7 @@ const recordedThisWeek = (world: World, labelId: string): number =>
 export const startSession = (world: World, label: Label, request: { artistId: string; themeId: string; beatId: string; levels: SongLevels }): StudioSession => {
   const artist = world.artists[request.artistId] ?? fail('Artiste introuvable.');
   if (contractOf(world, artist.id)?.labelId !== label.id) fail(`${artist.name} n'est pas dans ton label.`);
+  if (onTour(world, artist.id)) fail(`${artist.name} est en tournée : pas de studio avant la fin.`);
   beatById(request.beatId);
   // Only what the studio offers this week to this artist (the guided first song takes any).
   if (tutorialStep(world, label.id) !== 'song') {

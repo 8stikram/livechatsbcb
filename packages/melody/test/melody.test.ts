@@ -803,3 +803,104 @@ describe('clashs, piques et interviews', () => {
     expect(buildView(world, 'u1').interview!.questions.every((q) => q.answered === null)).toBe(true);
   });
 });
+
+describe('EP, albums et deluxe', () => {
+  const vault = (world: World, labelId: string, artist: Artist, count: number): string[] =>
+    Array.from({ length: count }, (_, i) => {
+      artist.energy = 100;
+      return createSong(world, labelId, {
+        artistId: artist.id,
+        title: `Piste ${i + 1}`,
+        themeId: 'ego',
+        beatId: 'boom_bap',
+        levels: { theme: 1, beat: 1, producer: 1, studio: 1 },
+        producer: producerOfLevel(1),
+      }).id;
+    });
+
+  it('puts an EP together, releases every track the same week with a boost, and notes it', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    world.labels[labelId]!.cash = 50_000;
+    const ids = vault(world, labelId, artist, 4);
+    expect(() => applyAction(world, 'u1', { type: 'project', artistId: artist.id, kind: 'album', title: 'Trop court', songIds: ids, inWeeks: 1 })).toThrow(/8 à 16/);
+    applyAction(world, 'u1', { type: 'project', artistId: artist.id, kind: 'ep', title: 'Premiers pas', songIds: ids, inWeeks: 1 });
+    expect(world.songs.filter((s) => ids.includes(s.id)).every((s) => s.state === 'scheduled' && s.boost === 1.2)).toBe(true);
+    expect(() => applyAction(world, 'u1', { type: 'project', artistId: artist.id, kind: 'ep', title: 'Encore', songIds: ids.slice(0, 3), inWeeks: 2 })).toThrow(/déjà/);
+    const report = runTick(world);
+    expect(world.songs.filter((s) => ids.includes(s.id)).every((s) => s.state === 'released' && s.boost === undefined)).toBe(true);
+    const ep = buildView(world, 'u1').projects[0]!;
+    expect(ep).toMatchObject({ kind: 'ep', state: 'released', title: 'Premiers pas' });
+    expect(ep.quality).toBeGreaterThan(0);
+    expect(report.labels[labelId]!.events.some((e) => e.includes('EP « Premiers pas »'))).toBe(true);
+  });
+
+  it('adds a deluxe to an album once, within ten weeks', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    world.labels[labelId]!.cash = 200_000;
+    const ids = vault(world, labelId, artist, 8);
+    applyAction(world, 'u1', { type: 'project', artistId: artist.id, kind: 'album', title: 'Grand saut', songIds: ids, inWeeks: 1 });
+    runTick(world);
+    const album = buildView(world, 'u1').projects[0]!;
+    expect(album.canDeluxe).toBe(true);
+    const extra = vault(world, labelId, artist, 3);
+    applyAction(world, 'u1', { type: 'deluxe', projectId: album.id, songIds: extra });
+    expect(() => applyAction(world, 'u1', { type: 'deluxe', projectId: album.id, songIds: extra })).toThrow(/déjà/);
+    runTick(world);
+    const after = buildView(world, 'u1').projects[0]!;
+    expect(after.tracks).toHaveLength(11);
+    expect(after.canDeluxe).toBe(false);
+  });
+});
+
+describe('tournées', () => {
+  it('announces a tour two weeks ahead, keeps the artist out of the studio, and plays two dates a week', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    const label = world.labels[labelId]!;
+    label.cash = 50_000;
+    artist.energy = 100;
+    applyAction(world, 'u1', { type: 'tour', artistId: artist.id, dates: 4, merch: true });
+    const tour = buildView(world, 'u1').tours[0]!;
+    expect(tour).toMatchObject({ state: 'announced', startsIn: 2, dates: 4 });
+    expect(label.cash).toBeLessThan(50_000);
+    runTick(world);
+    expect(() => applyAction(world, 'u1', { type: 'gig', artistId: artist.id })).toThrow(/tournée/);
+    runTick(world);
+    expect(buildView(world, 'u1').tours[0]!.state).toBe('running');
+    expect(buildView(world, 'u1').tours[0]!.played).toBe(2);
+    expect(() =>
+      startSession(world, label, { artistId: artist.id, themeId: 'ego', beatId: 'boom_bap', levels: { theme: 1, beat: 1, producer: 1, studio: 1 } }),
+    ).toThrow(/tournée/);
+    const fans = artist.fans;
+    runTick(world);
+    const done = buildView(world, 'u1').tours[0]!;
+    expect(done.state).toBe('done');
+    expect(done.totals.audience).toBeGreaterThan(0);
+    expect(done.totals.merch).toBeGreaterThan(0);
+    expect(done.log.length).toBeGreaterThanOrEqual(3);
+    expect(artist.fans).not.toBe(fans);
+  });
+
+  it('invites a friend’s artist on a joint tour, and adds an opening act', () => {
+    const world = createWorld(42);
+    for (const [user, name] of [['u1', 'Tête Records'], ['u2', 'Ami Records']] as const) {
+      applyAction(world, user, { type: 'found', name });
+      applyAction(world, user, { type: 'tuto', move: 'skip' });
+    }
+    const a = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    const b = Object.values(world.labels).find((l) => l.ownerId === 'u2')!;
+    a.cash = 50_000;
+    const youth = buildView(world, 'u1').academy!.youths[0]!;
+    applyAction(world, 'u1', { type: 'youth_promote', youthId: youth.id });
+    const [head, opener] = rosterOf(world, a.id);
+    const guest = rosterOf(world, b.id)[0]!;
+    head!.energy = 100;
+    applyAction(world, 'u1', { type: 'tour', artistId: head!.id, dates: 4, partnerId: guest.id, openerId: opener!.id });
+    const invite = buildView(world, 'u2').tours[0]!;
+    expect(invite).toMatchObject({ mine: false, partnerStatus: 'pending' });
+    applyAction(world, 'u2', { type: 'tour_answer', tourId: invite.id, accept: true });
+    const cashB = b.cash;
+    for (let i = 0; i < 3; i += 1) runTick(world);
+    expect(buildView(world, 'u1').tours[0]!.partnerStatus).toBe('accepted');
+    expect(b.cash).not.toBe(cashB);
+  });
+});

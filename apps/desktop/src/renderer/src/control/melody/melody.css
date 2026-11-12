@@ -2394,3 +2394,112 @@ img.mt-cover-img {
 .mt-deal.is-lose {
   border-color: var(--mt-bad);
 }
+
+/* Projets (EP, albums, deluxe) */
+.mt-maker .mt-input {
+  max-width: 420px;
+}
+.mt-tracks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+.mt-track {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--mt-panel2);
+  border: 1px solid var(--mt-line);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.mt-track > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mt-track b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mt-track input {
+  accent-color: var(--mt-a2);
+}
+.mt-track.is-on {
+  border-color: var(--mt-a2);
+  background: color-mix(in srgb, var(--mt-a2) 12%, var(--mt-panel2));
+}
+.mt-track-art {
+  width: 36px;
+  flex: none;
+}
+.mt-projects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+.mt-project {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  background: var(--mt-panel);
+  border: 1px solid var(--mt-line);
+  animation: mt-in 0.28s ease both;
+}
+.mt-project-art {
+  width: 84px;
+  flex: none;
+  box-shadow: 6px 6px 0 -2px var(--mt-panel2), 6px 6px 0 -1px var(--mt-line);
+}
+.mt-project-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  align-items: flex-start;
+}
+
+/* Tournées */
+.mt-tour,
+.mt-tourplan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 12px;
+  background: var(--mt-panel2);
+  border: 1px solid var(--mt-line);
+  animation: mt-in 0.28s ease both;
+}
+.mt-tour.is-running {
+  border-color: var(--mt-a1);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--mt-a1) 40%, transparent), 0 10px 30px -14px var(--mt-a1);
+}
+.mt-tourlog {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 13px;
+}
+.mt-tourlog li span {
+  display: inline-block;
+  width: 14px;
+}
+.mt-tourlog .is-good span {
+  color: var(--mt-ok);
+}
+.mt-tourlog .is-bad span {
+  color: var(--mt-bad);
+}
+.mt-tourlog .is-fun span {
+  color: var(--mt-a2);
+}
