@@ -33,16 +33,19 @@ export const CFG = {
   fatigue: { perSong: 12, recovery: 8, threshold: 70, penalty: 3 },
 
   quality: {
-    // Money helps a little and stops helping fast; the choices (fit, coherence) weigh the most.
-    weights: { artist: 0.35, producer: 0.12, theme: 0.1, beat: 0.08, studio: 0.07, choices: 0.28 },
-    baseWidth: 6,
-    /** Quality ceiling by number of level-1 choices (0..4). */
-    capByFreeChoices: [99, 99, 92, 86, 80],
-    themeValue: [0, 58, 64, 68],
+    // The note turns around the artist's level. Choices that go together move it a little (score 80 = even).
+    choiceEven: 80,
+    choiceWeight: 0.2,
+    choiceUp: 3,
+    choiceDown: 7,
+    /** How far above his level a song can land without a surprise. */
+    upside: 5,
+    /** How far below: 14 with nothing paid, 1 less for each paid step (text, beat, producer, studio), never under 3. */
+    riskFree: 14,
+    riskPerGear: 1,
+    riskMin: 3,
     themePrice: [0, 600, 3_500, 20_000],
-    beatValue: [50, 58, 64, 0],
     beatPrice: [0, 400, 3_000, 0],
-    studioValue: [50, 57, 62, 66],
     studioPrice: [0, 1_500, 8_000, 40_000],
     studioDelay: [0, 0, 1, 1],
     producerLevel: [48, 57, 63, 68],
@@ -51,10 +54,16 @@ export const CFG = {
 
   release: {
     payPerStream: 0.004,
+    /** Streams per fan for a star. Small artists' fans listen much less (see fanEngagement). */
     fanStreams: 3,
-    discoveryRate: 0.6,
+    /** Fans count from 10^engageFrom (about 200) and reach full engagement at 10^(engageFrom + engageSpan). */
+    engageFrom: 2.3,
+    engageSpan: 4.5,
+    engageCurve: 1.6,
+    /** Share of the people reached who listen: low, like real views. */
+    discoveryRate: 0.12,
     organicReach: 0.5,
-    fanConversion: 0.02,
+    fanConversion: 0.5,
     /** Marketing reach above max(floor, fans x softReachFans) only counts for softReachRate. */
     softReachFloor: 100_000,
     softReachFans: 3,
@@ -64,7 +73,8 @@ export const CFG = {
     decayBase: 0.55,
     decayHit: 0.35,
     catalogFloor: 0.01,
-    viralChance: 0.02,
+    /** A song that breaks out without the fans: mega rare. */
+    viralChance: 0.004,
     /** One release per artist per week, three per label. */
     singleCooldown: 1,
     perLabelWeek: 3,

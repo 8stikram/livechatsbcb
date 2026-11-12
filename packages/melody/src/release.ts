@@ -84,8 +84,15 @@ export interface FirstWeek {
   viral: boolean;
 }
 
+/** Streams per fan the week of a release: about 0.3 for 4 000 fans, 1 for 60 000, 3 for a star. */
+export const fanEngagement = (fans: number): number => {
+  const level = clamp((Math.log10(Math.max(1, fans)) - R.engageFrom) / R.engageSpan, 0.03, 1);
+  return R.fanStreams * level ** R.engageCurve;
+};
+
 export const firstWeek = (input: FirstWeekInput, rng: Rng): FirstWeek => {
-  const q = input.quality / 70;
+  // The note helps, but the buzz decides: a great song by an unknown stays small.
+  const q = 0.6 + 0.4 * (Math.max(0, input.quality) / 70) ** 1.5;
   const effectiveFans = input.fans + 0.5 * input.featFans;
   // Past a few times the fanbase, extra marketing reach counts much less.
   const soft = Math.max(R.softReachFloor, effectiveFans * R.softReachFans);
@@ -95,11 +102,12 @@ export const firstWeek = (input: FirstWeekInput, rng: Rng): FirstWeek => {
 
   const luck = clamp(Math.exp(rng.normal() * 0.2), 0.6, 1.8);
   const viral = rng.chance(R.viralChance);
-  const fanStreams = effectiveFans * R.fanStreams * q * q * luck;
-  const discovery = reach * R.discoveryRate * input.fit * q * luck * (viral ? rng.range(3, 6) : 1);
+  const engagement = fanEngagement(effectiveFans);
+  const fanStreams = effectiveFans * engagement * q * luck;
+  const discovery = reach * R.discoveryRate * input.fit * q * luck * (viral ? rng.range(10, 40) : 1);
   const streams = Math.round(fanStreams + discovery);
 
-  const baseline = Math.max(1, R.fanStreams * effectiveFans);
+  const baseline = Math.max(1, engagement * effectiveFans);
   const spread = 1 + 0.15 * Math.log10(Math.max(1, streams) / baseline);
   const hitScore = Math.round(clamp(50 * q * input.fit * luck * spread, 0, 100));
   return {

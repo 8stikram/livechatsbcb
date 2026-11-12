@@ -410,8 +410,8 @@ const memoryFor = (world: World, labelId: string, guestId: string) => {
 };
 
 /** What a guest asks now: +10 % after each refusal of the week. */
-export const guestDemand = (world: World, labelId: string, guest: Artist): number =>
-  Math.round(featDemand(guest) * 1.1 ** memoryFor(world, labelId, guest.id).tries);
+export const guestDemand = (world: World, labelId: string, guest: Artist, host?: Artist): number =>
+  Math.round(featDemand(guest, 0, host) * 1.1 ** memoryFor(world, labelId, guest.id).tries);
 
 /** Extra chance when the guest makes the same kind of music. */
 export const guestBonus = (host: Artist, guest: Artist): number => (GENRES[host.genre].family === GENRES[guest.genre].family ? 0.05 : 0);
@@ -439,7 +439,7 @@ export const guestChoices = (world: World, label: Label, session: StudioSession)
       const owner = contractOf(world, a.id);
       return !owner || world.labels[owner.labelId]?.kind !== 'player';
     })
-    .filter((a) => featDemand(a) * 0.6 <= budget)
+    .filter((a) => featDemand(a, 0, host) * 0.6 <= budget)
     .sort((a, b) => b.fans - a.fans);
   // Eight guests spread from the biggest affordable star to the smallest name: there is always a cheap option.
   if (affordable.length <= GUESTS) return affordable;
@@ -463,7 +463,7 @@ export const offerFeat = (world: World, label: Label, guestId: string, offer: nu
   if (base + session.cost + price > label.cash) fail('Pas assez de cash pour cette offre.');
   if (base + price > (CFG.tiers.songBudgetCap[label.tier - 1] ?? 15_000)) fail('Cette offre dépasse le budget de ton palier.');
 
-  const demand = guestDemand(world, label.id, guest);
+  const demand = guestDemand(world, label.id, guest, host);
   const memory = memoryFor(world, label.id, guest.id);
   const chance = featChance(price, demand, 0, label.reputation, guestBonus(host, guest));
   // The tutorial: no insult possible, and the second try always works.
@@ -566,6 +566,8 @@ export interface GuestView {
   fans: number;
   real: boolean;
   demand: number;
+  /** How many times more fans than the host: a far bigger guest asks much more (1 between equals). */
+  gap: number;
   bonus: number;
   blocked: string | null;
   /** A deal with another player: already paid, no wheel. */
@@ -655,6 +657,7 @@ export const sessionView = (world: World, label: Label, producer: SongRequest['p
               fans: guest.fans,
               real: guest.real,
               demand: deal.fee,
+              gap: 1,
               bonus: 0,
               blocked: guest.energy < DEALS.guestEnergy ? 'Trop fatigué cette semaine' : null,
               dealId: deal.id,
@@ -667,7 +670,8 @@ export const sessionView = (world: World, label: Label, producer: SongRequest['p
           gen: Math.round(artisticSkill(guest.attrs, GENRES[guest.genre].family)),
           fans: guest.fans,
           real: guest.real,
-          demand: guestDemand(world, label.id, guest),
+          demand: guestDemand(world, label.id, guest, artist),
+          gap: Math.max(1, Math.round((guest.fans + 100) / (artist.fans + 100))),
           bonus: guestBonus(artist, guest),
           blocked: guestBlocked(world, label.id, guest),
           dealId: null,

@@ -151,3 +151,14 @@ Choix du propriétaire : la note vient des **choix**, pas de l'argent ; c'est la
 - **Sons du jeu** : titres inventés dans la langue de l'artiste, sérieux ou absurdes.
 - **Extras** : page du son (cover, note, streams semaine par semaine, promo), case « Seulement les joueurs du serveur » dans les charts, moment « hit » animé.
 - Toujours pas en ligne ni dans une version publiée.
+
+## Étape 7 bis — équilibrage après le test du propriétaire (fait)
+
+- **Styles** : 2 styles au plus par artiste (le sien + un autre).
+- **Note du son** : elle tourne autour du **niveau de l'artiste**. De bons choix la bougent un peu (+3 à −7). Ce qu'on paie (texte, beat, producteur, studio) **n'augmente pas** la note : ça enlève le risque de rater (le bas de la fourchette remonte). Le haut reste à +5 au-dessus de l'artiste, hors surprise et combo.
+- **Streams** : c'est le buzz qui décide. Les fans d'un petit artiste écoutent peu (≈ 0,4 stream par fan à 4 000 fans, 1 à 60 000, 3 pour une star). Un premier son fait **1 000 à 3 000 streams**. La note compte peu (±15 %).
+- **Percer sans fans** : 1 chance sur 250, et là le son fait 10 à 40 fois plus de découvertes.
+- **Fans** : la moitié des gens qui découvrent le son restent (avant : 2 %, mais sur 5 fois plus de monde). Avec un son gratuit toutes les 2 semaines et un concert par semaine : 3 200 → ~5 000 fans en 24 semaines.
+- **Feats** : prix de base doublé, puis multiplié selon l'écart de fans avec ton artiste (jusqu'à ×20). Irko avec un débutant : ~24 000 €. Entre égaux : ~4 000 €. La carte explique pourquoi c'est cher.
+- **Sorties** : bilan de la semaine (streams, argent, meilleur son, courbe sur 12 semaines), tri (récents, streams, argent) et filtre par artiste. Sur chaque son : streams et argent au total ; le détail (semaine, coût, bénéfice) est dans la page du son.
+- **Effectif** : « ses sons tournent autour de X ».

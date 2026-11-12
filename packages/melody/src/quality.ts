@@ -65,17 +65,8 @@ export const estimateQuality = (plan: SongPlan): QualityEstimate => {
   const family = GENRES[beat.genres[0] ?? artist.genre].family;
   // Off his genre the artist loses a little; the bigger cost is in the choices score (and the risk).
   const skill = artisticSkill(artist.attrs, family) * (0.8 + 0.2 * genreAffinity(artist, beat.genres));
-  const producerValue = producer.level * producer.affinity;
-  const themeValue = Math.max(artist.attrs.ecriture, at(Q.themeValue, levels.theme));
-  const beatValue = levels.beat === 4 ? Math.min(72, producerValue + 4) : at(Q.beatValue, levels.beat);
-
-  let center =
-    Q.weights.artist * skill +
-    Q.weights.producer * producerValue +
-    Q.weights.theme * themeValue +
-    Q.weights.beat * beatValue +
-    Q.weights.studio * at(Q.studioValue, levels.studio) +
-    Q.weights.choices * choiceScore(artist, plan.themeId, plan.beatId);
+  // The note turns around what the artist is worth. Good choices move it a little, never far above him.
+  let center = skill + clamp((choiceScore(artist, plan.themeId, plan.beatId) - Q.choiceEven) * Q.choiceWeight, -Q.choiceDown, Q.choiceUp);
   center += plan.experience ?? 0;
 
   center += clamp((artist.morale - 50) / 10, -5, 5);
@@ -85,22 +76,22 @@ export const estimateQuality = (plan: SongPlan): QualityEstimate => {
   const randomChoices = plan.randomChoices ?? 0;
   center += (plan.eventBonus ?? 0) - 3 * randomChoices;
 
-  const studioBonus = levels.studio === 3 ? 1 : levels.studio === 4 ? 2 : 0;
-  const width = Math.max(2, Q.baseWidth + 3 * randomChoices - (plan.directorLevel ?? 0) - studioBonus);
-  const freeChoices = [levels.theme, levels.beat, levels.producer, levels.studio].filter((l) => l === 1).length;
-  const cap = Q.capByFreeChoices[freeChoices] ?? 99;
+  // What the label pays for (text, beat, producer, studio) does not lift the note: it takes away the risk of a miss.
+  const gear = levels.theme + levels.beat + levels.producer + levels.studio - 4 + (producer.affinity >= 0.95 ? 1 : 0);
+  const down = Math.max(Q.riskMin, Q.riskFree - Q.riskPerGear * gear + 3 * randomChoices - (plan.directorLevel ?? 0));
+  const up = Q.upside;
+  const cap = 99;
   return {
     center,
-    width,
+    width: (down + up) / 2,
     cap,
-    min: Math.round(clamp(center - width, 1, cap)),
-    max: Math.round(clamp(center + width, 1, cap)),
+    min: Math.round(clamp(center - down, 1, cap)),
+    max: Math.round(clamp(center + up, 1, cap)),
   };
 };
 
-/** The final, frozen note: a draw inside the range, then the débrouille ceiling. */
-export const rollQuality = (estimate: QualityEstimate, rng: Rng): number =>
-  Math.round(clamp(estimate.center + rng.range(-estimate.width, estimate.width), 1, estimate.cap));
+/** The final, frozen note: a draw inside the range. */
+export const rollQuality = (estimate: QualityEstimate, rng: Rng): number => Math.round(clamp(rng.range(estimate.min, estimate.max), 1, estimate.cap));
 
 export const qualityWord = (quality: number): string => {
   if (quality < 40) return 'Raté';
@@ -113,8 +104,12 @@ export const qualityWord = (quality: number): string => {
 };
 
 /** What a guest asks for a featuring. */
-export const featDemand = (guest: Pick<Artist, 'fans' | 'hype'>, relation = 0): number =>
-  Math.round(2_000 * (guest.fans / 100_000) ** 0.7 * (1 + guest.hype / 100) * (1 - 0.1 * relation));
+export const featDemand = (guest: Pick<Artist, 'fans' | 'hype'>, relation = 0, host?: Pick<Artist, 'fans'>): number =>
+  Math.round(4_000 * (guest.fans / 100_000) ** 0.7 * (1 + guest.hype / 100) * (1 - 0.1 * relation) * buzzGap(guest, host));
+
+/** A guest far bigger than the host asks much more: 1 between equals, up to 20 for a star with an unknown. */
+export const buzzGap = (guest: Pick<Artist, 'fans'>, host?: Pick<Artist, 'fans'>): number =>
+  host ? Math.min(20, Math.max(1, (guest.fans + 100) / (host.fans + 100)) ** 0.6) : 1;
 
 /** Chance (0-1) that the guest accepts an offer; null when the offer is so low that he takes offence. */
 export const featChance = (offer: number, demand: number, relation: number, labelReputation: number, bonus = 0): number | null => {

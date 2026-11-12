@@ -408,6 +408,9 @@ const Squad = ({
                 Potentiel {artist.potentialMin} – {artist.potentialMax}
               </span>
               <span className="mt-pill">{compact(artist.fans)} fans</span>
+              <span className="mt-pill" title="Avec des choix qui lui vont. Payer le studio enlève le risque de rater, pas plus.">
+                Ses sons tournent autour de {artist.expectedNote}
+              </span>
               <span className={`mt-pill${artist.weeksLeft <= 8 ? ' mt-pill-warn' : ''}`}>Contrat : {artist.weeksLeft} sem.</span>
               {artist.real && <span className="mt-pill">Vrai artiste</span>}
             </div>
@@ -738,6 +741,14 @@ const SongPage = ({ song, onClose }: { song: SongView; onClose: () => void }) =>
           <div className="mt-kv">
             <span className="mt-mute">Total</span>
             <b>{fmt(song.streamsTotal)} streams</b>
+            <span className="mt-mute">Cette semaine</span>
+            <b>{fmt(song.streamsLast)} streams</b>
+            <span className="mt-mute">Argent gagné</span>
+            <b>{money(song.earned)}</b>
+            <span className="mt-mute">Coût (studio + promo)</span>
+            <b>{money(song.spent)}</b>
+            <span className="mt-mute">Bénéfice</span>
+            <b className={song.earned - song.spent < 0 ? 'mt-neg' : 'mt-pos'}>{money(song.earned - song.spent)}</b>
             <span className="mt-mute">Meilleur rang</span>
             <b>{song.peakGlobal ? `${song.peakGlobal}e au top global` : song.peakGenre ? `${song.peakGenre}e de son genre` : 'pas classé'}</b>
           </div>
@@ -1020,6 +1031,11 @@ const Featuring = ({
           <span className="mt-mute">
             {genreName(guest.genre)} · {compact(guest.fans)} fans. Un bon invité monte la note et ramène ses fans.
           </span>
+          {guest.gap >= 2 && (
+            <span className="mt-sub">
+              Cher parce qu’il est <b>{guest.gap} fois plus connu</b> que ton artiste. Plus ton artiste a de fans, plus le prix baisse.
+            </span>
+          )}
           <label className="mt-lbl" htmlFor="mt-offer">
             Ton offre
           </label>
@@ -1568,7 +1584,7 @@ const SongTile = ({ song, onClick }: { song: SongView; onClick?: () => void }) =
       {song.state === 'released' && (
         <>
           <span className="mt-sub">
-            {compact(song.streamsLast)} streams cette semaine · {hitWord(song.hitScore)}
+            {compact(song.streamsTotal)} streams · {money(song.earned)}
           </span>
           <Stars score={song.hitScore} />
           {song.surprise && <span className={`mt-hot${song.surprise === 'boom' ? ' mt-hot-ok' : ''}`}>{SURPRISE_WORD[song.surprise]}</span>}
@@ -1578,6 +1594,14 @@ const SongTile = ({ song, onClick }: { song: SongView; onClick?: () => void }) =
   </button>
 );
 
+type SongSort = 'recent' | 'streams' | 'money';
+const SONG_SORTS: Record<SongSort, { name: string; by: (a: SongView, b: SongView) => number }> = {
+  recent: { name: 'Plus récents', by: (a, b) => (b.releasedTick ?? 0) - (a.releasedTick ?? 0) },
+  streams: { name: 'Plus de streams', by: (a, b) => b.streamsTotal - a.streamsTotal },
+  money: { name: 'Plus d’argent', by: (a, b) => b.earned - b.spent - (a.earned - a.spent) },
+};
+const PAY_PER_STREAM = CFG.release.payPerStream;
+
 const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean; onGo: (tab: Tab) => void }) => {
   const [planning, setPlanning] = useState<string | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
@@ -1586,7 +1610,14 @@ const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (actio
   if (page) return <SongPage song={page} onClose={() => setOpened(null)} />;
   const vault = view.songs.filter((s) => s.state === 'vault');
   const scheduled = view.songs.filter((s) => s.state === 'scheduled').sort((a, b) => (a.releaseInWeeks ?? 0) - (b.releaseInWeeks ?? 0));
-  const released = view.songs.filter((s) => s.state === 'released').sort((a, b) => a.weeksOut - b.weeksOut);
+  const [sort, setSort] = useState<SongSort>('recent');
+  const [only, setOnly] = useState('');
+  const out = view.songs.filter((s) => s.state === 'released');
+  const artists = [...new Map(out.map((s) => [s.artistId, s.artistName])).entries()];
+  const released = out.filter((s) => !only || s.artistId === only).sort(SONG_SORTS[sort].by);
+  const weekStreams = out.reduce((sum, s) => sum + s.streamsLast, 0);
+  const best = out.reduce<SongView | null>((top, s) => (!top || s.streamsLast > top.streamsLast ? s : top), null);
+  const peak = Math.max(1, ...view.labelWeeks);
   if (song) return <ReleasePlanner song={song} cash={view.label?.cash ?? 0} onAct={onAct} onClose={() => setPlanning(null)} busy={busy} />;
   return (
     <div className="mt-view mt-in">
@@ -1616,7 +1647,48 @@ const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (actio
       )}
       {released.length > 0 && (
         <section className="mt-section">
+          <Label>Bilan de la semaine</Label>
+          <div className="mt-weekly">
+            <div className="mt-weekly-nums">
+              <span>
+                <b>{compact(weekStreams)}</b>
+                <span className="mt-mute">streams cette semaine</span>
+              </span>
+              <span>
+                <b>{money(Math.round(weekStreams * PAY_PER_STREAM))}</b>
+                <span className="mt-mute">gagnés cette semaine</span>
+              </span>
+              {best && (
+                <span>
+                  <b>{best.title}</b>
+                  <span className="mt-mute">meilleur son · {compact(best.streamsLast)} streams</span>
+                </span>
+              )}
+            </div>
+            <div className="mt-history mt-weekly-curve" role="img" aria-label={`Streams du label sur douze semaines : ${view.labelWeeks.map(fmt).join(', ')}`}>
+              {view.labelWeeks.map((streams, i) => (
+                <span key={i} style={{ height: `${Math.max(3, (streams / peak) * 100)}%` } as CSSProperties} title={`${fmt(streams)} streams`} />
+              ))}
+            </div>
+          </div>
           <Label>Sortis</Label>
+          <div className="mt-chips">
+            {(Object.keys(SONG_SORTS) as SongSort[]).map((key) => (
+              <button key={key} type="button" className="mt-chipbtn" aria-pressed={sort === key} onClick={() => setSort(key)}>
+                {SONG_SORTS[key].name}
+              </button>
+            ))}
+            {artists.length > 1 && (
+              <select className="mt-select" aria-label="Artiste" value={only} onChange={(event) => setOnly(event.target.value)}>
+                <option value="">Tous les artistes</option>
+                {artists.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
           <div className="mt-songs">
             {released.map((s) => (
               <SongTile key={s.id} song={s} onClick={() => setOpened(s.id)} />

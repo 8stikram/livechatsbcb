@@ -52,23 +52,23 @@ describe('song creation', () => {
     expect(songCost({ theme: 1, beat: 4, producer: 4, studio: 1 }, { level: 86, affinity: 1, price: 40_000 })).toBe(60_000);
   });
 
-  it('lets money help a little, and good choices much more', () => {
+  it('keeps the note around the artist: money takes the risk away, choices move it a little', () => {
     const { artist } = worldWithLabel();
+    const level = generalRating(artist);
     const cheap = { theme: 1, beat: 1, producer: 1, studio: 1 } as const;
-    const dear = { theme: 3, beat: 3, producer: 3, studio: 3 } as const;
-    const free = estimateQuality({ artist, themeId: 'rupture', beatId: 'lovetrap', levels: cheap, producer: producerOfLevel(1) });
-    const paid = estimateQuality({ artist, themeId: 'rupture', beatId: 'lovetrap', levels: dear, producer: producerOfLevel(3, 1) });
-    expect(free.cap).toBe(80);
-    expect(free.max).toBeLessThanOrEqual(80);
-    expect(paid.center).toBeGreaterThan(free.center + 2);
-    expect(paid.center).toBeLessThan(free.center + 8);
-    expect(paid.width).toBeLessThan(free.width);
-    // A cheap song with choices that fit beats a dear song with choices that clash.
-    const offBeat = BEATS.find((b) => !b.genres.includes(artist.genre) && !artist.secondary.some((g) => b.genres.includes(g)) && b.id !== 'lovetrap')!;
-    const wrong = estimateQuality({ artist, themeId: 'clash', beatId: offBeat.id, levels: dear, producer: producerOfLevel(3, 1) });
+    const dear = { theme: 4, beat: 3, producer: 4, studio: 4 } as const;
     const fit = BEATS.find((b) => b.genres.includes(artist.genre))!;
-    const right = estimateQuality({ artist, themeId: fit.themes[0]!, beatId: fit.id, levels: cheap, producer: producerOfLevel(1) });
-    expect(right.center).toBeGreaterThan(wrong.center);
+    const free = estimateQuality({ artist, themeId: fit.themes[0]!, beatId: fit.id, levels: cheap, producer: producerOfLevel(1) });
+    const paid = estimateQuality({ artist, themeId: fit.themes[0]!, beatId: fit.id, levels: dear, producer: producerOfLevel(4, 1) });
+    // Same ceiling, a few points above the artist; paying only lifts the floor.
+    expect(paid.max).toBe(free.max);
+    expect(paid.max).toBeLessThanOrEqual(level + 12);
+    expect(paid.min).toBeGreaterThan(free.min + 8);
+    expect(free.min).toBeLessThan(level - 8);
+    // Choices that clash cost more than money can give back.
+    const offBeat = BEATS.find((b) => !b.genres.includes(artist.genre) && !artist.secondary.some((g) => b.genres.includes(g)))!;
+    const wrong = estimateQuality({ artist, themeId: 'clash', beatId: offBeat.id, levels: dear, producer: producerOfLevel(4, 1) });
+    expect(free.center).toBeGreaterThan(wrong.center + 5);
   });
 
   it('rates theme and beat coherence', () => {
@@ -78,8 +78,12 @@ describe('song creation', () => {
   });
 
   it('prices featurings and refuses insulting offers', () => {
-    expect(featDemand({ fans: 1_000_000, hype: 40 })).toBeGreaterThan(13_000);
-    expect(featDemand({ fans: 1_000_000, hype: 40 })).toBeLessThan(15_000);
+    expect(featDemand({ fans: 1_000_000, hype: 40 })).toBeGreaterThan(26_000);
+    expect(featDemand({ fans: 1_000_000, hype: 40 })).toBeLessThan(30_000);
+    // A star asks far more from an unknown than from an equal.
+    const irko = { fans: 60_000, hype: 48 };
+    expect(featDemand(irko, 0, { fans: 3_000 })).toBeGreaterThan(20_000);
+    expect(featDemand(irko, 0, { fans: 80_000 })).toBe(featDemand(irko));
     expect(featChance(390, 1_000, 0, 50)).toBeNull();
     expect(featChance(1_000, 1_000, 0, 50)).toBeCloseTo(0.5);
     expect(featChance(5_000, 1_000, 0, 50)).toBe(0.95);
@@ -110,7 +114,8 @@ describe('release and tick', () => {
     const report = runTick(world);
     expect(report.releases).toHaveLength(1);
     expect(song.state).toBe('released');
-    expect(song.streamsLast).toBeGreaterThan(10_000);
+    expect(song.streamsLast).toBeGreaterThan(300);
+    expect(song.streamsLast).toBeLessThan(40_000);
     expect(artist.fans).toBeGreaterThan(fansBefore);
     const income = report.labels[labelId]?.income ?? 0;
     expect(income).toBeCloseTo(song.streamsLast * CFG.release.payPerStream, 0);

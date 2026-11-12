@@ -2027,3 +2027,53 @@ img.mt-cover-img {
 :root.calm .mt-trend-fire {
   animation: none;
 }
+
+/* Sorties: the week at a glance, then the songs with a sort. */
+.mt-weekly {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+.mt-weekly-nums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 28px;
+  align-content: center;
+  padding: 12px 14px;
+  border: 1px solid var(--mt-line);
+  background: var(--mt-panel2);
+}
+.mt-weekly-nums > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mt-weekly-nums b {
+  font-size: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mt-weekly-curve {
+  height: 96px;
+}
+.mt-select {
+  padding: 6px 10px;
+  border: 1px solid var(--mt-line);
+  background: var(--mt-panel2);
+  color: inherit;
+  font: inherit;
+}
+.mt-neg {
+  color: #ff6b81;
+}
+.mt-pos {
+  color: #5fe3a1;
+}
+@media (max-width: 760px) {
+  .mt-weekly {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

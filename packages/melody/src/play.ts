@@ -249,6 +249,8 @@ export interface RosterView extends ArtistView {
   lastSong: { id: string; title: string; cover: boolean } | null;
   /** Songs he has made with the label. */
   songsMade: number;
+  /** The note his songs turn around, with choices that fit. */
+  expectedNote: number;
 }
 
 export interface SongView {
@@ -277,6 +279,11 @@ export interface SongView {
   releaseInWeeks: number | null;
   streamsLast: number;
   streamsTotal: number;
+  /** What its streams have paid since the release, and what it cost to make and promote. */
+  earned: number;
+  spent: number;
+  /** Week it came out (for sorting), null before. */
+  releasedTick: number | null;
   hitScore: number;
   peakGlobal: number | null;
   peakGenre: number | null;
@@ -332,6 +339,8 @@ export interface MelodyView {
   trend: Trend;
   /** Combos the label found by playing. */
   notebook: NotebookEntry[];
+  /** Streams of the whole label, week by week (twelve weeks, oldest first). */
+  labelWeeks: number[];
   /** Talks that ended this week, with the agent's last words. */
   talkNews: TalkNews[];
 }
@@ -421,6 +430,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
         offers: label ? studioOffers(world, label.id, artist) : { themes: [], beats: [] },
         lastSong: lastSongOf(world, artist.id),
         songsMade: world.songs.filter((s) => s.artistId === artist.id).length,
+        expectedNote: Math.round(generalRating(artist) + experienceBonus(world, artist)),
       };
     }),
     songs: label
@@ -450,6 +460,9 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
             releaseInWeeks: s.releaseTick !== null && s.state === 'scheduled' ? s.releaseTick - world.tick : null,
             streamsLast: s.streamsLast,
             streamsTotal: s.streamsTotal,
+            earned: Math.round(s.streamsTotal * CFG.release.payPerStream),
+            spent: Math.round(s.cost + s.marketingCost),
+            releasedTick: s.state === 'released' ? s.releaseTick : null,
             hitScore: s.hitScore,
             peakGlobal: s.peakGlobal,
             peakGenre: s.peakGenre,
@@ -470,7 +483,21 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     talkNews: label ? talkNews(world, label.id) : [],
     trend: trendOf(world),
     notebook: label ? notebookOf(world, label.id) : [],
+    labelWeeks: label ? labelWeeks(world, label.id) : [],
   };
+};
+
+/** Streams of all the label's songs over the last twelve weeks, oldest first. */
+const labelWeeks = (world: World, labelId: string): number[] => {
+  const weeks = Array.from({ length: 12 }, () => 0);
+  for (const song of world.songs) {
+    if (song.labelId !== labelId || song.state !== 'released' || !song.history) continue;
+    song.history.forEach((streams, i) => {
+      const at = weeks.length - (song.history!.length - i);
+      if (at >= 0) weeks[at] = (weeks[at] ?? 0) + streams;
+    });
+  }
+  return weeks;
 };
 
 const lastSongOf = (world: World, artistId: string): RosterView['lastSong'] => {

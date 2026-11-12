@@ -102,7 +102,8 @@ export const artistFromCatalog = (source: CatalogArtist, worldSeed: number): Art
     name: source.name,
     real: source.real,
     genre,
-    secondary: source.secondary.filter(isGenre),
+    // Two styles at most: his own and one other.
+    secondary: source.secondary.filter(isGenre).filter((g) => g !== genre).slice(0, 1),
     attrs: buildAttributes(source, genre),
     potential: Math.round(rng.range(source.potMin, source.potMax)),
     fans: source.fans,
