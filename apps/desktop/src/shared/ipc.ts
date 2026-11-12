@@ -397,7 +397,7 @@ export type ActionError = ApiErrorCode | 'network' | 'gave_up' | 'cancelled' | '
 export type ActionResult = { ok: true } | { ok: false; error: ActionError };
 
 // Melody Tycoon: the server's answer is passed through as it is, the screen knows its shape.
-export type MelodyRoute = 'view' | 'act' | 'preview';
+export type MelodyRoute = 'view' | 'act' | 'preview' | 'covers';
 export type MelodyCallResult = { ok: true; data: unknown } | { ok: false; error: ActionError };
 
 export type GameSendResult = ActionResult | { ok: false; error: 'too_large' | 'empty' | 'unsupported' };

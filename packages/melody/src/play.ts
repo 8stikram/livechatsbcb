@@ -4,6 +4,9 @@ import { CFG } from './config.ts';
 import { GENRES } from './data/content.ts';
 import { artistValue, catalogueValue, contractOf, debtOf, fansOf, netWorth, playGig, ranking, rosterOf, type RankingLine } from './economy.ts';
 import { estimateQuality, producerOfLevel, songCost, songEnergy } from './quality.ts';
+import { experienceBonus, notebookOf, studioOffers, trendOf, type NotebookEntry, type StudioOffers, type Trend } from './craft.ts';
+import { MARKETING } from './release.ts';
+import { releaseBlocked } from './world.ts';
 import { createRng, hashString } from './rng.ts';
 import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer, SongLevels, Trends, World } from './types.ts';
 import { GameError, addPlayerLabel, bookGig, createSong, expectedOffer, freeAgents, scheduleRelease, takeLoan, type Offer } from './world.ts';
@@ -117,7 +120,8 @@ export type MelodyAction =
   | { type: 'feat'; guestId: string; offer: number }
   | { type: 'feat_skip' }
   | { type: 'studio_cancel' }
-  | { type: 'song'; title: string }
+  /** cover: the image itself is kept by the server; the rules only note that there is one. */
+  | { type: 'song'; title: string; cover?: string }
   | { type: 'release'; songId: string; inWeeks: number; marketing: string[] }
   | { type: 'gig'; artistId: string }
   | { type: 'loan'; amount: number; weeks: 8 | 16 | 24 };
@@ -197,6 +201,8 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
       const session = sessionOf(world, label.id);
       if (!session) throw new GameError("Tu n'es pas en studio.");
       finishSession(world, label, title, producerFor(world, session.levels.producer, session.beatId));
+      const made = world.songs[world.songs.length - 1];
+      if (made && made.labelId === label.id) made.cover = typeof action.cover === 'string' && action.cover.length > 0;
       return;
     }
     case 'release':
@@ -237,6 +243,12 @@ export interface RosterView extends ArtistView {
   renewBlocked: string | null;
   gigsBooked: number;
   nextGig: { venue: string; audience: number; profit: number };
+  /** The themes and beats the studio offers him this week. */
+  offers: StudioOffers;
+  /** His latest song, shown in his frame. */
+  lastSong: { id: string; title: string; cover: boolean } | null;
+  /** Songs he has made with the label. */
+  songsMade: number;
 }
 
 export interface SongView {
@@ -244,7 +256,22 @@ export interface SongView {
   title: string;
   artistId: string;
   artistName: string;
-  quality: number;
+  featName: string | null;
+  themeId: string;
+  beatId: string;
+  /** Known only once the song is out; before, the range the studio announced. */
+  quality: number | null;
+  qualityMin: number;
+  qualityMax: number;
+  surprise: 'boom' | 'flop' | null;
+  combo: 'secret' | 'perfect' | null;
+  cover: boolean;
+  promo: Array<{ name: string; views: number; viral: boolean }>;
+  /** Promo picked, before the release. */
+  promoNames: string[];
+  history: number[];
+  /** For a song in the vault: why it cannot come out in 1..8 weeks (index 0 = next week), or null. */
+  blockedWeeks: Array<string | null>;
   state: 'vault' | 'scheduled' | 'released';
   readyInWeeks: number;
   releaseInWeeks: number | null;
@@ -301,6 +328,10 @@ export interface MelodyView {
   others: OtherArtistView[];
   /** Contract talks open this week. */
   talks: TalkView[];
+  /** What the public wants this month (genre, theme, beat). */
+  trend: Trend;
+  /** Combos the label found by playing. */
+  notebook: NotebookEntry[];
   /** Talks that ended this week, with the agent's last words. */
   talkNews: TalkNews[];
 }
@@ -387,6 +418,9 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
         renewBlocked: label ? talkBlocked(world, label, artist) : null,
         gigsBooked,
         nextGig: { venue: gig.venue, audience: gig.audience, profit: Math.round(gig.profit * (gig.profit > 0 ? CFG.live.labelShare : 1)) },
+        offers: label ? studioOffers(world, label.id, artist) : { themes: [], beats: [] },
+        lastSong: lastSongOf(world, artist.id),
+        songsMade: world.songs.filter((s) => s.artistId === artist.id).length,
       };
     }),
     songs: label
@@ -397,7 +431,20 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
             title: s.title,
             artistId: s.artistId,
             artistName: world.artists[s.artistId]?.name ?? '?',
-            quality: s.quality,
+            featName: s.featArtistId ? (world.artists[s.featArtistId]?.name ?? null) : null,
+            themeId: s.themeId,
+            beatId: s.beatId,
+            // The true quality and what it hides come out with the song.
+            quality: s.state === 'released' ? s.quality : null,
+            qualityMin: s.qualityMin ?? s.quality,
+            qualityMax: s.qualityMax ?? s.quality,
+            surprise: s.state === 'released' ? (s.surprise ?? null) : null,
+            combo: s.state === 'released' ? (s.combo ?? null) : null,
+            cover: s.cover ?? false,
+            promo: (s.promo ?? []).map((p) => ({ name: MARKETING.find((m) => m.id === p.id)?.name ?? p.id, views: p.views, viral: p.viral })),
+            promoNames: (s.marketingIds ?? []).map((id) => MARKETING.find((m) => m.id === id)?.name ?? id),
+            history: s.history ?? [],
+            blockedWeeks: s.state === 'vault' ? Array.from({ length: 8 }, (_, i) => releaseBlocked(world, label.id, s.artistId, world.tick + 1 + i)) : [],
             state: s.state,
             readyInWeeks: Math.max(0, s.availableTick - world.tick),
             releaseInWeeks: s.releaseTick !== null && s.state === 'scheduled' ? s.releaseTick - world.tick : null,
@@ -421,7 +468,14 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     featDeals: label ? dealsView(world, label.id) : [],
     others: label ? otherArtists(world, label.id) : [],
     talkNews: label ? talkNews(world, label.id) : [],
+    trend: trendOf(world),
+    notebook: label ? notebookOf(world, label.id) : [],
   };
+};
+
+const lastSongOf = (world: World, artistId: string): RosterView['lastSong'] => {
+  const song = world.songs.filter((s) => s.artistId === artistId).at(-1);
+  return song ? { id: song.id, title: song.title, cover: song.cover ?? false } : null;
 };
 
 const sessionOfLabel = (world: World, label: Label): SessionView | null => {
@@ -442,7 +496,7 @@ export const previewSong = (world: World, artistId: string, themeId: string, bea
   const artist = world.artists[artistId];
   if (!artist) throw new GameError('Artiste introuvable.');
   const producer = producerFor(world, levels.producer, beatId);
-  const estimate = estimateQuality({ artist, themeId, beatId, levels, producer });
+  const estimate = estimateQuality({ artist, themeId, beatId, levels, producer, experience: experienceBonus(world, artist) });
   return {
     cost: songCost(levels, producer),
     energy: songEnergy(levels, false, artist),

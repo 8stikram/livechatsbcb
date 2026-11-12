@@ -5,7 +5,9 @@ import { BEATS, GENRES, THEMES, beatById } from './data/content.ts';
 import { canTierUp, contractOf, debtOf, netWorth, playGig, rosterOf } from './economy.ts';
 import { tickDeals } from './featdeals.ts';
 import { cleanTalks } from './negotiation.ts';
-import { firstWeek, publicFit } from './release.ts';
+import { countryOf, noteCombo } from './craft.ts';
+import { firstWeek, releaseWeek } from './release.ts';
+import { inventTitle, langOf } from './titles.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
 import type { Artist, ChartEntry, GenreId, Label, Song, World } from './types.ts';
 
@@ -18,6 +20,9 @@ export interface ReleaseReport {
   hitScore: number;
   newFans: number;
   viral: boolean;
+  quality: number;
+  surprise: 'boom' | 'flop' | null;
+  combo: 'secret' | 'perfect' | null;
 }
 
 export interface LabelReport {
@@ -64,6 +69,7 @@ const npcReleases = (world: World, rng: Rng): void => {
       rng,
     );
     world.npcSongs.push({
+      title: inventTitle(rng, langOf(countryOf(artist), artist.genre), artist.genre),
       artistId: artist.id,
       artistName: artist.name,
       labelId: contractOf(world, artist.id)?.labelId ?? 'inde',
@@ -120,6 +126,10 @@ export const runTick = (world: World): TickReport => {
     song.streamsLast = Math.round(Math.max(song.streamsLast * song.decay, floor));
     song.streamsTotal += song.streamsLast;
     song.weeksOut += 1;
+    if (song.history) {
+      song.history.push(song.streamsLast);
+      if (song.history.length > 12) song.history.shift();
+    }
   }
   for (const npc of world.npcSongs) {
     npc.streams = Math.round(npc.streams * npc.decay);
@@ -136,22 +146,15 @@ export const runTick = (world: World): TickReport => {
     if (!artist || !label) continue;
     const feat = song.featArtistId ? world.artists[song.featArtistId] : undefined;
     const genre = songGenre(song, artist);
+    // The promo that was paid weeks ago meets the artist's buzz of today.
     const rivals =
       due.filter((o) => o !== song && (world.artists[o.artistId]?.fans ?? 0) > artist.fans && songGenre(o, artist) === genre).length +
       world.npcSongs.filter((n) => n.weeks === 0 && n.genre === genre && n.streams > artist.fans * 6).length;
-    const week = firstWeek(
-      {
-        quality: song.quality,
-        fans: artist.fans,
-        featFans: feat?.fans ?? 0,
-        hype: artist.hype,
-        fit: publicFit(artist, song.themeId, song.beatId, world.trends),
-        marketingReach: song.marketingReach,
-        rivals,
-      },
-      rngFor(world.seed, tick, song.id),
-    );
+    const { week, promo } = releaseWeek(world, song, artist, tick, rivals);
+    song.promo = promo;
+    song.marketingReach = promo.reduce((sum, p) => sum + p.views, 0) || song.marketingReach;
     song.state = 'released';
+    song.history = [week.streams];
     song.streamsLast = week.streams;
     song.streamsTotal = week.streams;
     song.decay = week.decay;
@@ -176,6 +179,13 @@ export const runTick = (world: World): TickReport => {
     else if (week.hitScore >= 70) label.reputation += 0.5 * room;
     else if (week.hitScore >= 50) label.reputation += 0.2 * room;
     if (week.hitScore >= 70) artist.superfanRate = Math.min(0.05, artist.superfanRate + 0.001);
+    // A combo found with this song goes in the label's notebook.
+    if (song.combo && label.kind === 'player') {
+      const added = noteCombo(world, label.id, { themeId: song.themeId, beatId: song.beatId, kind: song.combo, season: Math.floor(tick / CFG.ticksPerSeason), songTitle: song.title });
+      if (added) report(reports, label).events.push(song.combo === 'secret' ? `Combo secret trouvé avec « ${song.title} » : noté dans ton carnet.` : `Combo parfait avec « ${song.title} » : noté dans ton carnet.`);
+    }
+    if (song.surprise === 'boom') report(reports, label).events.push(`« ${song.title} » sonne bien mieux que prévu !`);
+    if (song.surprise === 'flop') report(reports, label).events.push(`« ${song.title} » est moins bon que prévu.`);
     releases.push({
       songId: song.id,
       labelId: label.id,
@@ -184,7 +194,10 @@ export const runTick = (world: World): TickReport => {
       streams: week.streams,
       hitScore: week.hitScore,
       newFans: week.newFans,
-      viral: week.viral,
+      viral: week.viral || promo.some((p) => p.viral),
+      quality: song.quality,
+      surprise: song.surprise ?? null,
+      combo: song.combo ?? null,
     });
   }
 
@@ -197,11 +210,20 @@ export const runTick = (world: World): TickReport => {
     lines.push({ title: song.title, artistName: artist.name, labelId: song.labelId, streams: song.streamsLast, genre: songGenre(song, artist), song });
   }
   for (const npc of world.npcSongs) {
-    lines.push({ title: `${npc.artistName} — single`, artistName: npc.artistName, labelId: npc.labelId, streams: npc.streams, genre: npc.genre, song: null });
+    lines.push({ title: npc.title ?? `${npc.artistName} — single`, artistName: npc.artistName, labelId: npc.labelId, streams: npc.streams, genre: npc.genre, song: null });
   }
   lines.sort((a, b) => b.streams - a.streams);
   const toEntries = (list: Line[], size: number): ChartEntry[] =>
-    list.slice(0, size).map((l, i) => ({ rank: i + 1, title: l.title, artistName: l.artistName, labelId: l.labelId, streams: l.streams, songId: l.song?.id ?? null }));
+    list.slice(0, size).map((l, i) => ({
+      rank: i + 1,
+      title: l.title,
+      artistName: l.artistName,
+      labelId: l.labelId,
+      streams: l.streams,
+      songId: l.song?.id ?? null,
+      player: world.labels[l.labelId]?.kind === 'player',
+      cover: l.song?.cover ?? false,
+    }));
   const globalLines = lines.filter((l) => l.streams >= CFG.charts.globalMin);
   world.charts.global = toEntries(globalLines, 100);
   world.charts.genres = {};

@@ -10,6 +10,7 @@ import { clamp, rngFor } from './rng.ts';
 import type { Artist, Label, SessionEvent, SongLevels, StudioSession, StudioStage, World } from './types.ts';
 import { DEALS, checkDealGuest, spendDeal, usableDeals } from './featdeals.ts';
 import { tutorialStep } from './tutorial.ts';
+import { experienceBonus, studioOffers } from './craft.ts';
 import { GameError, createSong, type SongRequest } from './world.ts';
 
 const fail = (message: string): never => {
@@ -310,6 +311,12 @@ export const startSession = (world: World, label: Label, request: { artistId: st
   const artist = world.artists[request.artistId] ?? fail('Artiste introuvable.');
   if (contractOf(world, artist.id)?.labelId !== label.id) fail(`${artist.name} n'est pas dans ton label.`);
   beatById(request.beatId);
+  // Only what the studio offers this week to this artist (the guided first song takes any).
+  if (tutorialStep(world, label.id) !== 'song') {
+    const offers = studioOffers(world, label.id, artist);
+    if (!offers.themes.some((t) => t.id === request.themeId)) fail('Ce thème n’est pas proposé cette semaine.');
+    if (!offers.beats.some((b) => b.id === request.beatId)) fail('Ce beat n’est pas proposé cette semaine.');
+  }
   const cost = songCost(request.levels, producerOfLevel(request.levels.producer));
   const cap = CFG.tiers.songBudgetCap[label.tier - 1] ?? 15_000;
   if (cost > cap) fail('Ce son dépasse le budget autorisé pour ton palier.');
@@ -372,6 +379,8 @@ export const reactToEvent = (world: World, label: Label, reactionId: string): vo
   if (reaction.roll) {
     const rng = rngFor(world.seed, session.tick, `react:${label.id}:${session.artistId}:${session.index}:${event.stage}:${reaction.id}`);
     const won = tutorialStep(world, label.id) === 'song' || rng.next() < reaction.roll.chance(ctx);
+    // Each gamble makes the song's surprise (good or bad) more likely.
+    session.risk = (session.risk ?? 0) + 1;
     const effect = won ? reaction.roll.success(ctx) : reaction.roll.failure(ctx);
     apply(session, effect);
     event.result = `${won ? reaction.roll.successText : reaction.roll.failureText}${Object.keys(effect).length ? ` ${describe(effect, ctx)}.` : ''}`;
@@ -530,6 +539,8 @@ export const finishSession = (world: World, label: Label, title: string, produce
     extraDelay: session.delay,
     moraleDelta: session.morale,
     energyDelta: session.energy,
+    gambles: session.risk ?? 0,
+    safe: tutorialStep(world, label.id) === 'song',
   };
   createSong(world, label.id, request);
   delete sessionsOf(world)[label.id];
@@ -595,6 +606,7 @@ export const sessionView = (world: World, label: Label, producer: SongRequest['p
     producer,
     feat: featArtist ? { gen: generalRating(featArtist) } : null,
     eventBonus: session.quality,
+    experience: experienceBonus(world, artist),
   });
   const lastGuest = session.lastOffer ? world.artists[session.lastOffer.guestId] : undefined;
   return {
@@ -614,7 +626,8 @@ export const sessionView = (world: World, label: Label, producer: SongRequest['p
         kind: event.kind,
         title: card.title,
         text: card.text,
-        reactions: card.reactions.map((r) => ({ id: r.id, text: r.text, hint: r.roll ? `Pari : ${Math.round(r.roll.chance(ctx) * 100)} % de chances` : describe(r.effect?.(ctx) ?? {}, ctx) })),
+        // What a reaction does stays hidden until it is chosen: taking a risk is part of the game.
+        reactions: card.reactions.map((r) => ({ id: r.id, text: r.text, hint: '' })),
         reaction: event.reaction,
         result: event.result,
       };

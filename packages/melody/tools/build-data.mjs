@@ -26,7 +26,13 @@ const readCsv = (file) => {
 };
 const list = (v) => (v ? v.split(/[;,]/).map((s) => s.trim()).filter(Boolean) : []);
 
-const artists = readCsv('artistes-echantillon.csv').map((a) => ({
+const seenNames = new Set();
+const artists = [...readCsv('artistes-echantillon.csv'), ...readCsv('artistes-liste.csv')].filter((a) => {
+  const key = a.nom.toLowerCase();
+  if (seenNames.has(key)) return false;
+  seenNames.add(key);
+  return true;
+}).map((a) => ({
   id: a.id, name: a.nom, country: a.pays, city: a.ville || null,
   genre: a.genre, secondary: list(a.genres_secondaires), tags: list(a.tags),
   gen: +a.gen, potMin: +a.pot_min, potMax: +a.pot_max, fans: +a.fans, hype: +a.hype,

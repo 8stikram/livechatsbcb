@@ -1,0 +1,917 @@
+id,nom,pays,ville,genre,genres_secondaires,tags,gen,pot_min,pot_max,fans,hype,label_id,reel,profil_energie,sync,merch,a_verifier
+taylor_swift,Taylor Swift,US,,pop,,,90,92,93,75450960,57,universal,oui,normal,39,37,liste:1
+lana_del_rey,Lana Del Rey,US,,pop,,,86,89,91,20420609,55,warner,oui,par_a_coups,50,61,liste:5
+joji,Joji,US,,pop,,,86,89,92,11679865,65,universal,oui,normal,71,77,liste:6
+olivia_rodrigo,Olivia Rodrigo,US,,pop,,,86,87,90,28163165,55,warner,oui,oiseau_de_nuit,52,40,liste:7
+sabrina_carpenter,Sabrina Carpenter,US,,pop,,,94,97,98,45996511,60,sony,oui,normal,54,44,liste:8
+miley_cyrus,Miley Cyrus,US,,pop,,,95,97,99,60969997,72,fic_seoul,oui,bourreau,46,44,liste:10
+beyonce,Beyoncé,US,,rnb,,,93,94,95,77116420,75,tde,oui,normal,47,51,liste:12
+rihanna,Rihanna,US,,rnb,,,92,95,96,27207213,69,tde,oui,normal,45,43,liste:13
+adele,Adele,US,,pop,,,90,91,93,58753456,67,universal,oui,bourreau,74,40,liste:14
+bruno_mars,Bruno Mars,US,,rnb,,,92,95,96,40208841,64,tde,oui,normal,41,84,liste:16
+justin_bieber,Justin Bieber,US,,pop,,,88,90,93,27420475,81,warner,oui,normal,40,82,liste:17
+selena_gomez,Selena Gomez,US,,pop,,,89,90,92,66037960,59,sony,oui,normal,70,69,liste:18
+shawn_mendes,Shawn Mendes,US,,pop,,,95,96,97,66837501,67,warner,oui,oiseau_de_nuit,32,39,liste:19
+camila_cabello,Camila Cabello,US,,pop,,,84,85,89,15676684,53,sony,oui,par_a_coups,66,39,liste:20
+harry_styles,Harry Styles,US,,pop,,,92,93,94,25179305,83,warner,oui,bourreau,68,31,liste:21
+niall_horan,Niall Horan,US,,pop,,,80,82,84,3047004,70,fic_seoul,oui,oiseau_de_nuit,38,73,liste:22
+louis_tomlinson,Louis Tomlinson,US,,pop,,,77,80,83,1005131,42,fic_soleil,oui,par_a_coups,82,38,liste:23
+zayn,Zayn,US,,rnb,,,82,84,86,5730356,48,tde,oui,normal,41,77,liste:24
+tame_impala,Tame Impala,US,,rock,,,86,88,89,8191830,73,warner,oui,normal,46,30,liste:25
+mgmt,MGMT,US,,rock,,,78,82,83,2246613,33,,oui,normal,44,75,liste:26
+flaming_lips,Flaming Lips,US,,rock,,,72,74,80,1155148,32,,oui,par_a_coups,80,35,liste:27
+animal_collective,Animal Collective,US,,rock,,,80,83,87,1307283,49,warner,oui,par_a_coups,56,43,liste:28
+grizzly_bear,Grizzly Bear,US,,rock,,,72,76,86,331794,36,,oui,oiseau_de_nuit,71,58,liste:29
+dirty_projectors,Dirty Projectors,US,,rock,,,72,76,79,79730,30,,oui,normal,52,52,liste:30
+vampire_weekend,Vampire Weekend,US,,rock,,,72,75,79,1186767,33,xl,oui,bourreau,51,31,liste:31
+the_strokes,The Strokes,US,,rock,,,79,81,84,7427585,45,warner,oui,par_a_coups,37,46,liste:32
+interpol,Interpol,US,,rock,,,78,82,88,672743,41,warner,oui,bourreau,73,50,liste:33
+yeah_yeah_yeahs,Yeah Yeah Yeahs,US,,rock,,,80,83,89,612292,49,warner,oui,oiseau_de_nuit,76,41,liste:34
+the_killers,The Killers,US,,rock,,,83,85,87,5662537,53,warner,oui,lazy,76,68,liste:35
+franz_ferdinand,Franz Ferdinand,US,,rock,,,77,79,85,1553096,54,warner,oui,normal,50,79,liste:36
+arctic_monkeys,Arctic Monkeys,US,,rock,,,94,96,97,31011612,80,warner,oui,par_a_coups,69,65,liste:37
+the_libertines,The Libertines,US,,rock,,,74,78,80,542745,29,warner,oui,lazy,33,79,liste:38
+bloc_party,Bloc Party,US,,rock,,,77,80,83,2736649,42,warner,oui,oiseau_de_nuit,38,45,liste:39
+kaiser_chiefs,Kaiser Chiefs,US,,rock,,,79,81,82,2581030,46,warner,oui,par_a_coups,32,40,liste:40
+maximo_park,Maximo Park,US,,rock,,,71,75,83,131606,30,warner,oui,normal,63,81,liste:41
+editors,Editors,US,,rock,,,71,74,77,2961984,29,warner,oui,lazy,43,32,liste:42
+the_futureheads,The Futureheads,US,,rock,,,72,76,83,239821,36,,oui,normal,78,79,liste:43
+klaxons,Klaxons,US,,electro,,,67,72,81,246468,42,,oui,normal,59,38,liste:44
+foals,Foals,US,,rock,,,81,84,86,1047425,38,warner,oui,normal,32,46,liste:45
+two_door_cinema_club,Two Door Cinema Club,US,,rock,,,80,82,85,696597,46,,oui,par_a_coups,41,31,liste:46
+bombay_bicycle_club,Bombay Bicycle Club,US,,rock,,,76,79,83,1010587,51,warner,oui,lazy,59,31,liste:47
+the_maccabees,The Maccabees,US,,rock,,,73,77,87,68600,42,fic_cathedrale,oui,par_a_coups,74,75,liste:48
+mystery_jets,Mystery Jets,US,,rock,,,70,74,83,55949,29,fic_cathedrale,oui,bourreau,71,69,liste:49
+late_of_the_pier,Late of the Pier,US,,rock,,,65,69,78,220638,40,,oui,par_a_coups,45,65,liste:50
+friendly_fires,Friendly Fires,US,,rock,,,66,71,81,54366,43,,oui,normal,76,62,liste:51
+passion_pit,Passion Pit,US,,pop,,,71,74,75,538658,50,,oui,normal,52,34,liste:52
+phoenix,Phoenix,FR,,pop,,,87,89,93,11236921,72,fic_cathedrale,oui,normal,68,41,liste:53
+m83,M83,FR,,electro,,,78,82,85,627756,39,,oui,normal,45,72,liste:54
+air,Air,FR,,electro,,,75,77,78,1756768,57,edbanger,oui,lazy,43,39,liste:55
+daft_punk,Daft Punk,FR,,electro,,,91,94,97,60022908,62,because,oui,normal,70,54,liste:56
+sebastian,SebastiAn,FR,,electro,,,71,75,79,1038249,31,,oui,par_a_coups,66,47,liste:58
+gesaffelstein,Gesaffelstein,FR,,electro,,,75,78,84,557987,41,edbanger,oui,bourreau,65,37,liste:62
+cassius,Cassius,FR,,electro,,,71,74,76,1363439,31,,oui,normal,65,67,liste:63
+etienne_de_crecy,Etienne de Crécy,FR,,electro,,,65,69,74,125785,43,,oui,normal,85,85,liste:64
+alex_gopher,Alex Gopher,FR,,electro,,,71,76,80,297496,18,because,oui,bourreau,34,38,liste:65
+modjo,Modjo,FR,,electro,,,70,72,74,782403,53,,oui,oiseau_de_nuit,75,70,liste:66
+demon,Demon,FR,,electro,,,68,73,80,126441,34,,oui,normal,59,62,liste:67
+le_knight_club,Le Knight Club,FR,,electro,,,64,67,74,482226,29,,oui,bourreau,32,76,liste:68
+lady_gaga,Lady Gaga,US,,pop,,,86,88,90,31256036,57,universal,oui,normal,37,85,liste:69
+katy_perry,Katy Perry,US,,pop,,,92,95,97,80487415,57,sony,oui,lazy,72,71,liste:70
+pink,Pink,US,,pop,,,87,89,91,3567619,52,warner,oui,normal,64,32,liste:71
+kelly_clarkson,Kelly Clarkson,US,,pop,,,80,82,83,19469473,43,warner,oui,oiseau_de_nuit,65,77,liste:72
+avril_lavigne,Avril Lavigne,US,,rock,,,80,82,85,12557874,47,fic_enfer,oui,par_a_coups,55,72,liste:73
+hilary_duff,Hilary Duff,US,,pop,,,77,80,83,793549,45,fic_velours,oui,lazy,40,72,liste:74
+mandy_moore,Mandy Moore,US,,pop,,,73,75,77,2203712,59,universal,oui,lazy,55,38,liste:75
+britney_spears,Britney Spears,US,,pop,,,86,88,91,56172537,75,xo,oui,lazy,56,65,liste:76
+christina_aguilera,Christina Aguilera,US,,pop,,,79,80,81,5985153,40,xo,oui,lazy,76,37,liste:77
+justin_timberlake,Justin Timberlake,US,,rnb,,,94,96,99,37567973,81,tde,oui,par_a_coups,60,37,liste:78
+chris_brown,Chris Brown,US,,rnb,,,92,95,96,39569203,66,tde,oui,normal,68,49,liste:79
+usher,Usher,US,,rnb,,,87,90,94,19946245,67,tde,oui,oiseau_de_nuit,31,37,liste:80
+ne_yo,Ne-Yo,US,,rnb,,,80,82,85,3498410,57,rec118,oui,par_a_coups,37,40,liste:81
+trey_songz,Trey Songz,US,,rnb,,,77,80,82,1126718,49,,oui,normal,38,32,liste:82
+omarion,Omarion,US,,rnb,,,71,75,81,921756,38,,oui,par_a_coups,64,34,liste:83
+bow_wow,Bow Wow,US,,rap_us,,,76,80,84,526073,28,sony,oui,bourreau,66,41,liste:84
+mario,Mario,US,,rnb,,,72,74,75,696494,28,tde,oui,lazy,48,52,liste:85
+b2k,B2K,US,,rnb,,,70,75,80,74417,37,,oui,par_a_coups,73,67,liste:86
+jls,JLS,US,,pop,,,71,74,77,890430,26,,oui,normal,60,68,liste:87
+the_wanted,The Wanted,US,,pop,,,75,78,81,637668,58,,oui,normal,42,47,liste:88
+one_direction,One Direction,US,,pop,,,89,91,92,41460239,68,universal,oui,par_a_coups,57,67,liste:89
+5sos,5SOS,US,,rock,,,78,81,84,3973966,45,fic_enfer,oui,bourreau,76,83,liste:90
+jonas_brothers,Jonas Brothers,US,,pop,,,81,82,86,15503040,41,universal,oui,lazy,43,74,liste:91
+hanson,Hanson,US,,rock,,,81,84,86,796433,46,warner,oui,lazy,77,69,liste:92
+backstreet_boys,Backstreet Boys,US,,pop,,,78,79,81,5702326,51,warner,oui,bourreau,31,39,liste:93
+nsync,NSYNC,US,,pop,,,74,78,83,706450,31,fic_seoul,oui,par_a_coups,46,69,liste:94
+o_town,O-Town,US,,pop,,,65,69,78,80622,25,,oui,normal,73,51,liste:95
+lfo,LFO,US,,pop,,,63,67,73,87777,42,,oui,normal,48,53,liste:96
+98_degrees,98 Degrees,US,,rnb,,,74,76,82,1986946,39,,oui,normal,63,82,liste:97
+boyz_ii_men,Boyz II Men,US,,rnb,,,80,83,88,712964,44,,oui,lazy,78,73,liste:98
+jodeci,Jodeci,US,,rnb,,,71,75,76,1184318,29,tde,oui,par_a_coups,75,41,liste:99
+tony_toni_tone,Tony! Toni! Toné!,US,,rnb,,,69,73,75,74247,15,,oui,normal,44,39,liste:100
+slipknot,Slipknot,US,,metal,,,88,89,90,4778472,44,warner,oui,normal,63,51,liste:101
+korn,Korn,US,,metal,,,84,86,89,19672620,72,fic_enfer,oui,normal,75,36,liste:102
+system_of_a_down,System of a Down,US,,metal,,,80,81,84,3569409,43,warner,oui,normal,69,70,liste:103
+rage_against_the_machine,Rage Against the Machine,US,,metal,,,79,82,85,7420226,42,warner,oui,lazy,76,58,liste:104
+bring_me_the_horizon,Bring Me The Horizon,US,,metal,,,86,87,89,3341170,73,warner,oui,normal,54,44,liste:105
+one_ok_rock,One Ok Rock,JP,,rock,,,65,70,75,94924,36,,oui,bourreau,63,62,liste:106
+berurier_noir,Bérurier Noir,FR,,rock,,,74,76,79,1864996,49,,oui,par_a_coups,45,76,liste:107
+metallica,Metallica,US,,metal,,,92,93,95,28871828,83,fic_enfer,oui,lazy,63,32,liste:108
+iron_maiden,Iron Maiden,US,,metal,,,85,86,88,4338475,74,warner,oui,bourreau,49,83,liste:109
+black_sabbath,Black Sabbath,US,,metal,,,84,86,90,12109576,71,warner,oui,bourreau,46,84,liste:110
+megadeth,Megadeth,US,,metal,,,80,81,82,10024274,73,warner,oui,oiseau_de_nuit,68,67,liste:111
+slayer,Slayer,US,,metal,,,70,73,77,709000,46,warner,oui,normal,46,36,liste:112
+pantera,Pantera,US,,metal,,,71,74,78,1770075,29,warner,oui,bourreau,37,47,liste:113
+judas_priest,Judas Priest,US,,metal,,,75,78,80,2091987,31,warner,oui,par_a_coups,83,40,liste:114
+motorhead,Motorhead,US,,metal,,,77,79,82,1181810,59,,oui,bourreau,36,30,liste:115
+tool,Tool,US,,metal,,concept,78,81,84,1885801,59,fic_enfer,oui,lazy,82,35,liste:116
+gojira,Gojira,FR,,metal,,,87,88,91,9472878,53,warner,oui,lazy,67,61,liste:117
+mastodon,Mastodon,US,,metal,,concept,76,80,82,1440758,44,,oui,bourreau,62,72,liste:118
+opeth,Opeth,US,,metal,,concept,77,80,81,2677247,41,warner,oui,normal,50,69,liste:119
+dream_theater,Dream Theater,US,,metal,,concept,80,82,83,2559823,28,fic_enfer,oui,par_a_coups,81,76,liste:120
+nightwish,Nightwish,FI,,metal,,,75,78,84,2181025,55,fic_enfer,oui,bourreau,63,60,liste:121
+epica,Epica,US,,metal,,,79,82,85,1083169,33,warner,oui,par_a_coups,66,40,liste:122
+sabaton,Sabaton,SE,,metal,,,73,77,79,1115030,58,,oui,oiseau_de_nuit,73,68,liste:123
+rammstein,Rammstein,DE,,metal,,,86,89,91,8899044,62,fic_enfer,oui,bourreau,49,58,liste:124
+ghost,Ghost,US,,metal,,,88,91,94,5287272,41,warner,oui,oiseau_de_nuit,51,66,liste:125
+parkway_drive,Parkway Drive,US,,metal,,,79,82,87,530502,26,warner,oui,par_a_coups,45,54,liste:126
+architects,Architects,US,,metal,,,75,78,84,2346942,26,warner,oui,par_a_coups,40,37,liste:127
+while_she_sleeps,While She Sleeps,US,,metal,,,63,68,71,490952,37,,oui,normal,32,48,liste:128
+bullet_for_my_valentine,Bullet For My Valentine,US,,metal,,,79,82,83,1011343,50,,oui,normal,79,49,liste:129
+asking_alexandria,Asking Alexandria,US,,metal,,,80,83,86,635053,25,warner,oui,bourreau,63,68,liste:130
+pierce_the_veil,Pierce The Veil,US,,rock,,,77,80,84,960777,36,,oui,oiseau_de_nuit,59,39,liste:131
+sleeping_with_sirens,Sleeping With Sirens,US,,rock,,,75,78,83,812613,49,warner,oui,normal,31,34,liste:132
+a_day_to_remember,A Day To Remember,US,,rock,,,77,81,87,1697726,46,warner,oui,oiseau_de_nuit,81,59,liste:133
+avenged_sevenfold,Avenged Sevenfold,US,,metal,,,78,79,81,5933271,63,fic_enfer,oui,normal,82,56,liste:134
+disturbed,Disturbed,US,,metal,,,82,83,86,13646410,60,fic_enfer,oui,lazy,33,40,liste:135
+five_finger_death_punch,Five Finger Death Punch,US,,metal,,,84,85,87,18176975,40,warner,oui,lazy,73,49,liste:136
+trivium,Trivium,US,,metal,,,72,75,77,632229,50,,oui,lazy,39,48,liste:137
+lamb_of_god,Lamb of God,US,,metal,,,71,75,76,2350149,39,,oui,par_a_coups,70,79,liste:138
+killswitch_engage,Killswitch Engage,US,,metal,,,72,76,82,562479,30,warner,oui,oiseau_de_nuit,39,79,liste:139
+as_i_lay_dying,As I Lay Dying,US,,metal,,,74,79,87,200453,28,,oui,normal,61,69,liste:140
+all_that_remains,All That Remains,US,,metal,,,69,72,82,158951,26,,oui,normal,67,42,liste:141
+machine_head,Machine Head,US,,metal,,,69,73,78,332330,43,,oui,lazy,54,39,liste:142
+chimaira,Chimaira,US,,metal,,,73,77,79,102498,18,warner,oui,normal,79,46,liste:143
+hatebreed,Hatebreed,US,,metal,,,68,72,80,257897,16,,oui,normal,85,83,liste:144
+cannibal_corpse,Cannibal Corpse,US,,metal,,,65,68,75,256277,37,,oui,par_a_coups,71,51,liste:145
+death,Death,US,,metal,,,67,71,78,96934,41,,oui,bourreau,62,32,liste:146
+carcass,Carcass,US,,metal,,,65,69,79,268617,19,,oui,lazy,82,72,liste:147
+napalm_death,Napalm Death,US,,metal,,,61,67,79,18554,15,,oui,par_a_coups,36,37,liste:148
+bolt_thrower,Bolt Thrower,US,,metal,,,69,73,79,288402,21,,oui,bourreau,60,53,liste:149
+entombed,Entombed,US,,metal,,,65,70,73,127028,29,,oui,par_a_coups,67,68,liste:150
+dismember,Dismember,US,,metal,,,64,68,69,190741,16,,oui,normal,51,32,liste:151
+at_the_gates,At The Gates,US,,pop,,,71,76,81,454880,34,,oui,bourreau,83,63,liste:152
+in_flames,In Flames,US,,pop,,,79,81,85,934883,48,,oui,lazy,39,80,liste:153
+dark_tranquillity,Dark Tranquillity,US,,pop,,,63,66,73,86746,28,,oui,normal,54,65,liste:154
+amon_amarth,Amon Amarth,US,,pop,,,78,81,85,1372650,55,,oui,bourreau,73,79,liste:155
+arch_enemy,Arch Enemy,US,,pop,,,78,82,86,1173347,49,,oui,par_a_coups,81,58,liste:156
+children_of_bodom,Children of Bodom,US,,pop,,,65,70,78,72098,18,,oui,normal,30,55,liste:157
+dimmu_borgir,Dimmu Borgir,US,,metal,,,81,84,89,1931709,34,,oui,par_a_coups,40,63,liste:158
+emperor,Emperor,US,,metal,,,63,70,88,7343,23,,oui,lazy,32,55,liste:159
+mayhem,Mayhem,US,,metal,,,54,61,65,9871,10,,oui,bourreau,76,76,liste:160
+burzum,Burzum,US,,metal,,,58,66,71,34106,27,,oui,oiseau_de_nuit,35,44,liste:161
+darkthrone,Darkthrone,US,,metal,,,64,71,85,9124,26,,oui,normal,55,48,liste:162
+bathory,Bathory,US,,metal,,,60,68,83,22260,24,,oui,par_a_coups,60,38,liste:163
+venom,Venom,US,,metal,,,61,67,84,11545,12,,oui,par_a_coups,50,34,liste:164
+celtic_frost,Celtic Frost,US,,metal,,,55,62,69,20379,29,,oui,lazy,65,67,liste:165
+mercyful_fate,Mercyful Fate,US,,metal,,,65,68,72,438585,28,,oui,lazy,78,70,liste:166
+king_diamond,King Diamond,US,,metal,,,74,78,82,64387,32,,oui,bourreau,45,38,liste:167
+helloween,Helloween,US,,metal,,,80,83,89,2445765,51,,oui,par_a_coups,58,41,liste:168
+blind_guardian,Blind Guardian,US,,metal,,,64,68,73,283011,32,,oui,bourreau,73,76,liste:169
+gamma_ray,Gamma Ray,US,,metal,,,70,74,77,277727,18,,oui,normal,73,32,liste:170
+stratovarius,Stratovarius,US,,metal,,,70,73,78,266906,24,,oui,bourreau,42,62,liste:171
+sonata_arctica,Sonata Arctica,US,,metal,,,72,76,82,51603,18,,oui,par_a_coups,52,75,liste:172
+hammerfall,HammerFall,US,,metal,,,68,72,76,388811,31,,oui,par_a_coups,80,72,liste:173
+dragonforce,DragonForce,US,,metal,,,72,74,79,1753997,50,warner,oui,bourreau,75,70,liste:174
+alestorm,Alestorm,US,,metal,,,70,73,77,2696379,47,warner,oui,normal,63,69,liste:175
+eluveitie,Eluveitie,US,,metal,,,67,72,78,60677,39,,oui,bourreau,80,72,liste:176
+korpiklaani,Korpiklaani,US,,metal,,,62,67,68,74669,20,,oui,bourreau,75,48,liste:177
+ensiferum,Ensiferum,US,,metal,,,70,74,84,167307,44,,oui,bourreau,47,71,liste:178
+turisas,Turisas,US,,metal,,,63,67,70,84402,42,,oui,par_a_coups,72,37,liste:179
+equilibrium,Equilibrium,US,,metal,,,73,76,80,152773,26,warner,oui,par_a_coups,36,37,liste:180
+heidevolk,Heidevolk,US,,metal,,,63,68,77,62909,43,,oui,oiseau_de_nuit,53,38,liste:181
+finntroll,Finntroll,US,,metal,,,62,67,69,53911,44,,oui,lazy,41,76,liste:182
+moonsorrow,Moonsorrow,US,,metal,,,67,72,79,290017,20,,oui,oiseau_de_nuit,38,66,liste:183
+windir,Windir,US,,metal,,,56,64,73,21085,19,,oui,par_a_coups,68,48,liste:184
+agalloch,Agalloch,US,,metal,,,56,62,76,41268,15,,oui,normal,56,81,liste:185
+alcest,Alcest,FR,,pop,,,71,73,74,668567,43,fic_cathedrale,oui,lazy,66,74,liste:186
+deafheaven,Deafheaven,US,,pop,,,74,77,83,2773005,35,universal,oui,bourreau,78,67,liste:187
+ghost_bath,Ghost Bath,US,,pop,,,60,68,79,14549,17,,oui,normal,61,47,liste:188
+harakiri_for_the_sky,Harakiri for the Sky,US,,metal,,,57,64,70,17281,32,,oui,lazy,34,50,liste:189
+amenra,Amenra,US,,metal,,,55,63,70,39839,24,,oui,lazy,61,76,liste:190
+cult_of_luna,Cult of Luna,US,,metal,,,63,70,76,22884,21,,oui,par_a_coups,41,51,liste:191
+isis,Isis,US,,metal,,,58,65,75,7051,22,,oui,normal,49,43,liste:192
+neurosis,Neurosis,US,,metal,,,65,71,83,31014,31,,oui,lazy,39,67,liste:193
+converge,Converge,US,,metal,,,68,72,77,155349,20,,oui,normal,71,73,liste:194
+dillinger_escape_plan,Dillinger Escape Plan,US,,metal,,,59,66,76,19729,24,,oui,normal,55,75,liste:195
+botch,Botch,US,,metal,,,55,63,80,8413,20,,oui,normal,37,58,liste:196
+cave_in,Cave In,US,,metal,,,73,76,84,51636,17,,oui,par_a_coups,64,39,liste:197
+jacob_s_ladder,Jacob's Ladder,US,,metal,,,67,71,73,203082,26,,oui,oiseau_de_nuit,75,81,liste:198
+zao,Zao,US,,metal,,,67,72,74,308286,18,,oui,par_a_coups,51,37,liste:199
+poison_the_well,Poison The Well,US,,metal,,,65,69,77,82307,26,,oui,lazy,31,57,liste:200
+kanye_west,Kanye West,US,,rap_us,,,87,89,91,52594182,80,qc,oui,normal,33,51,liste:211
+young_thug,Young Thug,US,,trap,,,79,82,86,3542652,51,fic_808,oui,par_a_coups,42,38,liste:212
+juice_wrld,Juice WRLD,US,,rap_us,,,89,91,94,86659945,59,universal,oui,oiseau_de_nuit,32,61,liste:221
+xxxtentacion,XXXTentacion,US,,rap_us,,,90,91,93,47902075,70,qc,oui,bourreau,56,58,liste:222
+lil_peep,Lil Peep,US,,rap_us,,,79,81,85,16245952,70,0207,oui,normal,35,35,liste:223
+ski_mask_the_slump_god,Ski Mask The Slump God,US,,rap_us,,,74,77,82,505145,51,cactusjack,oui,bourreau,56,85,liste:224
+denzel_curry,Denzel Curry,US,,rap_us,,,86,89,91,13319010,54,qc,oui,normal,61,46,liste:225
+jid,JID,US,,rap_us,,,80,83,85,2288172,41,warner,oui,normal,37,53,liste:226
+eminem,Eminem,US,,rap_us,,,88,90,92,22430891,56,qc,oui,oiseau_de_nuit,79,51,liste:228
+50_cent,50 Cent,US,,rap_us,,,91,93,95,37557905,56,qc,oui,lazy,34,69,liste:229
+snoop_dogg,Snoop Dogg,US,,rap_us,,,92,95,98,41584907,80,tde,oui,par_a_coups,76,56,liste:230
+dr_dre,Dr. Dre,US,,rap_us,,,94,95,97,45692923,75,tde,oui,bourreau,32,32,liste:231
+tupac,Tupac,US,,rap_us,,,93,95,98,39667375,65,universal,oui,bourreau,41,43,liste:232
+notorious_big,Notorious BIG,US,,rap_us,,,93,95,97,61705039,75,warner,oui,bourreau,65,47,liste:233
+jay_z,Jay-Z,US,,rap_us,,,87,88,91,34192029,64,qc,oui,lazy,36,55,liste:234
+nas,Nas,US,,rap_us,,,80,82,84,5043588,70,sony,oui,normal,45,31,liste:235
+wu_tang_clan,Wu-Tang Clan,US,,rap_us,,,86,88,92,5301155,72,fic_808,oui,bourreau,80,50,liste:236
+outkast,Outkast,US,,rap_us,,,85,87,90,15712596,58,tde,oui,normal,63,35,liste:237
+a_tribe_called_quest,A Tribe Called Quest,US,,rap_us,,,79,83,85,2136131,51,,oui,oiseau_de_nuit,56,84,liste:238
+the_roots,The Roots,US,,rap_us,,,70,73,75,1827734,37,,oui,oiseau_de_nuit,81,61,liste:239
+de_la_soul,De La Soul,US,,rap_us,,,72,74,77,902140,41,qc,oui,normal,75,57,liste:240
+run_dmc,Run DMC,US,,rap_us,,,70,73,76,1057824,58,fic_808,oui,bourreau,36,70,liste:241
+public_enemy,Public Enemy,US,,rap_us,,,77,81,82,744640,28,warner,oui,bourreau,51,52,liste:242
+nwa,NWA,US,,rap_us,,,76,78,80,1943507,51,tde,oui,lazy,53,43,liste:243
+ice_cube,Ice Cube,US,,rap_us,,,81,83,84,14351672,63,cactusjack,oui,lazy,83,32,liste:244
+eazy_e,Eazy-E,US,,rap_us,,,79,83,85,1667687,37,,oui,normal,33,48,liste:245
+logic,Logic,US,,rap_us,,,87,89,92,3140906,44,cactusjack,oui,normal,38,43,liste:246
+mac_miller,Mac Miller,US,,rap_us,,,81,83,85,16951390,54,universal,oui,bourreau,55,46,liste:247
+earl_sweatshirt,Earl Sweatshirt,US,,rap_us,,,80,83,89,529661,36,fic_808,oui,oiseau_de_nuit,31,53,liste:248
+vince_staples,Vince Staples,US,,rap_us,,,74,76,78,1228781,45,,oui,oiseau_de_nuit,72,71,liste:249
+joey_badass,Joey Bada$$,US,,rap_us,,,79,82,86,1353945,36,fic_808,oui,lazy,80,50,liste:250
+action_bronson,Action Bronson,US,,rap_us,,,71,73,76,881590,30,,oui,normal,83,32,liste:251
+freddie_gibbs,Freddie Gibbs,US,,rap_us,,,80,83,86,890801,42,,oui,par_a_coups,55,30,liste:252
+madvillain,Madvillain,US,,rap_us,,,73,77,81,1154619,51,,oui,normal,81,79,liste:253
+mf_doom,MF DOOM,US,,rap_us,,,72,76,79,1434937,46,sony,oui,oiseau_de_nuit,52,75,liste:254
+danny_brown,Danny Brown,US,,rap_us,,,80,83,87,761867,54,,oui,par_a_coups,59,38,liste:255
+jpegmafia,JPEGMAFIA,US,,rap_us,,,78,81,86,857137,32,qc,oui,normal,72,63,liste:256
+injury_reserve,Injury Reserve,US,,rap_us,,,66,71,77,54174,30,ovo,oui,normal,74,52,liste:257
+clipping,clipping.,US,,rap_us,,,63,70,72,21445,25,,oui,bourreau,76,46,liste:258
+death_grips,Death Grips,US,,rap_us,,,80,83,89,1549487,41,,oui,normal,56,56,liste:259
+ho99o9,Ho99o9,US,,rap_us,,,61,69,80,20802,25,,oui,bourreau,53,39,liste:260
+shabazz_palaces,Shabazz Palaces,US,,rap_us,,,65,69,71,50787,17,,oui,par_a_coups,58,45,liste:261
+fivio_foreign,Fivio Foreign,US,,drill,,,71,75,76,987200,31,blackbutter,oui,lazy,57,72,liste:269
+pop_smoke,Pop Smoke,US,,drill,,,79,81,83,18304593,74,0207,oui,bourreau,59,84,liste:270
+king_von,King Von,US,,drill,,,74,76,82,611353,27,,oui,normal,66,79,liste:271
+lil_durk,Lil Durk,US,,drill,,,82,84,85,7800708,53,0207,oui,par_a_coups,48,32,liste:272
+polo_g,Polo G,US,,rap_us,,,85,86,90,4185103,49,warner,oui,bourreau,82,72,liste:273
+roddy_ricch,Roddy Ricch,US,,rap_us,,,78,79,82,14993563,48,warner,oui,par_a_coups,58,75,liste:274
+dababy,DaBaby,US,,rap_us,,,84,86,89,3254939,71,qc,oui,oiseau_de_nuit,39,56,liste:275
+moneybagg_yo,Moneybagg Yo,US,,rap_us,,,71,74,79,2445830,30,,oui,normal,74,44,liste:276
+yo_gotti,Yo Gotti,US,,rap_us,,,77,80,82,1731611,28,,oui,normal,61,66,liste:277
+gucci_mane,Gucci Mane,US,,trap,,,78,80,82,3409338,50,cactusjack,oui,oiseau_de_nuit,73,78,liste:278
+migos,Migos,US,,trap,,,86,88,89,4607418,51,fic_808,oui,oiseau_de_nuit,82,74,liste:279
+offset,Offset,US,,trap,,,73,76,80,944861,26,,oui,normal,54,32,liste:280
+takeoff,Takeoff,US,,trap,,,81,84,87,1074401,45,fic_808,oui,bourreau,48,60,liste:282
+2_chainz,2 Chainz,US,,trap,,,71,75,76,1298748,52,,oui,oiseau_de_nuit,32,56,liste:283
+rick_ross,Rick Ross,US,,rap_us,,,81,84,87,7044874,40,xl,oui,bourreau,54,72,liste:284
+meek_mill,Meek Mill,US,,rap_us,,,89,90,93,5929112,65,qc,oui,par_a_coups,77,57,liste:285
+wale,Wale,US,,rap_us,,,73,76,79,1175033,34,universal,oui,par_a_coups,42,61,liste:286
+fabolous,Fabolous,US,,rap_us,,,78,80,85,971867,46,,oui,normal,67,60,liste:287
+jadakiss,Jadakiss,US,,rap_us,,,72,74,78,860642,44,,oui,normal,77,84,liste:288
+styles_p,Styles P,US,,rap_us,,,74,78,80,85528,21,,oui,normal,32,43,liste:289
+sheek_louch,Sheek Louch,US,,rap_us,,,67,72,75,59902,36,,oui,lazy,56,64,liste:290
+dmx,DMX,US,,rap_us,,,76,78,80,707753,58,,oui,bourreau,68,33,liste:291
+ja_rule,Ja Rule,US,,rap_us,,,72,74,78,2552796,36,qc,oui,par_a_coups,42,40,liste:292
+nelly,Nelly,US,,rap_us,,,85,87,89,11574274,44,fic_808,oui,bourreau,69,78,liste:293
+chingy,Chingy,US,,rap_us,,,73,77,82,1093919,26,tde,oui,normal,74,54,liste:294
+ludacris,Ludacris,US,,rap_us,,,84,85,87,10799653,72,tde,oui,lazy,63,78,liste:295
+t_i,T.I.,US,,rap_us,,,75,77,78,540901,39,,oui,oiseau_de_nuit,52,51,liste:296
+young_jeezy,Young Jeezy,US,,trap,,,76,79,81,2153798,45,tractopelle,oui,bourreau,68,71,liste:297
+birdman,Birdman,US,,rap_us,,,74,77,82,939000,37,fic_808,oui,normal,34,85,liste:298
+lil_wayne,Lil Wayne,US,,rap_us,,,86,88,90,33812117,77,qc,oui,normal,60,83,liste:299
+latto,Latto,US,,rap_us,,,80,83,84,6010421,47,sony,oui,normal,58,79,liste:304
+city_girls,City Girls,US,,rap_us,,,71,75,79,1507017,48,warner,oui,bourreau,57,83,liste:305
+glorilla,GloRilla,US,,rap_us,,,82,84,86,11995806,68,warner,oui,par_a_coups,42,38,liste:306
+sexyy_red,Sexyy Red,US,,rap_us,,,87,89,93,10961069,56,qc,oui,par_a_coups,42,68,liste:307
+coi_leray,Coi Leray,US,,rap_us,,,80,83,85,5054984,55,tde,oui,normal,83,57,liste:308
+baby_tate,Baby Tate,US,,rap_us,,,67,71,75,53492,19,,oui,par_a_coups,57,34,liste:309
+flo_milli,Flo Milli,US,,rap_us,,,70,72,74,803167,51,cactusjack,oui,normal,82,32,liste:310
+rico_nasty,Rico Nasty,US,,rap_us,,,73,75,79,518996,32,tde,oui,bourreau,39,56,liste:311
+kash_doll,Kash Doll,US,,rap_us,,,65,68,73,144578,43,,oui,oiseau_de_nuit,74,59,liste:312
+dreamdoll,DreamDoll,US,,rap_us,,,67,71,73,467073,19,,oui,par_a_coups,59,59,liste:313
+asian_doll,Asian Doll,US,,rap_us,,,72,76,83,481915,22,,oui,par_a_coups,66,74,liste:314
+cuban_doll,Cuban Doll,US,,rap_us,,,70,73,78,55748,20,,oui,normal,71,80,liste:315
+kaliii,Kaliii,US,,rap_us,,,71,75,80,183755,40,,oui,normal,73,65,liste:316
+saucy_santana,Saucy Santana,US,,rap_us,,,79,82,87,2926234,28,,oui,bourreau,66,57,liste:317
+duke_deuce,Duke Deuce,US,,rap_us,,,73,78,84,139094,32,,oui,normal,74,51,liste:318
+beatking,BeatKing,US,,rap_us,,,68,72,74,434504,36,,oui,lazy,39,41,liste:319
+fimiguerrero,Fimiguerrero,US,,rap_us,,,64,69,78,161697,37,,oui,normal,64,60,liste:321
+len,Len,US,,rap_us,,,72,77,79,97746,37,,oui,oiseau_de_nuit,46,53,liste:322
+slimeroni,Slimeroni,US,,rap_us,,,69,73,75,139035,41,,oui,par_a_coups,67,61,liste:323
+jnhygs,Jnhygs,US,,rap_us,,,73,76,78,67196,40,,oui,normal,73,34,liste:324
+cyst,Cyst,US,,trap,,,65,72,79,20065,12,,oui,par_a_coups,35,56,liste:326
+4batz,4batz,US,,rnb,,,70,74,79,435022,20,,oui,oiseau_de_nuit,63,48,liste:327
+opium,Opium,US,,trap,,,59,65,81,9719,22,,oui,bourreau,38,57,liste:329
+lucki,Lucki,US,,trap,,,63,70,86,32488,26,,oui,par_a_coups,65,38,liste:332
+duwap_kaine,Duwap Kaine,US,,trap,,,60,68,81,16145,20,,oui,bourreau,33,58,liste:333
+kankan,Kankan,US,,trap,,,58,65,80,15718,11,,oui,bourreau,82,44,liste:334
+summrs,Summrs,US,,trap,,,52,60,74,35032,34,,oui,bourreau,48,55,liste:335
+autumn,Autumn!,US,,trap,,,56,64,81,20304,16,,oui,normal,82,36,liste:336
+iayze,Iayze,US,,trap,,,65,73,79,11185,21,,oui,par_a_coups,41,56,liste:337
+sofaygo,SoFaygo,US,,trap,,,68,73,79,236558,27,qc,oui,normal,42,68,liste:338
+iann_dior,Iann Dior,US,,rap_us,,,59,67,81,29397,32,,oui,par_a_coups,71,68,liste:339
+24kgoldn,24kGoldn,US,,rap_us,,,74,77,82,821208,45,universal,oui,normal,65,63,liste:340
+jack_harlow,Jack Harlow,US,,rap_us,,,88,90,92,6817958,73,sony,oui,normal,68,51,liste:341
+cordae,Cordae,US,,rap_us,,,74,77,83,515482,31,xl,oui,bourreau,44,68,liste:342
+saba,Saba,US,,rap_us,,,75,78,82,1932046,59,sony,oui,normal,59,67,liste:343
+smino,Smino,US,,rap_us,,,80,82,84,2812657,26,,oui,bourreau,80,47,liste:344
+ab_soul,Ab-Soul,US,,rap_us,,,80,83,85,573835,41,,oui,normal,35,57,liste:345
+jay_rock,Jay Rock,US,,rap_us,,,71,74,76,797827,42,cactusjack,oui,oiseau_de_nuit,58,52,liste:347
+isaiah_rashad,Isaiah Rashad,US,,rap_us,,,79,82,83,835838,52,fic_808,oui,lazy,84,72,liste:348
+6lack,6LACK,US,,rnb,,,76,78,82,1144750,48,tde,oui,bourreau,51,43,liste:350
+tory_lanez,Tory Lanez,US,,rap_us,,,79,83,84,1910006,53,,oui,lazy,45,34,liste:352
+majid_jordan,Majid Jordan,US,,rnb,,,80,84,90,926647,34,tde,oui,lazy,80,42,liste:354
+roy_woods,Roy Woods,US,,rap_us,,,67,70,78,254691,21,,oui,lazy,56,79,liste:355
+dvsn,DVSN,US,,rnb,,,81,84,88,638963,60,tde,oui,lazy,73,81,liste:356
+kehlani,Kehlani,US,,rnb,,,88,89,92,10861337,46,ovo,oui,oiseau_de_nuit,76,33,liste:357
+h_e_r,H.E.R.,US,,rnb,,,86,88,92,3719149,74,tde,oui,oiseau_de_nuit,36,79,liste:358
+giveon,Giveon,US,,rnb,,,80,82,84,6794762,57,tde,oui,oiseau_de_nuit,68,49,liste:360
+snoh_aalegra,Snoh Aalegra,US,,rnb,,,74,77,82,2271257,40,tde,oui,oiseau_de_nuit,52,51,liste:361
+ravyn_lenae,Ravyn Lenae,US,,rnb,,,74,77,79,189738,42,,oui,oiseau_de_nuit,40,56,liste:362
+steve_lacy,Steve Lacy,US,,rnb,,,82,84,88,19617450,71,tde,oui,normal,39,59,liste:363
+omar_apollo,Omar Apollo,US,,rnb,,,78,82,85,1967388,34,merky,oui,bourreau,34,40,liste:364
+rex_orange_county,Rex Orange County,US,,pop,,,81,82,83,5130680,52,universal,oui,normal,75,46,liste:365
+dominic_fike,Dominic Fike,US,,pop,,,74,76,78,1111669,59,sony,oui,normal,49,39,liste:366
+gus_dapperton,Gus Dapperton,US,,pop,,,72,75,81,53705,27,,oui,oiseau_de_nuit,67,53,liste:367
+clairo,Clairo,US,,pop,,,87,89,91,6471699,45,sony,oui,lazy,32,65,liste:368
+beabadoobee,beabadoobee,US,,pop,,,76,79,85,1595527,37,warner,oui,normal,71,72,liste:369
+men_i_trust,men i trust,US,,pop,,,75,77,83,883920,56,,oui,par_a_coups,82,44,liste:370
+boy_pablo,boy pablo,US,,pop,,,74,78,80,1434763,59,sony,oui,normal,60,50,liste:371
+cuco,cuco,US,,pop,,,80,83,88,535047,41,,oui,lazy,81,43,liste:372
+still_woozy,Still Woozy,US,,pop,,,78,82,87,2835343,37,universal,oui,par_a_coups,76,49,liste:373
+wallows,Wallows,US,,rock,,,78,80,86,1301877,59,because,oui,normal,50,50,liste:374
+dayglow,Dayglow,US,,pop,,,71,74,78,150117,37,,oui,par_a_coups,83,79,liste:375
+conan_gray,Conan Gray,US,,pop,,,85,86,88,8070113,59,warner,oui,par_a_coups,77,68,liste:376
+lauv,Lauv,US,,pop,,,82,83,85,3107504,53,universal,oui,bourreau,79,69,liste:377
+jeremy_zucker,Jeremy Zucker,US,,pop,,,79,82,86,2769741,53,fic_cathedrale,oui,oiseau_de_nuit,61,55,liste:378
+blackbear,blackbear,US,,pop,,,75,77,82,981858,50,sony,oui,normal,34,42,liste:379
+machine_gun_kelly,Machine Gun Kelly,US,,rock,,,87,88,91,5470189,66,warner,oui,bourreau,76,38,liste:380
+yungblud,YUNGBLUD,US,,rock,,,82,83,87,5876828,61,warner,oui,normal,79,62,liste:381
+wifisfuneral,Wifisfuneral,US,,rap_us,,,74,79,86,449008,21,,oui,oiseau_de_nuit,35,70,liste:383
+craig_xen,Craig Xen,US,,rap_us,,,71,74,76,379897,31,,oui,lazy,52,52,liste:384
+bans,Bans,US,,rap_us,,,68,71,72,76401,34,,oui,lazy,77,66,liste:385
+smokepurpp,Smokepurpp,US,,trap,,,77,80,83,841365,48,,oui,normal,64,59,liste:386
+lil_pump,Lil Pump,US,,trap,,,86,87,89,10029735,59,opium,oui,normal,65,70,liste:387
+chief_keef,Chief Keef,US,,drill,,,85,86,87,16347698,71,92i,oui,par_a_coups,34,42,liste:388
+fredo_santana,Fredo Santana,US,,drill,,,66,70,74,51822,15,,oui,par_a_coups,84,37,liste:389
+lil_reese,Lil Reese,US,,drill,,,70,74,76,211888,44,,oui,bourreau,47,54,liste:390
+g_herbo,G Herbo,US,,drill,,,71,74,75,825238,48,0207,oui,lazy,42,56,liste:391
+famous_dex,Famous Dex,US,,trap,,,70,75,78,165729,28,,oui,normal,57,79,liste:392
+rich_the_kid,Rich The Kid,US,,trap,,,79,83,85,677991,41,fic_808,oui,bourreau,71,41,liste:393
+lil_skies,Lil Skies,US,,rap_us,,,78,80,86,2288302,59,,oui,lazy,33,78,liste:394
+ynw_melly,YNW Melly,US,,rap_us,,,71,75,77,2251423,33,,oui,lazy,58,46,liste:395
+kodak_black,Kodak Black,US,,rap_us,,,82,84,86,3103477,68,fic_808,oui,oiseau_de_nuit,77,80,liste:396
+comethazine,Comethazine,US,,rap_us,,,64,68,72,111319,42,,oui,normal,36,31,liste:398
+city_morgue,City Morgue,US,,rap_us,,,75,78,82,671991,47,sony,oui,normal,46,71,liste:399
+zillakami,ZillaKami,US,,rap_us,,,62,66,68,384118,36,,oui,par_a_coups,56,33,liste:400
+sosmula,Sosmula,US,,rap_us,,,64,68,71,425870,35,warner,oui,bourreau,77,40,liste:401
+xavier_wulf,Xavier Wulf,US,,rap_us,,,70,73,80,73346,19,,oui,normal,50,34,liste:402
+chris_travis,Chris Travis,US,,rap_us,,,63,67,70,386466,30,,oui,normal,46,38,liste:403
+eddy_baker,Eddy Baker,US,,rap_us,,,72,76,80,139997,44,,oui,normal,60,55,liste:404
+lil_tracy,Lil Tracy,US,,rap_us,,,65,71,72,23392,35,,oui,bourreau,36,50,liste:405
+wicca_phase_springs_eternal,Wicca Phase Springs Eternal,US,,rap_us,,,55,62,73,28149,12,,oui,normal,32,48,liste:406
+horse_head,Horse Head,US,,rap_us,,,65,72,80,6795,22,,oui,bourreau,69,51,liste:407
+mackned,Mackned,US,,rap_us,,,66,73,89,13013,24,,oui,par_a_coups,83,79,liste:408
+coldhart,Coldhart,US,,rap_us,,,57,64,72,12144,29,,oui,lazy,73,83,liste:409
+drip_1331,Drip-1331,US,,rap_us,,,56,64,77,23940,16,,oui,par_a_coups,46,69,liste:410
+gbc,GBC,US,,rap_us,,,64,71,79,5117,35,,oui,lazy,63,33,liste:411
+shinigami,Shinigami,US,,rap_us,,,62,68,70,25398,21,,oui,oiseau_de_nuit,69,38,liste:412
+ramirez,Ramirez,US,,rap_us,,,70,75,78,106985,19,,oui,oiseau_de_nuit,67,46,liste:413
+suicideboys,$uicideboy$,US,,rap_us,,,83,85,89,3019522,43,fic_808,oui,lazy,81,51,liste:414
+shakewhile,Shakewhile,US,,rap_us,,,67,71,77,118913,17,,oui,normal,52,31,liste:415
+pouya,Pouya,US,,rap_us,,,72,76,82,70675,21,,oui,lazy,84,57,liste:416
+germ,Germ,US,,rap_us,,,68,73,80,152577,24,,oui,normal,70,63,liste:417
+mikey_the_magician,Mikey The Magician,US,,rap_us,,,72,77,81,63057,36,,oui,oiseau_de_nuit,55,36,liste:418
+ghostemane,Ghostemane,US,,rap_us,,,75,79,84,978754,29,sony,oui,lazy,81,75,liste:419
+scarlxrd,Scarlxrd,US,,rap_us,,,72,76,79,728572,53,,oui,lazy,35,35,liste:420
+lil_darkie,Lil Darkie,US,,rap_us,,,70,75,76,54939,30,,oui,par_a_coups,59,62,liste:421
+wendigo,Wendigo,US,,rap_us,,,66,70,77,270251,41,sony,oui,normal,41,53,liste:422
+nedarb,Nedarb,US,,rap_us,,,67,70,76,398874,35,,oui,oiseau_de_nuit,56,57,liste:423
+nxxxxxs,NxxxxxS,US,,rap_us,,,70,73,81,259872,44,,oui,normal,68,45,liste:425
+lil_uzi,Lil Uzi,US,,trap,,,64,71,87,15860,22,,oui,lazy,55,41,liste:426
+pi_erre_bourne,Pi'erre Bourne,US,,trap,,,78,82,86,1211611,45,qc,oui,par_a_coups,52,41,liste:427
+f1lthy,F1lthy,US,,trap,,,59,65,80,11446,14,,oui,par_a_coups,63,62,liste:428
+star_boy,Star Boy,US,,trap,,,54,61,74,37723,16,,oui,lazy,53,69,liste:429
+outtatown,Outtatown,US,,trap,,,55,62,74,28601,11,,oui,bourreau,50,55,liste:430
+thelabcook,TheLabCook,US,,trap,,,62,70,88,7024,18,,oui,normal,80,62,liste:431
+deskhop,Deskhop,US,,trap,,,56,63,68,38823,26,,oui,lazy,36,52,liste:432
+loesoe,Loesoe,US,,trap,,,57,63,68,13561,31,,oui,par_a_coups,45,75,liste:433
+maaly_raw,Maaly Raw,US,,trap,,,73,77,84,177374,32,,oui,normal,73,40,liste:434
+don_cannon,Don Cannon,US,,trap,,,72,75,83,327820,21,qc,oui,oiseau_de_nuit,58,82,liste:435
+dj_drama,DJ Drama,US,,trap,,,73,77,81,392813,35,,oui,normal,46,31,liste:436
+zaytoven,Zaytoven,US,,trap,,,77,80,85,1033369,56,qc,oui,normal,77,54,liste:437
+southside,Southside,US,,trap,,,75,79,85,1763331,30,qc,oui,normal,71,45,liste:438
+tm88,TM88,US,,trap,,,71,76,85,83024,39,,oui,par_a_coups,38,74,liste:439
+tarentino,Tarentino,US,,trap,,,62,67,71,351686,26,defjamfr,oui,oiseau_de_nuit,73,82,liste:440
+tre_pounds,Tre Pounds,US,,trap,,,68,72,79,150888,18,,oui,normal,82,37,liste:441
+dy_krazy,DY Krazy,US,,trap,,,63,66,75,264047,25,,oui,par_a_coups,47,57,liste:442
+london_on_da_track,London on da Track,US,,trap,,,78,82,87,1301692,56,tractopelle,oui,normal,58,64,liste:443
+wheezy,Wheezy,US,,trap,,,80,83,88,2088058,48,,oui,lazy,60,81,liste:444
+nick_mira,Nick Mira,US,,trap,,,73,76,80,1959998,59,cactusjack,oui,lazy,76,78,liste:445
+taz_taylor,Taz Taylor,US,,trap,,,67,72,81,104109,36,,oui,bourreau,40,62,liste:446
+cxdy,Cxdy,US,,trap,,,70,74,79,343392,29,,oui,oiseau_de_nuit,42,53,liste:447
+e_trou,E-Trou,US,,trap,,,71,75,82,64005,42,,oui,par_a_coups,73,71,liste:448
+pharaoh,Pharaoh,RU,,rap_us,,,63,66,71,232907,34,,oui,normal,49,44,liste:449
+bedoes,Bedoes,PL,,rap_us,,,72,77,83,78878,38,,oui,lazy,33,34,liste:450
+bushi_2,Bushi,FR,,rap_fr,,,65,69,74,373243,19,qlf,oui,oiseau_de_nuit,47,83,liste:451
+fianso,Fianso,FR,,rap_fr,,,76,78,80,2592208,26,qlf,oui,normal,56,69,liste:452
+videuu,Videuu,FR,,rap_fr,,,68,71,76,170245,22,,oui,bourreau,42,38,liste:455
+soso_maness,Soso Maness,FR,,rap_fr,,,72,75,80,2301593,33,fic_nuitblanche,oui,normal,69,57,liste:456
+cherry_pie,Cherry Pie,FR,,rap_fr,,,62,65,69,478651,37,,oui,lazy,35,82,liste:457
+p_tite_soeur,P'tite Soeur,FR,,rap_fr,,,64,68,75,279812,36,,oui,normal,33,31,liste:458
+sim01,Sim01,FR,,rap_fr,,,65,68,72,220302,37,,oui,par_a_coups,66,66,liste:459
+kpri,Kpri,FR,,rap_fr,,,70,74,79,942661,49,fic_nuitblanche,oui,lazy,36,46,liste:460
+luv_resval,Luv Resval,FR,,rap_us,,,77,80,81,1044907,31,,oui,par_a_coups,53,76,liste:461
+ashe_22,Ashe 22,FR,,rap_fr,,,69,74,78,344305,37,,oui,oiseau_de_nuit,82,43,liste:463
+youv_dee,Youv Dee,FR,,rap_fr,,,75,78,82,774652,45,,oui,par_a_coups,49,37,liste:464
+wasting_shit,Wasting Shit,FR,,rap_fr,,,64,67,75,50895,16,defjamfr,oui,bourreau,61,60,liste:465
+kay_the_prodigy,Kay The Prodigy,FR,,rap_fr,,,66,69,72,176627,43,,oui,oiseau_de_nuit,73,37,liste:466
+mitaya,Mitaya,FR,,rap_fr,,,62,66,76,77392,34,,oui,normal,32,38,liste:467
+sheriff_lazone,Sheriff Lazone,FR,,rap_fr,,,66,70,72,137480,42,,oui,bourreau,56,76,liste:468
+zequin,Zequin,FR,,rap_fr,,,72,75,83,62695,20,,oui,bourreau,54,82,liste:470
+deelee_s,Deelee S,FR,,rap_fr,,,65,69,77,262883,28,,oui,normal,38,53,liste:471
+kerchak,Kerchak,FR,,afro,,,74,76,80,2539696,51,0207,oui,normal,35,40,liste:482
+doums,Doums,FR,,rap_fr,,,67,71,81,421476,44,,oui,oiseau_de_nuit,49,81,liste:484
+zuukou_mayzie,Zuukou mayzie,FR,,rap_fr,,,71,74,80,384527,37,,oui,oiseau_de_nuit,70,51,liste:485
+guy2bezbar,Guy2Bezbar,FR,,drill,,,78,81,87,653845,35,fic_beton,oui,par_a_coups,41,64,liste:486
+rk,Rk,FR,,rap_fr,,,72,75,79,2588053,51,dorplatine,oui,normal,58,32,liste:488
+j9ueve,J9ueve,FR,,rap_fr,,,65,68,74,183116,44,,oui,normal,84,84,liste:489
+ashh,Ashh,FR,,rap_fr,,,73,77,85,53045,44,,oui,par_a_coups,57,58,liste:490
+dadi,Dadi,FR,,rap_fr,,,74,77,80,238679,44,,oui,normal,71,54,liste:491
+slk148,Slk148,FR,,rap_fr,,,69,73,80,58801,31,,oui,lazy,66,66,liste:492
+osan,Osan,FR,,trap,,,56,63,73,5646,23,,oui,lazy,50,43,liste:493
+winnterz,Winnterz,FR,,trap,,,61,69,75,6269,11,,oui,bourreau,57,33,liste:494
+7droox,7droox,FR,,rap_us,,,61,68,75,19798,24,,oui,par_a_coups,61,59,liste:495
+yassboi,Yassboi,FR,,trap,,,53,60,67,5331,35,,oui,bourreau,68,36,liste:497
+drimo,Drimo,FR,,rap_us,,,53,59,63,35214,18,,oui,normal,64,46,liste:498
+polair,polair,FR,,trap,,,65,73,84,31661,28,,oui,par_a_coups,45,83,liste:499
+haristone,Haristone,FR,,trap,,,56,64,74,26159,34,,oui,normal,51,63,liste:500
+rom1,Rom1,FR,,trap,,,56,63,80,42992,34,,oui,bourreau,50,66,liste:501
+bkrbabyboy,BKRBABYBOY,FR,,trap,,,55,61,63,38181,12,,oui,bourreau,78,69,liste:502
+elevenzo,Elevenzo,FR,,trap,,,54,60,64,19077,22,,oui,oiseau_de_nuit,50,63,liste:503
+rohff,Rohff,FR,,rap_fr,,,85,86,87,12318019,45,qlf,oui,normal,70,82,liste:506
+gradur,Gradur,FR,,rap_fr,,,89,91,94,4255368,64,qlf,oui,par_a_coups,53,51,liste:508
+niro,Niro,FR,,rap_fr,,,70,74,75,1057144,39,fic_nuitblanche,oui,normal,51,56,liste:509
+kery_james,Kery James,FR,,rap_fr,,,73,76,81,1739420,46,,oui,lazy,51,49,liste:510
+medine,Médine,FR,,rap_fr,,,77,79,83,1143094,36,92i,oui,oiseau_de_nuit,40,74,liste:511
+youssoupha,Youssoupha,FR,,rap_fr,,,78,80,84,855649,28,,oui,par_a_coups,78,59,liste:512
+soprano,Soprano,FR,,rap_fr,,,87,88,91,6520996,74,rec118,oui,bourreau,38,36,liste:513
+akhenaton,Akhenaton,FR,,rap_fr,,,75,77,80,634326,48,,oui,normal,74,62,liste:514
+shurik_n,Shurik'n,FR,,rap_fr,,,66,69,77,258484,43,,oui,lazy,46,53,liste:515
+iam,IAM,FR,,rap_fr,,,82,85,88,5460974,47,dorplatine,oui,oiseau_de_nuit,36,68,liste:516
+ntm,NTM,FR,,rap_fr,,,76,78,81,854077,60,defjamfr,oui,normal,44,69,liste:517
+assassin,Assassin,FR,,rap_fr,,,70,74,82,413844,35,,oui,bourreau,47,65,liste:518
+ministere_a_m_e_r,Ministère A.M.E.R.,FR,,rap_fr,,,67,71,79,63193,31,,oui,oiseau_de_nuit,52,55,liste:519
+lunatic,Lunatic,FR,,rap_fr,,,73,77,78,1241959,36,,oui,par_a_coups,56,53,liste:520
+mafia_k_1_fry,Mafia K'1 Fry,FR,,rap_fr,,,81,83,86,2364184,49,,oui,oiseau_de_nuit,31,47,liste:521
+113,113,FR,,rap_fr,,,73,76,81,598523,29,,oui,lazy,32,44,liste:522
+intouchable,Intouchable,FR,,rap_fr,,,69,73,76,272677,31,,oui,lazy,46,51,liste:523
+tandem,Tandem,FR,,rap_fr,,,70,74,81,201714,30,,oui,bourreau,46,67,liste:524
+sniper,Sniper,FR,,rap_fr,,,78,81,83,2496016,29,fic_beton,oui,oiseau_de_nuit,36,54,liste:525
+sinik,Sinik,FR,,rap_fr,,,73,76,80,2943465,51,,oui,normal,55,32,liste:526
+diam_s,Diam's,FR,,rap_fr,,,80,83,87,6867116,54,qlf,oui,bourreau,70,33,liste:527
+keny_arkana,Keny Arkana,FR,,rap_fr,,,74,77,78,2245728,51,defjamfr,oui,bourreau,33,74,liste:528
+casey,Casey,FR,,rap_fr,,,65,70,80,458209,15,,oui,par_a_coups,39,50,liste:529
+la_rumeur,La Rumeur,FR,,rap_fr,,,72,76,79,84813,22,,oui,normal,72,70,liste:530
+oxmo_puccino,Oxmo Puccino,FR,,rap_fr,,,75,79,84,573705,32,,oui,par_a_coups,45,65,liste:531
+mc_solaar,MC Solaar,FR,,rap_fr,,,87,89,91,17420726,66,awa,oui,bourreau,31,68,liste:532
+passi,Passi,FR,,rap_fr,,,67,70,74,347815,44,,oui,bourreau,66,39,liste:533
+stomy_bugsy,Stomy Bugsy,FR,,rap_fr,,,65,69,71,116018,18,,oui,normal,78,57,liste:534
+doc_gyneco,Doc Gynéco,FR,,rap_fr,,,71,73,74,619859,28,awa,oui,normal,53,60,liste:535
+menelik,Menelik,FR,,rap_fr,,,73,78,85,54042,34,,oui,normal,37,81,liste:536
+arsenik,Arsenik,FR,,rap_fr,,,65,69,75,117510,18,,oui,oiseau_de_nuit,38,51,liste:537
+x_men,X Men,FR,,rap_fr,,,65,70,76,171629,28,,oui,par_a_coups,59,49,liste:538
+time_bomb,Time Bomb,FR,,rap_fr,,,67,72,73,472721,40,,oui,normal,31,51,liste:539
+hifi,Hifi,FR,,rap_fr,,,65,69,75,109037,43,,oui,lazy,33,46,liste:540
+busta_flex,Busta Flex,FR,,rap_fr,,,73,77,83,65676,26,,oui,bourreau,63,79,liste:541
+zoxea,Zoxea,FR,,rap_fr,,,66,70,75,463053,17,,oui,par_a_coups,71,38,liste:542
+lord_kossity,Lord Kossity,FR,,rap_fr,,,65,68,73,50580,22,92i,oui,lazy,42,70,liste:543
+melaaz,Melaaz,FR,,rap_fr,,,65,69,72,195614,16,,oui,par_a_coups,85,37,liste:544
+princess_anies,Princess Aniès,FR,,rap_fr,,,73,76,84,372842,34,,oui,normal,51,60,liste:545
+fabe,Fabe,FR,,rap_fr,,,72,77,80,178717,16,,oui,oiseau_de_nuit,38,85,liste:546
+lino,Lino,FR,,rap_fr,,,71,74,78,767551,46,,oui,bourreau,83,82,liste:547
+pit_baccardi,Pit Baccardi,FR,,rap_fr,,,69,74,82,240539,19,awa,oui,bourreau,84,77,liste:548
+kohndo,Kohndo,FR,,rap_fr,,,69,74,77,261813,17,,oui,normal,84,31,liste:549
+ali,Ali,FR,,rap_fr,,,74,78,87,51953,23,,oui,par_a_coups,61,54,liste:550
+mala,Mala,FR,,rap_fr,,,73,76,85,476793,28,92i,oui,lazy,75,47,liste:551
+bramsito,Bramsito,FR,,rap_fr,,,70,73,78,516134,50,,oui,normal,55,33,liste:552
+hornet_la_frappe,Hornet La Frappe,FR,,rap_fr,,,76,79,80,1367777,47,,oui,normal,49,47,liste:554
+lorenzo,Lorenzo,FR,,rap_fr,,,80,84,88,591374,27,rec118,oui,lazy,51,73,liste:556
+valentin,Valentin,FR,,rap_fr,,,73,78,84,152024,40,,oui,normal,41,70,liste:557
+columbine,Columbine,FR,,rap_fr,,,79,82,87,800975,36,dorplatine,oui,bourreau,77,76,liste:561
+l_entourage,L'Entourage,FR,,rap_fr,,,74,76,78,908789,36,92i,oui,lazy,68,60,liste:562
+fixpen_sill,Fixpen Sill,FR,,rap_fr,,,65,69,75,453084,31,,oui,bourreau,57,74,liste:563
+1995,1995,FR,,rap_fr,,,81,84,86,757979,40,92i,oui,normal,64,72,liste:564
+s_crew,S-Crew,FR,,rap_fr,,,73,77,83,416153,35,,oui,normal,65,82,liste:566
+mz,MZ,FR,,rap_fr,,,68,73,82,197864,39,,oui,bourreau,36,50,liste:567
+jazzy_bazz,Jazzy Bazz,FR,,rap_fr,,,78,81,87,2719410,41,92i,oui,bourreau,52,83,liste:568
+l_or_du_commun,L'Or du Commun,FR,,rap_fr,,,63,67,74,159500,31,,oui,oiseau_de_nuit,50,39,liste:569
+romeo_elvis,Roméo Elvis,BE,,rap_fr,,,79,83,85,1563593,27,,oui,bourreau,55,41,liste:570
+caballero_jeanjass,Caballero & JeanJass,BE,,rap_fr,,,78,81,87,1299417,45,,oui,lazy,50,31,liste:571
+lous_and_the_yakuza,Lous and the Yakuza,BE,,rap_fr,,,77,81,85,847530,46,fic_beton,oui,par_a_coups,78,31,liste:573
+veence_hanao,Veence Hanao,BE,,rap_fr,,,67,70,77,158424,33,,oui,bourreau,62,71,liste:576
+le_motel,Le Motel,BE,,rap_fr,,,72,76,86,124922,18,,oui,oiseau_de_nuit,77,51,liste:577
+naza,Naza,FR,,rap_fr,,,71,74,77,1103872,30,defjamfr,oui,oiseau_de_nuit,49,75,liste:580
+keblack,KeBlack,FR,,rap_fr,,,81,84,89,2390796,51,rec118,oui,normal,42,43,liste:581
+kalash,Kalash,FR,,afro,,,87,90,91,3548384,47,fic_roots,oui,oiseau_de_nuit,58,82,liste:583
+marlo,Marlo,FR,,rap_fr,,,75,77,81,651838,39,fic_nuitblanche,oui,normal,47,57,liste:584
+dinos,Dinos,FR,,rap_fr,,,75,77,83,1243547,39,,oui,bourreau,49,46,liste:585
+jok_air,Jok'Air,FR,,rap_fr,,,77,81,84,1531458,31,,oui,lazy,68,67,liste:586
+mhd,MHD,FR,,afro,,,84,86,87,18273599,42,rec118,oui,bourreau,69,74,liste:587
+kofs,Kofs,FR,,rap_fr,,,74,78,81,75190,23,dorplatine,oui,bourreau,33,32,liste:591
+13_organise,13 Organisé,FR,,rap_fr,,,77,80,84,505177,29,qlf,oui,lazy,40,52,liste:592
+houari,Houari,FR,,rap_fr,,,70,73,74,63685,41,,oui,par_a_coups,69,55,liste:594
+soldat_jahman,Soldat Jahman,FR,,rap_fr,,,66,70,72,84314,42,,oui,normal,77,52,liste:595
+le_rat_luciano,Le Rat Luciano,FR,,rap_fr,,,69,74,83,127371,17,,oui,bourreau,31,49,liste:596
+don_choa,Don Choa,FR,,rap_fr,,,74,78,86,54010,34,,oui,lazy,69,37,liste:597
+sat_l_artificier,Sat l'Artificier,FR,,rap_fr,,,74,77,82,70798,38,rec118,oui,bourreau,51,39,liste:598
+menzo,Menzo,FR,,rap_fr,,,74,78,84,191015,20,,oui,normal,84,71,liste:599
+stony_stone,Stony Stone,FR,,rap_fr,,,67,71,72,66128,27,,oui,normal,39,85,liste:600
+dadoo,Dadoo,FR,,rap_fr,,,71,76,86,462629,20,,oui,normal,57,61,liste:601
+k_rhyme_le_roi,K-Rhyme Le Roi,FR,,rap_fr,,,67,70,74,409945,21,,oui,oiseau_de_nuit,34,81,liste:602
+le_t_i_n,Le T.I.N.,FR,,rap_fr,,,74,79,83,84743,23,awa,oui,normal,38,51,liste:603
+es,Es,FR,,rap_fr,,,65,69,75,190492,38,,oui,par_a_coups,35,50,liste:604
+said,Saïd,FR,,rap_fr,,,73,77,84,51718,30,,oui,normal,58,64,liste:605
+k_reen,K-Reen,FR,,rnb,,,64,69,74,208478,32,,oui,par_a_coups,67,60,liste:606
+la_fouine,La Fouine,FR,,rap_fr,,,87,88,91,15929969,75,rec118,oui,oiseau_de_nuit,44,61,liste:608
+sefyu,Sefyu,FR,,rap_fr,,,80,83,86,943788,51,awa,oui,bourreau,44,57,liste:609
+mister_you,Mister You,FR,,rap_fr,,,73,75,80,2900600,43,,oui,bourreau,66,80,liste:610
+mac_tyer,Mac Tyer,FR,,rap_fr,,,62,65,75,96739,21,,oui,lazy,51,30,liste:611
+mac_kregor,Mac Kregor,FR,,rap_fr,,,71,76,85,207032,28,,oui,normal,30,57,liste:612
+faf_larage,Faf Larage,FR,,rap_fr,,,67,71,74,114481,19,awa,oui,normal,38,52,liste:614
+chiens_de_paille,Chiens de Paille,FR,,rap_fr,,,63,68,70,267523,16,,oui,bourreau,48,58,liste:615
+carre_rouge,Carré Rouge,FR,,rap_fr,,,69,72,75,286597,19,defjamfr,oui,bourreau,67,57,liste:616
+eths,Eths,FR,,metal,,,67,72,80,228288,17,,oui,lazy,53,59,liste:617
+watcha,Watcha,FR,,rap_fr,,,77,80,82,971466,32,92i,oui,normal,64,31,liste:618
+enhancer,Enhancer,FR,,rap_fr,,,69,73,81,409780,35,,oui,normal,75,39,liste:619
+pleymo,Pleymo,FR,,metal,,,67,71,80,290152,19,fic_enfer,oui,oiseau_de_nuit,39,32,liste:620
+lofofora,Lofofora,FR,,metal,,,67,72,75,253358,19,,oui,normal,75,46,liste:621
+mass_hysteria,Mass Hysteria,FR,,metal,,,77,81,84,634327,34,warner,oui,bourreau,78,45,liste:622
+tagada_jones,Tagada Jones,FR,,rock,,,74,76,78,860703,36,because,oui,par_a_coups,60,44,liste:623
+parabellum,Parabellum,FR,,rock,,,60,67,74,25308,17,,oui,par_a_coups,31,34,liste:624
+les_sheriff,Les Sheriff,FR,,rock,,,53,60,70,49826,15,,oui,par_a_coups,71,69,liste:625
+ludwig_von_88,Ludwig von 88,FR,,rock,,,61,68,80,35834,33,,oui,normal,73,55,liste:626
+les_wampas,Les Wampas,FR,,rock,,,79,83,84,972823,42,warner,oui,oiseau_de_nuit,44,63,liste:627
+little_big,Little Big,RU,,rock,,,56,64,75,6767,13,,oui,normal,84,84,liste:628
+oberkampf,Oberkampf,FR,,rock,,,56,64,65,35697,32,,oui,lazy,50,66,liste:630
+camera_silens,Camera Silens,FR,,rock,,,52,60,63,20241,28,,oui,normal,70,49,liste:631
+komintern_sect,Komintern Sect,FR,,rock,,,53,61,63,13006,17,,oui,normal,31,51,liste:632
+rene_biname,René Binamé,FR,,rock,,,63,70,83,6069,20,,oui,lazy,80,76,liste:633
+brigada_flores_magon,Brigada Flores Magon,FR,,rock,,,65,72,88,5796,20,,oui,oiseau_de_nuit,35,50,liste:634
+haine_brigade,Haine Brigade,FR,,rock,,,60,66,71,5910,22,,oui,normal,77,34,liste:635
+guerre_froide,Guerre Froide,FR,,rock,,,61,68,86,18168,25,,oui,par_a_coups,31,68,liste:636
+les_cadavres,Les Cadavres,FR,,rock,,,59,65,79,7338,31,,oui,normal,82,48,liste:637
+coitus,Coitus,FR,,rock,,,64,70,86,11718,27,,oui,par_a_coups,36,58,liste:638
+chaos,Chaos,FR,,rock,,,63,70,75,20966,13,,oui,oiseau_de_nuit,50,82,liste:639
+sore,Sore,FR,,rock,,,57,63,67,16978,24,,oui,oiseau_de_nuit,79,37,liste:640
+zebda,Zebda,FR,,rock,,,74,76,79,989982,38,,oui,bourreau,69,74,liste:641
+tryo,Tryo,FR,,reggae,,,70,72,78,726724,39,fic_roots,oui,normal,64,73,liste:642
+sinsemilia,Sinsemilia,FR,,reggae,,,75,78,80,1230382,35,,oui,normal,83,50,liste:643
+les_ogres_de_barback,Les Ogres de Barback,FR,,variete,,,62,66,69,93396,27,,oui,normal,50,58,liste:644
+les_hurlements_d_leo,Les Hurlements d'Léo,FR,,variete,,,71,75,81,51070,36,,oui,normal,58,55,liste:645
+la_rue_ketanou,La Rue Ketanou,FR,,variete,,,66,70,78,140493,35,,oui,normal,59,55,liste:646
+les_tetes_raides,Les Têtes Raides,FR,,variete,,,67,72,73,64545,37,,oui,bourreau,66,78,liste:647
+tetes_de_bois,Têtes de Bois,FR,,variete,,,72,76,83,411028,38,,oui,par_a_coups,40,38,liste:648
+les_ogres,Les Ogres,FR,,variete,,,67,72,74,86952,42,,oui,lazy,69,76,liste:649
+louise_attaque,Louise Attaque,FR,,rock,,,80,83,85,4431867,52,because,oui,normal,42,81,liste:650
+dionysos,Dionysos,FR,,rock,,,72,75,78,2727085,47,fic_cathedrale,oui,normal,70,51,liste:651
+mickey_3d,Mickey 3D,FR,,rock,,,76,78,83,985325,28,,oui,lazy,79,48,liste:652
+matmatah,Matmatah,FR,,rock,,,73,75,79,677094,40,,oui,bourreau,33,42,liste:653
+eiffel,Eiffel,FR,,rock,,,79,83,85,1669173,33,,oui,par_a_coups,46,55,liste:654
+kyo,Kyo,FR,,rock,,,74,77,80,555825,28,,oui,par_a_coups,77,33,liste:655
+superbus,Superbus,FR,,rock,,,71,75,78,922931,27,because,oui,lazy,44,52,liste:656
+bb_brunes,BB Brunes,FR,,rock,,,73,76,80,2392684,44,,oui,lazy,72,67,liste:657
+plastiscines,Plastiscines,FR,,rock,,,64,68,77,133106,34,,oui,par_a_coups,35,82,liste:658
+cocoon,Cocoon,FR,,rock,,,73,76,81,2081463,58,because,oui,bourreau,42,83,liste:659
+stuck_in_the_sound,Stuck in the Sound,FR,,rock,,,72,75,82,141916,24,,oui,oiseau_de_nuit,45,59,liste:660
+the_shoes,The Shoes,FR,,rock,,,67,71,80,59566,31,fic_cathedrale,oui,lazy,32,37,liste:661
+chokebore,Chokebore,FR,,rock,,,74,77,85,174849,20,,oui,lazy,49,37,liste:662
+diabologum,Diabologum,FR,,rock,,,62,66,72,345197,23,,oui,bourreau,33,37,liste:663
+programme,Programme,FR,,rock,,,62,65,68,226595,42,,oui,bourreau,33,76,liste:664
+michel_cloup,Michel Cloup,FR,,rock,,,72,76,81,339298,30,,oui,normal,69,51,liste:665
+experience,Expérience,FR,,rock,,,73,77,85,329110,18,,oui,normal,53,77,liste:666
+pascal_bouaziz,Pascal Bouaziz,FR,,rock,,,62,65,69,207725,40,fic_cathedrale,oui,oiseau_de_nuit,60,49,liste:667
+melanie_pain,Mélanie Pain,FR,,pop,,,69,73,80,233165,19,,oui,oiseau_de_nuit,61,58,liste:668
+nouvelle_vague,Nouvelle Vague,FR,,jazz,,,72,76,80,1516385,48,,oui,oiseau_de_nuit,63,74,liste:669
+marc_collin,Marc Collin,FR,,jazz,,,69,73,74,165852,33,,oui,normal,60,59,liste:670
+olivier_libaux,Olivier Libaux,FR,,jazz,,,64,67,75,141881,28,,oui,lazy,77,65,liste:671
+coralie_clee,Coralie Clée,FR,,jazz,,,70,74,81,178465,33,,oui,bourreau,31,68,liste:672
+camille,Camille,FR,,variete,,,73,75,78,2204761,30,dorplatine,oui,bourreau,60,79,liste:673
+emily_loizeau,Emily Loizeau,FR,,variete,,,68,72,79,171607,18,,oui,par_a_coups,78,32,liste:674
+olivia_ruiz,Olivia Ruiz,FR,,variete,,,80,83,88,720616,42,fic_notebleue,oui,normal,33,52,liste:675
+clarika,Clarika,FR,,variete,,,72,76,79,185585,18,,oui,oiseau_de_nuit,82,72,liste:676
+jeanne_cherhal,Jeanne Cherhal,FR,,variete,,,62,66,72,257434,19,,oui,par_a_coups,42,32,liste:677
+keren_ann,Keren Ann,FR,,variete,,,73,77,78,749895,51,fic_cathedrale,oui,normal,55,47,liste:678
+francoiz_breut,Françoiz Breut,FR,,variete,,,66,70,72,112040,32,,oui,normal,77,74,liste:679
+dominique_a,Dominique A,FR,,variete,,,81,83,87,2579524,30,fic_cathedrale,oui,bourreau,43,37,liste:680
+miossec,Miossec,FR,,variete,,,71,74,80,1007126,57,fic_cathedrale,oui,normal,37,36,liste:681
+arno,Arno,BE,,variete,,,75,78,84,1556519,46,fic_cathedrale,oui,bourreau,74,48,liste:682
+alain_bashung,Alain Bashung,FR,,variete,,,78,80,83,1769483,34,,oui,lazy,76,48,liste:683
+serge_gainsbourg,Serge Gainsbourg,FR,,variete,,,89,91,93,7035226,74,fic_cathedrale,oui,normal,32,55,liste:684
+jacques_dutronc,Jacques Dutronc,FR,,variete,,,84,87,91,5568019,54,fic_notebleue,oui,lazy,36,45,liste:685
+francoise_hardy,Françoise Hardy,FR,,variete,,,75,79,80,1035555,43,,oui,par_a_coups,73,60,liste:686
+france_gall,France Gall,FR,,variete,,,75,78,82,1191520,53,fic_notebleue,oui,bourreau,41,78,liste:687
+michel_berger,Michel Berger,FR,,variete,,,75,79,81,879905,59,,oui,normal,59,52,liste:688
+veronique_sanson,Véronique Sanson,FR,,variete,,,80,82,83,1897491,33,,oui,lazy,63,72,liste:689
+michel_polnareff,Michel Polnareff,FR,,variete,,,72,76,81,2074234,50,,oui,lazy,33,46,liste:690
+christophe,Christophe,FR,,variete,,,73,77,81,2078731,45,,oui,normal,49,38,liste:691
+julien_clerc,Julien Clerc,FR,,variete,,,75,77,82,583295,45,,oui,lazy,41,44,liste:692
+maxime_le_forestier,Maxime Le Forestier,FR,,variete,,,76,79,84,505777,57,,oui,normal,42,48,liste:693
+francis_cabrel,Francis Cabrel,FR,,variete,,,83,84,87,11394856,58,dorplatine,oui,lazy,81,39,liste:694
+renaud,Renaud,FR,,variete,,,87,88,91,15787903,46,dorplatine,oui,normal,56,40,liste:695
+telephone,Téléphone,FR,,rock,,,87,89,92,14466924,56,fic_cathedrale,oui,oiseau_de_nuit,77,81,liste:696
+trust,Trust,FR,,rock,,,73,75,77,790649,40,fic_cathedrale,oui,normal,77,57,liste:697
+ange,Ange,FR,,rock,,concept,62,68,69,5784,16,,oui,lazy,33,65,liste:698
+magma,Magma,FR,,rock,,concept,72,76,79,2513303,53,xl,oui,lazy,48,76,liste:699
+gong,Gong,FR,,rock,,concept,55,63,80,15895,14,,oui,bourreau,43,58,liste:700
+shylock,Shylock,FR,,rock,,concept,56,63,72,12267,14,,oui,normal,62,41,liste:701
+pulsar,Pulsar,FR,,rock,,concept,59,66,69,22766,18,,oui,par_a_coups,51,58,liste:702
+atoll,Atoll,FR,,rock,,concept,59,65,78,26783,33,,oui,bourreau,55,47,liste:703
+mona_lisa,Mona Lisa,FR,,rock,,concept,61,67,77,33096,29,,oui,normal,74,70,liste:704
+clearlight,Clearlight,FR,,rock,,concept,54,61,72,13707,20,,oui,lazy,83,73,liste:705
+wapassou,Wapassou,FR,,rock,,concept,61,68,72,21880,15,,oui,bourreau,84,78,liste:706
+art_zoyd,Art Zoyd,FR,,rock,,concept,59,65,75,8670,12,,oui,bourreau,74,38,liste:707
+univers_zero,Univers Zero,FR,,rock,,concept,57,64,67,9492,32,,oui,normal,47,59,liste:708
+present,Present,FR,,rock,,concept,65,73,80,44701,29,,oui,lazy,72,49,liste:709
+aksak_maboul,Aksak Maboul,FR,,rock,,concept,56,63,70,25407,28,,oui,bourreau,72,79,liste:710
+cos,Cos,FR,,rock,,concept,59,66,81,28701,14,,oui,oiseau_de_nuit,48,69,liste:711
+julverne,Julverne,FR,,rock,,concept,57,64,82,8734,27,,oui,normal,55,70,liste:712
+cro_magnon,Cro Magnon,FR,,rock,,concept,63,70,76,11353,23,,oui,lazy,65,72,liste:713
+heldon,Heldon,FR,,rock,,concept,65,73,79,7374,17,,oui,par_a_coups,67,46,liste:714
+richard_pinhas,Richard Pinhas,FR,,rock,,concept,60,68,77,32376,33,,oui,lazy,54,59,liste:715
+dashiell_hedayat,Dashiell Hedayat,FR,,rock,,concept,62,70,75,9131,19,,oui,normal,48,76,liste:716
+barricade,Barricade,FR,,rock,,concept,58,66,70,30509,34,,oui,normal,42,74,liste:717
+catharsis,Catharsis,FR,,rock,,concept,63,69,73,25109,12,,oui,normal,43,82,liste:718
+moving_gelatine_plates,Moving Gelatine Plates,FR,,rock,,concept,63,69,71,49337,33,,oui,bourreau,73,49,liste:719
+zoo,Zoo,FR,,rock,,concept,54,60,74,20716,27,,oui,normal,78,43,liste:720
+tairo,Taïro,FR,,reggae,,,72,75,85,291510,43,,oui,lazy,45,83,liste:721
+bob_marley,Bob Marley,JM,,reggae,,,90,91,94,47181696,60,fic_roots,oui,normal,64,53,liste:722
+peter_tosh,Peter Tosh,JM,,reggae,,,77,80,82,2294196,58,,oui,oiseau_de_nuit,64,70,liste:723
+bunny_wailer,Bunny Wailer,JM,,reggae,,,66,69,76,102106,33,,oui,normal,79,81,liste:724
+burning_spear,Burning Spear,JM,,reggae,,,66,71,74,65759,18,,oui,lazy,44,56,liste:725
+jimmy_cliff,Jimmy Cliff,JM,,reggae,,,71,74,79,521954,27,fic_roots,oui,normal,65,38,liste:726
+toots_and_the_maytals,Toots and the Maytals,JM,,reggae,,,62,66,68,196147,39,,oui,normal,52,45,liste:727
+desmond_dekker,Desmond Dekker,JM,,reggae,,,69,72,79,128796,21,,oui,par_a_coups,67,32,liste:728
+alpha_blondy,Alpha Blondy,FR,,reggae,,,72,75,77,973461,28,fic_roots,oui,bourreau,31,62,liste:729
+tiken_jah_fakoly,Tiken Jah Fakoly,FR,,reggae,,,75,78,82,2469646,27,fic_roots,oui,bourreau,30,61,liste:730
+manu_chao,Manu Chao,FR,,reggae,,,86,88,89,6342998,66,fic_roots,oui,par_a_coups,62,75,liste:731
+groundation,Groundation,US,,reggae,,,73,76,80,66519,24,fic_roots,oui,oiseau_de_nuit,56,73,liste:732
+dub_inc,Dub Inc,FR,,reggae,,,77,80,85,980587,28,,oui,lazy,50,66,liste:733
+raggasonic,Raggasonic,FR,,reggae,,,70,73,81,183470,20,,oui,normal,76,60,liste:734
+pierpoljak,Pierpoljak,FR,,reggae,,,65,69,73,168037,44,,oui,normal,77,81,liste:735
+tonton_david,Tonton David,FR,,reggae,,,63,67,68,339262,33,,oui,normal,78,62,liste:736
+nuttea,Nuttea,FR,,reggae,,,64,68,76,342874,37,,oui,normal,77,70,liste:737
+krys,Krys,FR,,reggae,,,79,82,83,625862,56,,oui,normal,54,39,liste:738
+admiral_t,Admiral T,FR,,reggae,,,80,83,89,1661207,33,fic_roots,oui,oiseau_de_nuit,81,32,liste:739
+yaniss_odua,Yaniss Odua,FR,,reggae,,,72,77,86,68768,27,fic_roots,oui,normal,84,30,liste:740
+sael,Saël,FR,,reggae,,,73,75,80,2599785,51,,oui,par_a_coups,53,77,liste:741
+natty_jean,Natty Jean,FR,,reggae,,,62,67,77,181649,22,,oui,bourreau,61,79,liste:742
+rida,Rida,FR,,reggae,,,72,76,80,57336,24,,oui,oiseau_de_nuit,57,83,liste:743
+danakil,Danakil,FR,,reggae,,,78,81,87,968099,29,fic_roots,oui,bourreau,60,81,liste:744
+biga_ranx,Biga Ranx,FR,,reggae,,,80,83,87,1700163,35,fic_roots,oui,normal,39,47,liste:745
+brain_damage,Brain Damage,FR,,reggae,,,74,77,81,981834,47,,oui,par_a_coups,37,40,liste:746
+high_tone,High Tone,FR,,reggae,,,77,79,81,1975494,34,fic_roots,oui,oiseau_de_nuit,48,45,liste:747
+ez3kiel,Ez3kiel,FR,,reggae,,,61,69,72,8484,17,,oui,normal,32,37,liste:748
+improvisators_dub,Improvisators Dub,FR,,reggae,,,54,62,80,9620,28,,oui,oiseau_de_nuit,31,81,liste:749
+zenzile,Zenzile,FR,,reggae,,,55,62,78,14734,11,,oui,par_a_coups,63,58,liste:750
+kaly_live_dub,Kaly Live Dub,FR,,reggae,,,58,66,76,8428,17,,oui,normal,74,73,liste:751
+manudigital,Manudigital,FR,,reggae,,,80,83,88,1872002,39,,oui,normal,77,69,liste:752
+stand_high_patrol,Stand High Patrol,FR,,reggae,,,62,69,83,14510,13,,oui,normal,83,80,liste:753
+pupajim,Pupajim,FR,,reggae,,,57,64,77,12937,30,,oui,bourreau,85,73,liste:754
+iration_steppas,Iration Steppas,US,,reggae,,,54,61,69,7869,32,,oui,lazy,37,65,liste:755
+king_shiloh,King Shiloh,US,,reggae,,,60,67,71,5312,24,,oui,normal,36,46,liste:756
+mungo_s_hi_fi,Mungo's Hi Fi,US,,reggae,,,54,61,76,46712,35,,oui,oiseau_de_nuit,61,73,liste:757
+obf,OBF,US,,reggae,,,54,60,66,7656,23,,oui,normal,60,62,liste:758
+aba_shanti_i,Aba Shanti-I,US,,reggae,,,64,72,87,31705,25,,oui,par_a_coups,42,65,liste:759
+jah_shaka,Jah Shaka,US,,reggae,,,55,62,75,10210,14,,oui,normal,73,61,liste:760
+mad_professor,Mad Professor,US,,reggae,,,52,60,66,17636,21,,oui,par_a_coups,62,84,liste:761
+scientist,Scientist,US,,reggae,,,52,59,65,39407,12,,oui,lazy,48,73,liste:762
+king_tubby,King Tubby,JM,,reggae,,,54,61,78,5724,30,,oui,normal,36,67,liste:763
+lee_scratch_perry,Lee Scratch Perry,JM,,reggae,,,72,76,79,1661380,54,,oui,lazy,75,53,liste:764
+augustus_pablo,Augustus Pablo,JM,,reggae,,,56,63,70,10102,32,,oui,normal,84,77,liste:765
+prince_jammy,Prince Jammy,US,,reggae,,,58,66,78,29182,19,,oui,normal,59,80,liste:766
+king_jammy,King Jammy,US,,reggae,,,60,67,83,6314,24,,oui,oiseau_de_nuit,80,68,liste:767
+gussie_clarke,Gussie Clarke,US,,reggae,,,64,69,73,185816,17,,oui,normal,83,68,liste:768
+harry_j,Harry J,US,,reggae,,,71,75,80,60985,40,,oui,lazy,83,85,liste:769
+channel_one,Channel One,US,,reggae,,,62,65,68,204970,19,,oui,lazy,39,64,liste:770
+techniques,Techniques,US,,reggae,,,62,66,71,113886,15,,oui,oiseau_de_nuit,62,32,liste:771
+treasure_isle,Treasure Isle,US,,reggae,,,63,66,70,91557,19,,oui,oiseau_de_nuit,70,46,liste:772
+studio_one,Studio One,US,,reggae,,,63,66,71,246775,16,,oui,par_a_coups,73,44,liste:773
+coxsone_dodd,Coxsone Dodd,US,,reggae,,,62,65,74,293511,21,fic_roots,oui,normal,58,66,liste:774
+duke_reid,Duke Reid,US,,reggae,,,70,75,84,96023,20,fic_roots,oui,bourreau,83,45,liste:775
+prince_buster,Prince Buster,JM,,reggae,,,73,78,85,75838,19,,oui,lazy,80,68,liste:776
+derrick_morgan,Derrick Morgan,US,,reggae,,,74,78,81,221879,42,fic_roots,oui,normal,76,58,liste:777
+laurel_aitken,Laurel Aitken,US,,reggae,,,64,68,77,108857,26,,oui,bourreau,61,67,liste:778
+owen_gray,Owen Gray,US,,reggae,,,63,67,73,84334,37,,oui,oiseau_de_nuit,42,70,liste:779
+wilfred_edwards,Wilfred Edwards,US,,reggae,,,70,74,82,86355,36,,oui,normal,57,84,liste:780
+holy_priest,Holy Priest,FR,,electro,,,71,74,78,54644,15,,oui,oiseau_de_nuit,32,54,liste:781
+carl_cox,Carl Cox,US,,electro,,,79,82,86,2513432,33,xl,oui,bourreau,44,76,liste:782
+sven_vath,Sven Väth,US,,electro,,,79,82,84,2449664,31,,oui,lazy,72,58,liste:783
+richie_hawtin,Richie Hawtin,US,,electro,,,77,81,84,1078014,25,fic_glitch,oui,oiseau_de_nuit,42,64,liste:784
+jeff_mills,Jeff Mills,US,,electro,,,70,73,75,1163382,33,,oui,lazy,43,45,liste:785
+robert_hood,Robert Hood,US,,electro,,,72,77,80,180555,29,,oui,par_a_coups,80,76,liste:786
+dave_clarke,Dave Clarke,US,,electro,,,68,73,79,282118,24,,oui,par_a_coups,68,31,liste:787
+surgeon,Surgeon,US,,electro,,,74,78,86,297995,32,,oui,lazy,37,44,liste:788
+regis,Regis,US,,electro,,,70,73,78,102390,19,,oui,bourreau,83,75,liste:789
+female,Female,US,,electro,,,68,72,79,245748,34,,oui,normal,52,60,liste:790
+british_murder_boys,British Murder Boys,US,,electro,,,65,68,70,101648,19,,oui,oiseau_de_nuit,42,51,liste:791
+paula_temple,Paula Temple,US,,electro,,,62,66,72,86106,30,,oui,bourreau,48,53,liste:792
+rebekah,Rebekah,US,,electro,,,71,75,78,182236,19,,oui,bourreau,66,70,liste:793
+amelie_lens,Amelie Lens,BE,,electro,,,73,75,76,2602660,34,because,oui,lazy,44,82,liste:794
+charlotte_de_witte,Charlotte de Witte,BE,,electro,,,89,90,93,12083614,41,because,oui,normal,75,57,liste:795
+anna,ANNA,US,,electro,,,64,68,78,92969,42,,oui,bourreau,49,81,liste:796
+nina_kraviz,Nina Kraviz,US,,electro,,,72,76,80,832340,37,xl,oui,bourreau,47,32,liste:797
+peggy_gou,Peggy Gou,US,,electro,,,88,89,93,7041775,68,xl,oui,bourreau,55,72,liste:798
+honey_dijon,Honey Dijon,US,,electro,,,62,66,72,144631,36,,oui,normal,40,65,liste:799
+the_black_madonna,The Black Madonna,US,,electro,,,68,71,78,147269,25,fic_glitch,oui,par_a_coups,59,40,liste:800
+nastia,Nastia,US,,electro,,,68,72,73,230881,38,,oui,oiseau_de_nuit,78,42,liste:801
+maceo_plex,Maceo Plex,US,,electro,,,67,71,81,50017,21,,oui,oiseau_de_nuit,39,41,liste:802
+tale_of_us,Tale of Us,US,,electro,,,76,79,82,660393,34,,oui,bourreau,46,48,liste:803
+solomun,Solomun,US,,electro,,,72,74,76,1176584,59,fic_glitch,oui,normal,38,73,liste:804
+dixon,Dixon,US,,electro,,,73,77,83,64874,17,fic_glitch,oui,oiseau_de_nuit,61,41,liste:805
+adam_port,Adam Port,US,,electro,,,74,78,81,471312,42,,oui,normal,71,47,liste:806
+me,&ME,US,,electro,,,64,69,73,274791,34,,oui,oiseau_de_nuit,74,45,liste:807
+rampa,Rampa,US,,electro,,,68,72,82,437917,30,,oui,lazy,75,68,liste:808
+patrice_baumel,Patrice Baumel,US,,electro,,,74,78,82,113368,37,,oui,normal,61,48,liste:809
+fideles,Fideles,US,,electro,,,72,75,85,459336,26,,oui,par_a_coups,46,43,liste:810
+adriatique,Adriatique,US,,electro,,,78,82,85,2877075,39,fic_glitch,oui,lazy,57,36,liste:811
+mind_against,Mind Against,US,,electro,,,65,69,78,388688,17,,oui,bourreau,62,53,liste:812
+artbat,Artbat,US,,electro,,,71,75,80,533288,52,,oui,lazy,34,73,liste:813
+camelphat,CamelPhat,US,,electro,,,72,74,76,1547776,55,fic_glitch,oui,oiseau_de_nuit,51,61,liste:814
+cristoph,Cristoph,US,,electro,,,67,71,79,284101,39,,oui,bourreau,69,41,liste:815
+patrick_topping,Patrick Topping,US,,electro,,,73,77,84,78342,25,xl,oui,par_a_coups,38,62,liste:816
+green_velvet,Green Velvet,US,,electro,,,65,68,72,256174,26,,oui,normal,78,40,liste:817
+felix_da_housecat,Felix da Housecat,US,,electro,,,64,68,76,132039,26,,oui,normal,41,85,liste:818
+paul_kalkbrenner,Paul Kalkbrenner,US,,electro,,,72,74,77,2468839,47,fic_glitch,oui,oiseau_de_nuit,45,67,liste:819
+ellen_allien,Ellen Allien,US,,electro,,,73,77,83,200168,28,,oui,par_a_coups,57,31,liste:820
+ben_klock,Ben Klock,US,,electro,,,63,67,76,113839,17,,oui,oiseau_de_nuit,46,75,liste:821
+marcel_dettmann,Marcel Dettmann,US,,electro,,,73,77,82,468398,20,,oui,normal,31,59,liste:822
+len_faki,Len Faki,US,,electro,,,72,75,77,120882,39,,oui,normal,81,59,liste:823
+dvs1,DVS1,US,,electro,,,65,70,78,80008,43,fic_glitch,oui,normal,60,75,liste:824
+oscar_mulero,Oscar Mulero,US,,electro,,,67,71,79,267868,33,,oui,lazy,49,57,liste:825
+tommy_four_seven,Tommy Four Seven,US,,electro,,,64,69,76,416688,31,,oui,normal,31,71,liste:826
+blawan,Blawan,US,,electro,,,73,78,82,459909,26,,oui,normal,62,77,liste:827
+paranoid_london,Paranoid London,US,,electro,,,68,72,75,333235,32,fic_glitch,oui,lazy,55,60,liste:828
+silent_servant,Silent Servant,US,,electro,,,67,71,80,77123,29,fic_glitch,oui,bourreau,70,47,liste:829
+ancient_methods,Ancient Methods,US,,electro,,,72,76,80,75915,32,,oui,par_a_coups,41,67,liste:830
+snorunt,snorunt,FR,,hyperpop,,viral,62,68,83,7082,23,,oui,normal,85,63,liste:831
+miaooss,miaooss!!,FR,,hyperpop,,viral,58,66,84,12013,20,,oui,bourreau,71,59,liste:832
+tkkf,TKKF,FR,,hyperpop,,viral,54,62,76,6043,24,,oui,lazy,42,44,liste:834
+55asky,55asky,FR,,hyperpop,,viral,64,71,81,6043,24,,oui,normal,52,52,liste:835
+243red,243red,FR,,hyperpop,,viral,53,60,66,21862,19,,oui,normal,42,69,liste:836
+sekkin_nedim,Sekkin Nedim,FR,,hyperpop,,viral,59,67,81,5156,33,,oui,oiseau_de_nuit,70,76,liste:837
+oklou,Oklou,FR,,hyperpop,,viral,75,78,82,514347,60,opium,oui,oiseau_de_nuit,56,71,liste:838
+gemroz,Gemroz,FR,,hyperpop,,viral,65,72,77,8750,20,,oui,par_a_coups,39,35,liste:840
+0ne0,0ne0,FR,,hyperpop,,viral,59,65,75,11176,34,,oui,normal,51,81,liste:841
+6arelyhuman,6arelyhuman,US,,hyperpop,,viral,63,69,85,6972,20,,oui,par_a_coups,36,56,liste:842
+hatsune_miku,hatsune miku,US,,hyperpop,,viral,87,89,91,9160181,55,opium,oui,normal,45,61,liste:843
+romance_planet,romance planet,US,,hyperpop,,viral,53,60,61,14554,25,,oui,oiseau_de_nuit,68,56,liste:844
+sebii,sebii,US,,hyperpop,,viral,58,65,76,14479,34,,oui,normal,75,32,liste:845
+umru,umru,US,,hyperpop,,viral,59,66,83,7470,21,,oui,normal,40,36,liste:846
+danny_l_harle,danny l harle,US,,hyperpop,,viral,55,63,74,10064,13,,oui,normal,33,35,liste:847
+a_g_cook,a. g. cook,US,,hyperpop,,viral,73,77,82,1003772,58,opium,oui,lazy,68,43,liste:848
+hyperpotions,hyperpotions,US,,hyperpop,,viral,59,65,69,6948,11,,oui,par_a_coups,47,53,liste:849
+alice_gas,alice gas,US,,hyperpop,,viral,54,60,77,5112,13,,oui,par_a_coups,45,66,liste:851
+brakence,brakence,US,,hyperpop,,viral,72,74,77,1325658,49,fic_glitch,oui,oiseau_de_nuit,71,39,liste:854
+midwxst,midwxst,US,,hyperpop,,viral,79,82,87,716874,54,,oui,normal,54,32,liste:855
+slayyyter,slayyyter,US,,hyperpop,,viral,74,77,81,1322277,28,opium,oui,normal,58,73,liste:856
+kim_petras,kim petras,US,,hyperpop,,viral,82,84,88,3263721,56,opium,oui,bourreau,76,46,liste:857
+dorian_electra,dorian electra,US,,hyperpop,,viral,75,77,80,2437562,52,fic_glitch,oui,lazy,78,70,liste:858
+lil_aaron,lil aaron,US,,hyperpop,,viral,52,59,67,11300,18,,oui,bourreau,40,41,liste:859
+food_house,food house,US,,hyperpop,,viral,57,64,80,46477,15,,oui,lazy,71,68,liste:860
+osquinn,osquinn,US,,hyperpop,,viral,56,63,75,28561,30,,oui,normal,79,44,liste:861
+p4rkr,p4rkr,US,,hyperpop,,viral,60,67,82,18698,33,,oui,oiseau_de_nuit,69,53,liste:862
+lucas,lucas,US,,hyperpop,,viral,56,63,73,34166,14,,oui,normal,52,48,liste:863
+aldn,aldn,US,,hyperpop,,viral,56,63,74,8457,21,,oui,par_a_coups,43,70,liste:866
+kmoe,kmoe,US,,hyperpop,,viral,58,65,69,6723,27,,oui,oiseau_de_nuit,37,62,liste:867
+sigilkore_artists,sigilkore artists,US,,hyperpop,,viral,54,62,78,16725,22,,oui,lazy,59,65,liste:868
+cyprien,Cyprien,FR,,variete,,viral;charisme,75,77,81,1701846,31,,oui,normal,80,38,liste:869
+norman,Norman,FR,,variete,,viral;charisme,71,74,77,1062721,56,,oui,par_a_coups,31,44,liste:870
+squeezie,Squeezie,FR,,variete,,viral;charisme,89,91,93,5439427,53,fic_notebleue,oui,par_a_coups,82,59,liste:871
+mister_v,Mister V,FR,,variete,,viral;charisme,82,84,88,12934977,69,fic_notebleue,oui,normal,59,67,liste:872
+jean_fils,Jean Fils,FR,,variete,,viral;charisme,64,69,73,115029,23,fic_notebleue,oui,normal,32,45,liste:873
+inoxtag,Inoxtag,FR,,variete,,viral;charisme,80,82,86,677037,50,dorplatine,oui,normal,39,74,liste:874
+mcfly_et_carlito,Mcfly et Carlito,FR,,variete,,viral;charisme,79,82,86,886113,53,fic_cathedrale,oui,par_a_coups,33,48,liste:875
+pv_nova,PV Nova,FR,,variete,,viral;charisme,72,77,82,266212,36,,oui,bourreau,45,67,liste:876
+kemmler,Kemmler,FR,,variete,,viral;charisme,67,72,78,58852,38,,oui,bourreau,40,55,liste:877
+natoo,Natoo,FR,,variete,,viral;charisme,80,83,86,924214,38,dorplatine,oui,lazy,62,71,liste:878
+julien_trebault,Julien Trebault,FR,,variete,,viral;charisme,62,65,67,266699,44,,oui,oiseau_de_nuit,31,53,liste:879
+jhon_rachid,Jhon Rachid,FR,,variete,,viral;charisme,67,70,76,103317,18,,oui,bourreau,51,38,liste:880
+max_bird,Max Bird,FR,,variete,,viral;charisme,72,77,79,68139,43,,oui,oiseau_de_nuit,71,69,liste:881
+le_rire_jaune,Le Rire Jaune,FR,,variete,,viral;charisme,73,76,84,315602,44,,oui,normal,56,77,liste:882
+andy_raconte,Andy Raconte,FR,,variete,,viral;charisme,68,72,76,64093,38,,oui,oiseau_de_nuit,76,80,liste:883
+fabien_cravatte,Fabien Cravatte,FR,,variete,,viral;charisme,64,68,74,488743,36,fic_notebleue,oui,par_a_coups,74,69,liste:884
+akim,Akim,FR,,variete,,viral;charisme,68,73,79,227041,25,fic_cathedrale,oui,normal,43,66,liste:885
+kevin_razy,Kevin Razy,FR,,variete,,viral;charisme,70,74,82,101103,22,,oui,par_a_coups,79,63,liste:886
+roman_frayssinet,Roman Frayssinet,FR,,variete,,viral;charisme,72,76,81,118154,26,fic_notebleue,oui,lazy,58,66,liste:887
+fary,Fary,FR,,variete,,viral;charisme,70,74,83,55185,33,,oui,bourreau,39,32,liste:888
+shirley_souagnon,Shirley Souagnon,FR,,variete,,viral;charisme,71,75,82,411797,20,,oui,normal,45,76,liste:889
+thomas_vdb,Thomas VDB,FR,,variete,,viral;charisme,71,75,80,79719,20,,oui,bourreau,81,47,liste:890
+meeko,meeko,FR,,pop,,viral,53,60,69,28788,30,,oui,oiseau_de_nuit,41,74,liste:891
+wolfram,wolfram,FR,,pop,,viral,62,69,73,8775,15,,oui,normal,79,73,liste:892
+mcpao,mcpao,FR,,pop,,viral,58,64,81,5182,13,,oui,lazy,47,43,liste:893
+brayano,brayano,FR,,pop,,viral,54,61,66,26517,28,,oui,normal,33,33,liste:894
+tengazala,tengazala,FR,,pop,,viral,60,68,78,23550,23,,oui,lazy,78,39,liste:895
+angelaetdjoofficiel,angelaetdjoofficiel,FR,,pop,,viral,64,71,81,8986,31,,oui,par_a_coups,31,33,liste:896
+luied,luied_,FR,,pop,,viral,53,60,64,5720,27,,oui,normal,84,33,liste:897
+lekho,lekho,FR,,pop,,viral,58,65,79,16863,34,,oui,lazy,62,60,liste:898
+marcuslovelyofficiel,marcuslovelyofficiel,FR,,pop,,viral,64,70,79,8382,15,,oui,normal,80,71,liste:899
+mehdy_vonti,mehdy vonti,FR,,pop,,viral,53,60,70,14570,11,,oui,bourreau,38,53,liste:900
+zacky_to_baddies,zacky to baddies,FR,,pop,,viral,55,61,79,28875,21,,oui,oiseau_de_nuit,37,61,liste:901
+bts,BTS,KR,,pop,,,92,95,98,34139552,77,fic_seoul,oui,par_a_coups,79,33,liste:902
+stray_kids,Stray Kids,KR,,pop,,,89,91,94,71530286,79,xo,oui,bourreau,83,36,liste:903
+newjeans,NewJeans,KR,,pop,,,82,84,86,5456220,64,fic_seoul,oui,normal,73,85,liste:904
+ive,IVE,KR,,pop,,,88,90,93,3715730,48,fic_seoul,oui,oiseau_de_nuit,75,65,liste:905
+aespa,aespa,KR,,pop,,,86,88,91,13260185,62,xo,oui,par_a_coups,32,72,liste:906
+le_sserafim,Le Sserafim,KR,,pop,,,79,80,83,18486648,62,fic_seoul,oui,normal,42,54,liste:907
+itzy,Itzy,KR,,pop,,,86,88,92,16544805,54,fic_seoul,oui,par_a_coups,34,70,liste:908
+twice,Twice,KR,,pop,,,79,81,82,7805569,41,fic_seoul,oui,normal,33,31,liste:909
+red_velvet,Red Velvet,KR,,pop,,,84,86,89,5652276,41,fic_seoul,oui,normal,70,56,liste:910
+davido,Davido,NG,,afro,,,85,87,88,4837642,60,rec118,oui,lazy,35,75,liste:913
+fireboy_dml,Fireboy DML,NG,,afro,,,78,81,84,3580600,74,fic_roots,oui,normal,65,58,liste:916
+ckay,CKay,NG,,afro,,,86,88,89,12507315,50,0207,oui,bourreau,43,61,liste:917
+omah_lay,Omah Lay,NG,,afro,,,80,82,84,5468217,43,rec118,oui,oiseau_de_nuit,39,52,liste:918
+joeboy,Joeboy,NG,,afro,,,77,79,82,1184315,30,,oui,normal,53,51,liste:920
+miles_davis,Miles Davis,US,,jazz,,voix,86,87,89,7629479,63,universal,oui,normal,79,81,liste:921
+john_coltrane,John Coltrane,US,,jazz,,voix,77,81,86,825076,45,,oui,bourreau,44,36,liste:922
+charlie_parker,Charlie Parker,US,,jazz,,voix,78,81,87,1861644,42,universal,oui,lazy,47,82,liste:923
+duke_ellington,Duke Ellington,US,,jazz,,voix,77,80,84,1550467,35,fic_notebleue,oui,bourreau,54,76,liste:924
+louis_armstrong,Louis Armstrong,US,,jazz,,voix,88,90,92,4082794,75,universal,oui,lazy,52,53,liste:925
+thelonious_monk,Thelonious Monk,US,,jazz,,voix,77,79,85,922921,47,universal,oui,bourreau,71,42,liste:926
+bill_evans,Bill Evans,US,,jazz,,voix,71,74,77,698750,28,,oui,normal,60,66,liste:927
+charles_mingus,Charles Mingus,US,,jazz,,voix,68,72,80,324049,16,,oui,lazy,30,31,liste:928
+ornette_coleman,Ornette Coleman,US,,jazz,,voix,62,65,69,350366,21,fic_notebleue,oui,lazy,73,62,liste:929
+sun_ra,Sun Ra,US,,jazz,,voix,69,72,82,469257,22,,oui,normal,72,37,liste:930
+beethoven,Beethoven,DE,,jazz,,concept,80,82,84,8544254,52,fic_notebleue,oui,par_a_coups,75,39,liste:931
+mozart,Mozart,AT,,jazz,,concept,88,91,93,10917795,40,fic_notebleue,oui,bourreau,76,31,liste:932
+bach,Bach,DE,,jazz,,concept,84,86,88,13981346,53,universal,oui,lazy,75,50,liste:933
+chopin,Chopin,PL,,jazz,,concept,85,87,88,6698946,49,universal,oui,lazy,80,71,liste:934
+tchaikovsky,Tchaikovsky,RU,,jazz,,concept,76,79,80,1450239,47,,oui,bourreau,82,43,liste:935
+vivaldi,Vivaldi,IT,,jazz,,concept,76,79,84,2065855,35,universal,oui,oiseau_de_nuit,82,31,liste:936
+handel,Handel,US,,jazz,,concept,73,78,84,54820,27,,oui,lazy,84,59,liste:937
+brahms,Brahms,US,,jazz,,concept,72,76,79,172396,38,universal,oui,bourreau,34,74,liste:938
+schubert,Schubert,US,,jazz,,concept,65,68,71,127374,17,,oui,bourreau,58,39,liste:939
+debussy,Debussy,US,,jazz,,concept,76,80,82,1455846,50,universal,oui,bourreau,73,30,liste:940
+hans_zimmer,Hans Zimmer,US,,jazz,,concept,94,97,99,48582685,81,universal,oui,bourreau,32,74,liste:941
+john_williams,John Williams,US,,jazz,,concept,86,87,90,11336402,50,universal,oui,bourreau,78,42,liste:942
+ennio_morricone,Ennio Morricone,IT,,jazz,,concept,80,83,86,3420566,42,universal,oui,normal,71,47,liste:943
+howard_shore,Howard Shore,US,,jazz,,concept,78,81,85,611269,30,universal,oui,normal,44,66,liste:944
+thomas_newman,Thomas Newman,US,,jazz,,concept,79,81,83,2743640,32,universal,oui,lazy,60,57,liste:945
+danny_elfman,Danny Elfman,US,,jazz,,concept,87,90,93,5721847,58,universal,oui,lazy,44,32,liste:946
+alan_silvestri,Alan Silvestri,US,,jazz,,concept,72,74,78,2571889,60,,oui,par_a_coups,31,50,liste:947
+james_horner,James Horner,US,,jazz,,concept,75,78,84,2944987,28,,oui,normal,82,75,liste:948
+jerry_goldsmith,Jerry Goldsmith,US,,jazz,,concept,72,75,78,254978,35,,oui,lazy,84,61,liste:949
+bernard_herrmann,Bernard Herrmann,US,,jazz,,concept,64,68,72,52720,42,,oui,bourreau,48,31,liste:950
+david_guetta,David Guetta,US,,electro,,,94,95,98,73935665,75,fic_glitch,oui,lazy,70,72,liste:951
+calvin_harris,Calvin Harris,US,,electro,,,88,90,93,63152394,79,edbanger,oui,lazy,43,71,liste:952
+avicii,Avicii,SE,,electro,,,91,92,93,74159597,75,because,oui,bourreau,43,81,liste:953
+martin_garrix,Martin Garrix,NL,,electro,,,84,86,87,4557317,68,xl,oui,oiseau_de_nuit,33,73,liste:954
+tiesto,Tiësto,NL,,electro,,,88,89,91,5862503,63,xl,oui,lazy,78,75,liste:955
+armin_van_buuren,Armin van Buuren,NL,,electro,,,80,81,82,15358482,68,xl,oui,par_a_coups,44,69,liste:956
+hardwell,Hardwell,NL,,electro,,,85,87,88,8366811,66,because,oui,bourreau,57,72,liste:957
+dimitri_vegas_like_mike,Dimitri Vegas & Like Mike,BE,,electro,,,80,82,85,9288216,47,xl,oui,par_a_coups,58,77,liste:958
+steve_aoki,Steve Aoki,US,,electro,,,89,91,94,13711552,73,xl,oui,normal,81,72,liste:959
+diplo,Diplo,US,,electro,,,88,90,91,6651869,59,because,oui,par_a_coups,61,35,liste:960
+johnny_cash,Johnny Cash,US,,rock,,,79,80,83,17951339,58,warner,oui,oiseau_de_nuit,82,56,liste:961
+dolly_parton,Dolly Parton,US,,rock,,,87,88,91,14501023,48,fic_cathedrale,oui,bourreau,56,54,liste:962
+willie_nelson,Willie Nelson,US,,rock,,,79,81,84,16781285,57,fic_cathedrale,oui,oiseau_de_nuit,68,83,liste:963
+hank_williams,Hank Williams,US,,rock,,,72,76,81,1745974,40,,oui,normal,58,84,liste:964
+patsy_cline,Patsy Cline,US,,rock,,,79,81,86,1098483,44,warner,oui,bourreau,38,84,liste:965
+loretta_lynn,Loretta Lynn,US,,rock,,,66,70,76,495982,19,,oui,bourreau,31,84,liste:966
+merle_haggard,Merle Haggard,US,,rock,,,69,74,76,369650,33,,oui,bourreau,80,47,liste:967
+george_jones,George Jones,US,,rock,,,68,71,79,77748,22,,oui,lazy,81,58,liste:968
+waylon_jennings,Waylon Jennings,US,,rock,,,67,72,80,296285,41,,oui,par_a_coups,38,63,liste:969
+tammy_wynette,Tammy Wynette,US,,rock,,,66,70,73,166909,18,,oui,normal,76,34,liste:970
+frank_sinatra,Frank Sinatra,US,,jazz,,voix,92,94,95,79541722,61,universal,oui,par_a_coups,63,66,liste:971
+ella_fitzgerald,Ella Fitzgerald,US,,jazz,,voix,75,77,79,902165,48,fic_notebleue,oui,normal,85,31,liste:972
+billie_holiday,Billie Holiday,US,,jazz,,voix,78,81,87,612997,35,fic_notebleue,oui,par_a_coups,32,42,liste:973
+sarah_vaughan,Sarah Vaughan,US,,jazz,,voix,69,73,74,398351,16,,oui,normal,60,31,liste:974
+nina_simone,Nina Simone,US,,jazz,,voix,83,84,87,12127247,42,universal,oui,bourreau,39,85,liste:975
+etta_james,Etta James,US,,rnb,,,77,79,82,1539671,44,tde,oui,normal,66,33,liste:976
+aretha_franklin,Aretha Franklin,US,,rnb,,voix,82,83,84,13576989,75,xo,oui,normal,51,83,liste:977
+marvin_gaye,Marvin Gaye,US,,rnb,,voix,87,90,91,14832323,43,tde,oui,lazy,53,82,liste:978
+stevie_wonder,Stevie Wonder,US,,rnb,,voix,84,87,89,14897103,57,tde,oui,par_a_coups,75,55,liste:979
+otis_redding,Otis Redding,US,,rnb,,voix,80,83,85,2987597,31,rec118,oui,oiseau_de_nuit,50,57,liste:980
+the_beatles,The Beatles,US,,rock,,,91,94,96,61780483,63,warner,oui,normal,40,49,liste:981
+the_rolling_stones,The Rolling Stones,US,,rock,,,92,93,96,29703031,76,warner,oui,oiseau_de_nuit,79,55,liste:982
+led_zeppelin,Led Zeppelin,US,,rock,,,87,89,91,44068726,79,warner,oui,oiseau_de_nuit,45,46,liste:983
+pink_floyd,Pink Floyd,US,,rock,,,88,91,93,21241301,73,warner,oui,lazy,47,32,liste:984
+queen,Queen,US,,rock,,,89,91,94,22298308,57,warner,oui,lazy,80,45,liste:985
+ac_dc,AC/DC,US,,rock,,,95,98,99,39294905,57,warner,oui,bourreau,70,72,liste:986
+aerosmith,Aerosmith,US,,rock,,,84,85,88,3614621,66,warner,oui,oiseau_de_nuit,35,46,liste:987
+guns_n_roses,Guns N' Roses,US,,rock,,,88,90,92,83441986,61,warner,oui,lazy,68,32,liste:988
+nirvana,Nirvana,US,,rock,,,88,91,92,28115862,73,warner,oui,oiseau_de_nuit,64,53,liste:989
+pearl_jam,Pearl Jam,US,,rock,,,88,90,92,11588300,50,warner,oui,normal,81,45,liste:990
+coldplay,Coldplay,US,,rock,,,93,95,96,76594754,61,fic_enfer,oui,oiseau_de_nuit,48,72,liste:992
+muse,Muse,US,,rock,,,81,83,86,9039441,55,warner,oui,lazy,42,40,liste:993
+linkin_park,Linkin Park,US,,rock,,,87,88,91,86138385,58,warner,oui,par_a_coups,54,42,liste:994
+green_day,Green Day,US,,rock,,,86,88,90,36347045,82,warner,oui,normal,43,79,liste:995
+blink_182,Blink-182,US,,rock,,,83,85,89,7284251,67,xl,oui,bourreau,48,72,liste:996
+red_hot_chili_peppers,Red Hot Chili Peppers,US,,rock,,,90,92,93,34652357,61,fic_enfer,oui,normal,51,57,liste:997
+foo_fighters,Foo Fighters,US,,rock,,,82,84,87,3042920,43,warner,oui,lazy,60,60,liste:998
+oasis,Oasis,US,,rock,,,83,84,86,10239586,60,because,oui,normal,75,45,liste:999
+blur,Blur,US,,rock,,,78,82,85,1020991,55,xl,oui,normal,72,54,liste:1000
+j_balvin,J Balvin,CO,,latin,,,87,90,92,6985660,65,warner,oui,lazy,48,39,liste:1001
+daddy_yankee,Daddy Yankee,PR,,latin,,,87,90,93,8539034,44,fic_seoul,oui,normal,33,84,liste:1002
+ozuna,Ozuna,PR,,latin,,,86,88,91,19353486,57,fic_cathedrale,oui,bourreau,41,64,liste:1003
+anuel_aa,Anuel AA,PR,,latin,,,82,85,88,6127893,45,because,oui,normal,40,61,liste:1004
+rauw_alejandro,Rauw Alejandro,PR,,latin,,,88,89,93,8665126,69,universal,oui,oiseau_de_nuit,47,33,liste:1005
+feid,Feid,CO,,latin,,,81,82,84,3677835,55,because,oui,lazy,44,80,liste:1006
+myke_towers,Myke Towers,PR,,latin,,,79,82,84,8006374,67,fic_seoul,oui,normal,57,39,liste:1007
+shakira,Shakira,CO,,latin,,,87,89,91,26345346,62,warner,oui,normal,81,79,liste:1008
+maluma,Maluma,CO,,latin,,,81,83,85,3185244,44,warner,oui,normal,64,57,liste:1009
+becky_g,Becky G,US,,latin,,,86,88,89,12437235,59,because,oui,par_a_coups,43,38,liste:1010
+nicky_jam,Nicky Jam,PR,,latin,,,82,85,88,5391720,67,xo,oui,oiseau_de_nuit,40,62,liste:1011
+sech,Sech,PR,,latin,,,72,74,80,935238,59,xo,oui,bourreau,74,59,liste:1012
+quevedo,Quevedo,ES,,latin,,,86,88,90,9961834,71,fic_cathedrale,oui,par_a_coups,71,75,liste:1013
+bizarrap,Bizarrap,AR,,latin,,,86,87,90,5427607,62,universal,oui,oiseau_de_nuit,69,52,liste:1014
+young_miko,Young Miko,PR,,latin,,,72,76,81,2604390,42,,oui,lazy,32,78,liste:1015
+tini,Tini,AR,,latin,,,80,83,88,522084,37,universal,oui,normal,36,32,liste:1016
+arcangel,Arcángel,PR,,latin,,,79,82,86,664123,27,,oui,lazy,65,42,liste:1017
+wisin_yandel,Wisin & Yandel,PR,,latin,,,82,85,89,5211180,73,xo,oui,lazy,60,75,liste:1018
+manuel_turizo,Manuel Turizo,CO,,latin,,,72,76,86,217471,25,because,oui,par_a_coups,40,52,liste:1019
+bad_gyal,Bad Gyal,ES,,latin,,,63,66,69,431796,44,,oui,oiseau_de_nuit,41,44,liste:1020
+natti_natasha,Natti Natasha,DO,,latin,,,73,76,80,292739,16,,oui,par_a_coups,48,66,liste:1021
+farruko,Farruko,PR,,latin,,,71,75,78,245330,29,fic_velours,oui,lazy,36,51,liste:1022

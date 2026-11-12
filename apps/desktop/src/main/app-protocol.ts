@@ -11,7 +11,8 @@ const CONTENT_SECURITY_POLICY = [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self'",
-  `img-src 'self' ${MEDIA_SCHEME}: ${DISCORD_IMAGE_ORIGIN}`,
+  // blob: for the song covers of Melody Tycoon, decoded in the page.
+  `img-src 'self' blob: ${MEDIA_SCHEME}: ${DISCORD_IMAGE_ORIGIN}`,
   `media-src ${MEDIA_SCHEME}:`,
   `connect-src ${MEDIA_SCHEME}:`,
   "font-src 'self'",

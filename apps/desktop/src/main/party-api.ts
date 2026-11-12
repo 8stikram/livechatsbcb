@@ -90,7 +90,7 @@ export const fetchMe = async (accountToken: string, fresh: boolean): Promise<Api
 export const melodyCall = async (
   accountToken: string,
   guildId: string,
-  route: 'view' | 'act' | 'preview',
+  route: 'view' | 'act' | 'preview' | 'covers',
   body: unknown,
 ): Promise<ApiResult<unknown>> => {
   let response: Response | null = null;

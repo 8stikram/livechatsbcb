@@ -1037,7 +1037,7 @@ function start(): void {
     const auth = store.login;
     if (!auth) return { ok: false, error: 'signed_out' };
     if (typeof guildId !== 'string' || !/^\d{17,20}$/.test(guildId)) return { ok: false, error: 'invalid_request' };
-    if (route !== 'view' && route !== 'act' && route !== 'preview') return { ok: false, error: 'invalid_request' };
+    if (route !== 'view' && route !== 'act' && route !== 'preview' && route !== 'covers') return { ok: false, error: 'invalid_request' };
     const result = await partyApi.melodyCall(auth.token, guildId, route, body);
     if (!result.ok && result.error === 'signed_out' && store.login?.token === auth.token) signOut('account_expired');
     return result.ok ? { ok: true, data: result.value } : result;

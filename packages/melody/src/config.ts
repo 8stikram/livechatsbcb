@@ -33,18 +33,19 @@ export const CFG = {
   fatigue: { perSong: 12, recovery: 8, threshold: 70, penalty: 3 },
 
   quality: {
-    weights: { artist: 0.35, producer: 0.2, theme: 0.15, beat: 0.1, studio: 0.1, coherence: 0.1 },
+    // Money helps a little and stops helping fast; the choices (fit, coherence) weigh the most.
+    weights: { artist: 0.35, producer: 0.12, theme: 0.1, beat: 0.08, studio: 0.07, choices: 0.28 },
     baseWidth: 6,
     /** Quality ceiling by number of level-1 choices (0..4). */
-    capByFreeChoices: [99, 99, 78, 68, 62],
-    themeValue: [0, 60, 72, 86],
+    capByFreeChoices: [99, 99, 92, 86, 80],
+    themeValue: [0, 58, 64, 68],
     themePrice: [0, 600, 3_500, 20_000],
-    beatValue: [45, 60, 72, 0],
+    beatValue: [50, 58, 64, 0],
     beatPrice: [0, 400, 3_000, 0],
-    studioValue: [40, 58, 74, 88],
+    studioValue: [50, 57, 62, 66],
     studioPrice: [0, 1_500, 8_000, 40_000],
     studioDelay: [0, 0, 1, 1],
-    producerLevel: [35, 54, 70, 86],
+    producerLevel: [48, 57, 63, 68],
     producerPrice: [0, 1_000, 5_500, 40_000],
   },
 
@@ -64,7 +65,9 @@ export const CFG = {
     decayHit: 0.35,
     catalogFloor: 0.01,
     viralChance: 0.02,
-    singleCooldown: 2,
+    /** One release per artist per week, three per label. */
+    singleCooldown: 1,
+    perLabelWeek: 3,
   },
 
   hype: { decay: 0.92, top10Global: 4, top10Genre: 2, idleTicks: 6, idlePenalty: 3 },

@@ -13,7 +13,10 @@ export const GENRES: Record<GenreId, { name: string; family: GenreFamily; neighb
   variete: { name: 'Variété', family: 'chant', neighbours: ['pop', 'rock'] },
   hyperpop: { name: 'Hyperpop', family: 'machines', neighbours: ['trap', 'electro', 'pop'] },
   electro: { name: 'Électro', family: 'machines', neighbours: ['hyperpop', 'pop'] },
-  rock: { name: 'Rock / Alternatif', family: 'groupe', neighbours: ['pop', 'variete'] },
+  rock: { name: 'Rock / Alternatif', family: 'groupe', neighbours: ['pop', 'variete', 'metal'] },
+  metal: { name: 'Métal', family: 'groupe', neighbours: ['rock'] },
+  reggae: { name: 'Reggae / Dub', family: 'chant', neighbours: ['afro', 'variete'] },
+  jazz: { name: 'Jazz / Classique', family: 'groupe', neighbours: ['rnb', 'variete'] },
 };
 
 export const GENRE_IDS = Object.keys(GENRES) as GenreId[];
@@ -72,6 +75,12 @@ export const BEATS: Beat[] = [
   { id: 'pop_synthe', name: 'Pop synthé', genres: ['pop', 'variete'], themes: ['amour', 'nostalgie', 'motivation'] },
   { id: 'house', name: 'House / French touch', genres: ['electro'], themes: ['danse', 'nuit', 'fete'] },
   { id: 'guitare', name: 'Guitare / Emo', genres: ['rock', 'pop'], themes: ['rupture', 'mental', 'famille'] },
+  { id: 'riff', name: 'Gros riff', genres: ['metal', 'rock'], themes: ['clash', 'mental', 'trahison', 'nuit'] },
+  { id: 'blast', name: 'Blast beat', genres: ['metal'], themes: ['clash', 'spirituel', 'engagement'] },
+  { id: 'roots', name: 'Roots reggae', genres: ['reggae'], themes: ['spirituel', 'engagement', 'soleil', 'detente'] },
+  { id: 'dub', name: 'Dub', genres: ['reggae', 'electro'], themes: ['nuit', 'detente', 'engagement'] },
+  { id: 'jazz_club', name: 'Jazz de club', genres: ['jazz', 'rnb'], themes: ['nuit', 'amour', 'melancolie', 'detente'] },
+  { id: 'orchestre', name: 'Orchestre / Cinéma', genres: ['jazz', 'variete'], themes: ['nostalgie', 'spirituel', 'famille', 'motivation'] },
 ];
 
 export const beatById = (id: string): Beat => {

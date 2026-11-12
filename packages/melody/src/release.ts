@@ -1,36 +1,56 @@
 // What a release does the week it comes out (docs/melody-tycoon/04-sortie-charts-economie.md).
 import { genreAffinity } from './artists.ts';
 import { CFG } from './config.ts';
+import { trendBoost } from './craft.ts';
 import { beatById, coherence } from './data/content.ts';
-import { clamp, type Rng } from './rng.ts';
-import type { Artist, Trends } from './types.ts';
+import { clamp, rngFor, type Rng } from './rng.ts';
+import type { Artist, PromoResult, Song, Trends, World } from './types.ts';
 
 const R = CFG.release;
 
 export interface MarketingOption {
   id: string;
   name: string;
+  /** What it is, in the words of the networks. */
+  note: string;
   cost: number;
-  reach: number;
+  /** Views for each "buzz point" of the artist (see buzzOf). */
+  power: number;
 }
 
-/** Marketing options kept for the first playable version. */
+/** Promo like on the real networks: the views depend on the artist's buzz, not only on the money. */
 export const MARKETING: MarketingOption[] = [
-  { id: 'posts', name: 'Réseaux sociaux — posts simples', cost: 0, reach: 5_000 },
-  { id: 'social_1', name: 'Réseaux sociaux — petite campagne', cost: 500, reach: 20_000 },
-  { id: 'social_2', name: 'Réseaux sociaux — campagne', cost: 3_000, reach: 150_000 },
-  { id: 'social_3', name: 'Réseaux sociaux — grosse campagne', cost: 15_000, reach: 900_000 },
-  { id: 'posters_1', name: 'Affiches', cost: 1_500, reach: 40_000 },
-  { id: 'posters_2', name: 'Affiches — campagne nationale', cost: 10_000, reach: 300_000 },
-  { id: 'clip_1', name: 'Clip vidéo simple', cost: 5_000, reach: 150_000 },
-  { id: 'clip_2', name: 'Clip vidéo soigné', cost: 25_000, reach: 1_000_000 },
-  { id: 'clip_3', name: 'Clip vidéo événement', cost: 120_000, reach: 6_000_000 },
+  { id: 'posts', name: 'Posts Insta & TikTok', note: 'Ton artiste poste lui-même', cost: 0, power: 1 },
+  { id: 'story', name: 'Stories et teasing', note: 'Des extraits avant la sortie', cost: 150, power: 1.5 },
+  { id: 'tiktok_ads', name: 'Pub TikTok', note: 'Le son passe dans les « Pour toi »', cost: 600, power: 3 },
+  { id: 'influence', name: 'Influenceurs', note: 'Des créateurs dansent dessus', cost: 2_000, power: 6 },
+  { id: 'playlist', name: 'Pitch playlists', note: 'Placé dans des playlists', cost: 2_500, power: 6 },
+  { id: 'clip', name: 'Clip YouTube', note: 'Tourné avec les potes', cost: 3_500, power: 8 },
+  { id: 'clip_pro', name: 'Clip pro', note: 'Vrai réalisateur, vrai décor', cost: 15_000, power: 16 },
+  { id: 'affiches', name: 'Affiches en ville', note: 'Dans le métro et les rues', cost: 6_000, power: 7 },
 ];
 
+/** Same id with the old promos of songs scheduled before this update. */
+const OLD: Record<string, string> = { social_1: 'tiktok_ads', social_2: 'influence', social_3: 'influence', posters_1: 'affiches', posters_2: 'affiches', clip_1: 'clip', clip_2: 'clip_pro', clip_3: 'clip_pro' };
+
 export const marketingById = (id: string): MarketingOption => {
-  const option = MARKETING.find((m) => m.id === id);
+  const option = MARKETING.find((m) => m.id === (OLD[id] ?? id));
   if (!option) throw new Error(`unknown marketing option ${id}`);
   return option;
+};
+
+/** The artist's buzz: about how many people see a simple post. Fans count most, hype multiplies. */
+export const buzzOf = (artist: Pick<Artist, 'fans' | 'hype'>): number => Math.round((300 + artist.fans * 0.04) * (1 + artist.hype / 50));
+
+/** The views each promo makes the week of the release. About one in thirty goes viral. */
+export const promoViews = (ids: readonly string[], artist: Pick<Artist, 'fans' | 'hype'>, rng: Rng): Array<{ id: string; views: number; viral: boolean }> => {
+  const buzz = buzzOf(artist);
+  return [...new Set(ids)].map((id) => {
+    const option = marketingById(id);
+    const viral = rng.chance(1 / 30);
+    const luck = clamp(Math.exp(rng.normal() * 0.35), 0.4, 2.5);
+    return { id: option.id, views: Math.round(option.power * buzz * luck * (viral ? rng.range(5, 15) : 1)), viral };
+  });
 };
 
 /** How well the song fits what the public wants right now, 0.5 to 1.5. */
@@ -100,4 +120,18 @@ export const hitWord = (hitScore: number): string => {
   if (hitScore < 70) return 'Succès';
   if (hitScore < 90) return 'Hit';
   return 'Carton';
+};
+
+/** What a release does its first week: shared by the weekly tick and the tutorial's forecast. */
+export const releaseWeek = (world: World, song: Song, artist: Artist, tick: number, rivals: number): { week: FirstWeek; promo: PromoResult[] } => {
+  const feat = song.featArtistId ? world.artists[song.featArtistId] : undefined;
+  const promo = song.marketingIds ? promoViews(song.marketingIds, artist, rngFor(world.seed, tick, `promo:${song.id}`)) : [];
+  const reach = song.marketingIds ? promo.reduce((sum, p) => sum + p.views, 0) : song.marketingReach;
+  const genres = [artist.genre, ...beatById(song.beatId).genres];
+  const fit = clamp(publicFit(artist, song.themeId, song.beatId, world.trends) * trendBoost(world, tick, genres, song.themeId, song.beatId), 0.5, 2.2);
+  const week = firstWeek(
+    { quality: song.quality, fans: artist.fans, featFans: feat?.fans ?? 0, hype: artist.hype, fit, marketingReach: reach, rivals },
+    rngFor(world.seed, tick, song.id),
+  );
+  return { week, promo };
 };

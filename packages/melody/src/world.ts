@@ -6,6 +6,7 @@ import { CATALOG_ARTISTS, CATALOG_LABELS } from './data/catalog.gen.ts';
 import { BEATS, THEMES } from './data/content.ts';
 import { artistValue, contractOf, debtOf, fameTier, rosterOf } from './economy.ts';
 import { estimateQuality, rollQuality, songCost, songDelay, songEnergy, type SongPlan } from './quality.ts';
+import { CRAFT, experienceBonus, isPerfect, isSecret, riskOf, rollSurprise } from './craft.ts';
 import { marketingById } from './release.ts';
 import { clamp, rngFor } from './rng.ts';
 import type { Artist, Contract, Label, Producer, Song, SongLevels, Trends, World } from './types.ts';
@@ -153,6 +154,10 @@ export interface SongRequest {
   extraDelay?: number;
   moraleDelta?: number;
   energyDelta?: number;
+  /** Gambles taken in the studio: a surprise gets more likely. */
+  gambles?: number;
+  /** No flop possible (the guided first song). */
+  safe?: boolean;
 }
 
 /** Creates a song: pays, spends energy and freezes the quality. */
@@ -179,8 +184,17 @@ export const createSong = (world: World, labelId: string, request: SongRequest):
     feat: feat ? { gen: generalRating(feat) } : null,
     eventBonus: request.eventBonus ?? 0,
     randomChoices: request.randomChoices ?? 0,
+    experience: experienceBonus(world, artist),
   };
-  const quality = rollQuality(estimateQuality(plan), rngFor(world.seed, world.tick, `song${world.nextId}`));
+  const estimate = estimateQuality(plan);
+  const rng = rngFor(world.seed, world.tick, `song${world.nextId}`);
+  // What the studio cannot see: a secret combo, a perfect match, and the surprise of the release.
+  const secret = isSecret(world, request.themeId, request.beatId);
+  const perfect = isPerfect(artist, request.themeId, request.beatId);
+  const surprise = rollSurprise(rng, riskOf(artist, request.themeId, request.beatId) + (request.gambles ?? 0), artist);
+  if (request.safe && surprise.kind === 'flop') surprise.kind = null;
+  const hidden = (secret ? CRAFT.secretBonus : 0) + (perfect ? CRAFT.perfectBonus : 0) + (surprise.kind ? surprise.delta : 0);
+  const quality = Math.round(clamp(rollQuality(estimate, rng) + hidden, 1, surprise.kind === 'boom' ? 99 : Math.min(99, estimate.cap + (secret ? CRAFT.secretBonus : 0))));
 
   label.cash -= cost;
   artist.energy = clamp(artist.energy - energy + (request.energyDelta ?? 0), 0, 100);
@@ -211,10 +225,29 @@ export const createSong = (world: World, labelId: string, request: SongRequest):
     peakGlobal: null,
     peakGenre: null,
     weeksOut: 0,
+    qualityMin: estimate.min,
+    qualityMax: estimate.max,
+    surprise: surprise.kind,
+    combo: secret ? 'secret' : perfect ? 'perfect' : null,
+    cover: false,
+    history: [],
   };
   world.nextId += 1;
   world.songs.push(song);
   return song;
+};
+
+/** Why a song of this artist cannot come out that week, or null: one per artist, three per label. */
+export const releaseBlocked = (world: World, labelId: string, artistId: string, releaseTick: number): string | null => {
+  const artist = world.artists[artistId];
+  const out = world.songs.filter((s) => (s.state === 'scheduled' || s.state === 'released') && s.releaseTick === releaseTick);
+  if (out.some((s) => s.artistId === artistId) || (artist && artist.lastReleaseTick === releaseTick)) {
+    return `${artist?.name ?? 'Cet artiste'} sort déjà un son cette semaine-là.`;
+  }
+  if (out.filter((s) => s.labelId === labelId).length >= CFG.release.perLabelWeek) {
+    return `Déjà ${CFG.release.perLabelWeek} sorties cette semaine-là pour ton label.`;
+  }
+  return null;
 };
 
 /** Schedules a single. The marketing is paid now. */
@@ -225,12 +258,8 @@ export const scheduleRelease = (world: World, labelId: string, songId: string, r
   if (releaseTick < song.availableTick) return fail("Ce son n'est pas encore prêt pour cette semaine.");
   if (releaseTick > world.tick + 8) return fail('Une sortie se programme au plus 8 semaines à l’avance.');
   const artist = artistOf(world, song.artistId);
-  const busy = world.songs.some(
-    (s) => s.artistId === artist.id && s.state === 'scheduled' && Math.abs((s.releaseTick ?? 0) - releaseTick) < CFG.release.singleCooldown,
-  );
-  if (busy || releaseTick - artist.lastReleaseTick < CFG.release.singleCooldown) {
-    return fail(`${artist.name} a déjà une sortie trop proche de cette semaine.`);
-  }
+  const blocked = releaseBlocked(world, labelId, artist.id, releaseTick);
+  if (blocked) return fail(blocked);
   const options = [...new Set(marketingIds)].map(marketingById);
   const cost = options.reduce((sum, o) => sum + o.cost, 0);
   if (cost > label.cash) return fail('Pas assez de cash pour ce marketing.');
@@ -238,7 +267,9 @@ export const scheduleRelease = (world: World, labelId: string, songId: string, r
   song.state = 'scheduled';
   song.releaseTick = releaseTick;
   song.marketingCost = cost;
-  song.marketingReach = options.reduce((sum, o) => sum + o.reach, 0);
+  // The views of the promo depend on the artist's buzz the week of the release.
+  song.marketingIds = options.map((o) => o.id);
+  song.marketingReach = 0;
   return song;
 };
 

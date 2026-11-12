@@ -19,6 +19,9 @@ export { nextParisTick };
 const LevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
 const LevelsSchema = z.object({ theme: LevelSchema, beat: LevelSchema, producer: LevelSchema, studio: LevelSchema });
 const IdSchema = z.string().min(1).max(64);
+// A song cover: a small square picture the app has already shrunk (about 10 kB).
+const COVER_MAX = 40_000;
+const CoverSchema = z.string().max(COVER_MAX).regex(/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/);
 
 export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('found'), name: z.string().min(1).max(60), starterId: IdSchema }),
@@ -44,11 +47,13 @@ export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('feat'), guestId: IdSchema, offer: z.number().min(1).max(1e9) }),
   z.object({ type: z.literal('feat_skip') }),
   z.object({ type: z.literal('studio_cancel') }),
-  z.object({ type: z.literal('song'), title: z.string().min(1).max(80) }),
+  z.object({ type: z.literal('song'), title: z.string().min(1).max(80), cover: CoverSchema.optional() }),
   z.object({ type: z.literal('release'), songId: IdSchema, inWeeks: z.number().int().min(1).max(8), marketing: z.array(IdSchema).max(12) }),
   z.object({ type: z.literal('gig'), artistId: IdSchema }),
   z.object({ type: z.literal('loan'), amount: z.number().min(1).max(1e9), weeks: z.union([z.literal(8), z.literal(16), z.literal(24)]) }),
 ]);
+
+export const MelodyCoversSchema = z.object({ ids: z.array(IdSchema).max(60) });
 
 export const MelodyPreviewSchema = z.object({ artistId: IdSchema, themeId: IdSchema, beatId: IdSchema, levels: LevelsSchema });
 
@@ -57,6 +62,8 @@ export type MelodyResult = ({ ok: true } & MelodyState) | { ok: false; message: 
 
 // A world nobody opens for this long stops ticking: it costs nothing while it sleeps.
 const SLEEP_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
+// Covers kept per world: the oldest go first, so the storage stays small.
+const MAX_COVERS = 600;
 // After an outage the world replays at most this many missed weeks.
 const MAX_CATCH_UP = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -78,6 +85,7 @@ export class MelodyWorld extends DurableObject<Env> {
     ctx.storage.sql.exec(`
       CREATE TABLE IF NOT EXISTS parts (name TEXT PRIMARY KEY, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS covers (song_id TEXT PRIMARY KEY, data TEXT NOT NULL, at INTEGER NOT NULL);
     `);
   }
 
@@ -163,15 +171,35 @@ export class MelodyWorld extends DurableObject<Env> {
     const nextTickAt = this.touch();
     // The rules change the world in place: work on a copy so a refused action leaves nothing behind.
     const draft = structuredClone(world);
+    // The picture stays out of the world: the rules only learn that there is one.
+    const cover = action.type === 'song' ? action.cover : undefined;
+    const before = draft.songs.length;
     try {
-      applyAction(draft, userId, action);
+      applyAction(draft, userId, action.type === 'song' && cover ? { ...action, cover: 'yes' } : action);
     } catch (error) {
       if (error instanceof GameError) return { ok: false, message: error.message };
       throw error;
     }
     this.world = draft;
+    const made = draft.songs.length > before ? draft.songs[draft.songs.length - 1] : undefined;
+    if (cover && made?.cover) this.keepCover(made.id, cover);
     this.save(action.type === 'song' || action.type === 'release' || action.type === 'tuto' ? ['core', 'artists', 'songs'] : ['core', 'artists']);
     return { ok: true, ...this.state(draft, userId, nextTickAt) };
+  }
+
+  private keepCover(songId: string, data: string): void {
+    this.ctx.storage.sql.exec('INSERT INTO covers (song_id, data, at) VALUES (?, ?, ?) ON CONFLICT (song_id) DO UPDATE SET data = excluded.data', songId, data, Date.now());
+    this.ctx.storage.sql.exec('DELETE FROM covers WHERE song_id NOT IN (SELECT song_id FROM covers ORDER BY at DESC LIMIT ?)', MAX_COVERS);
+  }
+
+  /** The covers of some songs, for the charts and the song pages. */
+  covers(ids: string[]): { ok: true; covers: Record<string, string> } {
+    const covers: Record<string, string> = {};
+    for (const id of new Set(ids)) {
+      const [row] = this.ctx.storage.sql.exec<{ data: string }>('SELECT data FROM covers WHERE song_id = ?', id).toArray();
+      if (row) covers[id] = row.data;
+    }
+    return { ok: true, covers };
   }
 
   override async alarm(): Promise<void> {

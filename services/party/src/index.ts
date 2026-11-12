@@ -11,7 +11,7 @@ import {
 } from '@livechatsbcb/protocol';
 import { Directory } from './directory';
 import { AUTHORIZE_URL, LOGIN_SCOPE, exchangeLoginCode } from './discord';
-import { MelodyActionSchema, MelodyPreviewSchema, MelodyWorld } from './melody';
+import { MelodyActionSchema, MelodyCoversSchema, MelodyPreviewSchema, MelodyWorld } from './melody';
 import { Party, guildPartyId } from './party';
 import { sha256Base64Url } from './tokens';
 
@@ -170,6 +170,11 @@ const melody = async (request: Request, env: Env, guildId: string, action: strin
     const body = MelodyPreviewSchema.safeParse(await readJson(request));
     if (!body.success) return fail('invalid_request', 400);
     return json(await world.preview(guildId, body.data));
+  }
+  if (request.method === 'POST' && action === 'covers') {
+    const body = MelodyCoversSchema.safeParse(await readJson(request));
+    if (!body.success) return fail('invalid_request', 400);
+    return json(await world.covers(body.data.ids));
   }
   if (request.method === 'POST' && action === 'act') {
     const body = MelodyActionSchema.safeParse(await readJson(request));
@@ -466,7 +471,7 @@ export default {
     const guildRoute = pathname.match(/^\/v1\/guilds\/(\d{17,20})\/join$/);
     if (guildRoute && method === 'POST') return joinGuild(request, env, guildRoute[1]!);
 
-    const melodyRoute = pathname.match(/^\/v1\/melody\/(\d{17,20})(?:\/(act|preview))?$/);
+    const melodyRoute = pathname.match(/^\/v1\/melody\/(\d{17,20})(?:\/(act|preview|covers))?$/);
     if (melodyRoute) return melody(request, env, melodyRoute[1]!, melodyRoute[2]);
 
     const route = pathname.match(/^\/v1\/parties\/([0-9a-f-]{36}|g-\d{17,20})\/(ws|rotate-code|leave)$/);

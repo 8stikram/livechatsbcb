@@ -1,7 +1,8 @@
 // Song creation: prices, energy and the quality range (docs/melody-tycoon/03-creation-de-son.md).
 import { artisticSkill, genreAffinity } from './artists.ts';
 import { CFG } from './config.ts';
-import { GENRES, beatById, coherence } from './data/content.ts';
+import { choiceScore } from './craft.ts';
+import { GENRES, beatById } from './data/content.ts';
 import { clamp, type Rng } from './rng.ts';
 import type { Artist, Producer, SongLevels } from './types.ts';
 
@@ -29,6 +30,8 @@ export interface SongPlan {
   randomChoices?: number;
   /** Level of the label's artistic director, 0 if none. */
   directorLevel?: number;
+  /** Fame and songs already made (see craft.ts experienceBonus). */
+  experience?: number;
 }
 
 /** Price of the four paid choices. A custom beat (level 4) costs half the producer's price. */
@@ -60,10 +63,11 @@ export const estimateQuality = (plan: SongPlan): QualityEstimate => {
   const { artist, levels, producer } = plan;
   const beat = beatById(plan.beatId);
   const family = GENRES[beat.genres[0] ?? artist.genre].family;
-  const skill = artisticSkill(artist.attrs, family) * genreAffinity(artist, beat.genres);
+  // Off his genre the artist loses a little; the bigger cost is in the choices score (and the risk).
+  const skill = artisticSkill(artist.attrs, family) * (0.8 + 0.2 * genreAffinity(artist, beat.genres));
   const producerValue = producer.level * producer.affinity;
   const themeValue = Math.max(artist.attrs.ecriture, at(Q.themeValue, levels.theme));
-  const beatValue = levels.beat === 4 ? Math.min(99, producerValue + 5) : at(Q.beatValue, levels.beat);
+  const beatValue = levels.beat === 4 ? Math.min(72, producerValue + 4) : at(Q.beatValue, levels.beat);
 
   let center =
     Q.weights.artist * skill +
@@ -71,7 +75,8 @@ export const estimateQuality = (plan: SongPlan): QualityEstimate => {
     Q.weights.theme * themeValue +
     Q.weights.beat * beatValue +
     Q.weights.studio * at(Q.studioValue, levels.studio) +
-    Q.weights.coherence * coherence(plan.themeId, plan.beatId);
+    Q.weights.choices * choiceScore(artist, plan.themeId, plan.beatId);
+  center += plan.experience ?? 0;
 
   center += clamp((artist.morale - 50) / 10, -5, 5);
   if (artist.energy < CFG.energy.lowEnergyThreshold) center -= CFG.energy.lowEnergyPenalty;

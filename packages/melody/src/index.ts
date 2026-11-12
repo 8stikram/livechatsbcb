@@ -8,13 +8,18 @@ export {
   estimateQuality, rollQuality, qualityWord, songCost, songDelay, songEnergy, producerOfLevel, featDemand, featChance,
   type SongPlan, type QualityEstimate,
 } from './quality.ts';
-export { MARKETING, marketingById, publicFit, firstWeek, hitWord, type FirstWeek, type FirstWeekInput } from './release.ts';
+export { MARKETING, marketingById, publicFit, firstWeek, hitWord, buzzOf, promoViews, releaseWeek, type FirstWeek, type FirstWeekInput } from './release.ts';
+export {
+  CRAFT, choiceScore, riskOf, isPerfect, isSecret, secretCombos, themeFits, beatFits, experienceBonus, studioOffers, trendOf, trendBoost,
+  notebookOf, noteCombo, rollSurprise, countryOf, type StudioOffers, type Offered, type Trend, type NotebookEntry, type Surprise,
+} from './craft.ts';
+export { inventTitle, langOf, type Lang } from './titles.ts';
 export {
   artistValue, catalogueValue, contractOf, rosterOf, debtOf, fansOf, netWorth, playGig, canTierUp, ranking,
   type RankingLine, type GigResult,
 } from './economy.ts';
 export {
-  GameError, createWorld, addPlayerLabel, freeAgents, expectedOffer, signArtist, createSong, scheduleRelease, bookGig, takeLoan,
+  GameError, createWorld, addPlayerLabel, freeAgents, expectedOffer, signArtist, createSong, scheduleRelease, releaseBlocked, bookGig, takeLoan,
   type Offer, type SongRequest,
 } from './world.ts';
 export {

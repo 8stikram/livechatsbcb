@@ -1,6 +1,7 @@
 // Melody Tycoon, Nuit Néon look: few numbers, big buttons, cards. The world lives on the server,
 // one per Discord server; this screen only shows it and sends the player's choices.
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
   BEATS,
   CFG,
@@ -25,8 +26,12 @@ import {
   type SongPreview,
   type SongView,
   type TutorialView,
+  type NotebookEntry,
+  type Trend,
 } from '@livechatsbcb/melody';
 import type { MelodyRoute } from '../../../../shared/ipc';
+import { LibraryPicker, type Shelf } from '../LibraryPicker';
+import { useClipboardShelf } from '../ClipboardShelf';
 import { errorMessage } from '../messages';
 import '@fontsource-variable/archivo/wdth.css';
 import './melody.css';
@@ -215,6 +220,7 @@ const Home = ({ view, onGo }: { view: MelodyView; onGo: (tab: Tab) => void }) =>
   const tape = next ? `Prochaine sortie ▪▪ dans ${next.releaseInWeeks} semaine${next.releaseInWeeks === 1 ? '' : 's'} ▪▪ ` : 'Rien de programmé ▪▪ ';
   return (
     <div className="mt-view mt-in">
+      <TrendBanner trend={view.trend} />
       <div className="mt-hub">
         <button type="button" className="mt-tile mt-t-create" data-tuto="hub-studio" onClick={() => onGo('studio')}>
           <span className="mt-vinyl" aria-hidden="true" />
@@ -229,7 +235,7 @@ const Home = ({ view, onGo }: { view: MelodyView; onGo: (tab: Tab) => void }) =>
           <span className="mt-tape" aria-hidden="true">
             {tape.repeat(8)}
           </span>
-          <Label>{next ? `Prochaine sortie · note ${next.quality}` : vault > 0 ? `${vault} son${vault > 1 ? 's' : ''} au coffre` : 'Prochaine sortie'}</Label>
+          <Label>{next ? `Prochaine sortie · attendu ${next.qualityMin} – ${next.qualityMax}` : vault > 0 ? `${vault} son${vault > 1 ? 's' : ''} au coffre` : 'Prochaine sortie'}</Label>
           <span className="mt-h mt-h-xl">{next ? next.title : vault > 0 ? 'À sortir' : 'Rien en vue'}</span>
           <span className="mt-sub">{next ? next.artistName : 'Programme une sortie pour faire parler de toi'}</span>
         </button>
@@ -405,6 +411,18 @@ const Squad = ({
               <span className={`mt-pill${artist.weeksLeft <= 8 ? ' mt-pill-warn' : ''}`}>Contrat : {artist.weeksLeft} sem.</span>
               {artist.real && <span className="mt-pill">Vrai artiste</span>}
             </div>
+            {artist.lastSong && (
+              <div className="mt-lastsong">
+                <Cover id={artist.lastSong.id} className="mt-lastsong-art" />
+                <span>
+                  <Label>Dernier son</Label>
+                  <b>{artist.lastSong.title}</b>
+                  <span className="mt-sub">
+                    {artist.songsMade} son{artist.songsMade > 1 ? 's' : ''} avec le label
+                  </span>
+                </span>
+              </div>
+            )}
             <Radar attrs={artist.attrs} />
             <div className="mt-bars">
               <div>
@@ -453,6 +471,354 @@ const Squad = ({
         )}
       </div>
     </div>
+  );
+};
+
+/* ---------------------------------- Covers ---------------------------------- */
+
+// Covers come from the server once, then stay here as pictures the page can show.
+const coverUrls = new Map<string, string>();
+
+const blobUrlOf = (data: string): string => {
+  const [head = '', body = ''] = data.split(',');
+  const type = head.slice(5, head.indexOf(';')) || 'image/jpeg';
+  const bin = atob(body);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type }));
+};
+
+/** Keeps a cover the player just made, so it shows without asking the server. */
+const rememberCover = (songId: string, data: string): void => {
+  if (!coverUrls.has(songId)) coverUrls.set(songId, blobUrlOf(data));
+};
+
+const CoversContext = createContext<number>(0);
+
+// Fetches the covers the screen needs, sixty at most per call; the number changes when new ones arrive.
+const useCovers = (guildId: string, view: MelodyView | undefined): number => {
+  const [version, setVersion] = useState(0);
+  const asked = useRef(new Set<string>());
+  const wanted = useMemo(() => {
+    if (!view) return [];
+    const ids = [
+      ...view.songs.filter((s) => s.cover).map((s) => s.id),
+      ...view.roster.flatMap((a) => (a.lastSong?.cover ? [a.lastSong.id] : [])),
+      ...view.charts.global.flatMap((e) => (e.cover && e.songId ? [e.songId] : [])),
+      ...Object.values(view.charts.genres).flatMap((list) => list.flatMap((e) => (e.cover && e.songId ? [e.songId] : []))),
+    ];
+    return [...new Set(ids)].filter((id) => !coverUrls.has(id) && !asked.current.has(id)).slice(0, 60);
+  }, [view]);
+  useEffect(() => {
+    if (wanted.length === 0) return;
+    for (const id of wanted) asked.current.add(id);
+    void ask<{ covers: Record<string, string> }>(guildId, 'covers', { ids: wanted }).then((answer) => {
+      if (!answer.ok) return;
+      for (const [id, data] of Object.entries(answer.data.covers)) rememberCover(id, data);
+      setVersion((v) => v + 1);
+    });
+  }, [guildId, wanted]);
+  return version;
+};
+
+// A song's cover, or a drawn one in the song's colours when there is none.
+const Cover = ({ id, className = 'mt-song-art' }: { id: string; className?: string }) => {
+  useContext(CoversContext);
+  const url = coverUrls.get(id);
+  return url ? <img className={`${className} mt-cover-img`} src={url} alt="" /> : <span className={className} style={{ '--hue': hueOf(id) } as CSSProperties} aria-hidden="true" />;
+};
+
+/** Crops any picture to a small square JPEG, light enough for the free server. */
+const makeCover = (src: string): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const size = 192;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('canvas'));
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+      let quality = 0.82;
+      let out = canvas.toDataURL('image/jpeg', quality);
+      while (out.length > 38_000 && quality > 0.4) {
+        quality -= 0.1;
+        out = canvas.toDataURL('image/jpeg', quality);
+      }
+      resolve(out);
+    };
+    img.onerror = () => reject(new Error('image'));
+    img.src = src;
+  });
+
+// Picks the cover like a LiveChat media: from the library, from the PC, a copied picture, or Ctrl+V.
+const CoverPicker = ({ value, onChange }: { value: string | null; onChange: (data: string | null) => void }) => {
+  const [shelf, setShelf] = useState<Shelf | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const clips = useClipboardShelf();
+  const file = useRef<HTMLInputElement>(null);
+  const preview = useMemo(() => (value ? blobUrlOf(value) : null), [value]);
+  useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
+
+  const take = useCallback(
+    (src: string, revoke = false) => {
+      setProblem(null);
+      void makeCover(src)
+        .then(onChange)
+        .catch(() => setProblem('Cette image ne passe pas. Essaie une autre.'))
+        .finally(() => revoke && URL.revokeObjectURL(src));
+    },
+    [onChange],
+  );
+
+  // Ctrl+V while the picker is open: the picture becomes the cover, not a LiveChat.
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const image = [...(event.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
+      if (!image) return;
+      event.preventDefault();
+      event.stopPropagation();
+      take(URL.createObjectURL(image), true);
+    };
+    document.addEventListener('paste', onPaste, true);
+    return () => document.removeEventListener('paste', onPaste, true);
+  }, [take]);
+
+  return (
+    <div className="mt-coverpick">
+      <div className="mt-coverbox">{preview ? <img src={preview} alt="Cover du son" /> : <span className="mt-sub">Pas encore de cover</span>}</div>
+      <div className="mt-col">
+        <div className="mt-acts">
+          <button type="button" className="mt-ghost" onClick={() => setShelf('image')}>
+            Ma bibliothèque
+          </button>
+          <button type="button" className="mt-ghost" onClick={() => file.current?.click()}>
+            Depuis le PC
+          </button>
+          <input
+            ref={file}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(event) => {
+              const picked = event.target.files?.[0];
+              if (picked) take(URL.createObjectURL(picked), true);
+              event.target.value = '';
+            }}
+          />
+        </div>
+        {clips.items.length > 0 && (
+          <div className="mt-clips" aria-label="Images copiées">
+            {clips.items.slice(0, 6).map((item) => (
+              <button key={item.id} type="button" title="Prendre cette image" onClick={() => take(item.url)}>
+                <img src={item.url} alt="" />
+              </button>
+            ))}
+          </div>
+        )}
+        <span className="mt-sub">Ou colle une image avec Ctrl+V. Elle est recadrée en carré.</span>
+        {problem && <span className="mt-toast">{problem}</span>}
+      </div>
+      {shelf &&
+        createPortal(
+          <LibraryPicker
+            shelf={shelf}
+            onShelf={(next) => setShelf(next === 'image' ? next : 'image')}
+            onClose={() => setShelf(null)}
+            onPick={(picked) => {
+              setShelf(null);
+              if (picked.kind === 'image') take(picked.url);
+              else setProblem('Choisis une image.');
+            }}
+          />,
+          document.body,
+        )}
+    </div>
+  );
+};
+
+/* ---------------------------------- Trend and notebook ---------------------------------- */
+
+const themeName = (id: string): string => THEMES.find((t) => t.id === id)?.name ?? id;
+const beatName = (id: string): string => BEATS.find((b) => b.id === id)?.name ?? id;
+
+// What the public wants this month, said like a rumour.
+const TrendBanner = ({ trend }: { trend: Trend }) => (
+  <div className="mt-trend" role="note">
+    <span className="mt-trend-fire" aria-hidden="true" />
+    <span>
+      <b>Tendance du mois</b> · ça parle beaucoup de <b>{genreName(trend.genre)}</b> en ce moment. On entend partout des sons «&nbsp;{themeName(trend.themeId)}&nbsp;» et des prods{' '}
+      {beatName(trend.beatId)}…
+    </span>
+    <span className="mt-sub">
+      Encore {trend.weeksLeft} sem.
+    </span>
+  </div>
+);
+
+// The combos found by playing: secret ones only work during their season.
+const Notebook = ({ entries, season, onClose }: { entries: NotebookEntry[]; season: number; onClose: () => void }) => (
+  <div className="mt-panel mt-notebook mt-in">
+    <div className="mt-ptop">
+      <h2 className="mt-h">Carnet du label</h2>
+      <button type="button" className="mt-ghost" onClick={onClose}>
+        Fermer
+      </button>
+    </div>
+    {entries.length === 0 ? (
+      <span className="mt-sub">Vide pour l’instant. Quand un thème et un beat font des merveilles ensemble, la combo s’écrit ici à la sortie du son.</span>
+    ) : (
+      <ul className="mt-notes">
+        {entries.map((entry) => (
+          <li key={`${entry.kind}:${entry.themeId}:${entry.beatId}:${entry.season}`} className={entry.kind === 'secret' && entry.season !== season - 1 ? 'is-old' : ''}>
+            <b>
+              {themeName(entry.themeId)} + {beatName(entry.beatId)}
+            </b>
+            <span className="mt-sub">
+              {entry.kind === 'secret' ? (entry.season === season - 1 ? 'Combo secret · cette saison' : `Combo secret · saison ${entry.season + 1}, finie`) : 'Combo parfait'} · trouvé avec «&nbsp;{entry.songTitle}&nbsp;»
+            </span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+);
+
+/** True when this theme and beat are in the notebook and still work. */
+const noted = (entries: NotebookEntry[], season: number, themeId: string | null, beatId: string): boolean =>
+  themeId !== null && entries.some((e) => e.themeId === themeId && e.beatId === beatId && (e.kind === 'perfect' || e.season === season - 1));
+
+/* ---------------------------------- Song page ---------------------------------- */
+
+const SURPRISE_WORD = { boom: 'Bien mieux que prévu', flop: 'Moins bon que prévu' } as const;
+
+// Everything about one song: cover, note, promo and its streams week by week.
+const SongPage = ({ song, onClose }: { song: SongView; onClose: () => void }) => {
+  const top = Math.max(1, ...song.history);
+  return (
+    <div className="mt-panel mt-songpage mt-in">
+      <div className="mt-songhead">
+        <Cover id={song.id} className="mt-songpage-art" />
+        <div className="mt-col">
+          <Label>
+            {song.artistName}
+            {song.featName ? ` feat. ${song.featName}` : ''}
+          </Label>
+          <h2 className="mt-h mt-h-xl">{song.title}</h2>
+          <span className="mt-sub">
+            {themeName(song.themeId)} · {beatName(song.beatId)}
+          </span>
+          <div className="mt-pills">
+            {song.quality !== null ? (
+              <span className="mt-pill">
+                Note {song.quality} · {qualityWord(song.quality)}
+              </span>
+            ) : (
+              <span className="mt-pill">
+                Note attendue {song.qualityMin} – {song.qualityMax}
+              </span>
+            )}
+            {song.surprise && <span className={`mt-pill${song.surprise === 'flop' ? ' mt-pill-warn' : ' mt-pill-hot'}`}>{SURPRISE_WORD[song.surprise]}</span>}
+            {song.combo && <span className="mt-pill mt-pill-hot">{song.combo === 'secret' ? 'Combo secret' : 'Combo parfait'}</span>}
+            {song.state === 'released' && <span className="mt-pill">{hitWord(song.hitScore)}</span>}
+          </div>
+        </div>
+      </div>
+      {song.state === 'released' && (
+        <>
+          <Label>Streams semaine par semaine</Label>
+          <div className="mt-history" role="img" aria-label={`Streams : ${song.history.map(fmt).join(', ')}`}>
+            {song.history.map((streams, i) => (
+              <span key={i} style={{ height: `${Math.max(3, (streams / top) * 100)}%` } as CSSProperties} title={`Semaine ${i + 1} : ${fmt(streams)}`} />
+            ))}
+          </div>
+          <div className="mt-kv">
+            <span className="mt-mute">Total</span>
+            <b>{fmt(song.streamsTotal)} streams</b>
+            <span className="mt-mute">Meilleur rang</span>
+            <b>{song.peakGlobal ? `${song.peakGlobal}e au top global` : song.peakGenre ? `${song.peakGenre}e de son genre` : 'pas classé'}</b>
+          </div>
+        </>
+      )}
+      {song.promo.length > 0 && (
+        <>
+          <Label>Promo</Label>
+          <ul className="mt-promo-out">
+            {song.promo.map((p) => (
+              <li key={p.name} className={p.viral ? 'is-viral' : ''}>
+                <span>{p.name}</span>
+                <b>
+                  {fmt(p.views)} vues{p.viral ? ' · VIRAL !' : ''}
+                </b>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {song.state === 'scheduled' && song.promoNames.length > 0 && (
+        <span className="mt-sub">Promo prévue : {song.promoNames.join(', ')}. Les vues dépendront du buzz de l’artiste le jour de la sortie.</span>
+      )}
+      <div className="mt-acts">
+        <button type="button" className="mt-ghost" onClick={onClose}>
+          Retour
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ---------------------------------- Hit moment ---------------------------------- */
+
+const SEEN_HITS = 'mt-hits-seen';
+const seenHits = (): Set<string> => {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(SEEN_HITS) ?? '[]') as string[]);
+  } catch {
+    return new Set();
+  }
+};
+
+// A big moment when a song of the label blows up the week it comes out. Once per song.
+const HitMoment = ({ view }: { view: MelodyView }) => {
+  const [closed, setClosed] = useState<Set<string>>(seenHits);
+  const hit = view.songs.find((s) => s.state === 'released' && s.weeksOut === 0 && (s.surprise === 'boom' || s.hitScore >= 70 || s.promo.some((p) => p.viral)) && !closed.has(s.id));
+  if (!hit) return null;
+  const close = () => {
+    const next = new Set(closed).add(hit.id);
+    setClosed(next);
+    try {
+      localStorage.setItem(SEEN_HITS, JSON.stringify([...next].slice(-100)));
+    } catch {
+      // Not remembered: it may show again next time.
+    }
+  };
+  const viral = hit.promo.find((p) => p.viral);
+  return createPortal(
+    <div className="mt mt-hit" role="dialog" aria-label="Moment hit" onClick={close}>
+      <div className="mt-hit-card">
+        <div className="mt-hit-rays" aria-hidden="true" />
+        <Cover id={hit.id} className="mt-hit-art" />
+        <span className="mt-hit-word mt-gt">{hit.surprise === 'boom' ? 'ÇA A PÉTÉ !' : viral ? 'VIRAL !' : 'HIT !'}</span>
+        <b className="mt-h">{hit.title}</b>
+        <span className="mt-sub">
+          {hit.artistName} · <CountUp to={hit.streamsLast} /> streams la première semaine
+          {viral ? ` · ${viral.name} : ${compact(viral.views)} vues` : ''}
+        </span>
+        {hit.quality !== null && (
+          <span className="mt-sub">
+            Note {hit.quality}
+            {hit.surprise === 'boom' ? ` (le studio annonçait ${hit.qualityMin} – ${hit.qualityMax})` : ''}
+          </span>
+        )}
+        <button type="button" className="mt-go">
+          Trop bien
+        </button>
+      </div>
+    </div>,
+    document.body,
   );
 };
 
@@ -508,7 +874,7 @@ const SCALE: Array<[number, string]> = [
   [85, 'Tube'],
 ];
 
-const STEPS = ['Artiste', 'Thème', 'Beat', 'Équipe', 'Cabine', 'Featuring', 'Titre', 'Note'];
+const STEPS = ['Artiste', 'Thème', 'Beat', 'Équipe', 'Cabine', 'Featuring', 'Titre', 'Fini'];
 const STAGE_NAMES: Record<string, string> = { theme: 'Après l’écriture', beat: 'Après le beat', producer: 'Avec le producteur', studio: 'Au studio', feat: 'Avec l’invité' };
 
 const settled = (session: SessionView): boolean => session.events.every((e) => e.kind === 'fluid' || e.reaction !== null);
@@ -519,12 +885,13 @@ const EventCard = ({ event, busy, onReact, onNext }: { event: SessionEventView; 
     <Label>{event.kind === 'fluid' ? `${STAGE_NAMES[event.stage]} · ça roule` : `Embrouille · ${STAGE_NAMES[event.stage]?.toLowerCase()}`}</Label>
     <h3>{event.title}</h3>
     {event.kind === 'clash' && <span className="mt-mute">{event.text}</span>}
+    {event.kind === 'clash' && event.reaction === null && <span className="mt-sub">Tu ne sais pas ce que ça va donner : à toi de sentir le coup.</span>}
     {event.kind === 'clash' && event.reaction === null ? (
       <div className="mt-react">
         {event.reactions.map((reaction) => (
           <button key={reaction.id} type="button" disabled={busy} onClick={() => onReact(reaction.id)}>
             <span>{reaction.text}</span>
-            <b>{reaction.hint}</b>
+            {reaction.hint && <b>{reaction.hint}</b>}
           </button>
         ))}
       </div>
@@ -723,6 +1090,8 @@ const Studio = ({
   const [beatId, setBeatId] = useState<string | null>(null);
   const [levels, setLevels] = useState<Levels>({ theme: 1, beat: 1, producer: 1, studio: 1 });
   const [title, setTitle] = useState('');
+  const [cover, setCover] = useState<string | null>(null);
+  const [notebookOpen, setNotebookOpen] = useState(false);
   const [preview, setPreview] = useState<SongPreview | null>(null);
   const [made, setMade] = useState<SongView | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -762,6 +1131,7 @@ const Studio = ({
     setBeatId(null);
     setLevels({ theme: 1, beat: 1, producer: 1, studio: 1 });
     setTitle('');
+    setCover(null);
     setPreview(null);
     setMade(null);
     setProblem(null);
@@ -785,9 +1155,11 @@ const Studio = ({
 
   const record = async () => {
     const before = new Set(view.songs.map((song) => song.id));
-    const next = await onAct({ type: 'song', title: title.trim() });
+    if (!cover) return;
+    const next = await onAct({ type: 'song', title: title.trim(), cover });
     const song = next?.songs.find((s) => !before.has(s.id));
     if (song) {
+      rememberCover(song.id, cover);
       setMade(song);
       setStep(7);
     }
@@ -797,7 +1169,6 @@ const Studio = ({
   const cap = Math.min(cash, view.label?.songBudgetCap ?? 0);
   const theme = THEMES.find((t) => t.id === (session?.themeId ?? themeId));
   const beat = BEATS.find((b) => b.id === (session?.beatId ?? beatId));
-  const hot = (value: number | undefined) => (value ?? 50) >= 65;
 
   let stage: ReactNode = null;
   if (step === 0) {
@@ -825,52 +1196,55 @@ const Studio = ({
     stage = (
       <>
         <Label>Étape 2 · de quoi parle le son ?</Label>
+        <span className="mt-sub">Cette semaine, le studio propose ces thèmes à {artist?.name ?? 'ton artiste'}. ★ = colle à son style.</span>
         <div className="mt-opts">
-          {THEMES.map((t) => (
+          {(artist?.offers.themes ?? []).map((offer) => (
             <button
-              key={t.id}
+              key={offer.id}
               type="button"
               className="mt-opt mt-opt-small"
-              aria-pressed={themeId === t.id}
+              aria-pressed={themeId === offer.id}
               onClick={() => {
-                setThemeId(t.id);
+                setThemeId(offer.id);
                 setStep(2);
               }}
             >
-              {hot(view.trends.themes[t.id]) && <span className="mt-hot">En vogue</span>}
-              <b>{t.name}</b>
+              {offer.star && <span className="mt-hot mt-hot-ok">★ Son style</span>}
+              <b>{themeName(offer.id)}</b>
             </button>
           ))}
         </div>
       </>
     );
   } else if (step === 2) {
-    const fits = (b: (typeof BEATS)[number]) => artist !== null && b.genres.includes(artist.genre);
-    const sorted = [...BEATS].sort((a, b) => Number(fits(b)) - Number(fits(a)));
     stage = (
       <>
         <Label>Étape 3 · sur quelle prod ?</Label>
+        <span className="mt-sub">Un beat loin de son style, c’est un pari : ça peut faire un flop… ou un tube.</span>
         <div className="mt-opts">
-          {sorted.map((b) => (
-            <button
-              key={b.id}
-              type="button"
-              className="mt-opt mt-opt-small"
-              aria-pressed={beatId === b.id}
-              onClick={() => {
-                setBeatId(b.id);
-                setStep(3);
-              }}
-            >
-              <span className="mt-tags">
-                {fits(b) && <span className="mt-hot mt-hot-ok">Son style</span>}
-                {themeId && b.themes.includes(themeId) && <span className="mt-hot mt-hot-ok">Va avec le thème</span>}
-                {hot(view.trends.beats[b.id]) && <span className="mt-hot">En vogue</span>}
-              </span>
-              <b>{b.name}</b>
-              <span className="mt-sub">{b.genres.map(genreName).join(' · ')}</span>
-            </button>
-          ))}
+          {(artist?.offers.beats ?? []).map((offer) => {
+            const b = BEATS.find((x) => x.id === offer.id);
+            if (!b) return null;
+            return (
+              <button
+                key={b.id}
+                type="button"
+                className="mt-opt mt-opt-small"
+                aria-pressed={beatId === b.id}
+                onClick={() => {
+                  setBeatId(b.id);
+                  setStep(3);
+                }}
+              >
+                <span className="mt-tags">
+                  {offer.star && <span className="mt-hot mt-hot-ok">★ Son style</span>}
+                  {noted(view.notebook, view.season, themeId, b.id) && <span className="mt-hot">Carnet ✓</span>}
+                </span>
+                <b>{b.name}</b>
+                <span className="mt-sub">{b.genres.map(genreName).join(' · ')}</span>
+              </button>
+            );
+          })}
         </div>
       </>
     );
@@ -971,30 +1345,36 @@ const Studio = ({
   } else if (step === 6 && session) {
     stage = (
       <>
-        <Label>Étape 7 · le titre</Label>
+        <Label>Étape 7 · le titre et la cover</Label>
         <label className="mt-field">
           <Label>Titre du son</Label>
           <input value={title} maxLength={40} placeholder="Rue Glacée" autoFocus onChange={(event) => setTitle(event.target.value)} />
         </label>
+        <CoverPicker value={cover} onChange={setCover} />
         <p className="mt-sub">
           {session.artistName}
-          {session.feat ? ` feat. ${session.feat.name}` : ''} · {theme?.name} · {beat?.name}. Une fois enregistrée, la note est figée.
+          {session.feat ? ` feat. ${session.feat.name}` : ''} · {theme?.name} · {beat?.name}. La vraie note tombera à la sortie du son.
         </p>
         <div className="mt-acts">
-          <button type="button" className="mt-go mt-go-big" disabled={busy || title.trim().length === 0} onClick={() => void record()}>
+          <button type="button" className="mt-go mt-go-big" disabled={busy || title.trim().length === 0 || !cover} onClick={() => void record()}>
             Enregistrer · {money(session.baseCost + session.extraCost)}
           </button>
+          {(title.trim().length === 0 || !cover) && <span className="mt-sub">{title.trim().length === 0 ? 'Donne un titre au son.' : 'Choisis une cover.'}</span>}
         </div>
       </>
     );
   } else if (step === 7 && made) {
     stage = (
       <div className="mt-reveal">
-        <Label>Note finale · le son est figé</Label>
+        <Cover id={made.id} className="mt-reveal-art" />
+        <Label>Le studio annonce</Label>
         <div className="mt-reveal-n mt-gt">
-          <CountUp to={made.quality} ms={1400} />
+          {made.qualityMin} – {made.qualityMax}
         </div>
-        <div className="mt-reveal-w">{qualityWord(made.quality)}</div>
+        <div className="mt-reveal-w">
+          {qualityWord(made.qualityMin)} à {qualityWord(made.qualityMax).toLowerCase()}
+        </div>
+        <span className="mt-sub">La vraie note tombera à la sortie : en général dans cette fourchette… mais parfois un son pète, ou déçoit.</span>
         <span className="mt-sub">« {made.title} » part au coffre{made.readyInWeeks > 0 ? `, prêt dans ${made.readyInWeeks} semaine${made.readyInWeeks > 1 ? 's' : ''}` : ''}.</span>
         <div className="mt-acts mt-acts-center">
           <button type="button" className="mt-go" onClick={() => onGo('releases')}>
@@ -1017,6 +1397,15 @@ const Studio = ({
   const energy = inBooth ? shown.energy : (preview?.energy ?? 0);
   return (
     <div className="mt-view mt-in">
+      {step <= 3 && (
+        <div className="mt-studiobar">
+          <TrendBanner trend={view.trend} />
+          <button type="button" className="mt-ghost" onClick={() => setNotebookOpen(!notebookOpen)}>
+            Carnet ({view.notebook.length})
+          </button>
+        </div>
+      )}
+      {notebookOpen && step <= 3 && <Notebook entries={view.notebook} season={view.season} onClose={() => setNotebookOpen(false)} />}
       <div className="mt-steps">
         {STEPS.map((name, i) => (
           <button
@@ -1038,10 +1427,10 @@ const Studio = ({
         <div className="mt-col">
           <div className="mt-band">
             <Label>Qualité estimée</Label>
-            <div className="mt-big mt-gt">{made && step === 7 ? made.quality : showRange ? `${low} – ${high}` : '—'}</div>
+            <div className="mt-big mt-gt">{made && step === 7 ? `${made.qualityMin} – ${made.qualityMax}` : showRange ? `${low} – ${high}` : '—'}</div>
             <div className="mt-range">
               {showRange && step !== 7 && <i style={{ left: `${low}%`, width: `${Math.max(2, high - low)}%` }} />}
-              {made && step === 7 && <u style={{ left: `${made.quality}%` }} />}
+              {made && step === 7 && <i style={{ left: `${made.qualityMin}%`, width: `${Math.max(2, made.qualityMax - made.qualityMin)}%` }} />}
             </div>
             <div className="mt-scale">
               {SCALE.map(([at, word]) => (
@@ -1106,20 +1495,21 @@ const Studio = ({
 
 const ReleasePlanner = ({ song, cash, onAct, onClose, busy }: { song: SongView; cash: number; onAct: (action: MelodyAction) => void; onClose: () => void; busy: boolean }) => {
   const soonest = Math.max(1, song.readyInWeeks);
-  const [weeks, setWeeks] = useState(soonest);
+  const why = (w: number): string | null => song.blockedWeeks[w - 1] ?? null;
+  const [weeks, setWeeks] = useState(() => [1, 2, 3, 4, 6, 8].find((w) => w >= soonest && !why(w)) ?? soonest);
   const [promo, setPromo] = useState<string[]>(['posts']);
   const total = promo.reduce((sum, id) => sum + (MARKETING.find((m) => m.id === id)?.cost ?? 0), 0);
   const toggle = (id: string) => setPromo(promo.includes(id) ? promo.filter((p) => p !== id) : [...promo, id]);
   return (
     <div className="mt-panel mt-in">
       <div className="mt-ptop">
-        <div>
-          <Label>Note</Label>
-          <div className="mt-gen mt-gt">{song.quality}</div>
-        </div>
+        <Cover id={song.id} className="mt-planner-art" />
         <div>
           <Label>{song.artistName}</Label>
           <h2 className="mt-h">{song.title}</h2>
+          <span className="mt-sub">
+            Note attendue {song.qualityMin} – {song.qualityMax}
+          </span>
         </div>
       </div>
       <Label>Sortie dans</Label>
@@ -1127,18 +1517,21 @@ const ReleasePlanner = ({ song, cash, onAct, onClose, busy }: { song: SongView; 
         {[1, 2, 3, 4, 6, 8]
           .filter((w) => w >= soonest)
           .map((w) => (
-            <button key={w} type="button" className="mt-chipbtn" aria-pressed={weeks === w} onClick={() => setWeeks(w)}>
+            <button key={w} type="button" className="mt-chipbtn" aria-pressed={weeks === w} disabled={why(w) !== null} title={why(w) ?? undefined} onClick={() => setWeeks(w)}>
               {w} sem.
             </button>
           ))}
       </div>
+      {why(weeks) && <span className="mt-toast">{why(weeks)}</span>}
+      <span className="mt-sub">Un son par artiste et trois par label chaque semaine.</span>
       <Label>Promo</Label>
+      <span className="mt-sub">Les vues dépendent du buzz de l’artiste (ses fans, sa hype). Tu les découvriras à la sortie. Parfois, une vidéo devient virale.</span>
       <div className="mt-promo">
         {MARKETING.map((m) => (
           <button key={m.id} type="button" className="mt-opt mt-opt-promo" aria-pressed={promo.includes(m.id)} onClick={() => toggle(m.id)}>
-            <b>{m.name.replace('Réseaux sociaux — ', 'Réseaux · ')}</b>
+            <b>{m.name}</b>
             <span className="mt-price">{m.cost ? money(m.cost) : 'Gratuit'}</span>
-            <span className="mt-sub">touche ~{compact(m.reach)} personnes</span>
+            <span className="mt-sub">{m.note}</span>
           </button>
         ))}
       </div>
@@ -1147,7 +1540,7 @@ const ReleasePlanner = ({ song, cash, onAct, onClose, busy }: { song: SongView; 
           type="button"
           className="mt-go mt-go-big"
           data-tuto="release-go"
-          disabled={busy || total > cash}
+          disabled={busy || total > cash || why(weeks) !== null}
           onClick={() => onAct({ type: 'release', songId: song.id, inWeeks: weeks, marketing: promo })}
         >
           Programmer · {money(total)}
@@ -1163,8 +1556,10 @@ const ReleasePlanner = ({ song, cash, onAct, onClose, busy }: { song: SongView; 
 
 const SongTile = ({ song, onClick }: { song: SongView; onClick?: () => void }) => (
   <button type="button" className="mt-song" onClick={onClick} disabled={!onClick}>
-    <span className="mt-song-art" style={{ '--hue': hueOf(song.id) } as CSSProperties} />
-    <span className="mt-song-q">{song.quality}</span>
+    <Cover id={song.id} />
+    <span className={`mt-song-q${song.quality === null ? ' is-hidden' : ''}`} title={song.quality === null ? `Attendu : ${song.qualityMin} – ${song.qualityMax}` : undefined}>
+      {song.quality ?? '?'}
+    </span>
     <span className="mt-song-body">
       <b>{song.title}</b>
       <span className="mt-sub">{song.artistName}</span>
@@ -1176,6 +1571,7 @@ const SongTile = ({ song, onClick }: { song: SongView; onClick?: () => void }) =
             {compact(song.streamsLast)} streams cette semaine · {hitWord(song.hitScore)}
           </span>
           <Stars score={song.hitScore} />
+          {song.surprise && <span className={`mt-hot${song.surprise === 'boom' ? ' mt-hot-ok' : ''}`}>{SURPRISE_WORD[song.surprise]}</span>}
         </>
       )}
     </span>
@@ -1184,7 +1580,10 @@ const SongTile = ({ song, onClick }: { song: SongView; onClick?: () => void }) =
 
 const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean; onGo: (tab: Tab) => void }) => {
   const [planning, setPlanning] = useState<string | null>(null);
+  const [opened, setOpened] = useState<string | null>(null);
   const song = view.songs.find((s) => s.id === planning && s.state === 'vault');
+  const page = view.songs.find((s) => s.id === opened);
+  if (page) return <SongPage song={page} onClose={() => setOpened(null)} />;
   const vault = view.songs.filter((s) => s.state === 'vault');
   const scheduled = view.songs.filter((s) => s.state === 'scheduled').sort((a, b) => (a.releaseInWeeks ?? 0) - (b.releaseInWeeks ?? 0));
   const released = view.songs.filter((s) => s.state === 'released').sort((a, b) => a.weeksOut - b.weeksOut);
@@ -1210,7 +1609,7 @@ const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (actio
           <Label>Programmées</Label>
           <div className="mt-songs">
             {scheduled.map((s) => (
-              <SongTile key={s.id} song={s} />
+              <SongTile key={s.id} song={s} onClick={() => setOpened(s.id)} />
             ))}
           </div>
         </section>
@@ -1220,7 +1619,7 @@ const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (actio
           <Label>Sortis</Label>
           <div className="mt-songs">
             {released.map((s) => (
-              <SongTile key={s.id} song={s} />
+              <SongTile key={s.id} song={s} onClick={() => setOpened(s.id)} />
             ))}
           </div>
         </section>
@@ -1466,7 +1865,7 @@ const guideLine = (tutorial: TutorialView, tab: Tab, talk: MelodyView['talks'][n
     case 'song':
       if (tab !== 'studio') return { text: 'Crée ton premier son. Direction le Studio !', target: 'nav-studio' };
       return {
-        text: 'Choisis un artiste, un thème, un beat puis ton équipe. Une embrouille va arriver : pas de panique. Au featuring, la roue dira oui au deuxième essai.',
+        text: 'Choisis un artiste, un thème et un beat (★ = colle à son style), puis ton équipe. Une embrouille va arriver : pas de panique. Au featuring, la roue dira oui au deuxième essai. À la fin : un titre et une cover.',
         target: null,
       };
     case 'release':
@@ -1788,7 +2187,8 @@ const Market = ({
 
 const Charts = ({ view }: { view: MelodyView }) => {
   const [chart, setChart] = useState<string>('global');
-  const entries = (chart === 'global' ? view.charts.global : (view.charts.genres[chart] ?? [])).slice(0, 20);
+  const [players, setPlayers] = useState(false);
+  const entries = (chart === 'global' ? view.charts.global : (view.charts.genres[chart] ?? [])).filter((e) => !players || e.player).slice(0, 20);
   const mine = view.label?.id;
   const podium = view.ranking.slice(0, 5);
   return (
@@ -1819,10 +2219,15 @@ const Charts = ({ view }: { view: MelodyView }) => {
               </button>
             ))}
         </div>
+        <label className="mt-check">
+          <input type="checkbox" checked={players} onChange={(event) => setPlayers(event.target.checked)} />
+          Seulement les joueurs du serveur
+        </label>
         <ol className="mt-chart">
           {entries.map((entry) => (
             <li key={`${entry.rank}-${entry.title}`} className={entry.labelId === mine ? 'is-me' : ''}>
               <span className="mt-rank">{entry.rank}</span>
+              {entry.songId ? <Cover id={entry.songId} className="mt-chart-art" /> : <span className="mt-chart-art" style={{ '--hue': hueOf(entry.artistName) } as CSSProperties} aria-hidden="true" />}
               <span className="mt-chart-title">
                 <b>{entry.title}</b>
                 <span className="mt-sub">{entry.artistName}</span>
@@ -1830,7 +2235,7 @@ const Charts = ({ view }: { view: MelodyView }) => {
               <span className="mt-mute">{compact(entry.streams)}</span>
             </li>
           ))}
-          {entries.length === 0 && <li className="mt-sub">Le chart se remplit après la première semaine.</li>}
+          {entries.length === 0 && <li className="mt-sub mt-chart-empty">{players ? 'Aucun son de joueur dans ce chart pour l’instant.' : 'Le chart se remplit après la première semaine.'}</li>}
         </ol>
       </section>
     </div>
@@ -1998,6 +2403,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
   };
 
   const view = state?.view;
+  const coversVersion = useCovers(guildId, view);
   const top = useMemo(() => {
     if (!view?.label) return null;
     const label = view.label;
@@ -2058,6 +2464,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
   }
 
   return (
+    <CoversContext.Provider value={coversVersion}>
     <section className="mt" aria-label="Melody Tycoon">
       {top}
       <div className="mt-clockbar">
@@ -2127,6 +2534,8 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
           {toast.text}
         </div>
       )}
+      {view.label && active && !view.tutorial && <HitMoment view={view} />}
     </section>
+    </CoversContext.Provider>
   );
 };

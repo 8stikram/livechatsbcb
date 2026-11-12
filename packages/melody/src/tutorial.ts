@@ -4,8 +4,7 @@
 import { CFG } from './config.ts';
 import { BEATS, THEMES } from './data/content.ts';
 import { rosterOf } from './economy.ts';
-import { publicFit, firstWeek } from './release.ts';
-import { rngFor } from './rng.ts';
+import { releaseWeek } from './release.ts';
 import type { Label, World } from './types.ts';
 
 export type TutorialStep = 'home' | 'sign' | 'song' | 'release' | 'results' | 'done';
@@ -120,19 +119,7 @@ export const tutorialView = (world: World, labelId: string): TutorialView | null
   const song = world.songs.filter((s) => s.labelId === labelId && s.state === 'scheduled').sort((a, b) => (a.releaseTick ?? 0) - (b.releaseTick ?? 0))[0];
   const artist = song ? world.artists[song.artistId] : undefined;
   if (song && artist && song.releaseTick !== null) {
-    const feat = song.featArtistId ? world.artists[song.featArtistId] : undefined;
-    const week = firstWeek(
-      {
-        quality: song.quality,
-        fans: artist.fans,
-        featFans: feat?.fans ?? 0,
-        hype: artist.hype,
-        fit: publicFit(artist, song.themeId, song.beatId, world.trends),
-        marketingReach: song.marketingReach,
-        rivals: 0,
-      },
-      rngFor(world.seed, song.releaseTick, song.id),
-    );
+    const { week } = releaseWeek(world, song, artist, song.releaseTick, 0);
     preview = {
       title: song.title,
       artistName: artist.name,

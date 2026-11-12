@@ -2091,9 +2091,9 @@ describe('Melody Tycoon', () => {
     const again = await act(player.token, { type: 'found', name: 'Deuxième', starterId: 'x' });
     expect(again).toMatchObject({ ok: false });
 
-    const artistId = started.view.roster[0]!.id;
+    const { id: artistId, offers } = started.view.roster[0]!;
     const tooDear = await act(player.token, {
-      type: 'studio', artistId, themeId: 'rupture', beatId: 'lovetrap',
+      type: 'studio', artistId, themeId: offers.themes[0]!.id, beatId: offers.beats[0]!.id,
       levels: { theme: 4, beat: 3, producer: 4, studio: 4 },
     });
     expect(tooDear.ok).toBe(false);
@@ -2145,14 +2145,16 @@ describe('Melody Tycoon', () => {
     const started = await found(player.token, 'Nuit Néon');
     const artist = started.view.roster[0]!;
     const levels = { theme: 2, beat: 2, producer: 2, studio: 2 };
+    const themeId = artist.offers.themes[0]!.id;
+    const beatId = artist.offers.beats[0]!.id;
 
-    const previewed = await post(`/v1/melody/${guildId}/preview`, { artistId: artist.id, themeId: 'rupture', beatId: 'lovetrap', levels }, bearer(player.token), QUICK_BASE);
+    const previewed = await post(`/v1/melody/${guildId}/preview`, { artistId: artist.id, themeId, beatId, levels }, bearer(player.token), QUICK_BASE);
     const preview = (await previewed.json()) as { ok: true; preview: { cost: number; qualityMin: number; qualityMax: number; energy: number } };
     expect(preview.preview.cost).toBe(600 + 400 + 1_000 + 1_500);
     expect(preview.preview.qualityMax).toBeGreaterThan(preview.preview.qualityMin);
 
     // In the booth: one event after each choice, every embrouille answered, then no featuring.
-    let studio = await act(player.token, { type: 'studio', artistId: artist.id, themeId: 'rupture', beatId: 'lovetrap', levels });
+    let studio = await act(player.token, { type: 'studio', artistId: artist.id, themeId, beatId, levels });
     if (!studio.ok) throw new Error(studio.message);
     expect(studio.view.session!.events.map((event) => event.stage)).toEqual(['theme', 'beat', 'producer', 'studio']);
     // Not before the featuring step is settled.
@@ -2165,16 +2167,21 @@ describe('Melody Tycoon', () => {
     if (!studio.ok) throw new Error(studio.message);
     const session = studio.view.session!;
 
-    const recorded = await act(player.token, { type: 'song', title: '  Rue   Glacée ' });
+    // A cover that is not a small picture is refused before the rules see it.
+    expect((await post(`/v1/melody/${guildId}/act`, { type: 'song', title: 'X', cover: 'javascript:alert(1)' }, bearer(player.token), QUICK_BASE)).status).toBe(400);
+    const cover = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==';
+    const recorded = await act(player.token, { type: 'song', title: '  Rue   Glacée ', cover });
     if (!recorded.ok) throw new Error(recorded.message);
     const song = recorded.view.songs[0]!;
     expect(recorded.view.session).toBeNull();
-    expect(song).toMatchObject({ title: 'Rue Glacée', state: 'vault' });
-    expect(song.quality).toBeGreaterThanOrEqual(session.qualityMin);
-    expect(song.quality).toBeLessThanOrEqual(session.qualityMax);
+    // The true note stays hidden until the release: only a range is known.
+    expect(song).toMatchObject({ title: 'Rue Glacée', state: 'vault', quality: null, cover: true });
+    expect(song.qualityMin).toBeLessThan(song.qualityMax);
     expect(recorded.view.label!.cash).toBe(30_000 - session.baseCost - session.extraCost);
+    const covers = await post(`/v1/melody/${guildId}/covers`, { ids: [song.id, 'nothing'] }, bearer(player.token), QUICK_BASE);
+    expect(((await covers.json()) as { covers: Record<string, string> }).covers).toEqual({ [song.id]: cover });
 
-    const scheduled = await act(player.token, { type: 'release', songId: song.id, inWeeks: 1, marketing: ['social_1'] });
+    const scheduled = await act(player.token, { type: 'release', songId: song.id, inWeeks: 1, marketing: ['posts', 'tiktok_ads'] });
     if (!scheduled.ok) throw new Error(scheduled.message);
     expect(scheduled.view.songs[0]).toMatchObject({ state: 'scheduled', releaseInWeeks: 1 });
     const booked = await act(player.token, { type: 'gig', artistId: artist.id });
@@ -2188,6 +2195,8 @@ describe('Melody Tycoon', () => {
     const released = now.view.songs[0]!;
     expect(released.state).toBe('released');
     expect(released.streamsLast).toBeGreaterThan(1_000);
+    expect(released.quality).toBeGreaterThan(0);
+    expect(released.promo.map((p) => p.views > 0)).toEqual([true, true]);
     expect(now.view.tick).toBeGreaterThan(started.view.tick);
     expect(now.view.roster[0]!.fans).toBeGreaterThan(artist.fans);
     expect(now.view.label!.cash).not.toBe(scheduled.view.label!.cash);

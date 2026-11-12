@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "data": "node tools/build-data.mjs",
-    "sim": "node src/sim-cli.ts"
+    "sim": "node src/sim-cli.ts",
+    "owner-list": "node tools/owner-list.mjs"
   }
 }

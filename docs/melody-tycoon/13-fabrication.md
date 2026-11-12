@@ -132,3 +132,22 @@ Choix du propriétaire : accord **avant** le studio, accepter / refuser / autre 
 - L'invité dépense **10 d'énergie** quand le son est enregistré (refusé s'il est trop fatigué) et gagne une part des nouveaux fans quand le son sort.
 - Une seule demande ouverte par artiste et par label, 10 au plus par label et 300 par serveur (pour rester dans le gratuit).
 - Toujours pas en ligne ni dans une version publiée.
+
+## Étape 7 — studio & sorties (fait)
+
+Choix du propriétaire : la note vient des **choix**, pas de l'argent ; c'est la **notoriété** qui rapporte des streams ; l'argent reste équilibré.
+
+- **Liste d'artistes** : la liste du propriétaire (~1000 noms) + ~20 artistes latinos, soit **1152 artistes** et **36 labels**. Nouveaux genres : métal, reggae / dub, jazz / classique. Seuls le nom et le genre viennent de la liste ; fans et niveau sont estimés. Les grands noms sont dans des labels gérés par le jeu (cadenas), les petits sont libres.
+- **Studio** : chaque semaine, **5 thèmes et 5 beats au hasard** par artiste. Une **★** marque ce qui va bien avec l'artiste (pas toujours présente). Aucun signe pour les choix risqués.
+- **Note** : choix 28 %, artiste 35 %, le reste (thème, beat, producteur, studio payés) compte peu. Payer le max donne +2 à +8 points, pas plus. **Expérience** : notoriété de l'artiste et sons déjà faits (un débutant perd 2 points).
+- **Combos cachés** : 10 duos thème + beat secrets par saison (+7). Le duo « parfait » (tout va avec l'artiste) donne +3. Un combo trouvé s'écrit dans le **Carnet** du label (40 au plus).
+- **Embrouilles** : on ne voit plus rien avant de choisir sa réaction. Chaque pari ajoute du risque.
+- **Surprise** : parfois un son explose (boom, +6 à +16) ou rate (flop). Plus de risque = plus de surprises, dans les deux sens.
+- **Révélation** : après le studio, une **fourchette** ; la vraie note seulement à la sortie (elle peut sortir de la fourchette).
+- **Tendance du mois** : un genre, un thème, un beat, affichés en bandeau. Coller à la tendance aide les streams.
+- **Titre et cover obligatoires** : la cover se choisit comme un média LiveChat (bibliothèque, PC, copiés, Ctrl+V), recadrée en carré, image fixe. Visible par tout le serveur. 600 covers gardées par serveur au plus.
+- **Sorties** : 1 son par artiste et 3 par label chaque semaine ; la semaine bloquée est grisée avec la raison.
+- **Promo** : Posts, Story, Pub TikTok, Influenceurs, Playlist, Clip YouTube, Clip pro, Affiches. Les **vues** dépendent du buzz (fans, hype) et se découvrent à la sortie. Rarement (~1 sur 30) une vidéo devient **virale**.
+- **Sons du jeu** : titres inventés dans la langue de l'artiste, sérieux ou absurdes.
+- **Extras** : page du son (cover, note, streams semaine par semaine, promo), case « Seulement les joueurs du serveur » dans les charts, moment « hit » animé.
+- Toujours pas en ligne ni dans une version publiée.

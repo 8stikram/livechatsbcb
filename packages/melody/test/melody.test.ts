@@ -4,7 +4,8 @@ import {
   expectedOffer, featChance, featDemand, firstWeek, freeAgents, generalRating, playGig, producerOfLevel, ranking, rosterOf,
   runTick, scheduleRelease, signArtist, simulate, songCost, songEnergy, takeLoan, CATALOG_ARTISTS,
   applyAction, buildView, cancelSession, guestDemand, offerFeat, reactToEvent, startSession,
-  makeOffer, openTalk, talkOf, talkBlocked, contractOf,
+  makeOffer, openTalk, talkOf, talkBlocked, contractOf, studioOffers, BEATS, THEMES,
+  releaseBlocked, promoViews, secretCombos, trendOf, rollSurprise, langOf, inventTitle,
 } from '../src/index.ts';
 import type { Artist, World } from '../src/index.ts';
 
@@ -51,14 +52,23 @@ describe('song creation', () => {
     expect(songCost({ theme: 1, beat: 4, producer: 4, studio: 1 }, { level: 86, affinity: 1, price: 40_000 })).toBe(60_000);
   });
 
-  it('caps the quality when everything is free and widens with paid choices', () => {
+  it('lets money help a little, and good choices much more', () => {
     const { artist } = worldWithLabel();
-    const free = estimateQuality({ artist, themeId: 'rupture', beatId: 'lovetrap', levels: { theme: 1, beat: 1, producer: 1, studio: 1 }, producer: producerOfLevel(1) });
-    const paid = estimateQuality({ artist, themeId: 'rupture', beatId: 'lovetrap', levels: { theme: 3, beat: 3, producer: 3, studio: 3 }, producer: producerOfLevel(3, 1) });
-    expect(free.cap).toBe(62);
-    expect(free.max).toBeLessThanOrEqual(62);
-    expect(paid.center).toBeGreaterThan(free.center + 8);
+    const cheap = { theme: 1, beat: 1, producer: 1, studio: 1 } as const;
+    const dear = { theme: 3, beat: 3, producer: 3, studio: 3 } as const;
+    const free = estimateQuality({ artist, themeId: 'rupture', beatId: 'lovetrap', levels: cheap, producer: producerOfLevel(1) });
+    const paid = estimateQuality({ artist, themeId: 'rupture', beatId: 'lovetrap', levels: dear, producer: producerOfLevel(3, 1) });
+    expect(free.cap).toBe(80);
+    expect(free.max).toBeLessThanOrEqual(80);
+    expect(paid.center).toBeGreaterThan(free.center + 2);
+    expect(paid.center).toBeLessThan(free.center + 8);
     expect(paid.width).toBeLessThan(free.width);
+    // A cheap song with choices that fit beats a dear song with choices that clash.
+    const offBeat = BEATS.find((b) => !b.genres.includes(artist.genre) && !artist.secondary.some((g) => b.genres.includes(g)) && b.id !== 'lovetrap')!;
+    const wrong = estimateQuality({ artist, themeId: 'clash', beatId: offBeat.id, levels: dear, producer: producerOfLevel(3, 1) });
+    const fit = BEATS.find((b) => b.genres.includes(artist.genre))!;
+    const right = estimateQuality({ artist, themeId: fit.themes[0]!, beatId: fit.id, levels: cheap, producer: producerOfLevel(1) });
+    expect(right.center).toBeGreaterThan(wrong.center);
   });
 
   it('rates theme and beat coherence', () => {
@@ -181,7 +191,11 @@ describe('labels', () => {
 
 describe('studio sessions', () => {
   const levels = { theme: 2, beat: 2, producer: 2, studio: 2 } as const;
-  const plan = (artistId: string) => ({ artistId, themeId: 'rupture', beatId: 'lovetrap', levels: { ...levels } });
+  // The first theme and beat the studio offers this week.
+  const plan = (world: World, labelId: string, artist: Artist) => {
+    const offers = studioOffers(world, labelId, artist);
+    return { artistId: artist.id, themeId: offers.themes[0]!.id, beatId: offers.beats[0]!.id, levels: { ...levels } };
+  };
 
   // Moves the week until the draw gives at least one embrouille.
   const sessionWithClash = () => {
@@ -190,7 +204,7 @@ describe('studio sessions', () => {
     label.cash = 200_000;
     for (let week = 0; week < 60; week += 1) {
       world.tick = week;
-      const session = startSession(world, label, plan(artist.id));
+      const session = startSession(world, label, plan(world, label.id, artist));
       if (session.events.some((e) => e.kind === 'clash')) return { world, label, artist, session };
     }
     throw new Error('no embrouille in 60 weeks');
@@ -201,7 +215,7 @@ describe('studio sessions', () => {
     expect(session.events.map((e) => e.stage)).toEqual(['theme', 'beat', 'producer', 'studio']);
     const first = JSON.stringify(session.events);
     cancelSession(world, label);
-    expect(JSON.stringify(startSession(world, label, plan(artist.id)).events)).toBe(first);
+    expect(JSON.stringify(startSession(world, label, plan(world, label.id, artist)).events)).toBe(first);
   });
 
   it('waits for every embrouille to be answered, then records the song with what they cost', () => {
@@ -229,7 +243,7 @@ describe('studio sessions', () => {
     label.cash = 500_000;
     // A bigger label, so its budget per song leaves room for dear guests.
     label.tier = 4;
-    startSession(world, label, plan(artist.id));
+    startSession(world, label, plan(world, label.id, artist));
     const clashes = buildView(world, label.ownerId!).session!.events.filter((e) => e.kind === 'clash');
     for (const event of clashes) reactToEvent(world, label, event.reactions[0]!.id);
     const guests = buildView(world, label.ownerId!).session!.guests;
@@ -486,5 +500,79 @@ describe('featuring between players', () => {
     runTick(world);
     runTick(world);
     expect(world.featDeals).toHaveLength(0);
+  });
+});
+
+describe('studio choices and releases', () => {
+  it('offers five themes and five beats a week, the same all week, and refuses the others', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    const offers = studioOffers(world, labelId, artist);
+    expect(offers.themes).toHaveLength(5);
+    expect(offers.beats).toHaveLength(5);
+    expect(studioOffers(world, labelId, artist)).toEqual(offers);
+    const missing = THEMES.find((t) => !offers.themes.some((o) => o.id === t.id))!;
+    const levels = { theme: 2, beat: 2, producer: 2, studio: 2 } as const;
+    expect(() => startSession(world, world.labels[labelId]!, { artistId: artist.id, themeId: missing.id, beatId: offers.beats[0]!.id, levels })).toThrow(/proposé/);
+  });
+
+  it('lets one song per artist and three per label out each week', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    const make = (title: string) => {
+      artist.energy = 100;
+      const label = world.labels[labelId]!;
+      label.cash = 1e6;
+      return createSong(world, labelId, {
+        artistId: artist.id, title, themeId: 'rupture', beatId: 'lovetrap',
+        levels: { theme: 1, beat: 1, producer: 1, studio: 1 }, producer: producerOfLevel(1, 1),
+      });
+    };
+    const week = world.tick + 2;
+    scheduleRelease(world, labelId, make('Un').id, week, ['posts']);
+    expect(releaseBlocked(world, labelId, artist.id, week)).toMatch(/semaine/);
+    expect(() => scheduleRelease(world, labelId, make('Deux').id, week, [])).toThrow(GameError);
+    expect(releaseBlocked(world, labelId, artist.id, week + 1)).toBeNull();
+  });
+
+  it('finds promo views from the buzz, and goes viral only now and then', () => {
+    const rng = createRng(9);
+    const small = { fans: 500, hype: 0 };
+    const big = { fans: 2_000_000, hype: 40 };
+    const sum = (artist: typeof small, ids: string[]) => promoViews(ids, artist, createRng(3)).reduce((s, p) => s + p.views, 0);
+    expect(sum(big, ['posts'])).toBeGreaterThan(sum(small, ['posts']));
+    expect(sum(small, ['posts', 'clip'])).toBeGreaterThan(sum(small, ['posts']));
+    let viral = 0;
+    for (let i = 0; i < 3_000; i += 1) viral += promoViews(['posts'], small, rng).filter((p) => p.viral).length;
+    expect(viral / 3_000).toBeGreaterThan(0.01);
+    expect(viral / 3_000).toBeLessThan(0.07);
+  });
+
+  it('keeps ten secret combos a season and a trend each month', () => {
+    const world = createWorld(7);
+    expect(secretCombos(world, 0).size).toBe(10);
+    expect(secretCombos(world, 5)).toEqual(secretCombos(world, 0));
+    const trend = trendOf(world, 0);
+    expect(trend.weeksLeft).toBeGreaterThan(0);
+    expect(trendOf(world, 1)).toMatchObject({ genre: trend.genre });
+  });
+
+  it('surprises more often when the session took risks', () => {
+    const artist = { attrs: { creativite: 50, discipline: 50 } } as Artist;
+    const count = (risk: number) => {
+      const rng = createRng(11);
+      let hits = 0;
+      for (let i = 0; i < 4_000; i += 1) if (rollSurprise(rng, risk, artist).kind !== null) hits += 1;
+      return hits;
+    };
+    expect(count(3)).toBeGreaterThan(count(0) * 1.5);
+  });
+
+  it('invents titles in the language of the artist', () => {
+    expect(langOf('FR')).toBe('fr');
+    expect(langOf('US')).toBe('en');
+    expect(langOf('US', 'latin')).toBe('es');
+    const rng = createRng(4);
+    const titles = new Set(Array.from({ length: 40 }, () => inventTitle(rng, 'fr', 'rap_fr')));
+    expect(titles.size).toBeGreaterThan(20);
+    for (const title of titles) expect(title.length).toBeGreaterThan(1);
   });
 });

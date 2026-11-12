@@ -3,7 +3,8 @@
 
 export type GenreId =
   | 'rap_fr' | 'rap_us' | 'drill' | 'trap' | 'rnb' | 'pop'
-  | 'afro' | 'latin' | 'variete' | 'hyperpop' | 'electro' | 'rock';
+  | 'afro' | 'latin' | 'variete' | 'hyperpop' | 'electro' | 'rock'
+  | 'metal' | 'reggae' | 'jazz';
 
 export type GenreFamily = 'rap' | 'chant' | 'machines' | 'groupe';
 
@@ -165,6 +166,26 @@ export interface Song {
   peakGlobal: number | null;
   peakGenre: number | null;
   weeksOut: number;
+  /** The range the studio announced; the true quality shows at release. Missing on songs made before. */
+  qualityMin?: number;
+  qualityMax?: number;
+  /** The song blew up or flopped against what the studio expected. */
+  surprise?: 'boom' | 'flop' | null;
+  /** A combo found with this song, written in the notebook at release. */
+  combo?: 'secret' | 'perfect' | null;
+  /** The player gave it a cover (kept apart by the server). */
+  cover?: boolean;
+  /** Promo picked at scheduling; the views are known after the release. */
+  marketingIds?: string[];
+  promo?: PromoResult[];
+  /** Streams week by week since the release (at most 12). */
+  history?: number[];
+}
+
+export interface PromoResult {
+  id: string;
+  views: number;
+  viral: boolean;
 }
 
 export interface Loan {
@@ -183,6 +204,8 @@ export interface Gig {
 
 /** A release by a label run by the game. Kept only while it still charts. */
 export interface NpcSong {
+  /** Invented in the artist's language and style. Missing on releases made before. */
+  title?: string;
   artistId: string;
   artistName: string;
   labelId: string;
@@ -199,6 +222,10 @@ export interface ChartEntry {
   labelId: string;
   streams: number;
   songId: string | null;
+  /** Song of a player's label (for "seulement les joueurs"). */
+  player?: boolean;
+  /** The player gave the song a cover. */
+  cover?: boolean;
 }
 
 export interface Trends {
@@ -231,6 +258,8 @@ export interface World {
   tutorials?: Record<string, import('./tutorial.ts').Tutorial>;
   /** Featuring requests between players. */
   featDeals?: import('./featdeals.ts').FeatDeal[];
+  /** Combos each label found by playing. */
+  notebooks?: Record<string, import('./craft.ts').NotebookEntry[]>;
 }
 
 export type StudioStage = 'theme' | 'beat' | 'producer' | 'studio' | 'feat';
@@ -262,5 +291,7 @@ export interface StudioSession {
   /** dealId when the guest comes from a deal with another player (already paid). */
   feat: { guestId: string; fee: number; dealId?: string } | null;
   featDone: boolean;
+  /** Gambles taken during the session: each one makes a surprise more likely. */
+  risk?: number;
   lastOffer: { guestId: string; offer: number; chance: number; roll: number | null; outcome: 'accepted' | 'refused' | 'vexed' } | null;
 }
