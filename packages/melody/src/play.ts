@@ -12,6 +12,7 @@ import { releaseBlocked } from './world.ts';
 import { createRng, hashString } from './rng.ts';
 import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer, SongLevels, Trends, World } from './types.ts';
 import { GameError, addPlayerLabel, bookGig, createSong, expectedOffer, freeAgents, scheduleRelease, takeLoan, type Offer } from './world.ts';
+import { answerClash, answerInterview, clashesView, interviewView, refuseClash, rivalsView, shadeView, startClash, throwShade, type ClashView, type InterviewView, type RivalView, type ShadeView, type Tone } from './clash.ts';
 import { answerTransfer, askTransfer, cancelTransfer, clauseOf, setClause, transfersView, type TransferView } from './transfers.ts';
 import { answerDeal, askFeat, cancelDeal, dealsView, otherArtists, type FeatDealView, type OtherArtistView } from './featdeals.ts';
 import { afterAction, isGuarded, nextStep, refund, skipTutorial, startTutorial, tutorialView, type TutorialView } from './tutorial.ts';
@@ -116,6 +117,11 @@ export type MelodyAction =
   | { type: 'transfer_answer'; transferId: string; answer: 'accept' | 'refuse' | 'counter'; fee?: number }
   | { type: 'transfer_cancel'; transferId: string }
   | { type: 'clause'; artistId: string; amount: number | null }
+  | { type: 'interview'; question: number; tone: Tone }
+  | { type: 'shade'; targetLabelId: string; line: number }
+  | { type: 'clash'; targetLabelId: string; artistId: string }
+  | { type: 'clash_answer'; clashId: string; artistId: string }
+  | { type: 'clash_refuse'; clashId: string }
   | { type: 'feat_deal'; dealId: string }
   | { type: 'studio'; artistId: string; themeId: string; beatId: string; levels: SongLevels }
   | { type: 'react'; reactionId: string }
@@ -175,6 +181,21 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
       return;
     case 'clause':
       setClause(world, label, action.artistId, action.amount);
+      return;
+    case 'interview':
+      answerInterview(world, label, action.question, action.tone);
+      return;
+    case 'shade':
+      throwShade(world, label, action.targetLabelId, action.line);
+      return;
+    case 'clash':
+      startClash(world, label, action.targetLabelId, action.artistId);
+      return;
+    case 'clash_answer':
+      answerClash(world, label, action.clashId, action.artistId);
+      return;
+    case 'clash_refuse':
+      refuseClash(world, label, action.clashId);
       return;
     case 'feat_deal':
       useDeal(world, label, action.dealId);
@@ -362,6 +383,8 @@ export interface LabelCard {
   fans: number;
   numberOnes: number;
   top10: number;
+  clashWins: number;
+  clashLosses: number;
   artists: Array<{ id: string; name: string; genre: GenreId; gen: number; fans: number }>;
   /** Their five best songs out, by streams. */
   songs: Array<{ id: string; title: string; artistName: string; streams: number; cover: boolean }>;
@@ -378,6 +401,8 @@ const labelCards = (world: World): LabelCard[] =>
       fans: fansOf(world, l.id),
       numberOnes: l.stats.numberOnes,
       top10: l.stats.top10Global,
+      clashWins: l.stats.clashWins ?? 0,
+      clashLosses: l.stats.clashLosses ?? 0,
       artists: rosterOf(world, l.id).map((a) => ({ id: a.id, name: a.name, genre: a.genre, gen: generalRating(a), fans: a.fans })),
       songs: world.songs
         .filter((s) => s.labelId === l.id && s.state === 'released')
@@ -425,6 +450,10 @@ export interface MelodyView {
   /** Featuring requests with other players, sent and received. */
   featDeals: FeatDealView[];
   transfers: TransferView[];
+  clashes: ClashView[];
+  rivals: RivalView[];
+  interview: InterviewView | null;
+  shade: ShadeView | null;
   /** The artists of the other players of the server. */
   others: OtherArtistView[];
   /** Contract talks open this week. */
@@ -644,6 +673,10 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     tutorial: label ? tutorialView(world, label.id) : null,
     featDeals: label ? dealsView(world, label.id) : [],
     transfers: label ? transfersView(world, label.id) : [],
+    clashes: label ? clashesView(world, label.id) : [],
+    rivals: label ? rivalsView(world, label.id) : [],
+    interview: label ? interviewView(world, label) : null,
+    shade: label ? shadeView(world, label) : null,
     others: label ? otherArtists(world, label.id) : [],
     talkNews: label ? talkNews(world, label.id) : [],
     trend: trendOf(world),

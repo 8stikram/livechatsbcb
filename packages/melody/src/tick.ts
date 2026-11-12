@@ -6,6 +6,7 @@ import { canTierUp, contractOf, debtOf, netWorth, playGig, rosterOf } from './ec
 import { tickAcademy } from './academy.ts';
 import { tickDeals } from './featdeals.ts';
 import { tickTransfers } from './transfers.ts';
+import { tickClashes } from './clash.ts';
 import { cleanTalks } from './negotiation.ts';
 import { countryOf, noteCombo } from './craft.ts';
 import { firstWeek, releaseWeek } from './release.ts';
@@ -358,6 +359,7 @@ export const runTick = (world: World): TickReport => {
   };
   tickDeals(world, tell);
   tickTransfers(world, tell);
+  tickClashes(world, tell);
   for (const contract of world.contracts.filter((c) => c.endTick <= tick)) {
     const label = world.labels[contract.labelId];
     const artist = world.artists[contract.artistId];

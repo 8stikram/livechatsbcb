@@ -113,6 +113,8 @@ export interface LabelStats {
   top10Global: number;
   top100Global: number;
   top50Genre: number;
+  clashWins?: number;
+  clashLosses?: number;
 }
 
 export interface Label {
@@ -182,6 +184,8 @@ export interface Song {
   promo?: PromoResult[];
   /** Streams week by week since the release (at most 12). */
   history?: number[];
+  /** A disstrack: the label it goes after. */
+  diss?: string;
 }
 
 export interface PromoResult {
@@ -261,6 +265,11 @@ export interface World {
   /** Featuring requests between players. */
   featDeals?: import('./featdeals.ts').FeatDeal[];
   transfers?: import('./transfers.ts').Transfer[];
+  clashes?: import('./clash.ts').Clash[];
+  /** Tick of the last shade of each label (one a week). */
+  shades?: Record<string, number>;
+  /** This week's interview answers of each label. */
+  interviews?: Record<string, { tick: number; answers: Partial<Record<number, import('./clash.ts').Tone>> }>;
   /** The centre de formation of each label: youths, scout, mission. */
   academies?: Record<string, import('./academy.ts').Academy>;
   /** Artists each label keeps an eye on in the market. */

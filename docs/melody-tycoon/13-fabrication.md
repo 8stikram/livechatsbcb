@@ -182,3 +182,15 @@ Choix du propriétaire : la note vient des **choix**, pas de l'argent ; c'est la
 - **Fil de la party** : l'accord et le transfert apparaissent dans les nouvelles du marché, avec le montant.
 - **Vente** : on ne peut plus vendre un artiste dans ses 8 premières semaines (sinon un jeune du centre signé gratuitement se revendait tout de suite).
 - **Prix du studio selon le palier** : Label Maison paie 15 % des prix, Underground 40 %, ensuite plein tarif. Un son « plume reconnue » + beat exclusif + producteur reconnu + studio pro coûte ~3 000 € au lieu de 20 000 €.
+
+## Étape 9 — interviews, piques et clashs (fait)
+
+Tout est dans l'onglet **Label**. Ce qui se gagne ou se perd : des fans et du buzz, jamais d'argent.
+
+- **Interview de la semaine** (façon FIFA) : un de tes artistes, 3 questions, 3 tons de réponse. Humble : il est content (+moral, +réputation). Sûr de lui : du buzz. Provoc : beaucoup de buzz, mais −2 de réputation, et la phrase part dans les nouvelles du marché. Les questions suivent ce qui se passe (son qui vient de sortir, clash en cours, artiste énervé, label rival).
+- **Pique de la semaine** : une phrase à choisir parmi 3, contre le label de ton choix (joueur ou label du jeu). Ton artiste prend du buzz, le leur en perd un peu. 1 fois sur 5, ça se retourne contre toi.
+- **Disstrack** : un de tes artistes enregistre gratuitement un son « Clash » contre un label (10 d'énergie). Il sort la semaine suivante, dans tes Sorties et les charts. Le label visé a 2 semaines pour répondre avec son propre disstrack.
+- **Résultat** : la semaine après la sortie des deux sons. Compte : la note du son, le buzz de l'artiste, son public, un peu de chance. Le gagnant prend 4 % des fans du perdant (50 000 max) et du buzz ; le perdant perd 3 % de ses fans.
+- **Se dégonfler** (refuser ou ne pas répondre) : −3 de réputation et du buzz en moins, et tout le monde le sait.
+- **Labels du jeu** : ils répondent 2 fois sur 3, sinon ils se dégonflent.
+- **Historique** : victoires et défaites de clash sur la fiche de chaque label. Tout passe dans les nouvelles du marché.

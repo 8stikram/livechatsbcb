@@ -46,6 +46,10 @@ export {
   TRANSFERS, askTransfer, answerTransfer, cancelTransfer, completeTransfer, setClause, clauseOf, agreedTransfer, transfersView, tickTransfers,
   type Transfer, type TransferStatus, type TransferView,
 } from './transfers.ts';
+export {
+  CLASH, startClash, answerClash, refuseClash, throwShade, answerInterview, interviewView, shadeView, clashesView, rivalsView, rivalsOf, tickClashes,
+  type Clash, type ClashStatus, type Tone, type ClashView, type RivalView, type InterviewView, type ShadeView,
+} from './clash.ts';
 export { runTick, type TickReport, type ReleaseReport, type LabelReport } from './tick.ts';
 export { simulate, STRATEGIES, type Strategy, type Snapshot } from './sim.ts';
 export { createRng, rngFor, type Rng } from './rng.ts';

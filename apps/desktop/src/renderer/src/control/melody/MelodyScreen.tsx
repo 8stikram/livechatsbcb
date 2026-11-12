@@ -33,6 +33,10 @@ import {
   type MarketView,
   type LabelCard,
   type TransferView,
+  type ClashView,
+  type InterviewView,
+  type RivalView,
+  type Tone,
 } from '@livechatsbcb/melody';
 import type { MelodyRoute } from '../../../../shared/ipc';
 import { LibraryPicker, type Shelf } from '../LibraryPicker';
@@ -2741,6 +2745,165 @@ const TransferMarket = ({ view, onTalk, onAct, busy }: { view: MelodyView; onTal
   );
 };
 
+/* ---------------------------------- Interview, piques et clashs ---------------------------------- */
+
+const TONES: Record<Tone, string> = { humble: 'Humble', confident: 'Sûr de lui', provoc: 'Provoc' };
+
+// The weekly interview, FIFA style: three questions, three tones.
+const Interview = ({ interview, onAct, busy }: { interview: InterviewView; onAct: (action: MelodyAction) => void; busy: boolean }) => (
+  <section className="mt-section mt-interview">
+    <Label>Interview de la semaine · {interview.artistName}</Label>
+    <span className="mt-sub">Humble : il est content. Sûr de lui : du buzz. Provoc : beaucoup de buzz, mais ta réputation en prend un coup.</span>
+    {interview.questions.map((q, i) => (
+      <div key={i} className="mt-question">
+        <b>« {q.text} »</b>
+        <div className="mt-answers">
+          {q.answers.map((a) => (
+            <button
+              key={a.tone}
+              type="button"
+              className={`mt-answer is-${a.tone}${q.answered === a.tone ? ' is-picked' : ''}`}
+              disabled={busy || q.answered !== null}
+              aria-pressed={q.answered === a.tone}
+              onClick={() => onAct({ type: 'interview', question: i, tone: a.tone })}
+            >
+              <small>{TONES[a.tone]}</small>
+              {a.text}
+            </button>
+          ))}
+        </div>
+      </div>
+    ))}
+  </section>
+);
+
+const RivalSelect = ({ rivals, value, onChange }: { rivals: RivalView[]; value: string; onChange: (id: string) => void }) => (
+  <select className="mt-select" aria-label="Label visé" value={value} onChange={(event) => onChange(event.target.value)}>
+    <option value="">Choisis un label</option>
+    {rivals.some((r) => r.player) && (
+      <optgroup label="Joueurs du serveur">
+        {rivals
+          .filter((r) => r.player)
+          .map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name} · {r.topArtist}
+            </option>
+          ))}
+      </optgroup>
+    )}
+    <optgroup label="Labels du jeu">
+      {rivals
+        .filter((r) => !r.player)
+        .map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.name} · {r.topArtist}
+          </option>
+        ))}
+    </optgroup>
+  </select>
+);
+
+const ArtistSelect = ({ view, value, onChange }: { view: MelodyView; value: string; onChange: (id: string) => void }) => (
+  <select className="mt-select" aria-label="Artiste" value={value} onChange={(event) => onChange(event.target.value)}>
+    {view.roster.map((a) => (
+      <option key={a.id} value={a.id} disabled={a.energy < 10}>
+        {a.name} · énergie {Math.round(a.energy)}
+      </option>
+    ))}
+  </select>
+);
+
+const CLASH_STATUS: Record<ClashView['status'], string> = { waiting: 'En attente', answered: 'Les disstracks tournent', won: 'Terminé', refused: 'Dégonflé' };
+
+const ClashRow = ({ clash, view, onAct, busy }: { clash: ClashView; view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const [artistId, setArtistId] = useState(view.roster[0]?.id ?? '');
+  const sent = clash.direction === 'sent';
+  const weeks = `${clash.weeksLeft} sem.`;
+  const line =
+    clash.status === 'waiting'
+      ? sent
+        ? `Disstrack de ${clash.myArtist}. ${clash.otherLabel} a ${weeks} pour répondre.`
+        : `${clash.theirArtist} t’a clashé. Réponds sous ${weeks}, sinon tu passes pour un dégonflé.`
+      : clash.status === 'answered'
+        ? `${clash.myArtist} contre ${clash.theirArtist}. Résultat dans ${weeks}`
+        : clash.won
+          ? clash.status === 'refused'
+            ? `${clash.otherLabel} s’est dégonflé. Victoire.`
+            : `${clash.myArtist} a gagné contre ${clash.theirArtist} : fans et buzz en plus.`
+          : clash.status === 'refused'
+            ? 'Tu t’es dégonflé. Ta réputation baisse.'
+            : `${clash.myArtist} a perdu contre ${clash.theirArtist}.`;
+  return (
+    <div className={`mt-deal is-${clash.status}${clash.won === true ? ' is-win' : clash.won === false ? ' is-lose' : ''}`}>
+      <span className="mt-crest mt-clash-crest" aria-hidden="true">
+        {clash.otherLabel[0]?.toUpperCase()}
+      </span>
+      <div className="mt-deal-text">
+        <Label>{sent ? `Clash contre ${clash.otherLabel}` : `${clash.otherLabel} te clashe`}</Label>
+        <b>{CLASH_STATUS[clash.status]}</b>
+        <span className="mt-sub">{line}</span>
+      </div>
+      {!sent && clash.status === 'waiting' && (
+        <div className="mt-acts mt-deal-acts">
+          <ArtistSelect view={view} value={artistId} onChange={setArtistId} />
+          <button type="button" className="mt-go" disabled={busy || !artistId} onClick={() => onAct({ type: 'clash_answer', clashId: clash.id, artistId })}>
+            Répondre avec un disstrack
+          </button>
+          <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'clash_refuse', clashId: clash.id })}>
+            Se dégonfler
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Going after another label: a pique once a week, or a disstrack.
+const Beef = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const [target, setTarget] = useState('');
+  const [artistId, setArtistId] = useState(view.roster[0]?.id ?? '');
+  if (view.roster.length === 0 || view.rivals.length === 0) return null;
+  const shade = view.shade;
+  return (
+    <section className="mt-section mt-beef">
+      <Label>Clasher un label</Label>
+      <div className="mt-acts">
+        <RivalSelect rivals={view.rivals} value={target} onChange={setTarget} />
+      </div>
+      {shade && (
+        <div className="mt-shade">
+          <Label>Pique de la semaine {shade.used ? '· déjà lancée' : ''}</Label>
+          <div className="mt-answers">
+            {shade.lines.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                className="mt-answer is-provoc"
+                disabled={busy || shade.used || !target}
+                title={target ? undefined : 'Choisis d’abord un label'}
+                onClick={() => onAct({ type: 'shade', targetLabelId: target, line: l.id })}
+              >
+                {l.text.split('{t}').join(view.rivals.find((r) => r.id === target)?.name ?? '…')}
+              </button>
+            ))}
+          </div>
+          <span className="mt-sub">Une pique par semaine. Ton artiste gagne du buzz… sauf si ça se retourne contre toi.</span>
+        </div>
+      )}
+      <div className="mt-diss">
+        <Label>Disstrack</Label>
+        <div className="mt-acts">
+          <ArtistSelect view={view} value={artistId} onChange={setArtistId} />
+          <button type="button" className="mt-go" disabled={busy || !target || !artistId} onClick={() => onAct({ type: 'clash', targetLabelId: target, artistId })}>
+            Sortir un disstrack
+          </button>
+        </div>
+        <span className="mt-sub">Gratuit, 10 d’énergie, il sort la semaine prochaine. L’autre label a 2 semaines pour répondre. Le gagnant prend des fans au perdant.</span>
+      </div>
+    </section>
+  );
+};
+
 /* ---------------------------------- Label (the other players) ---------------------------------- */
 
 const LabelPage = ({ card, onClose }: { card: LabelCard; onClose: () => void }) => (
@@ -2759,6 +2922,9 @@ const LabelPage = ({ card, onClose }: { card: LabelCard; onClose: () => void }) 
       <span className="mt-pill">Réputation {card.reputation}</span>
       <span className="mt-pill">
         {card.numberOnes} n°1 · {card.top10} top 10
+      </span>
+      <span className="mt-pill">
+        Clashs : {card.clashWins} gagné{card.clashWins > 1 ? 's' : ''} · {card.clashLosses} perdu{card.clashLosses > 1 ? 's' : ''}
       </span>
     </div>
     <Label>Artistes</Label>
@@ -2822,6 +2988,16 @@ const LabelsTab = ({ view, onAct, onTalk, busy }: { view: MelodyView; onAct: (ac
           ))}
         </div>
       </section>
+      {view.clashes.length > 0 && (
+        <section className="mt-deals" aria-label="Clashs">
+          <Label>Clashs</Label>
+          {view.clashes.map((clash) => (
+            <ClashRow key={`${clash.id}:${clash.status}`} clash={clash} view={view} onAct={onAct} busy={busy} />
+          ))}
+        </section>
+      )}
+      {view.interview && <Interview interview={view.interview} onAct={onAct} busy={busy} />}
+      <Beef view={view} onAct={onAct} busy={busy} />
       <section className="mt-section">
         <Label>Labels du serveur</Label>
         <div className="mt-labels">
@@ -3056,6 +3232,10 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'sell') say('Artiste vendu.');
       if (action.type === 'transfer_ask') say('Offre envoyée.');
       if (action.type === 'transfer_answer' && action.answer === 'accept') say('Accord des labels. L’artiste doit encore signer.');
+      if (action.type === 'clash') say('Disstrack enregistré. Il sort la semaine prochaine.');
+      if (action.type === 'clash_answer') say('Réponse enregistrée. Que le meilleur gagne.');
+      if (action.type === 'clash_refuse') say('Tu te dégonfles… ta réputation en prend un coup.');
+      if (action.type === 'shade') say('Pique envoyée. Regarde les nouvelles du marché.');
       if (action.type === 'clause') say(action.amount === null ? 'Clause retirée.' : 'Clause enregistrée.');
       return answer.data.view;
     },

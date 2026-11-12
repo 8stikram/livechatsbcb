@@ -2321,3 +2321,76 @@ img.mt-cover-img {
 .mt-deal.is-agreed {
   border-color: var(--mt-ok);
 }
+
+/* interview et clashs */
+.mt-interview,
+.mt-beef {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mt-question {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--mt-panel);
+  border: 1px solid var(--mt-line);
+}
+.mt-answers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+.mt .mt-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  background: var(--mt-panel2);
+  border: 1px solid var(--mt-line);
+  font-size: 13px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.mt .mt-answer:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--mt-a1);
+}
+.mt .mt-answer:disabled:not(.is-picked) {
+  opacity: 0.45;
+}
+.mt-answer small {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mt-mute);
+}
+.mt-answer.is-provoc small {
+  color: var(--mt-a2);
+}
+.mt-answer.is-confident small {
+  color: var(--mt-warn);
+}
+.mt-answer.is-humble small {
+  color: var(--mt-ok);
+}
+.mt .mt-answer.is-picked {
+  border-image: var(--mt-grad) 1;
+}
+.mt-shade,
+.mt-diss {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mt-clash-crest {
+  width: 32px;
+  height: 36px;
+  font-size: 16px;
+}
+.mt-deal.is-win {
+  border-color: var(--mt-ok);
+}
+.mt-deal.is-lose {
+  border-color: var(--mt-bad);
+}

@@ -731,3 +731,75 @@ describe('prix du studio', () => {
     expect(songCost(levels, producer, 1)).toBeLessThan(songCost(levels, producer, 3) / 5);
   });
 });
+
+describe('clashs, piques et interviews', () => {
+  const twoLabels = () => {
+    const world = createWorld(7);
+    for (const [user, name] of [['u1', 'Rouge Records'], ['u2', 'Bleu Records']] as const) {
+      applyAction(world, user, { type: 'found', name });
+      applyAction(world, user, { type: 'tuto', move: 'skip' });
+    }
+    const a = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    const b = Object.values(world.labels).find((l) => l.ownerId === 'u2')!;
+    return { world, a, b, artistA: rosterOf(world, a.id)[0]!, artistB: rosterOf(world, b.id)[0]! };
+  };
+
+  it('puts out two disstracks and gives fans and buzz to the winner', () => {
+    const { world, a, b, artistA, artistB } = twoLabels();
+    expect(buildView(world, 'u1').rivals.some((r) => r.id === b.id && r.player)).toBe(true);
+    applyAction(world, 'u1', { type: 'clash', targetLabelId: b.id, artistId: artistA.id });
+    const diss = world.songs.at(-1)!;
+    expect(diss).toMatchObject({ themeId: 'clash', diss: b.id, state: 'scheduled' });
+    expect(() => applyAction(world, 'u1', { type: 'clash', targetLabelId: b.id, artistId: artistA.id })).toThrow(/déjà en cours/);
+    const received = buildView(world, 'u2').clashes[0]!;
+    expect(received).toMatchObject({ direction: 'received', status: 'waiting' });
+    applyAction(world, 'u2', { type: 'clash_answer', clashId: received.id, artistId: artistB.id });
+    const fans = artistA.fans + artistB.fans;
+    for (let i = 0; i < 4; i += 1) runTick(world);
+    const done = buildView(world, 'u1').clashes[0]!;
+    expect(done.status).toBe('won');
+    expect(typeof done.won).toBe('boolean');
+    expect((a.stats.clashWins ?? 0) + (b.stats.clashWins ?? 0)).toBe(1);
+    expect(artistA.fans + artistB.fans).not.toBe(fans);
+    expect(world.marketNews!.some((n) => n.text.startsWith('Clash : ') && n.text.includes('gagne'))).toBe(true);
+  });
+
+  it('shames the label that backs down', () => {
+    const { world, a, b, artistA } = twoLabels();
+    applyAction(world, 'u1', { type: 'clash', targetLabelId: b.id, artistId: artistA.id });
+    const rep = b.reputation;
+    applyAction(world, 'u2', { type: 'clash_refuse', clashId: buildView(world, 'u2').clashes[0]!.id });
+    expect(b.reputation).toBeLessThan(rep);
+    expect(a.stats.clashWins).toBe(1);
+    expect(buildView(world, 'u2').labels.find((l) => l.id === b.id)!.clashLosses).toBe(1);
+    expect(world.marketNews!.at(-1)!.text).toMatch(/dégonfle/);
+  });
+
+  it('lets a label of the game answer or back down', () => {
+    const { world, artistA } = twoLabels();
+    const npc = buildView(world, 'u1').rivals.find((r) => !r.player)!;
+    applyAction(world, 'u1', { type: 'clash', targetLabelId: npc.id, artistId: artistA.id });
+    runTick(world);
+    expect(['answered', 'refused']).toContain(buildView(world, 'u1').clashes[0]!.status);
+  });
+
+  it('throws one shade a week, and answers the interview once per question', () => {
+    const { world, b } = twoLabels();
+    const shade = buildView(world, 'u1').shade!;
+    expect(shade.lines).toHaveLength(3);
+    applyAction(world, 'u1', { type: 'shade', targetLabelId: b.id, line: shade.lines[0]!.id });
+    expect(buildView(world, 'u1').shade!.used).toBe(true);
+    expect(() => applyAction(world, 'u1', { type: 'shade', targetLabelId: b.id, line: shade.lines[1]!.id })).toThrow(/déjà/);
+
+    const interview = buildView(world, 'u1').interview!;
+    expect(interview.questions).toHaveLength(3);
+    const artist = world.artists[interview.artistId]!;
+    const hype = artist.hype;
+    applyAction(world, 'u1', { type: 'interview', question: 0, tone: 'confident' });
+    expect(artist.hype).toBeGreaterThan(hype);
+    expect(buildView(world, 'u1').interview!.questions[0]!.answered).toBe('confident');
+    expect(() => applyAction(world, 'u1', { type: 'interview', question: 0, tone: 'provoc' })).toThrow(/déjà/);
+    runTick(world);
+    expect(buildView(world, 'u1').interview!.questions.every((q) => q.answered === null)).toBe(true);
+  });
+});
