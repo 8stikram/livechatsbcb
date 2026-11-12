@@ -225,3 +225,15 @@ Style choisi par le propriétaire parmi 3 maquettes (néon, pixel, silhouette) :
 - **Humeur visible** sur tes artistes : une croix rouge de colère quand le moral est sous 35, des « Z » quand l'énergie est sous 25.
 - **Où** : toutes les cartes d'artiste (Effectif, studio, marché, négociation, autres joueurs), le centre de formation, les offres de featuring et de transfert, les invitations en tournée, la fiche des labels.
 - Rien ne change côté serveur : l'avatar se dessine dans l'appli.
+
+## Étape 12 — saisons (fait)
+
+Choix du propriétaire : saison de **4 vraies semaines** (28 semaines de jeu), **on garde tout** à la fin, **3 objectifs proposés dont 2 à choisir**, et tous les plus (trophées, cérémonie animée, palmarès, coup de pouce au dernier).
+
+- **Objectifs** (Accueil) : chaque label reçoit 3 objectifs adaptés à son palier (un son dans un top, finir sans dette, sortir un EP, finir une tournée, signer un artiste noté 60+…). Il en choisit 2, c'est verrouillé. Sans choix après 4 semaines, le jeu prend les deux premiers. Réussi : +1 à +3 de réputation et du cash (1 000 à 10 000 € × le palier) à la fin de la saison. Raté : rien.
+- **Fin de saison** (semaine 28) : classement final (le même calcul que le classement du serveur), puis récompenses. Podium : +3, +2, +1 de réputation. Le dernier reçoit 10 000 € s'il y a au moins 2 labels.
+- **Trophées**, entre labels de joueurs : Label de la saison, Son de la saison (meilleur démarrage), Projet de la saison (EP ou album le mieux noté), Artiste de la saison (le plus de streams), Révélation (plus forte hausse de fans, parti de moins de 50 000). Chaque trophée d'artiste : +2 de réputation pour le label, +10 de buzz pour l'artiste.
+- **Cérémonie** : à la première ouverture après la fin de saison, un écran en 3 temps (podium, trophées, ton bilan) avec confettis. On peut la revoir depuis l'onglet Label.
+- **Palmarès** : sur la fiche de chaque label, sa place et ses trophées saison par saison (12 saisons gardées).
+- **Après** : rien n'est remis à zéro sauf les compteurs de saison. De nouveaux objectifs sont proposés tout de suite.
+- Un label qui arrive en cours de saison reçoit ses objectifs à son arrivée.

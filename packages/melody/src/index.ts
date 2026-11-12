@@ -58,6 +58,10 @@ export {
   TOURS, tourQuote, announceTour, answerTourInvite, cancelTour, tourOf, onTour, toursView, tourGuests, tickTours,
   type Tour, type TourState, type TourView, type TourQuote,
 } from './tours.ts';
+export {
+  SEASONS, TROPHY_NAMES, seasonNumber, seasonsOf, enterSeason, pickGoals, watchCeremony, tickSeason, seasonView, honoursOf,
+  type GoalId, type GoalView, type SeasonView, type SeasonResult, type SeasonState, type Seasons, type TrophyKind, type Honour,
+} from './seasons.ts';
 export { runTick, type TickReport, type ReleaseReport, type LabelReport } from './tick.ts';
 export { simulate, STRATEGIES, type Strategy, type Snapshot } from './sim.ts';
 export { HAIRS, HATS, FACES, lookOf, parseLook, type Look, type Hair, type Hat, type Face } from './avatar.ts';

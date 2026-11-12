@@ -5,7 +5,7 @@ import {
   runTick, scheduleRelease, signArtist, simulate, songCost, songEnergy, takeLoan, CATALOG_ARTISTS,
   applyAction, buildView, cancelSession, guestDemand, offerFeat, reactToEvent, startSession,
   makeOffer, openTalk, talkOf, talkBlocked, contractOf, studioOffers, BEATS, THEMES,
-  releaseBlocked, promoViews, secretCombos, trendOf, rollSurprise, langOf, inventTitle, academyOf, LOOKS, lookOf, parseLook,
+  releaseBlocked, promoViews, secretCombos, trendOf, rollSurprise, langOf, inventTitle, academyOf, LOOKS, lookOf, parseLook, seasonsOf,
 } from '../src/index.ts';
 import type { Artist, World } from '../src/index.ts';
 
@@ -924,5 +924,79 @@ describe('avatars', () => {
     expect(new Set(looks.map((l) => l.hair + ' ' + l.hat)).size).toBeGreaterThan(10);
     const metal = Array.from({ length: 300 }, (_, i) => lookOf('someone_' + i, 'metal'));
     expect(metal.filter((l) => l.hair === 'long').length).toBeGreaterThan(100);
+  });
+});
+
+describe('saisons', () => {
+  it('offers three goals, lets the label pick two once, and picks for it after four weeks', () => {
+    const { world, labelId } = worldWithLabel();
+    const before = buildView(world, 'u1').seasonInfo;
+    expect(before).toMatchObject({ number: 1, week: 1, picked: false, picks: 2 });
+    expect(before.goals).toHaveLength(3);
+    const [a, b, c] = before.goals.map((g) => g.id);
+    expect(() => applyAction(world, 'u1', { type: 'season_goals', goals: [a!] })).toThrow(/Choisis 2/);
+    expect(() => applyAction(world, 'u1', { type: 'season_goals', goals: [a!, 'nope'] })).toThrow(/pas proposé/);
+    applyAction(world, 'u1', { type: 'season_goals', goals: [a!, c!] });
+    const after = buildView(world, 'u1').seasonInfo;
+    expect(after.picked).toBe(true);
+    expect(after.goals.filter((g) => g.chosen).map((g) => g.id)).toEqual([a, c]);
+    expect(() => applyAction(world, 'u1', { type: 'season_goals', goals: [a!, b!] })).toThrow(/déjà/);
+
+    const lazy = worldWithLabel();
+    lazy.world.labels[lazy.labelId]!.cash = 500_000;
+    for (let i = 0; i < 5; i += 1) runTick(lazy.world);
+    const auto = buildView(lazy.world, 'u1').seasonInfo;
+    expect(auto.picked).toBe(true);
+    expect(auto.goals.filter((g) => g.chosen)).toHaveLength(2);
+    expect(labelId).toBeTruthy();
+  });
+
+  it('closes the season after 28 weeks: ranking, trophies, rewards for the goals kept, and a new season', () => {
+    const { world, labelId } = worldWithLabel();
+    const label = world.labels[labelId]!;
+    label.cash = 500_000;
+    const mine = seasonsOf(world).current.labels[labelId]!;
+    mine.offered = ['no_debt', 'streams', 'number1'];
+    applyAction(world, 'u1', { type: 'season_goals', goals: ['no_debt', 'streams'] });
+    mine.streams = mine.start.streamsTarget;
+    const reputation = label.reputation;
+    let last = runTick(world);
+    expect(last.labels[labelId]!.events.some((e) => e.includes('Objectif de saison atteint'))).toBe(true);
+    for (let i = 1; i < 28; i += 1) last = runTick(world);
+    expect(world.tick).toBe(28);
+    const view = buildView(world, 'u1');
+    expect(view.seasonInfo).toMatchObject({ number: 2, week: 1, picked: false, unseen: true });
+    const result = view.seasonInfo.last!;
+    expect(result.number).toBe(1);
+    expect(result.ranking[0]).toMatchObject({ labelId, place: 1 });
+    expect(result.trophies.some((t) => t.kind === 'label' && t.labelId === labelId)).toBe(true);
+    const took = result.labels[labelId]!;
+    expect(took.goals.map((g) => g.done)).toEqual([true, true]);
+    // Two goals (1 + 2), first place (3), and the trophies of its artists.
+    expect(took.reputation).toBeGreaterThanOrEqual(6);
+    expect(took.cash).toBe(1_500 * label.tier + 2_500 * label.tier);
+    expect(label.reputation).toBeGreaterThan(reputation);
+    expect(last.labels[labelId]!.events.some((e) => e.includes('Saison 1 terminée : tu finis 1er sur 1'))).toBe(true);
+    expect(view.labels.find((l) => l.id === labelId)!.honours[0]).toMatchObject({ season: 1, place: 1 });
+    applyAction(world, 'u1', { type: 'season_seen' });
+    expect(buildView(world, 'u1').seasonInfo.unseen).toBe(false);
+    expect(buildView(world, 'u1').seasonInfo.goals).toHaveLength(3);
+  });
+
+  it('gives the last label a hand when there are several', () => {
+    const world = createWorld(7);
+    for (const [user, name] of [['u1', 'Gros Label'], ['u2', 'Petit Label']] as const) {
+      applyAction(world, user, { type: 'found', name });
+      applyAction(world, user, { type: 'tuto', move: 'skip' });
+    }
+    const big = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    const small = Object.values(world.labels).find((l) => l.ownerId === 'u2')!;
+    big.cash = 2_000_000;
+    small.cash = 300_000;
+    for (let i = 0; i < 28; i += 1) runTick(world);
+    const result = seasonsOf(world).history[0]!;
+    expect(result.ranking.map((r) => r.labelId)).toEqual([big.id, small.id]);
+    expect(result.labels[small.id]!.cash).toBeGreaterThanOrEqual(10_000);
+    expect(buildView(world, 'u2').seasonInfo.last!.labels[small.id]!.place).toBe(2);
   });
 });

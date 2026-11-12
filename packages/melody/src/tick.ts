@@ -8,6 +8,7 @@ import { tickDeals } from './featdeals.ts';
 import { tickTransfers } from './transfers.ts';
 import { tickClashes } from './clash.ts';
 import { tickProjects } from './projects.ts';
+import { tickSeason } from './seasons.ts';
 import { tickTours } from './tours.ts';
 import { cleanTalks } from './negotiation.ts';
 import { countryOf, noteCombo } from './craft.ts';
@@ -382,6 +383,19 @@ export const runTick = (world: World): TickReport => {
   tickProjects(world, tell, (text) => {
     world.marketNews = [...(world.marketNews ?? []), { tick: world.tick, text }];
   });
+  // The season: streams counted, goals noted, and on its last week the ranking, the trophies and the rewards.
+  tickSeason(
+    world,
+    (labelId, amount) => {
+      const label = world.labels[labelId];
+      if (label) earn(reports, label, amount);
+    },
+    tell,
+    (text) => {
+      world.marketNews = [...(world.marketNews ?? []), { tick: world.tick, text }];
+    },
+  );
+  for (const label of players) if (!label.bankrupt) report(reports, label).cash = Math.round(label.cash);
   for (const contract of world.contracts.filter((c) => c.endTick <= tick)) {
     const label = world.labels[contract.labelId];
     const artist = world.artists[contract.artistId];

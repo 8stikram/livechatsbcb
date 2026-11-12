@@ -14,6 +14,7 @@ import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer,
 import { GameError, addPlayerLabel, bookGig, createSong, expectedOffer, freeAgents, scheduleRelease, takeLoan, type Offer } from './world.ts';
 import { addDeluxe, createProject, projectsView, type ProjectKind, type ProjectView } from './projects.ts';
 import { announceTour, answerTourInvite, cancelTour, tourGuests, toursView, type TourView } from './tours.ts';
+import { enterSeason, honoursOf, pickGoals, seasonView, watchCeremony, type Honour, type SeasonView } from './seasons.ts';
 import { answerClash, answerInterview, clashesView, interviewView, refuseClash, rivalsView, shadeView, startClash, throwShade, type ClashView, type InterviewView, type RivalView, type ShadeView, type Tone } from './clash.ts';
 import { answerTransfer, askTransfer, cancelTransfer, clauseOf, setClause, transfersView, type TransferView } from './transfers.ts';
 import { answerDeal, askFeat, cancelDeal, dealsView, otherArtists, type FeatDealView, type OtherArtistView } from './featdeals.ts';
@@ -139,6 +140,8 @@ export type MelodyAction =
   | { type: 'tour'; artistId: string; dates: number; partnerId?: string | null; openerId?: string | null; merch?: boolean }
   | { type: 'tour_answer'; tourId: string; accept: boolean }
   | { type: 'tour_cancel'; tourId: string }
+  | { type: 'season_goals'; goals: string[] }
+  | { type: 'season_seen' }
   | { type: 'loan'; amount: number; weeks: 8 | 16 | 24 };
 
 const labelOfOwner = (world: World, ownerId: string): Label => {
@@ -151,9 +154,11 @@ const labelOfOwner = (world: World, ownerId: string): Label => {
 export const applyAction = (world: World, ownerId: string, action: MelodyAction): void => {
   if (action.type === 'found') {
     foundLabel(world, ownerId, action.name);
+    enterSeason(world, labelOfOwner(world, ownerId));
     return;
   }
   const label = labelOfOwner(world, ownerId);
+  enterSeason(world, label);
   const guarded = isGuarded(world, label.id, action.type);
   const cash = label.cash;
   const roster = rosterOf(world, label.id).length;
@@ -302,6 +307,12 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
     case 'tour_cancel':
       cancelTour(world, label, action.tourId);
       return;
+    case 'season_goals':
+      pickGoals(world, label, action.goals);
+      return;
+    case 'season_seen':
+      watchCeremony(world, label);
+      return;
     case 'loan':
       takeLoan(world, label.id, action.amount, action.weeks);
       return;
@@ -411,6 +422,8 @@ export interface LabelCard {
   top10: number;
   clashWins: number;
   clashLosses: number;
+  /** Past seasons: place and trophies. */
+  honours: Honour[];
   artists: Array<{ id: string; name: string; genre: GenreId; gen: number; fans: number }>;
   /** Their five best songs out, by streams. */
   songs: Array<{ id: string; title: string; artistName: string; streams: number; cover: boolean }>;
@@ -429,6 +442,7 @@ const labelCards = (world: World): LabelCard[] =>
       top10: l.stats.top10Global,
       clashWins: l.stats.clashWins ?? 0,
       clashLosses: l.stats.clashLosses ?? 0,
+      honours: honoursOf(world, l.id),
       artists: rosterOf(world, l.id).map((a) => ({ id: a.id, name: a.name, genre: a.genre, gen: generalRating(a), fans: a.fans })),
       songs: world.songs
         .filter((s) => s.labelId === l.id && s.state === 'released')
@@ -441,6 +455,8 @@ export interface MelodyView {
   tick: number;
   season: number;
   weekOfSeason: number;
+  /** Goals of the season, and the last season's results. */
+  seasonInfo: SeasonView;
   trends: Trends;
   label: null | {
     id: string;
@@ -610,6 +626,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     tick: world.tick,
     season: Math.floor(world.tick / CFG.ticksPerSeason) + 1,
     weekOfSeason: (world.tick % CFG.ticksPerSeason) + 1,
+    seasonInfo: seasonView(world, label ?? undefined),
     trends: world.trends,
     label: label && {
       id: label.id,

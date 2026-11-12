@@ -272,6 +272,8 @@ export interface World {
   clashes?: import('./clash.ts').Clash[];
   projects?: import('./projects.ts').Project[];
   tours?: import('./tours.ts').Tour[];
+  /** The season being played, its goals, and the past seasons. */
+  seasons?: import('./seasons.ts').Seasons;
   /** Tick of the last shade of each label (one a week). */
   shades?: Record<string, number>;
   /** This week's interview answers of each label. */

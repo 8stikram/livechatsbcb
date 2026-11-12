@@ -64,6 +64,8 @@ export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('tour'), artistId: IdSchema, dates: z.number().int().min(4).max(20), partnerId: IdSchema.nullable().optional(), openerId: IdSchema.nullable().optional(), merch: z.boolean().optional() }),
   z.object({ type: z.literal('tour_answer'), tourId: IdSchema, accept: z.boolean() }),
   z.object({ type: z.literal('tour_cancel'), tourId: IdSchema }),
+  z.object({ type: z.literal('season_goals'), goals: z.array(z.string().min(1).max(20)).min(1).max(3) }),
+  z.object({ type: z.literal('season_seen') }),
   z.object({ type: z.literal('studio'), artistId: IdSchema, themeId: IdSchema, beatId: IdSchema, levels: LevelsSchema }),
   z.object({ type: z.literal('react'), reactionId: IdSchema }),
   z.object({ type: z.literal('feat'), guestId: IdSchema, offer: z.number().min(1).max(1e9) }),

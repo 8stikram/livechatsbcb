@@ -44,6 +44,8 @@ import {
   type ProjectKind,
   type ProjectView,
   type TourView,
+  TROPHY_NAMES,
+  type SeasonResult,
 } from '@livechatsbcb/melody';
 import type { MelodyRoute } from '../../../../shared/ipc';
 import { LibraryPicker, type Shelf } from '../LibraryPicker';
@@ -208,7 +210,7 @@ const FoundLabel = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: M
 
 /* ---------------------------------- Home ---------------------------------- */
 
-const Home = ({ view, onGo }: { view: MelodyView; onGo: (tab: Tab) => void }) => {
+const Home = ({ view, onGo, onAct, busy }: { view: MelodyView; onGo: (tab: Tab) => void; onAct: (action: MelodyAction) => void; busy: boolean }) => {
   const rested = view.roster.filter((artist) => artist.energy >= 30).length;
   const next = view.songs.filter((song) => song.state === 'scheduled').sort((a, b) => (a.releaseInWeeks ?? 0) - (b.releaseInWeeks ?? 0))[0];
   const last = view.songs.filter((song) => song.state === 'released').sort((a, b) => a.weeksOut - b.weeksOut)[0];
@@ -258,6 +260,7 @@ const Home = ({ view, onGo }: { view: MelodyView; onGo: (tab: Tab) => void }) =>
           )}
         </div>
       </div>
+      <SeasonGoals key={view.seasonInfo.number} view={view} onAct={onAct} busy={busy} />
       <div className="mt-row4">
         <button type="button" className="mt-tile" onClick={() => onGo('charts')}>
           <span className="mt-ico">{place || '–'}</span>
@@ -858,6 +861,182 @@ const HitMoment = ({ view }: { view: MelodyView }) => {
         <button type="button" className="mt-go">
           Trop bien
         </button>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
+/* ---------------------------------- Saisons ---------------------------------- */
+
+const nth = (place: number): string => (place === 1 ? '1er' : `${place}e`);
+
+// The goals of the season on the home page: three offered, two to pick, then their progress.
+const SeasonGoals = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const info = view.seasonInfo;
+  const [picked, setPicked] = useState<string[]>([]);
+  if (info.goals.length === 0) return null;
+  const toggle = (id: string) => setPicked((list) => (list.includes(id) ? list.filter((x) => x !== id) : list.length < info.picks ? [...list, id] : list));
+  const shown = info.picked ? info.goals.filter((g) => g.chosen) : info.goals;
+  return (
+    <section className="mt-section mt-season" aria-label="Objectifs de saison">
+      <div className="mt-bar">
+        <Label>
+          Saison {info.number} · semaine {info.week} sur {CFG.ticksPerSeason}
+        </Label>
+        <span className="mt-sub">
+          Classement final dans {info.weeksLeft} semaine{info.weeksLeft > 1 ? 's' : ''}
+        </span>
+      </div>
+      <div className="mt-seasonbar" role="img" aria-label={`Semaine ${info.week} sur ${CFG.ticksPerSeason}`}>
+        <i style={{ width: `${(info.week / CFG.ticksPerSeason) * 100}%` }} />
+      </div>
+      {!info.picked && (
+        <span className="mt-sub">
+          Choisis {info.picks} objectifs sur {info.goals.length}. Réussi : de la réputation et du cash à la fin de la saison. Raté : rien ne se passe.
+          {info.pickWeeksLeft > 0 ? ` Encore ${info.pickWeeksLeft} semaine${info.pickWeeksLeft > 1 ? 's' : ''} pour choisir, sinon le jeu prend les deux premiers.` : ''}
+        </span>
+      )}
+      <div className="mt-goals">
+        {shown.map((g) => {
+          const body = (
+            <>
+              <b>{g.text}</b>
+              <span className="mt-sub">
+                +{g.reputation} réputation · +{money(g.cash)}
+              </span>
+              {info.picked && <span className={`mt-goal-state${g.done ? ' is-done' : ''}`}>{g.done ? '✓ Atteint' : g.atEnd ? `Jugé le dernier jour · ${g.progress ?? ''}` : (g.progress ?? 'En cours')}</span>}
+            </>
+          );
+          return info.picked ? (
+            <div key={g.id} className={`mt-goal${g.done ? ' is-done' : ''}`}>
+              {body}
+            </div>
+          ) : (
+            <button key={g.id} type="button" className="mt-goal" aria-pressed={picked.includes(g.id)} onClick={() => toggle(g.id)}>
+              {body}
+            </button>
+          );
+        })}
+      </div>
+      {!info.picked && (
+        <div className="mt-acts">
+          <button type="button" className="mt-go" disabled={busy || picked.length !== info.picks} onClick={() => onAct({ type: 'season_goals', goals: picked })}>
+            Valider mes {info.picks} objectifs
+          </button>
+        </div>
+      )}
+    </section>
+  );
+};
+
+const Cup = () => (
+  <svg className="mt-cup" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M7 3h10v5a5 5 0 0 1-10 0z" />
+    <path d="M7 5H4a3 3 0 0 0 3 4M17 5h3a3 3 0 0 1-3 4" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M11 13h2v4h-2zM8 17h8v3H8z" />
+  </svg>
+);
+
+// Always the same rain of confetti: no random, so the screen does not jump when it is drawn again.
+const CONFETTI = Array.from({ length: 36 }, (_, i) => ({ left: (i * 37) % 100, delay: ((i * 53) % 30) / 10, hue: (i * 47) % 360, turn: i % 2 === 0 ? 1 : -1 }));
+
+// End of season: the podium, then the trophies, then what the label takes home.
+const Ceremony = ({ result, labelId, onClose, busy }: { result: SeasonResult; labelId: string; onClose: () => void; busy: boolean }) => {
+  const [step, setStep] = useState(0);
+  const mine = result.labels[labelId];
+  const pages = ['podium', ...(result.trophies.length > 0 ? ['trophies'] : []), ...(mine ? ['mine'] : [])];
+  const page = pages[Math.min(step, pages.length - 1)];
+  const last = step >= pages.length - 1;
+  const [first, second, third] = result.ranking;
+  const podium = [second, first, third].filter((line): line is NonNullable<typeof line> => !!line);
+  return createPortal(
+    <div className="mt mt-hit mt-cer" role="dialog" aria-label={`Fin de la saison ${result.number}`}>
+      <div className="mt-confetti" aria-hidden="true">
+        {CONFETTI.map((c, i) => (
+          <i key={i} style={{ left: `${c.left}%`, animationDelay: `${c.delay}s`, background: `hsl(${c.hue} 90% 60%)`, '--turn': c.turn } as CSSProperties} />
+        ))}
+      </div>
+      <div className="mt-cer-card">
+        <Label>Fin de la saison {result.number}</Label>
+        <div key={page} className="mt-cer-body">
+          {page === 'podium' && (
+            <>
+              <span className="mt-h">
+                Le classement <span className="mt-gt">final</span>
+              </span>
+              <div className="mt-cer-podium">
+                {podium.map((line) => (
+                  <div key={line.labelId} className={`mt-cer-step is-${line.place}${line.labelId === labelId ? ' is-me' : ''}`}>
+                    <span className="mt-cer-name">{line.name}</span>
+                    <span className="mt-sub">{line.score} points</span>
+                    <span className="mt-cer-bar">
+                      <b>{line.place}</b>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {result.ranking.length > 3 && (
+                <ul className="mt-cer-rest">
+                  {result.ranking.slice(3).map((line) => (
+                    <li key={line.labelId} className={line.labelId === labelId ? 'is-me' : ''}>
+                      {nth(line.place)} · {line.name} · {line.score} points
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+          {page === 'trophies' && (
+            <>
+              <span className="mt-h">
+                Les <span className="mt-gt">trophées</span>
+              </span>
+              <div className="mt-cer-trophies">
+                {result.trophies.map((t, i) => (
+                  <div key={t.kind} className={`mt-trophy${t.labelId === labelId ? ' is-me' : ''}`} style={{ animationDelay: `${i * 0.25}s` }}>
+                    <Cup />
+                    <Label>{TROPHY_NAMES[t.kind]}</Label>
+                    <b>{t.winner}</b>
+                    <span className="mt-sub">{t.kind === 'label' ? t.detail : `${t.labelName} · ${t.detail}`}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {page === 'mine' && mine && (
+            <>
+              <span className="mt-h">
+                Tu finis <span className="mt-gt">{nth(mine.place)}</span> sur {result.ranking.length}
+              </span>
+              {mine.goals.length === 0 ? (
+                <span className="mt-sub">Pas d’objectif choisi cette saison.</span>
+              ) : (
+                <ul className="mt-cer-goals">
+                  {mine.goals.map((g) => (
+                    <li key={g.id} className={g.done ? 'is-done' : 'is-missed'}>
+                      <span aria-hidden="true">{g.done ? '✓' : '✗'}</span>
+                      <span>
+                        <b>{g.text}</b>
+                        <span className="mt-sub">{g.done ? `+${g.reputation} réputation · +${money(g.cash)}` : 'Raté, sans conséquence'}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-pills">
+                <span className="mt-pill">+{mine.reputation} réputation</span>
+                {mine.cash > 0 && <span className="mt-pill">+{money(mine.cash)}</span>}
+              </div>
+              <span className="mt-sub">On garde tout : label, artistes, cash. De nouveaux objectifs t’attendent à l’accueil.</span>
+            </>
+          )}
+        </div>
+        <div className="mt-acts">
+          <button type="button" className="mt-go" disabled={busy} onClick={() => (last ? onClose() : setStep(step + 1))}>
+            {last ? `Lancer la saison ${result.number + 1}` : 'Suite'}
+          </button>
+        </div>
       </div>
     </div>,
     document.body,
@@ -3292,6 +3471,20 @@ const LabelPage = ({ card, onClose }: { card: LabelCard; onClose: () => void }) 
         Clashs : {card.clashWins} gagné{card.clashWins > 1 ? 's' : ''} · {card.clashLosses} perdu{card.clashLosses > 1 ? 's' : ''}
       </span>
     </div>
+    {card.honours.length > 0 && (
+      <>
+        <Label>Palmarès</Label>
+        <ul className="mt-rows mt-honours">
+          {[...card.honours].reverse().map((h) => (
+            <li key={h.season}>
+              <span className={`mt-medal is-${Math.min(h.place, 4)}`}>{nth(h.place)}</span>
+              <b>Saison {h.season}</b>
+              <span className="mt-sub">{h.trophies.length > 0 ? h.trophies.map((t) => TROPHY_NAMES[t]).join(' · ') : 'Pas de trophée'}</span>
+            </li>
+          ))}
+        </ul>
+      </>
+    )}
     <Label>Artistes</Label>
     <ul className="mt-rows">
       {card.artists.map((a) => (
@@ -3326,7 +3519,19 @@ const LabelPage = ({ card, onClose }: { card: LabelCard; onClose: () => void }) 
   </div>
 );
 
-const LabelsTab = ({ view, onAct, onTalk, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; onTalk: (artistId: string) => void; busy: boolean }) => {
+const LabelsTab = ({
+  view,
+  onAct,
+  onTalk,
+  onCeremony,
+  busy,
+}: {
+  view: MelodyView;
+  onAct: (action: MelodyAction) => void;
+  onTalk: (artistId: string) => void;
+  onCeremony: () => void;
+  busy: boolean;
+}) => {
   const [opened, setOpened] = useState<string | null>(null);
   const mine = view.label?.id;
   const card = view.labels.find((l) => l.id === opened);
@@ -3335,7 +3540,16 @@ const LabelsTab = ({ view, onAct, onTalk, busy }: { view: MelodyView; onAct: (ac
   return (
     <div className="mt-view mt-in">
       <section className="mt-section">
-        <Label>Classement du serveur · saison {view.season}</Label>
+        <div className="mt-bar">
+          <Label>
+            Classement du serveur · saison {view.season} · semaine {view.seasonInfo.week} sur {CFG.ticksPerSeason}
+          </Label>
+          {view.seasonInfo.last && (
+            <button type="button" className="mt-ghost" onClick={onCeremony}>
+              Revoir la fin de la saison {view.seasonInfo.last.number}
+            </button>
+          )}
+        </div>
         <div className="mt-podium">
           {podium.map((line, i) => (
             <button
@@ -3554,6 +3768,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
   const [studioArtist, setStudioArtist] = useState<string | null>(null);
   const [studioKey, setStudioKey] = useState(0);
   const [talkWith, setTalkWith] = useState<string | null>(null);
+  const [replay, setReplay] = useState(false);
   const now = useNow(1000);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -3621,6 +3836,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'tour') say(action.partnerId ? 'Tournée annoncée. L’invité doit accepter.' : 'Tournée annoncée !');
       if (action.type === 'tour_answer') say(action.accept ? 'C’est parti pour la tournée commune.' : 'Invitation refusée.');
       if (action.type === 'tour_cancel') say('Tournée annulée.');
+      if (action.type === 'season_goals') say('Objectifs verrouillés. Bonne saison !');
       return answer.data.view;
     },
     [guildId, say],
@@ -3750,7 +3966,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
               }}
             />
           )}
-          {!talkWith && tab === 'home' && <Home view={view} onGo={go} />}
+          {!talkWith && tab === 'home' && <Home view={view} onGo={go} onAct={run} busy={busy} />}
           {!talkWith && tab === 'squad' && (
             <Squad
               view={view}
@@ -3773,7 +3989,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
           {!talkWith && tab === 'releases' && <Releases view={view} onAct={run} busy={busy} onGo={go} />}
           {!talkWith && tab === 'academy' && <Academy view={view} onAct={run} busy={busy} />}
           {!talkWith && tab === 'market' && <TransferMarket view={view} onTalk={(id) => void openTalk(id)} onAct={run} busy={busy} />}
-          {!talkWith && tab === 'labels' && <LabelsTab view={view} onAct={run} onTalk={(id) => void openTalk(id)} busy={busy} />}
+          {!talkWith && tab === 'labels' && <LabelsTab view={view} onAct={run} onTalk={(id) => void openTalk(id)} onCeremony={() => setReplay(true)} busy={busy} />}
           {!talkWith && tab === 'charts' && <Charts view={view} />}
           {!talkWith && tab === 'bank' && <Bank view={view} onAct={run} busy={busy} />}
         </>
@@ -3785,6 +4001,18 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
         </div>
       )}
       {view.label && active && !view.tutorial && <HitMoment view={view} />}
+      {view.label && active && !view.tutorial && view.seasonInfo.last && (view.seasonInfo.unseen || replay) && (
+        <Ceremony
+          key={view.seasonInfo.last.number}
+          result={view.seasonInfo.last}
+          labelId={view.label.id}
+          busy={busy}
+          onClose={() => {
+            setReplay(false);
+            if (view.seasonInfo.unseen) run({ type: 'season_seen' });
+          }}
+        />
+      )}
     </section>
     </AvatarGenres.Provider>
     </CoversContext.Provider>
