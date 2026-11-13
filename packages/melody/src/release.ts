@@ -5,6 +5,7 @@ import { trendBoost } from './craft.ts';
 import { beatById, coherence } from './data/content.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
 import { viewsBoost } from './staff.ts';
+import { supportBoost } from './support.ts';
 import { decayBonus, discoveryBoost, hitBonus, NEW_AUDIENCE, viralFactor } from './skills.ts';
 import type { Artist, PromoResult, Song, Trends, World } from './types.ts';
 
@@ -140,7 +141,7 @@ export const hitWord = (hitScore: number): string => {
 /** What a release does its first week: shared by the weekly tick and the tutorial's forecast. */
 export const releaseWeek = (world: World, song: Song, artist: Artist, tick: number, rivals: number): { week: FirstWeek; promo: PromoResult[] } => {
   const feat = song.featArtistId ? world.artists[song.featArtistId] : undefined;
-  const views = viewsBoost(world, song.labelId);
+  const views = viewsBoost(world, song.labelId) * supportBoost(world, song.labelId, artist.id, 'promo');
   const promo = song.marketingIds
     ? promoViews(song.marketingIds, artist, rngFor(world.seed, tick, `promo:${song.id}`)).map((p) => ({ ...p, views: Math.round(p.views * views) }))
     : [];

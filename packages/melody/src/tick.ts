@@ -11,6 +11,7 @@ import { returnLoans, shareLoan, tickLending } from './lending.ts';
 import { tickClashes } from './clash.ts';
 import { tickProjects } from './projects.ts';
 import { judgeRelease } from './letdown.ts';
+import { supportBoost } from './support.ts';
 import { tickSeason } from './seasons.ts';
 import { coachBoost, crowdBoost, gigEnergy, tickStaff } from './staff.ts';
 import { tickMorale } from './morale.ts';
@@ -366,7 +367,7 @@ export const runTick = (world: World): TickReport => {
       if (idle > CFG.hype.idleTicks) artist.hype = Math.max(0, artist.hype - CFG.hype.idlePenalty);
       if (idle > CFG.fans.idleTicks) artist.fans = Math.round(artist.fans * (1 - CFG.fans.idleLoss));
       if (artist.energy < 20) artist.morale = clamp(artist.morale + CFG.morale.lowEnergy, 0, 100);
-      growArtist(artist, activeArtists.has(artist.id) || artist.lastActiveTick >= tick - 1, rng, coachBoost(world, label.id, artist.id) * profileGrowth(world, artist));
+      growArtist(artist, activeArtists.has(artist.id) || artist.lastActiveTick >= tick - 1, rng, coachBoost(world, label.id, artist.id) * profileGrowth(world, artist) * supportBoost(world, label.id, artist.id, 'grow'));
     }
 
     if (label.cash < 0) {
@@ -430,9 +431,18 @@ export const runTick = (world: World): TickReport => {
     tell,
   );
   tickClashes(world, tell);
-  tickProjects(world, tell, (text) => {
-    world.marketNews = [...(world.marketNews ?? []), { tick: world.tick, text }];
-  });
+  tickProjects(
+    world,
+    tell,
+    (text) => {
+      world.marketNews = [...(world.marketNews ?? []), { tick: world.tick, text }];
+    },
+    // CD and vinyl sales: an artist on loan shares them with his label, like the rest.
+    (labelId, amount, artistId) => {
+      const label = world.labels[labelId];
+      if (label) earn(reports, label, shareLoan(world, artistId, labelId, amount, toLender));
+    },
+  );
   // The season: streams counted, goals noted, and on its last week the ranking, the trophies and the rewards.
   tickSeason(
     world,

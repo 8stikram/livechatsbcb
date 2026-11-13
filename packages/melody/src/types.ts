@@ -98,6 +98,8 @@ export interface Artist {
   jealous?: { name: string; tick: number };
   /** The lower rank he knows is better paid (told once). */
   grudge?: string;
+  /** The lower rank he knows is better supported (told once). */
+  snub?: string;
   /** Fans tired of weak songs: was each of his last releases a letdown, and when it last cost him. */
   letdown?: { recent: boolean[]; hitTick?: number };
   /** Evolution: weeks with a player's label, releases, the profile once known, the late bloom, the streak toward a higher ceiling, the rating curve. */
@@ -160,6 +162,8 @@ export interface Label {
   stats: LabelStats;
   /** Last party of the label (morale). */
   partyTick?: number;
+  /** Support slider of each artist (0 to 10): the label's support is shared by these weights. */
+  support?: Record<string, number>;
   /** Genre changes made this season. */
   genreChanges?: { season: number; count: number };
   /** Embrouilles of the last song made: never the same one twice in a row. */

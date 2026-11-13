@@ -57,13 +57,14 @@ export {
 } from './lending.ts';
 export { LETDOWN, usualNote, isLetdown, judgeRelease } from './letdown.ts';
 export { studioCardsFor, STUDIO_CONTENT } from './studio.ts';
+export { SUPPORT, boostOf, levelFor, setSupport, sharesOf, snubbedBy, supportBoost, supportLevel, supportShares, supportWeights, type SupportKind } from './support.ts';
 export {
   CLASH, startClash, answerClash, refuseClash, throwShade, answerInterview, interviewView, shadeView, clashesView, rivalsView, rivalsOf, tickClashes,
   type Clash, type ClashStatus, type Tone, type ClashView, type RivalView, type InterviewView, type ShadeView,
 } from './clash.ts';
 export {
-  PROJECTS, projectCost, createProject, addDeluxe, projectsView, tickProjects,
-  type Project, type ProjectKind, type ProjectView,
+  PROJECTS, SALES, salesQuote, projectCost, createProject, addDeluxe, projectsView, tickProjects,
+  type Project, type ProjectKind, type ProjectView, type SalesInput,
 } from './projects.ts';
 export {
   TOURS, tourQuote, announceTour, answerTourInvite, cancelTour, tourOf, onTour, toursView, tourGuests, tickTours,

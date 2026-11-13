@@ -5,6 +5,7 @@ import { priceScale } from './quality.ts';
 import { clamp } from './rng.ts';
 import { albumBonus } from './skills.ts';
 import { judgeRelease } from './letdown.ts';
+import { supportBoost } from './support.ts';
 import type { Label, Song, World } from './types.ts';
 import { GameError } from './world.ts';
 
@@ -35,14 +36,74 @@ export interface Project {
   title: string;
   songIds: string[];
   cover?: boolean;
+  /** The artist signs CDs the week it comes out: more sales, less energy. */
+  signing?: boolean;
   state: 'scheduled' | 'released';
   releaseTick: number;
-  deluxe?: { songIds: string[]; tick: number };
+  deluxe?: { songIds: string[]; tick: number; sales?: number; money?: number };
+  /** CDs and vinyls sold at release, and what they brought. */
+  sales?: number;
+  salesMoney?: number;
+  cert?: 'gold' | 'platinum';
   /** Average note of the tracks, known at release. */
   quality?: number;
 }
 
 const projectsOf = (world: World): Project[] => (world.projects ??= []);
+
+/**
+ * CDs and vinyls (owner's choice, 2026-11-13): sold by themselves when an EP or an album comes out, from the fans.
+ * An album of an artist with 100 000 fans brings about 8 000 €. An album sells twice an EP; the note, the buzz,
+ * a cover, a signing session and the label's support sell more. A deluxe sells about a third of the album.
+ */
+export const SALES = {
+  perFan: 0.0067,
+  ep: 0.5,
+  price: 12,
+  cover: 1.1,
+  signing: 1.25,
+  signingEnergy: 15,
+  deluxe: 1 / 3,
+  gold: 2_000,
+  platinum: 6_000,
+  goldReputation: 2,
+  platinumReputation: 4,
+} as const;
+
+export interface SalesInput {
+  fans: number;
+  hype: number;
+  kind: ProjectKind;
+  quality: number;
+  cover: boolean;
+  signing: boolean;
+  /** The label's support of the artist (1 for an equal share). */
+  boost: number;
+}
+
+/** Copies sold and money: shared by the release and the estimate of the project maker. */
+export const salesQuote = (input: SalesInput): { units: number; money: number } => {
+  const note = clamp((input.quality - 30) / 40, 0.25, 1.5);
+  const buzz = clamp(1 + (input.hype - 30) / 100, 0.7, 1.6);
+  const units = Math.max(
+    0,
+    Math.round(input.fans * SALES.perFan * (input.kind === 'ep' ? SALES.ep : 1) * note * buzz * (input.cover ? SALES.cover : 1) * (input.signing ? SALES.signing : 1) * input.boost),
+  );
+  return { units, money: units * SALES.price };
+};
+
+const certify = (project: Project, label: Label, artistName: string, tell: (labelId: string, text: string) => void, news: (text: string) => void): void => {
+  if (project.cert === 'platinum') return;
+  const total = (project.sales ?? 0) + (project.deluxe?.sales ?? 0);
+  const cert = total >= SALES.platinum ? 'platinum' : total >= SALES.gold ? 'gold' : null;
+  if (!cert || cert === project.cert) return;
+  const reputation = cert === 'platinum' ? SALES.platinumReputation : SALES.goldReputation;
+  project.cert = cert;
+  label.reputation = clamp(label.reputation + reputation, 0, 100);
+  const word = cert === 'platinum' ? 'disque de platine' : 'disque d’or';
+  tell(label.id, `« ${project.title} » est ${word} : ${total.toLocaleString('fr-FR')} CD et vinyles vendus. Réputation +${reputation}.`);
+  news(`${artistName} (${label.name}) : ${word} pour « ${project.title} ».`);
+};
 
 /** Mixing, mastering and pressing: small labels pay small-label prices. */
 export const projectCost = (kind: ProjectKind | 'deluxe', tier: number): number =>
@@ -82,7 +143,7 @@ const schedule = (songs: Song[], tick: number, boost: number, projectId: string)
 export const createProject = (
   world: World,
   label: Label,
-  request: { artistId: string; kind: ProjectKind; title: string; songIds: string[]; inWeeks: number; cover?: boolean },
+  request: { artistId: string; kind: ProjectKind; title: string; songIds: string[]; inWeeks: number; cover?: boolean; signing?: boolean },
 ): Project => {
   const artist = world.artists[request.artistId] ?? fail('Artiste introuvable.');
   if (contractOf(world, artist.id)?.labelId !== label.id) fail(`${artist.name} n'est pas dans ton label.`);
@@ -112,6 +173,7 @@ export const createProject = (
     title,
     songIds: songs.map((s) => s.id),
     cover: request.cover ? true : undefined,
+    signing: request.signing ? true : undefined,
     state: 'scheduled',
     releaseTick: tick,
   };
@@ -148,8 +210,26 @@ export const addDeluxe = (world: World, label: Label, projectId: string, songIds
 };
 
 /** Weekly, after the releases: projects out this week get their note, and a good album raises the label. */
-export const tickProjects = (world: World, tell: (labelId: string, text: string) => void, news: (text: string) => void): void => {
+export const tickProjects = (
+  world: World,
+  tell: (labelId: string, text: string) => void,
+  news: (text: string) => void,
+  pay: (labelId: string, amount: number, artistId: string) => void = () => undefined,
+): void => {
   for (const project of world.projects ?? []) {
+    // A deluxe out this week: the fans buy the new edition too.
+    if (project.state === 'released' && project.deluxe && project.deluxe.tick <= world.tick && project.deluxe.sales === undefined) {
+      const label = world.labels[project.labelId];
+      const artist = world.artists[project.artistId];
+      if (label && artist) {
+        const sale = salesQuote({ fans: artist.fans, hype: artist.hype, kind: project.kind, quality: project.quality ?? 0, cover: !!project.cover, signing: false, boost: supportBoost(world, label.id, artist.id, 'sales') });
+        project.deluxe.sales = Math.round(sale.units * SALES.deluxe);
+        project.deluxe.money = project.deluxe.sales * SALES.price;
+        if (project.deluxe.money > 0) pay(label.id, project.deluxe.money, artist.id);
+        tell(project.labelId, `Deluxe de « ${project.title} » : ${project.deluxe.sales.toLocaleString('fr-FR')} CD et vinyles vendus (+${project.deluxe.money.toLocaleString('fr-FR')} €).`);
+        certify(project, label, artist.name, tell, news);
+      }
+    }
     if (project.state !== 'scheduled' || project.releaseTick > world.tick) continue;
     const tracks = project.songIds.map((id) => world.songs.find((s) => s.id === id)).filter((s): s is Song => !!s);
     project.state = 'released';
@@ -163,7 +243,17 @@ export const tickProjects = (world: World, tell: (labelId: string, text: string)
       judgeRelease(world, label, artist, project.quality, what, (text) => tell(project.labelId, text));
     }
     const name = `${PROJECTS[project.kind].name} « ${project.title} »`;
-    tell(project.labelId, `${name} est sorti : ${streams.toLocaleString('fr-FR')} streams la première semaine, note ${project.quality}.`);
+    let sold = '';
+    if (label && artist) {
+      const sale = salesQuote({ fans: artist.fans, hype: artist.hype, kind: project.kind, quality: project.quality, cover: !!project.cover, signing: !!project.signing, boost: supportBoost(world, label.id, artist.id, 'sales') });
+      if (project.signing) artist.energy = Math.max(0, artist.energy - SALES.signingEnergy);
+      project.sales = sale.units;
+      project.salesMoney = sale.money;
+      if (sale.money > 0) pay(label.id, sale.money, artist.id);
+      sold = ` ${sale.units.toLocaleString('fr-FR')} CD et vinyles vendus (+${sale.money.toLocaleString('fr-FR')} €)${project.signing ? `, avec la séance de dédicace (énergie −${SALES.signingEnergy})` : ''}.`;
+    }
+    tell(project.labelId, `${name} est sorti : ${streams.toLocaleString('fr-FR')} streams la première semaine, note ${project.quality}.${sold}`);
+    if (label && artist) certify(project, label, artist.name, tell, news);
     if (label && artist) news(`${artist.name} (${label.name}) sort son ${name}.`);
     if (label && project.kind === 'album' && project.quality >= PROJECTS.goodAlbum) {
       label.reputation = clamp(label.reputation + PROJECTS.goodAlbumReputation, 0, 100);
@@ -186,6 +276,11 @@ export interface ProjectView {
   cover: boolean;
   /** A deluxe can still be added. */
   canDeluxe: boolean;
+  signing: boolean;
+  /** CDs and vinyls sold (with the deluxe), what they brought, and the record it earned. */
+  sales: number | null;
+  salesMoney: number | null;
+  cert: 'gold' | 'platinum' | null;
 }
 
 export const projectsView = (world: World, labelId: string): ProjectView[] =>
@@ -207,6 +302,10 @@ export const projectsView = (world: World, labelId: string): ProjectView[] =>
         quality: p.quality ?? null,
         cover: p.cover ?? false,
         canDeluxe: p.kind === 'album' && p.state === 'released' && !p.deluxe && world.tick - p.releaseTick < PROJECTS.deluxe.withinTicks,
+        signing: p.signing ?? false,
+        sales: p.sales === undefined ? null : p.sales + (p.deluxe?.sales ?? 0),
+        salesMoney: p.salesMoney === undefined ? null : p.salesMoney + (p.deluxe?.money ?? 0),
+        cert: p.cert ?? null,
       } satisfies ProjectView;
     })
     .sort((a, b) => Number(a.state === 'released') - Number(b.state === 'released') || b.weeksLeft - a.weeksLeft);

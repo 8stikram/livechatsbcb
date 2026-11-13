@@ -38,6 +38,13 @@ import {
   type RivalView,
   type Tone,
   PROJECTS,
+  SALES,
+  salesQuote,
+  SUPPORT,
+  boostOf,
+  levelFor,
+  sharesOf,
+  snubbedBy,
   TOURS,
   projectCost,
   tourQuote,
@@ -2165,8 +2172,17 @@ const ProjectMaker = ({ view, onAct, onClose, busy }: { view: MelodyView; onAct:
   const [picked, setPicked] = useState<string[]>([]);
   const [weeks, setWeeks] = useState(2);
   const [cover, setCover] = useState<string | null>(null);
+  const [signing, setSigning] = useState(false);
   const songs = candidates(artistId);
   const rules = PROJECTS[kind];
+  const who = view.roster.find((a) => a.id === artistId);
+  const chosen = songs.filter((s) => picked.includes(s.id));
+  // Songs still in the vault have a note range: the sales estimate is a range too.
+  const noteOf = (edge: (s: (typeof chosen)[number]) => number): number =>
+    chosen.length > 0 ? chosen.reduce((sum, s) => sum + (s.quality ?? edge(s)), 0) / chosen.length : (who?.expectedNote ?? 50);
+  const quoteAt = (quality: number) => (who ? salesQuote({ fans: who.fans, hype: who.hype, kind, quality, cover: cover !== null, signing, boost: who.salesBoost }) : null);
+  const saleLow = quoteAt(noteOf((s) => s.qualityMin));
+  const saleHigh = quoteAt(noteOf((s) => s.qualityMax));
   const singles = picked.filter((id) => songs.find((s) => s.id === id)?.state === 'released').length;
   const cost = projectCost(kind, view.label?.tier ?? 1);
   const toggle = (id: string) => setPicked((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
@@ -2231,6 +2247,19 @@ const ProjectMaker = ({ view, onAct, onClose, busy }: { view: MelodyView; onAct:
       </div>
       <Label>Pochette</Label>
       <CoverPicker value={cover} onChange={setCover} />
+      <Label>CD et vinyles</Label>
+      <label className="mt-check">
+        <input type="checkbox" checked={signing} onChange={(event) => setSigning(event.target.checked)} />
+        Séance de dédicace la semaine de sortie : +{Math.round((SALES.signing - 1) * 100)} % de ventes, énergie −{SALES.signingEnergy}
+      </label>
+      {saleLow && saleHigh && (
+        <span className="mt-sub">
+          {saleLow.money === saleHigh.money
+            ? `Ventes estimées : environ ${money(saleLow.money)} (${saleLow.units.toLocaleString('fr-FR')} CD et vinyles)`
+            : `Ventes estimées : entre ${money(saleLow.money)} et ${money(saleHigh.money)} (${saleLow.units.toLocaleString('fr-FR')} à ${saleHigh.units.toLocaleString('fr-FR')} CD et vinyles)`}
+          , selon la note des sons. Plus de buzz à la sortie, plus de ventes.
+        </span>
+      )}
       <span className="mt-sub">Mix, master et pressage : {money(cost)}.</span>
       {problem && <span className="mt-sub mt-warn">{problem}</span>}
       <div className="mt-acts">
@@ -2239,7 +2268,7 @@ const ProjectMaker = ({ view, onAct, onClose, busy }: { view: MelodyView; onAct:
           className="mt-go"
           disabled={busy || problem !== null}
           onClick={() => {
-            onAct({ type: 'project', artistId, kind, title: title.trim(), songIds: picked, inWeeks: weeks, cover: cover ?? undefined });
+            onAct({ type: 'project', artistId, kind, title: title.trim(), songIds: picked, inWeeks: weeks, cover: cover ?? undefined, signing });
             onClose();
           }}
         >
@@ -2303,9 +2332,10 @@ const ProjectCard = ({ project, onDeluxe }: { project: ProjectView; onDeluxe: ()
       <b>{project.title}</b>
       <span className="mt-sub">
         {project.state === 'scheduled'
-          ? `Sort dans ${project.weeksLeft} semaine${project.weeksLeft > 1 ? 's' : ''} · ${project.tracks.length} sons`
-          : `${project.tracks.length} sons · note ${project.quality} · ${compact(project.streamsTotal)} streams`}
+          ? `Sort dans ${project.weeksLeft} semaine${project.weeksLeft > 1 ? 's' : ''} · ${project.tracks.length} sons${project.signing ? ' · séance de dédicace prévue' : ''}`
+          : `${project.tracks.length} sons · note ${project.quality} · ${compact(project.streamsTotal)} streams${project.sales !== null ? ` · ${project.sales.toLocaleString('fr-FR')} CD et vinyles (${money(project.salesMoney ?? 0)})` : ''}`}
       </span>
+      {project.cert && <span className={`mt-cert is-${project.cert}`}>{project.cert === 'platinum' ? 'Disque de platine' : 'Disque d’or'}</span>}
       {project.canDeluxe && (
         <button type="button" className="mt-ghost" onClick={onDeluxe}>
           Ajouter une deluxe
@@ -3457,6 +3487,72 @@ const DynamicsRow = ({ artist, view, onAct, busy }: { artist: DynamicsView['arti
   );
 };
 
+const signed = (boost: number): string => {
+  const value = Math.round((boost - 1) * 100);
+  return `${value >= 0 ? '+' : '−'}${Math.abs(value)} %`;
+};
+
+// The label's support: one slider per artist, his share and what it does, saved together.
+const SupportPanel = ({ dyn, onAct, busy }: { dyn: DynamicsView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const saved = Object.fromEntries(dyn.artists.map((a) => [a.id, a.support.weight])) as Record<string, number>;
+  const key = JSON.stringify(saved);
+  const [weights, setWeights] = useState<Record<string, number>>(saved);
+  useEffect(() => setWeights(JSON.parse(key) as Record<string, number>), [key]);
+  const shares = sharesOf(weights);
+  const snubs = snubbedBy(dyn.artists, shares);
+  const changed = dyn.artists.some((a) => weights[a.id] !== a.support.weight);
+  const none = dyn.artists.every((a) => (weights[a.id] ?? 0) === 0);
+  return (
+    <section className="mt-section mt-support">
+      <Label>Soutien du label · 100 % à partager</Label>
+      <span className="mt-sub">
+        Plus un artiste est soutenu, plus il a de promo, de ventes de CD et vinyles, de progrès et de moral. Les moins soutenus en ont un peu moins. Un artiste est jaloux si
+        un plus petit que lui est plus soutenu.
+      </span>
+      <ul className="mt-support-list">
+        {dyn.artists.map((a) => {
+          const share = shares[a.id] ?? 0;
+          const level = levelFor(share, dyn.artists.length);
+          const effect =
+            Math.abs(level) < 0.05
+              ? 'Part égale : rien ne change.'
+              : `Promo ${signed(boostOf(level, 'promo'))} · ventes ${signed(boostOf(level, 'sales'))} · progrès ${signed(boostOf(level, 'grow'))}${level >= SUPPORT.backedAt ? ' · moral +1 / sem.' : level <= -SUPPORT.backedAt ? ' · moral en baisse' : ''}`;
+          return (
+            <li key={a.id} className={level < 0 ? 'is-low' : level > 0 ? 'is-high' : ''}>
+              <span className="mt-support-who">
+                <b>{a.name}</b>
+                <span className={`mt-rank is-${a.rank}`}>{a.rankName}</span>
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={SUPPORT.max}
+                step={1}
+                value={weights[a.id] ?? 0}
+                aria-label={`Soutien de ${a.name}`}
+                onChange={(event) => setWeights((w) => ({ ...w, [a.id]: Number(event.target.value) }))}
+              />
+              <b className="mt-support-pct">{Math.round(share * 100)} %</b>
+              <span className="mt-sub">{effect}</span>
+              {snubs[a.id] && <span className="mt-sub mt-warn">Jaloux : {snubs[a.id]} a un rang plus bas mais plus de soutien.</span>}
+            </li>
+          );
+        })}
+      </ul>
+      <div className="mt-acts">
+        <button type="button" className="mt-go" disabled={busy || !changed || none} onClick={() => onAct({ type: 'support', weights })}>
+          Valider le soutien
+        </button>
+        {changed && (
+          <button type="button" className="mt-ghost" onClick={() => setWeights(saved)}>
+            Annuler
+          </button>
+        )}
+      </div>
+    </section>
+  );
+};
+
 const DynamicsTab = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean; onGo: (tab: Tab) => void }) => {
   const dyn = view.dynamics;
   if (!dyn) return null;
@@ -3495,6 +3591,7 @@ const DynamicsTab = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (ac
           </button>
         </div>
       </section>
+      {dyn.artists.length >= 2 && <SupportPanel dyn={dyn} onAct={onAct} busy={busy} />}
       <section className="mt-section">
         <Label>Tes artistes, par rang</Label>
         <ul className="mt-dyn">
@@ -4633,6 +4730,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'staff_poach_cancel') say('Offre retirée.');
       if (action.type === 'cheer') say(action.kind === 'bonus' ? 'Prime versée. Il a le sourire.' : action.kind === 'trip' ? 'Bon voyage ! Il revient plein d’idées.' : 'Quelle soirée ! Tout le label est de bonne humeur.');
       if (action.type === 'raise') say('Augmentation signée.');
+      if (action.type === 'support') say('Soutien du label mis à jour.');
       if (action.type === 'genre_change') say('Changement de genre lancé. Laisse-lui le temps de trouver son son.');
       if (action.type === 'genre_wish_refuse') say('Tu as dit non. Il fait un peu la tête.');
       if (action.type === 'auction_start') say('Enchère lancée. Les offres arrivent dans le Marché.');

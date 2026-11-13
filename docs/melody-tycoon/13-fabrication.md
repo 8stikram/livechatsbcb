@@ -308,3 +308,18 @@ Choix du propriétaire : **pas de mixtape ni de freestyle** (on garde EP, album 
 - **Sorties ratées** : une sortie est ratée si sa note est sous 50, ou 5 points ou plus sous la moyenne de ses 6 derniers sons. Un EP ou un album compte comme une seule sortie, avec sa note. À la 2e sortie ratée sur ses 4 dernières : buzz −5, 1 % de fans en moins, moral −3. À la 3e : le double, à la 4e : le triple. Une sortie au-dessus de sa moyenne efface tout. Sortir souvent n'est pas puni, seulement les sons ratés.
 - **Le label** : si un autre artiste du label a déjà déçu ses fans dans les 4 dernières semaines, la réputation du label baisse de 1 (une fois par semaine au plus).
 - Pas d'alerte avant la sortie : le joueur le découvre dans le bilan de la semaine. Seuls les labels des joueurs sont concernés.
+
+## Étape 18 — ventes de CD et vinyles et soutien du label (fait)
+
+Choix du propriétaire : **pas de superfans**, pas de fan club, pas de précommandes, pas de merch toute l'année. **Ventes de CD et vinyles automatiques** à la sortie d'un EP ou d'un album, montant **moyen**, et les plus « disque d'or et de platine », « séance de dédicace » et « ventes dans le bilan ». Il a ajouté une idée à lui : **choisir dans quels artistes le label investit le plus**, à des degrés différents.
+
+- **Combien** : un album d'un artiste à 100 000 fans, note 70, buzz normal, vend environ 670 CD et vinyles à 12 €, soit environ 8 000 €. Un EP vend moitié moins. Une bonne note vend plus (note 90 : ×1,5 ; sous 40 : très peu), le buzz aussi (de ×0,7 à ×1,6), une pochette +10 %.
+- **Deluxe** : à sa sortie, il vend un tiers de ce que vendrait l'album.
+- **Séance de dédicace** (case à cocher en montant le projet) : +25 % de ventes, l'artiste perd 15 d'énergie la semaine de sortie.
+- **Estimation** : en montant le projet, une fourchette « entre X et Y € » selon la note des sons choisis. Le buzz à la sortie peut faire monter le chiffre.
+- **Disque d'or** à 2 000 ventes (réputation +2), **disque de platine** à 6 000 (réputation +4), deluxe compris. Un badge sur la carte du projet, une ligne dans le bilan et les news.
+- **Bilan** : « N CD et vinyles vendus (+M €) » dans la ligne de sortie du projet. Si l'artiste est prêté, l'argent est partagé 70/30 comme le reste.
+- **Soutien du label** (onglet Dynamique, dès 2 artistes) : un curseur de 0 à 10 par artiste, le jeu en fait des parts qui font 100 %. Gratuit : ce qu'un artiste gagne, les autres le perdent.
+- **Au-dessus d'une part égale** : jusqu'à +25 % de promo, +30 % de ventes, +20 % de progrès par niveau, et moral +1 par semaine s'il est bien soutenu. **En dessous** : un peu moins (−15 % de promo, −20 % de ventes, −15 % de progrès au pire), et moral −1 par semaine s'il est presque oublié (jamais sous 45).
+- **Jalousie** : un artiste est jaloux si un artiste de rang plus bas a nettement plus de soutien que lui (au moins 1,2 fois et 5 points de plus). Moral −2 par semaine, dit une fois dans le bilan, visible dans l'onglet Dynamique.
+- Seuls les labels des joueurs sont concernés par le soutien. Les onglets seront revus à la fin, avant la sortie.

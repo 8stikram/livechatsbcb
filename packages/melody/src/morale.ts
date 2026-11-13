@@ -4,6 +4,7 @@ import { generalRating } from './artists.ts';
 import { contractOf, rosterOf } from './economy.ts';
 import { clamp, hashString, rngFor } from './rng.ts';
 import { staffOf } from './staff.ts';
+import { SUPPORT, levelFor, snubbedBy, supportShares, supportWeights } from './support.ts';
 import type { Artist, Contract, Label, World } from './types.ts';
 import { GameError } from './world.ts';
 
@@ -13,7 +14,7 @@ const fail = (message: string): never => {
 
 export type Rank = 'star' | 'established' | 'hope' | 'development';
 export type CheerKind = 'bonus' | 'trip' | 'party';
-export type WorryKind = 'strike' | 'out' | 'injustice' | 'late' | 'jealous' | 'aside' | 'tired';
+export type WorryKind = 'strike' | 'out' | 'injustice' | 'late' | 'jealous' | 'snubbed' | 'unsupported' | 'aside' | 'tired';
 
 export const RANKS: Rank[] = ['star', 'established', 'hope', 'development'];
 
@@ -135,6 +136,12 @@ export const worriesOf = (world: World, labelId: string, artist: Artist, ranks =
     worries.push({ kind: 'late', weeks: since, text: `Pas de son depuis ${since} semaines. Il en attend un toutes les ${every}.` });
   if (artist.jealous && world.tick - artist.jealous.tick < MORALE.jealousWeeks)
     worries.push({ kind: 'jealous', name: artist.jealous.name, text: `Jaloux de la grosse promo de ${artist.jealous.name}.` });
+  // The label's support: a lower rank better backed than him, or hardly any support at all.
+  const shares = supportShares(world, labelId);
+  const snub = snubbedBy(rosterOf(world, labelId).map((a) => ({ id: a.id, name: a.name, rank: ranks.get(a.id) ?? 'development' })), shares)[artist.id];
+  if (snub) worries.push({ kind: 'snubbed', name: snub, text: `${snub} a un rang plus bas mais le label le soutient plus.` });
+  else if (levelFor(shares[artist.id] ?? 0, Object.keys(shares).length) <= -SUPPORT.backedAt)
+    worries.push({ kind: 'unsupported', text: `Peu soutenu par le label (${Math.round((shares[artist.id] ?? 0) * 100)} % du soutien).` });
   const idle = world.tick - artist.lastActiveTick;
   if (idle > MORALE.asideTicks && !coachOn(world, labelId, artist.id)) worries.push({ kind: 'aside', weeks: idle, text: `Mis de côté : rien fait depuis ${idle} semaines.` });
   if (artist.energy < 20) worries.push({ kind: 'tired', text: 'Épuisé.' });
@@ -201,6 +208,8 @@ const BUBBLES: Record<WorryKind | 'happy' | 'fine', string[]> = {
   injustice: ['J’ai appris combien gagne {name}. On en parle ?', '{name} gagne plus que moi ? Sérieusement ?', 'Je fais les gros sons et c’est {name} qui a la grosse paie. Logique.'],
   late: ['Ça fait {weeks} semaines sans son. Mes fans croient que j’ai arrêté.', 'Ma mère me demande si j’ai changé de métier.', 'J’ai des couplets plein mon téléphone. On les sort quand ?'],
   jealous: ['{name} a eu une promo de star. Moi, un post sur un mur.', 'Les affiches de {name} sont partout. Et les miennes ?', 'Ah, {name} a droit au panneau géant. Super. Bravo.'],
+  snubbed: ['Le label mise tout sur {name}. Moi, j’ai droit à un « bon courage ».', '{name} a le budget, moi j’ai le Wi-Fi du studio.', 'J’ai vu le planning : {name}, {name}, {name}… et moi en bas, au crayon.'],
+  unsupported: ['On m’a oublié dans le budget, ou c’est voulu ?', 'Mon dernier soutien du label, c’était un « like ».', 'Je m’autofinance avec des tickets-resto.'],
   aside: ['Je suis toujours dans le label ? Quelqu’un ?', 'J’ai regardé le plafond toute la semaine. Il est joli.', 'Si on a besoin de moi, je suis sur le canapé.'],
   tired: ['Je dors debout. Un concert de plus et je chante en ronflant.', 'Mon lit me manque. On ne s’est pas vus depuis des jours.'],
   happy: ['Je me sens invincible. On retourne en studio ?', 'Meilleur label du monde. Je l’ai presque tatoué.', 'J’ai la pêche. Donnez-moi un micro.'],
@@ -234,6 +243,7 @@ export const tickMorale = (world: World, tell: (labelId: string, text: string) =
       }
     }
     const calm = MORALE.calm + (roster.some((a) => isLeader(a.id)) ? MORALE.leaderCalm : 0);
+    const shares = supportShares(world, label.id);
     for (const artist of roster) {
       const worries = worriesOf(world, label.id, artist, ranks);
       let change = 0;
@@ -241,11 +251,18 @@ export const tickMorale = (world: World, tell: (labelId: string, text: string) =
       if (wronged && artist.grudge !== wronged.name) tell(label.id, `${artist.name} a appris que ${wronged.name} gagne plus que lui. Il le prend mal : regarde l’onglet Dynamique.`);
       artist.grudge = wronged?.name;
       if (!artist.grudge) delete artist.grudge;
+      const snub = worries.find((w) => w.kind === 'snubbed');
+      if (snub && artist.snub !== snub.name) tell(label.id, `${artist.name} voit que le label soutient plus ${snub.name}, pourtant plus petit que lui. Il le prend mal : regarde l’onglet Dynamique.`);
+      artist.snub = snub?.name;
+      if (!artist.snub) delete artist.snub;
       for (const worry of worries) {
         if (worry.kind === 'late') change += MORALE.late;
         if (worry.kind === 'injustice') change += MORALE.injustice;
         if (worry.kind === 'aside') change += MORALE.aside;
+        if (worry.kind === 'snubbed') change += SUPPORT.snub;
+        if (worry.kind === 'unsupported' && artist.morale > SUPPORT.asideFloor) change += SUPPORT.aside;
       }
+      if (levelFor(shares[artist.id] ?? 0, roster.length) >= SUPPORT.backedAt) change += SUPPORT.backed;
       if (coachOn(world, label.id, artist.id)) change += MORALE.coachFocus;
       // Nothing wrong this week: he calms down, up or down.
       const bothered = worries.some((w) => w.kind !== 'strike' && w.kind !== 'out' && (w.kind !== 'jealous' || artist.jealous?.tick === tick));
@@ -301,6 +318,8 @@ export interface DynamicsArtist {
   tripIn: number;
   /** Extra allowance per week that would end an injustice, or null. */
   raise: number | null;
+  /** His support slider (0 to 10), his share of the label's support, and its level (-1 to 1.5). */
+  support: { weight: number; share: number; level: number };
 }
 
 export interface DynamicsView {
@@ -317,6 +336,8 @@ export interface DynamicsView {
 /** What a label sees of the mood of its artists. */
 export const dynamicsView = (world: World, label: Label): DynamicsView => {
   const ranks = ranksOf(world, label.id);
+  const weights = supportWeights(world, label.id);
+  const shares = supportShares(world, label.id);
   const roster = rosterOf(world, label.id).sort((a, b) => RANKS.indexOf(ranks.get(a.id) ?? 'development') - RANKS.indexOf(ranks.get(b.id) ?? 'development') || b.morale - a.morale);
   let weight = 0;
   let sum = 0;
@@ -342,6 +363,7 @@ export const dynamicsView = (world: World, label: Label): DynamicsView => {
       bonusIn: weeksBefore(artist.cheers?.bonus, MORALE.cheers.bonus.every, world.tick),
       tripIn: weeksBefore(artist.cheers?.trip, MORALE.cheers.trip.every, world.tick),
       raise: wronged ? Math.ceil(wronged.pay - wronged.mine) : null,
+      support: { weight: weights[artist.id] ?? SUPPORT.start, share: shares[artist.id] ?? 0, level: levelFor(shares[artist.id] ?? 0, Object.keys(shares).length) },
     };
   });
   const leaders = roster.filter((a) => isLeader(a.id)).map((a) => a.name);

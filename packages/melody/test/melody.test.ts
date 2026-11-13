@@ -9,6 +9,7 @@ import {
   STAFF, staffOf, staffWage, coachBoost, producerShare, houseProducer, viewsBoost, crowdBoost, gigEnergy,
   MORALE, RANKS, ranksOf, isLeader, worriesOf, moraleBlock, tickMorale, dynamicsView,
   shareLoan, returnLoans, STUDIO_CONTENT, studioCardsFor, usualNote, isLetdown, judgeRelease,
+  SALES, salesQuote, createProject, tickProjects, SUPPORT, setSupport, supportBoost, supportShares, boostOf,
   SKILL_IDS, skillsOf, skillLevel, skillPlus, stageBoost, tirelessFactor, PROFILES, EVOLUTION, GENRE_CHANGE, profileOf, profileGrowth, afterRelease, tickEvolution, GENRES,
 } from '../src/index.ts';
 import type { Artist, Song, StaffMember, World } from '../src/index.ts';
@@ -1874,5 +1875,125 @@ describe('studio : 40 embrouilles, situations et sorties ratées', () => {
     scheduleRelease(world, label.id, song.id, world.tick + 2, []);
     const events = [...runTick(world).labels[label.id]!.events, ...runTick(world).labels[label.id]!.events];
     expect(events.filter((e) => e.startsWith('« Raté » déçoit les fans'))).toHaveLength(1);
+  });
+});
+
+describe('ventes de CD et vinyles, et soutien du label', () => {
+  const players = () => {
+    const world = createWorld(42);
+    applyAction(world, 'u1', { type: 'found', name: 'Label u1' });
+    applyAction(world, 'u1', { type: 'tuto', move: 'skip' });
+    const label = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    label.cash = 2_000_000;
+    label.tier = 3;
+    const artist = rosterOf(world, label.id)[0]!;
+    return { world, label, artist };
+  };
+  const songsFor = (world: World, labelId: string, artist: Artist, count: number, quality: number) =>
+    Array.from({ length: count }, (_, i) => {
+      artist.energy = 100;
+      const song = createSong(world, labelId, {
+        artistId: artist.id, title: `Piste ${i + 1}`, themeId: 'rupture', beatId: 'lovetrap',
+        levels: { theme: 1, beat: 1, producer: 1, studio: 1 }, producer: producerOfLevel(1, 1),
+      });
+      song.quality = quality;
+      song.availableTick = 0;
+      return song;
+    });
+
+  it('prices CDs and vinyls from the fans: an album of 100 000 fans brings about 8 000 €', () => {
+    const base = { fans: 100_000, hype: 30, kind: 'album' as const, quality: 70, cover: false, signing: false, boost: 1 };
+    expect(salesQuote(base)).toEqual({ units: 670, money: 8_040 });
+    expect(salesQuote({ ...base, kind: 'ep' }).units).toBe(335);
+    expect(salesQuote({ ...base, quality: 90 }).units).toBe(1_005);
+    expect(salesQuote({ ...base, quality: 40 }).units).toBe(Math.round(670 * 0.25));
+    expect(salesQuote({ ...base, hype: 80 }).units).toBe(1_005);
+    expect(salesQuote({ ...base, cover: true, signing: true }).units).toBe(Math.round(670 * 1.1 * 1.25));
+    expect(salesQuote({ ...base, boost: 1.3 }).units).toBe(871);
+  });
+
+  it('sells at release with the signing session, then the deluxe, and certifies gold then platinum', () => {
+    const { world, label, artist } = players();
+    const songs = songsFor(world, label.id, artist, 3, 70);
+    const project = createProject(world, label, { artistId: artist.id, kind: 'ep', title: 'Or Massif', songIds: songs.map((x) => x.id), inWeeks: 2, signing: true });
+    expect(project.signing).toBe(true);
+    world.tick = project.releaseTick;
+    Object.assign(artist, { fans: 1_000_000, hype: 30, energy: 50 });
+    label.reputation = 20;
+    const told: string[] = [];
+    const news: string[] = [];
+    const paid: number[] = [];
+    tickProjects(world, (_, text) => told.push(text), (text) => news.push(text), (_, amount) => paid.push(amount));
+    const quote = salesQuote({ fans: 1_000_000, hype: 30, kind: 'ep', quality: project.quality!, cover: false, signing: true, boost: 1 });
+    expect(project.sales).toBe(quote.units);
+    expect(paid).toEqual([quote.money]);
+    expect(artist.energy).toBe(50 - SALES.signingEnergy);
+    expect(told[0]).toMatch(/CD et vinyles vendus .*séance de dédicace/);
+    expect(project.cert).toBe('gold');
+    expect(label.reputation).toBe(20 + SALES.goldReputation);
+    expect(news.some((n) => n.includes('disque d’or pour « Or Massif »'))).toBe(true);
+    // A deluxe out the week after: a third of what the album would sell, and the total reaches platinum.
+    project.kind = 'album';
+    project.deluxe = { songIds: [], tick: world.tick + 1 };
+    world.tick += 1;
+    tickProjects(world, (_, text) => told.push(text), (text) => news.push(text), (_, amount) => paid.push(amount));
+    const album = salesQuote({ fans: 1_000_000, hype: 30, kind: 'album', quality: project.quality!, cover: false, signing: false, boost: 1 });
+    expect(project.deluxe.sales).toBe(Math.round(album.units * SALES.deluxe));
+    expect(paid[1]).toBe(project.deluxe.sales! * SALES.price);
+    expect(project.cert).toBe('platinum');
+    expect(label.reputation).toBe(20 + SALES.goldReputation + SALES.platinumReputation);
+    // Sold once only.
+    world.tick += 1;
+    tickProjects(world, () => undefined, () => undefined, (_, amount) => paid.push(amount));
+    expect(paid).toHaveLength(2);
+    const view = buildView(world, 'u1').projects.find((x) => x.id === project.id)!;
+    expect(view).toMatchObject({ sales: project.sales! + project.deluxe.sales!, cert: 'platinum', signing: true });
+  });
+
+  it('shares the support with sliders: more promo, sales and progress above an equal share, a little less below', () => {
+    const { world, label, artist } = players();
+    expect(() => applyAction(world, 'u1', { type: 'support', weights: { [artist.id]: 5 } })).toThrow(/deux artistes/);
+    for (const free of freeAgents(world).slice(0, 2)) signArtist(world, label.id, free.id, expectedOffer(free));
+    const [a, b, c] = rosterOf(world, label.id);
+    expect(supportShares(world, label.id)[a!.id]).toBeCloseTo(1 / 3);
+    expect(supportBoost(world, label.id, a!.id, 'promo')).toBe(1);
+    expect(() => applyAction(world, 'u1', { type: 'support', weights: { [a!.id]: 11 } })).toThrow(/0 à 10/);
+    expect(() => applyAction(world, 'u1', { type: 'support', weights: { [a!.id]: 0, [b!.id]: 0, [c!.id]: 0 } })).toThrow(/au moins un/);
+    expect(() => applyAction(world, 'u1', { type: 'support', weights: { fic_inconnu: 3 } })).toThrow(/pas dans ton label/);
+    applyAction(world, 'u1', { type: 'support', weights: { [a!.id]: 10, [b!.id]: 5, [c!.id]: 0 } });
+    // a: two thirds of the support (level 1), c: nothing (level -1).
+    expect(supportBoost(world, label.id, a!.id, 'promo')).toBeCloseTo(1 + SUPPORT.promo.up);
+    expect(supportBoost(world, label.id, a!.id, 'sales')).toBeCloseTo(1 + SUPPORT.sales.up);
+    expect(supportBoost(world, label.id, c!.id, 'grow')).toBeCloseTo(1 - SUPPORT.grow.down);
+    expect(boostOf(-1, 'sales')).toBeCloseTo(0.8);
+    expect(buildView(world, 'u1').roster.find((r) => r.id === a!.id)?.salesBoost).toBeCloseTo(1.3);
+    const dyn = buildView(world, 'u1').dynamics!.artists.find((x) => x.id === a!.id)!;
+    expect(dyn.support).toMatchObject({ weight: 10, level: 1 });
+    expect(dyn.support.share).toBeCloseTo(2 / 3);
+    // A game label is never touched.
+    const npc = Object.values(world.labels).find((l) => l.kind !== 'player')!;
+    expect(supportBoost(world, npc.id, rosterOf(world, npc.id)[0]!.id, 'promo')).toBe(1);
+  });
+
+  it('makes the bigger artists jealous of a smaller one better supported, and tells it once', () => {
+    const { world, label } = players();
+    for (const free of freeAgents(world).slice(0, 2)) signArtist(world, label.id, free.id, expectedOffer(free));
+    const ranks = ranksOf(world, label.id);
+    const roster = rosterOf(world, label.id);
+    const star = roster.find((x) => ranks.get(x.id) === 'star')!;
+    const small = roster.find((x) => ranks.get(x.id) === 'development' || ranks.get(x.id) === 'hope')!;
+    applyAction(world, 'u1', { type: 'support', weights: Object.fromEntries(roster.map((x) => [x.id, x.id === small.id ? 10 : x.id === star.id ? 1 : 3])) });
+    expect(worriesOf(world, label.id, star).find((w) => w.kind === 'snubbed')).toMatchObject({ name: small.name });
+    expect(worriesOf(world, label.id, small).some((w) => w.kind === 'snubbed')).toBe(false);
+    star.morale = 70;
+    const told: string[] = [];
+    tickMorale(world, (_, text) => told.push(text), () => undefined);
+    expect(told.filter((t) => t.startsWith(star.name) && t.includes(`soutient plus ${small.name}`))).toHaveLength(1);
+    expect(star.morale).toBeLessThanOrEqual(70 + SUPPORT.snub);
+    tickMorale(world, (_, text) => told.push(text), () => undefined);
+    expect(told.filter((t) => t.startsWith(star.name) && t.includes(`soutient plus ${small.name}`))).toHaveLength(1);
+    // Hardly any support, with nobody smaller above him: a little let down.
+    applyAction(world, 'u1', { type: 'support', weights: Object.fromEntries(roster.map((x) => [x.id, x.id === small.id ? 0 : 5])) });
+    expect(worriesOf(world, label.id, small).map((w) => w.kind)).toContain('unsupported');
   });
 });
