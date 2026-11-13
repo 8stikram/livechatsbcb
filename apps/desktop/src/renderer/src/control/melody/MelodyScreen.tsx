@@ -70,7 +70,7 @@ import './melody.css';
 
 type MelodyState = { view: MelodyView; nextTickAt: number };
 type Answer<T> = { ok: true; data: T } | { ok: false; message: string };
-type Levels = { theme: 1 | 2 | 3 | 4; beat: 1 | 2 | 3 | 4; producer: 1 | 2 | 3 | 4; studio: 1 | 2 | 3 | 4 };
+type Levels = { theme: 1 | 2 | 3 | 4; beat: 1 | 2 | 3 | 4; producer: 1 | 2 | 3 | 4 | 5; studio: 1 | 2 | 3 | 4 };
 type Tab = 'home' | 'squad' | 'dynamics' | 'studio' | 'releases' | 'academy' | 'staff' | 'market' | 'labels' | 'charts' | 'bank';
 
 const TABS: Array<{ id: Tab; name: string }> = [
@@ -1260,7 +1260,7 @@ const Ceremony = ({ result, labelId, onClose, busy }: { result: SeasonResult; la
 
 /* ---------------------------------- Studio ---------------------------------- */
 
-const LEVELS: Array<{ key: keyof Levels; name: string; options: Array<{ name: string; price: (cfg: typeof CFG.quality, scale: number) => string; note: string }> }> = [
+const LEVELS: Array<{ key: keyof Levels; name: string; options: Array<{ name: string; price: (cfg: typeof CFG.quality, scale: number) => string; note: string; minTier?: number }> }> = [
   {
     key: 'theme',
     name: 'Écriture',
@@ -1289,6 +1289,7 @@ const LEVELS: Array<{ key: keyof Levels; name: string; options: Array<{ name: st
       { name: 'Producteur local', price: (q, s) => money(s * q.producerPrice[1]!), note: 'Solide' },
       { name: 'Producteur reconnu', price: (q, s) => money(s * q.producerPrice[2]!), note: 'Un vrai son' },
       { name: 'Star de la prod', price: (q, s) => money(s * q.producerPrice[3]!), note: 'Signature en or' },
+      { name: 'Légende', price: (q, s) => money(s * q.producerPrice[4]!), note: 'Le meilleur son du jeu', minTier: CFG.tiers.legendTier },
     ],
   },
   {
@@ -1698,23 +1699,25 @@ const Studio = ({
             <span className="mt-level-name">{row.name}</span>
             <div className="mt-levels">
               {row.options.map((option, index) => {
-                const level = (index + 1) as 1 | 2 | 3 | 4;
+                const level = index + 1;
+                const locked = (option.minTier ?? 1) > (view.label?.tier ?? 1);
                 return (
                   <button
                     key={option.name}
                     type="button"
-                    className="mt-opt mt-opt-level"
+                    className={`mt-opt mt-opt-level${option.minTier ? ' is-legend' : ''}`}
                     aria-pressed={levels[row.key] === level}
-                    onClick={() => setLevels({ ...levels, [row.key]: level })}
+                    disabled={locked}
+                    onClick={() => setLevels({ ...levels, [row.key]: level } as Levels)}
                   >
                     <span className="mt-lv">
-                      {[1, 2, 3, 4].map((i) => (
-                        <i key={i} className={i <= level ? 'f' : ''} />
+                      {row.options.map((_, i) => (
+                        <i key={i} className={i < level ? 'f' : ''} />
                       ))}
                     </span>
                     <b>{option.name}</b>
                     <span className="mt-price">{option.price(CFG.quality, priceScale(view.label?.tier))}</span>
-                    <span className="mt-sub">{option.note}</span>
+                    <span className="mt-sub">{locked ? `Dès le palier ${CFG.tiers.names[(option.minTier ?? 1) - 1]}` : option.note}</span>
                   </button>
                 );
               })}
@@ -2394,7 +2397,7 @@ const TourPlanner = ({ view, artist, onAct, onClose, busy }: { view: MelodyView;
   const [merch, setMerch] = useState(true);
   const others = view.roster.filter((a) => a.id !== artist.id);
   const partner = others.find((a) => a.id === partnerId) ?? view.tourGuests.find((g) => g.id === partnerId);
-  const quote = tourQuote(artist.fans, artist.hype, dates, merch, partner?.fans ?? 0, view.tourGuests.some((g) => g.id === partnerId), artist.crowd);
+  const quote = tourQuote(artist.fans, artist.hype, dates, merch, partner?.fans ?? 0, view.tourGuests.some((g) => g.id === partnerId), artist.crowd, view.label?.tier ?? 1);
   const cost = quote.setup + quote.merchCost;
   return (
     <div className="mt-tourplan">
@@ -4432,6 +4435,7 @@ const LabelsTab = ({
   const podium = view.ranking.slice(0, 5);
   return (
     <div className="mt-view mt-in">
+      <TierPanel view={view} />
       <section className="mt-section">
         <div className="mt-bar">
           <Label>
@@ -4568,11 +4572,24 @@ const Charts = ({ view }: { view: MelodyView }) => {
 
 /* ---------------------------------- Bank ---------------------------------- */
 
+const LOAN_NAMES: Record<'classic' | 'asset' | 'emergency', string> = { classic: 'Prêt classique', asset: 'Prêt sur patrimoine', emergency: 'Prêt d’urgence' };
+
 const Bank = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
   const label = view.label!;
+  const estate = view.estate;
   const room = Math.max(0, label.loanCap - label.debt);
   const [amount, setAmount] = useState(Math.min(5_000, room));
   const [weeks, setWeeks] = useState<8 | 16 | 24>(16);
+  const cap = estate?.assetCap ?? 0;
+  const [asset, setAsset] = useState(Math.min(cap, 50_000));
+  const [assetWeeks, setAssetWeeks] = useState(26);
+  const assetAmount = Math.max(1_000, Math.min(asset, cap));
+  const kinds = (['classic', 'asset', 'emergency'] as const)
+    .map((kind) => {
+      const loans = label.loans.filter((l) => l.kind === kind);
+      return { kind, count: loans.length, total: Math.ceil(loans.reduce((sum, l) => sum + l.remaining, 0)), weeks: Math.max(0, ...loans.map((l) => l.ticksLeft)), rate: loans[0]?.ratePerTick ?? 0 };
+    })
+    .filter((k) => k.count > 0);
   return (
     <div className="mt-view mt-in">
       <div className="mt-squad">
@@ -4584,21 +4601,42 @@ const Bank = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyA
             <b>{money(label.debt)}</b>
             <span className="mt-mute">Valeur du catalogue</span>
             <b>{money(label.catalogue)}</b>
+            {estate && (
+              <>
+                <span className="mt-mute">Patrimoine</span>
+                <b>{money(estate.assetBase)}</b>
+              </>
+            )}
           </div>
-          {label.loans.length > 0 && (
+          {kinds.length > 0 && (
             <ul className="mt-loans">
-              {label.loans.map((loan, i) => (
-                <li key={i}>
-                  <b>{money(loan.remaining)}</b>
-                  <span className="mt-sub">encore {loan.ticksLeft} semaines</span>
+              {kinds.map((k) => (
+                <li key={k.kind}>
+                  <span>
+                    <b>{LOAN_NAMES[k.kind]}</b>
+                    {k.count > 1 ? ` × ${k.count}` : ''} · {money(k.total)}
+                  </span>
+                  <span className="mt-sub">
+                    encore {k.weeks} semaine{k.weeks > 1 ? 's' : ''} · {(k.rate * 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} % par semaine
+                  </span>
+                  <button type="button" className="mt-ghost" disabled={busy || k.total > label.cash} onClick={() => onAct({ type: 'repay', kind: k.kind })}>
+                    Tout rembourser · {money(k.total)}
+                  </button>
                 </li>
               ))}
             </ul>
           )}
+          {kinds.length > 0 && <span className="mt-sub">Rembourser en avance ne coûte rien de plus.</span>}
+          {estate?.seizeIn !== null && estate?.seizeIn !== undefined && (
+            <span className="mt-toast mt-warn">
+              Alerte de la banque : {estate.seizeIn > 0 ? `dans ${estate.seizeIn} semaine${estate.seizeIn > 1 ? 's' : ''}` : 'cette semaine'}, elle saisit tes sons qui rapportent le plus.
+              Repasse au-dessus de zéro et rembourse tes prêts d’urgence pour l’éviter.
+            </span>
+          )}
           {label.distress > 0 && <span className="mt-toast mt-warn">Attention : ton label est dans le rouge. Rembourse vite.</span>}
         </div>
         <div className="mt-panel">
-          <Label>Emprunter</Label>
+          <Label>Prêt classique</Label>
           {room < 1_000 ? (
             <span className="mt-sub">La banque ne te prête plus pour l’instant.</span>
           ) : (
@@ -4627,8 +4665,153 @@ const Bank = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyA
             </>
           )}
         </div>
+        {estate && (
+          <div className="mt-panel">
+            <Label>Prêt sur patrimoine</Label>
+            {label.tier < (CFG.tiers.names as readonly string[]).indexOf(estate.assetMinTier) + 1 ? (
+              <span className="mt-sub">Arrive au palier {estate.assetMinTier}. La banque prête alors 40 % de ton patrimoine, à petit taux.</span>
+            ) : label.loans.some((l) => l.kind === 'asset') ? (
+              <span className="mt-sub">Tu as déjà un prêt sur patrimoine. Rembourse-le pour en prendre un autre.</span>
+            ) : cap < 1_000 ? (
+              <span className="mt-sub">Ton patrimoine est encore trop petit : sors des sons qui marchent et signe des artistes.</span>
+            ) : (
+              <>
+                <div className="mt-big">{money(assetAmount)}</div>
+                <input
+                  type="range"
+                  min={1_000}
+                  max={cap}
+                  step={1_000}
+                  value={assetAmount}
+                  aria-label="Somme à emprunter sur ton patrimoine"
+                  onChange={(event) => setAsset(Number(event.target.value))}
+                />
+                <div className="mt-chips">
+                  {estate.assetWeeks.map((w) => (
+                    <button key={w} type="button" className="mt-chipbtn" aria-pressed={assetWeeks === w} onClick={() => setAssetWeeks(w)}>
+                      {w} semaines
+                    </button>
+                  ))}
+                </div>
+                <span className="mt-sub">
+                  Jusqu’à {money(cap)} : 40 % de ton patrimoine (tes sons + la moitié de la valeur de tes artistes). {(estate.assetRate * 100).toLocaleString('fr-FR')} %
+                  d’intérêts par semaine. Si tu ne peux plus payer, la banque te prévient, puis 2 semaines après elle saisit tes sons qui rapportent le plus.
+                </span>
+                <button type="button" className="mt-go mt-go-big" disabled={busy} onClick={() => onAct({ type: 'asset_loan', amount: assetAmount, weeks: assetWeeks })}>
+                  Emprunter sur mon patrimoine
+                </button>
+              </>
+            )}
+          </div>
+        )}
+        {estate && estate.seized.length > 0 && (
+          <div className="mt-panel">
+            <Label>Sons saisis par la banque</Label>
+            <span className="mt-sub">Ils ne te rapportent plus rien. Tu peux les racheter, plus cher que ce qu’ils valent.</span>
+            <ul className="mt-loans">
+              {estate.seized.map((s) => (
+                <li key={s.id}>
+                  <span>
+                    <b>« {s.title} »</b> · {s.artist}
+                  </span>
+                  <button type="button" className="mt-ghost" disabled={busy || s.price > label.cash} onClick={() => onAct({ type: 'buyback', songId: s.id })}>
+                    Racheter · {money(s.price)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
+  );
+};
+
+/* ---------------------------------- Tiers ---------------------------------- */
+
+const TierPanel = ({ view }: { view: MelodyView }) => {
+  const [open, setOpen] = useState(false);
+  const estate = view.estate;
+  if (!estate || !view.label) return null;
+  const count = (n: number): string => (n >= 10_000 ? compact(n) : n.toLocaleString('fr-FR'));
+  return (
+    <section className="mt-section mt-tier">
+      <div className="mt-bar">
+        <Label>Ton palier · {view.label.tierName}</Label>
+        <button type="button" className="mt-ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? 'Cacher les paliers' : 'Voir les 6 paliers'}
+        </button>
+      </div>
+      {estate.next ? (
+        <>
+          <span className="mt-sub">Pour devenir {estate.next.name}, il te faut :</span>
+          <ul className="mt-tier-goals">
+            {estate.next.conditions.map((c) => (
+              <li key={c.text} className={c.have >= c.need ? 'is-done' : ''}>
+                <span>{c.text}</span>
+                <b>
+                  {count(Math.min(c.have, c.need))} / {count(c.need)}
+                </b>
+                <Meter value={Math.min(100, (c.have / Math.max(1, c.need)) * 100)} />
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <span className="mt-sub">Tu es tout en haut.</span>
+      )}
+      {open && (
+        <ol className="mt-tier-table">
+          {estate.table.map((row) => (
+            <li key={row.tier} className={row.tier === view.label!.tier ? 'is-me' : row.tier < view.label!.tier ? 'is-done' : ''}>
+              <b>
+                {row.tier}. {row.name}
+              </b>
+              <span className="mt-sub">
+                {row.maxArtists} artistes · {row.needs}
+              </span>
+              <span>{row.unlocks}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+};
+
+const TierParty = ({ view, onClose, busy }: { view: MelodyView; onClose: () => void; busy: boolean }) => {
+  const party = view.estate?.party;
+  if (!party) return null;
+  const row = view.estate?.table.find((r) => r.tier === party.tier);
+  return createPortal(
+    <div className="mt mt-hit mt-cer" role="dialog" aria-label={`Nouveau palier : ${party.name}`}>
+      <div className="mt-confetti" aria-hidden="true">
+        {CONFETTI.map((c, i) => (
+          <i key={i} style={{ left: `${c.left}%`, animationDelay: `${c.delay}s`, background: `hsl(${c.hue} 90% 60%)`, '--turn': c.turn } as CSSProperties} />
+        ))}
+      </div>
+      <div className="mt-cer-card">
+        <Label>Nouveau palier</Label>
+        <div className="mt-cer-body">
+          <span className="mt-h">
+            Ton label devient <span className="mt-gt">{party.name}</span>
+          </span>
+          <span className="mt-sub">Toute la party est au courant. Moral +5 pour tous tes artistes.</span>
+          {row && (
+            <div className="mt-pills">
+              <span className="mt-pill">Jusqu’à {row.maxArtists} artistes</span>
+              <span className="mt-pill">{row.unlocks}</span>
+            </div>
+          )}
+        </div>
+        <div className="mt-acts">
+          <button type="button" className="mt-go" disabled={busy} onClick={onClose}>
+            On fête ça
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 };
 
@@ -4720,6 +4903,9 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'staff_poach_cancel') say('Offre retirée.');
       if (action.type === 'cheer') say(action.kind === 'bonus' ? 'Prime versée. Il a le sourire.' : action.kind === 'trip' ? 'Bon voyage ! Il revient plein d’idées.' : 'Quelle soirée ! Tout le label est de bonne humeur.');
       if (action.type === 'raise') say('Augmentation signée.');
+      if (action.type === 'asset_loan') say('Prêt sur patrimoine accordé.');
+      if (action.type === 'repay') say('Prêt remboursé.');
+      if (action.type === 'buyback') say('Son racheté : il te rapporte de nouveau.');
       if (action.type === 'role') say(`Nouveau rôle : ${ROLES[action.role].name}.`);
       if (action.type === 'genre_change') say('Changement de genre lancé. Laisse-lui le temps de trouver son son.');
       if (action.type === 'genre_wish_refuse') say('Tu as dit non. Il fait un peu la tête.');
@@ -4919,6 +5105,9 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
         </div>
       )}
       {view.label && active && !view.tutorial && <HitMoment view={view} />}
+      {view.label && active && !view.tutorial && view.estate?.party && !(view.seasonInfo.last && (view.seasonInfo.unseen || replay)) && (
+        <TierParty view={view} busy={busy} onClose={() => run({ type: 'tier_seen' })} />
+      )}
       {view.label && active && !view.tutorial && view.seasonInfo.last && (view.seasonInfo.unseen || replay) && (
         <Ceremony
           key={view.seasonInfo.last.number}

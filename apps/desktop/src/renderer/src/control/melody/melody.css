@@ -3296,3 +3296,60 @@ button.mt-goal:hover {
   gap: 8px;
   min-width: 0;
 }
+
+/* ---------- Paliers, banque, producteur légende ---------- */
+.mt-tier-goals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+.mt-tier-goals li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--mt-line);
+  background: var(--mt-panel2);
+}
+.mt-tier-goals li > :last-child {
+  grid-column: 1 / -1;
+}
+.mt-tier-goals li.is-done {
+  border-color: color-mix(in srgb, var(--mt-ok) 55%, var(--mt-line));
+}
+.mt-tier-table {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.mt-tier-table li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--mt-line);
+}
+.mt-tier-table li.is-me {
+  border-color: var(--mt-a2);
+  background: var(--mt-panel2);
+}
+.mt-tier-table li.is-done {
+  opacity: 0.6;
+}
+.mt-loans li {
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.mt-opt-level.is-legend:not(:disabled) {
+  border-color: #f2c14e;
+}
+.mt-opt-level:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

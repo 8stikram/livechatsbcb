@@ -10,6 +10,7 @@ import { tickAuctions } from './auctions.ts';
 import { returnLoans, shareLoan, tickLending } from './lending.ts';
 import { tickClashes } from './clash.ts';
 import { tickProjects } from './projects.ts';
+import { ESTATE, tickAssetLoan } from './estate.ts';
 import { judgeRelease } from './letdown.ts';
 import { lightUp, supportBoost } from './support.ts';
 import { tickSeason } from './seasons.ts';
@@ -296,7 +297,7 @@ export const runTick = (world: World): TickReport => {
   // 4. Streaming money. The artist's royalties first repay his advance.
   for (const song of world.songs) {
     const label = world.labels[song.labelId];
-    if (song.state !== 'released' || !label || label.kind !== 'player' || label.bankrupt) continue;
+    if (song.state !== 'released' || song.seized || !label || label.kind !== 'player' || label.bankrupt) continue;
     const gross = song.streamsLast * CFG.release.payPerStream;
     const contract = contractOf(world, song.artistId);
     let paidToArtist = 0;
@@ -320,7 +321,7 @@ export const runTick = (world: World): TickReport => {
     if (!artist || !label || label.bankrupt || artist.energy < tiring) continue;
     const already = gigsPlayed.get(artist.id) ?? 0;
     gigsPlayed.set(artist.id, already + 1);
-    const result = playGig(artist, already, crowdBoost(world, label.id) * stageBoost(artist));
+    const result = playGig(artist, already, crowdBoost(world, label.id) * stageBoost(artist), label.tier);
     artist.energy -= tiring;
     artist.fans += Math.round(result.audience * CFG.fans.gigGain);
     artist.lastActiveTick = tick;
@@ -372,6 +373,8 @@ export const runTick = (world: World): TickReport => {
       growArtist(artist, activeArtists.has(artist.id) || artist.lastActiveTick >= tick - 1, rng, coachBoost(world, label.id, artist.id) * profileGrowth(world, artist) * supportBoost(world, label.id, artist.id, 'grow'));
     }
 
+    // The asset loan: warning, then seizure of songs.
+    tickAssetLoan(world, label, (text) => report(reports, label).events.push(text));
     if (label.cash < 0) {
       const emergencies = world.loans.filter((l) => l.labelId === label.id && l.kind === 'emergency').length;
       if (emergencies < CFG.bank.maxEmergency) {
@@ -396,7 +399,11 @@ export const runTick = (world: World): TickReport => {
       report(reports, label).events.push('Faillite : le label est remis à zéro.');
     } else if (canTierUp(world, label)) {
       label.tier += 1;
-      report(reports, label).events.push(`Le label devient ${CFG.tiers.names[label.tier - 1]}.`);
+      const name = CFG.tiers.names[label.tier - 1] ?? '';
+      for (const artist of roster) artist.morale = clamp(artist.morale + ESTATE.tierMorale, 0, 100);
+      label.tierParty = label.tier;
+      world.marketNews = [...(world.marketNews ?? []), { tick, text: `${label.name} devient ${name} !` }];
+      report(reports, label).events.push(`Le label devient ${name}. Moral +${ESTATE.tierMorale} pour tous tes artistes.`);
     }
     label.reputation = clamp(label.reputation, 0, 100);
     report(reports, label).cash = Math.round(label.cash);

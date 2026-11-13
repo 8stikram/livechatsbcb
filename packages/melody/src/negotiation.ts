@@ -93,7 +93,7 @@ export const talkBlocked = (world: World, label: Label, artist: Artist): string 
 /** What the artist really wants: the posted price moved by luck, and by his mood for a renewal. */
 const drawTalk = (world: World, label: Label, artist: Artist, renewal: boolean): Talk => {
   const rng = rngFor(world.seed, world.tick, `talk:${label.id}:${artist.id}`);
-  const base = expectedOffer(artist);
+  const base = expectedOffer(artist, label.tier);
   const mood = renewal ? clamp(1 + (60 - artist.morale) / 200, 0.8, 1.3) : 1;
   const greed = (0.85 + rng.next() * 0.35) * mood;
   const advance = round100(base.advance * greed);
@@ -352,7 +352,7 @@ export const talkView = (world: World, talk: Talk): TalkView => {
     lock: talk.lockRevealed ? { clause: talk.lock, value: talk.lockValue } : null,
     counter: talk.counter,
     last: talk.last,
-    hint: artist ? expectedOffer(artist) : talk.expect,
+    hint: artist ? expectedOffer(artist, world.labels[talk.labelId]?.tier ?? 1) : talk.expect,
     transferFee: agreedTransfer(world, talk.labelId, talk.artistId)?.fee ?? 0,
   };
 };

@@ -10,6 +10,7 @@ import {
   MORALE, RANKS, ranksOf, isLeader, worriesOf, moraleBlock, tickMorale, dynamicsView,
   shareLoan, returnLoans, STUDIO_CONTENT, studioCardsFor, usualNote, isLetdown, judgeRelease,
   SALES, salesQuote, createProject, tickProjects, supportBoost, ROLES, ROLE_RULES, FORM, roleSlots, inForm, lightUp, experienceBonus,
+  ESTATE, TIER_TABLE, assetBase, assetLoanCap, buybackPrice, tickAssetLoan, tierProgress, catalogueValue,
   SKILL_IDS, skillsOf, skillLevel, skillPlus, stageBoost, tirelessFactor, PROFILES, EVOLUTION, GENRE_CHANGE, profileOf, profileGrowth, afterRelease, tickEvolution, GENRES,
 } from '../src/index.ts';
 import type { Artist, Song, StaffMember, World } from '../src/index.ts';
@@ -2015,5 +2016,147 @@ describe('ventes de CD et vinyles, et soutien du label', () => {
     const theirs = rosterOf(world, npc.id)[0]!;
     lightUp(world, npc.id, theirs, 'n°1', () => undefined);
     expect(inForm(world, theirs)).toBe(false);
+  });
+});
+
+describe('prêt sur patrimoine et paliers Mainstream et Empire', () => {
+  const setup = (tier: number) => {
+    const world = createWorld(42);
+    applyAction(world, 'u1', { type: 'found', name: 'Label u1' });
+    applyAction(world, 'u1', { type: 'tuto', move: 'skip' });
+    const label = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    label.cash = 2_000_000;
+    label.tier = tier;
+    const artist = rosterOf(world, label.id)[0]!;
+    return { world, label, artist };
+  };
+  const hits = (world: World, labelId: string, artist: Artist, streams: number[]) =>
+    streams.map((weekly, i) => {
+      artist.energy = 100;
+      const song = createSong(world, labelId, {
+        artistId: artist.id, title: `Tube ${i + 1}`, themeId: 'rupture', beatId: 'lovetrap',
+        levels: { theme: 1, beat: 1, producer: 1, studio: 1 }, producer: producerOfLevel(1, 1),
+      });
+      Object.assign(song, { state: 'released', releaseTick: 0, streamsLast: weekly, decay: 0.95 });
+      return song;
+    });
+
+  it('lends 40 % of the assets from the Respecté tier, over 13, 26 or 52 weeks, one at a time, repaid early without fees', () => {
+    const { world, label, artist } = setup(2);
+    hits(world, label.id, artist, [2_000_000, 500_000]);
+    expect(assetLoanCap(world, label)).toBe(0);
+    expect(() => applyAction(world, 'u1', { type: 'asset_loan', amount: 10_000, weeks: 26 })).toThrow(/palier/);
+    label.tier = 3;
+    const cap = assetLoanCap(world, label);
+    expect(cap).toBe(Math.floor((ESTATE.share * assetBase(world, label)) / 1_000) * 1_000);
+    expect(cap).toBeGreaterThan(0);
+    expect(() => applyAction(world, 'u1', { type: 'asset_loan', amount: 10_000, weeks: 20 })).toThrow(/13, 26 ou 52/);
+    expect(() => applyAction(world, 'u1', { type: 'asset_loan', amount: cap + 1_000, weeks: 26 })).toThrow(/au plus/);
+    const cash = label.cash;
+    applyAction(world, 'u1', { type: 'asset_loan', amount: 10_000, weeks: 52 });
+    expect(label.cash).toBe(cash + 10_000);
+    expect(world.loans.find((l) => l.labelId === label.id && l.kind === 'asset')).toMatchObject({ ratePerTick: ESTATE.rate, ticksLeft: 52 });
+    expect(() => applyAction(world, 'u1', { type: 'asset_loan', amount: 1_000, weeks: 13 })).toThrow(/déjà/);
+    applyAction(world, 'u1', { type: 'repay', kind: 'asset' });
+    expect(label.cash).toBe(cash);
+    expect(world.loans.some((l) => l.labelId === label.id)).toBe(false);
+    expect(() => applyAction(world, 'u1', { type: 'repay', kind: 'classic' })).toThrow(/Pas de prêt/);
+  });
+
+  it('warns, then 2 weeks later seizes the songs that earn the most, which can be bought back dearer', () => {
+    const { world, label, artist } = setup(3);
+    const [big, small] = hits(world, label.id, artist, [2_000_000, 100_000]);
+    applyAction(world, 'u1', { type: 'asset_loan', amount: 50_000, weeks: 26 });
+    const told: string[] = [];
+    // Back in the green: nothing happens.
+    tickAssetLoan(world, label, (t) => told.push(t));
+    expect(told).toHaveLength(0);
+    label.cash = -1_000;
+    tickAssetLoan(world, label, (t) => told.push(t));
+    expect(told[0]).toMatch(/Alerte de la banque/);
+    expect(buildView(world, 'u1').estate!.seizeIn).toBe(ESTATE.warnWeeks);
+    world.tick += 1;
+    tickAssetLoan(world, label, (t) => told.push(t));
+    expect(big!.seized).toBeUndefined();
+    world.tick += 1;
+    const before = catalogueValue(world, label.id);
+    tickAssetLoan(world, label, (t) => told.push(t));
+    // The biggest song covers the debt alone.
+    expect(big!.seized).toEqual({ tick: world.tick });
+    expect(small!.seized).toBeUndefined();
+    expect(told.at(-1)).toMatch(/saisit 1 son : « Tube 1 »/);
+    expect(world.loans.some((l) => l.labelId === label.id && l.kind === 'asset')).toBe(false);
+    expect(catalogueValue(world, label.id)).toBeLessThan(before);
+    // It earns nothing any more.
+    const report = runTick(world);
+    expect(report).toBeDefined();
+    const view = buildView(world, 'u1').estate!;
+    expect(view.seized.map((x) => x.id)).toEqual([big!.id]);
+    expect(view.seized[0]!.price).toBe(buybackPrice(world, big!.id));
+    // Dearer than what it is worth: its value as if it were still the label's, plus 25 %.
+    expect(view.seized[0]!.price).toBeGreaterThan(10_000);
+    label.cash = 0;
+    expect(() => applyAction(world, 'u1', { type: 'buyback', songId: big!.id })).toThrow(/Il te faut/);
+    label.cash = 10_000_000;
+    applyAction(world, 'u1', { type: 'buyback', songId: big!.id });
+    expect(big!.seized).toBeUndefined();
+    expect(() => applyAction(world, 'u1', { type: 'buyback', songId: small!.id })).toThrow(/pas saisi/);
+  });
+
+  it('lifts the warning when the label is back in the green without emergency loan', () => {
+    const { world, label, artist } = setup(3);
+    hits(world, label.id, artist, [2_000_000]);
+    applyAction(world, 'u1', { type: 'asset_loan', amount: 20_000, weeks: 13 });
+    const told: string[] = [];
+    label.cash = -5;
+    tickAssetLoan(world, label, (t) => told.push(t));
+    label.cash = 100;
+    tickAssetLoan(world, label, (t) => told.push(t));
+    expect(told[1]).toMatch(/lève son alerte/);
+    expect(buildView(world, 'u1').estate!.seizeIn).toBeNull();
+  });
+
+  it('opens legend producers at Mainstream, stadiums and cheaper stars at Empire', () => {
+    const { world, label, artist } = setup(3);
+    artist.energy = 100;
+    const legend = { artistId: artist.id, title: 'Légende', themeId: 'rupture', beatId: 'lovetrap', levels: { theme: 1, beat: 1, producer: 5, studio: 1 } as const, producer: producerOfLevel(5, 1) };
+    expect(() => createSong(world, label.id, legend)).toThrow(/légende arrivent au palier Label Mainstream/);
+    label.tier = 4;
+    const song = createSong(world, label.id, legend);
+    expect(song.cost).toBe(CFG.quality.producerPrice[4]);
+    // Stadiums: Empire only.
+    const star = { ...artist, fans: 80_000_000, hype: 90 };
+    expect(playGig(star, 0, 1, 4).venue).not.toBe('Stade');
+    expect(playGig(star, 0, 1, 5).venue).toBe('Stade');
+    // Stars (only Mainstream labels and up can sign them) ask an Empire 25 % less.
+    const famous = { ...artist, fans: 10_000_000 };
+    expect(expectedOffer(famous, 5).advance).toBe(Math.round(artistValue(famous) * CFG.advanceShare * (1 - CFG.tiers.starDiscount)));
+    expect(expectedOffer(famous, 5).advance).toBeLessThan(expectedOffer(famous, 4).advance);
+    expect(expectedOffer(artist, 5).advance).toBe(expectedOffer(artist, 1).advance);
+  });
+
+  it('shows the progress to the next tier, the table of the 6 tiers, and throws a party when the label goes up', () => {
+    const { world, label } = setup(1);
+    expect(TIER_TABLE).toHaveLength(6);
+    expect(TIER_TABLE[0]!.needs).toBe('Au départ');
+    expect(TIER_TABLE[4]!.unlocks).toMatch(/stades/);
+    const next = tierProgress(world, label)!;
+    expect(next.name).toBe('Label Underground');
+    expect(next.conditions.map((c) => c.text)).toEqual(['Réputation', 'Fans', 'Son dans un top 50 de genre']);
+    // Meet every condition: the label goes up at the next tick.
+    Object.assign(label, { reputation: 30 });
+    label.stats.top50Genre = 1;
+    const roster = rosterOf(world, label.id);
+    roster[0]!.fans = 30_000;
+    const report = runTick(world);
+    expect(label.tier).toBe(2);
+    expect(report.labels[label.id]?.events.some((e) => e.includes('Le label devient Label Underground'))).toBe(true);
+    expect(world.marketNews?.some((n) => n.text === 'Label u1 devient Label Underground !')).toBe(true);
+    expect(buildView(world, 'u1').estate!.party).toEqual({ tier: 2, name: 'Label Underground' });
+    applyAction(world, 'u1', { type: 'tier_seen' });
+    expect(buildView(world, 'u1').estate!.party).toBeNull();
+    // At the top, nothing more to show.
+    label.tier = 6;
+    expect(tierProgress(world, label)).toBeNull();
   });
 });

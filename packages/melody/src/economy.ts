@@ -30,7 +30,7 @@ export const fameTier = (artist: Artist): number => {
 export const labelShare = (contract: Contract | undefined): number => 1 - (contract?.royaltyRate ?? 0);
 
 export const songValue = (song: Song, contract: Contract | undefined): number => {
-  if (song.state !== 'released') return 0;
+  if (song.state !== 'released' || song.seized) return 0;
   const weekly = song.streamsLast * CFG.release.payPerStream * labelShare(contract);
   return weekly * Math.min(20, 1 / (1 - song.decay));
 };
@@ -62,12 +62,12 @@ export interface GigResult {
 }
 
 /** One concert at home: the game picks the venue that earns the most. */
-export const playGig = (artist: Artist, alreadyThisWeek = 0, crowd = 1): GigResult => {
+export const playGig = (artist: Artist, alreadyThisWeek = 0, crowd = 1, tier = 6): GigResult => {
   const demand =
     crowd *
     CFG.live.demandFactor * Math.sqrt(artist.fans) * (0.5 + artist.hype / 50) * Math.max(0.25, 1 - CFG.live.repeatPenalty * alreadyThisWeek);
   let best: GigResult | null = null;
-  for (const venue of CFG.live.venues) {
+  for (const venue of CFG.live.venues.filter((v) => v.minTier <= tier)) {
     const audience = Math.min(demand, venue.seats);
     const profit = audience * venue.price * CFG.live.margin - venue.fixed;
     if (!best || profit > best.profit) best = { venue: venue.name, audience: Math.round(audience), fill: audience / venue.seats, profit: Math.round(profit) };
@@ -76,12 +76,15 @@ export const playGig = (artist: Artist, alreadyThisWeek = 0, crowd = 1): GigResu
   return best;
 };
 
-const TIER_RULES = [
-  { reputation: 20, fans: 25_000, revenue: 0, check: (l: Label) => l.stats.top50Genre >= 1 },
-  { reputation: 40, fans: 500_000, revenue: 250_000, check: (l: Label) => l.stats.top100Global >= 1 },
-  { reputation: 60, fans: 5_000_000, revenue: 5_000_000, check: (l: Label) => l.stats.top10Global >= 3 },
-  { reputation: 80, fans: 50_000_000, revenue: 100_000_000, check: (l: Label) => l.stats.numberOnes >= 1 },
-  { reputation: 95, fans: 500_000_000, revenue: 2_000_000_000, check: (l: Label) => l.stats.numberOnes >= 10 },
+type HitKey = 'top50Genre' | 'top100Global' | 'top10Global' | 'numberOnes';
+
+/** What each tier up needs (index: current tier - 1). */
+export const TIER_RULES: Array<{ reputation: number; fans: number; revenue: number; hit: { key: HitKey; need: number; text: string } }> = [
+  { reputation: 20, fans: 25_000, revenue: 0, hit: { key: 'top50Genre', need: 1, text: 'son dans un top 50 de genre' } },
+  { reputation: 40, fans: 500_000, revenue: 250_000, hit: { key: 'top100Global', need: 1, text: 'son dans le top 100 global' } },
+  { reputation: 60, fans: 5_000_000, revenue: 5_000_000, hit: { key: 'top10Global', need: 3, text: 'sons dans le top 10 global' } },
+  { reputation: 80, fans: 50_000_000, revenue: 100_000_000, hit: { key: 'numberOnes', need: 1, text: 'n°1 du top global' } },
+  { reputation: 95, fans: 500_000_000, revenue: 2_000_000_000, hit: { key: 'numberOnes', need: 10, text: 'n°1 du top global' } },
 ];
 
 /** True when the label meets every condition of the next tier. */
@@ -92,7 +95,7 @@ export const canTierUp = (world: World, label: Label): boolean => {
     label.reputation >= rule.reputation &&
     fansOf(world, label.id) >= rule.fans &&
     label.stats.revenueTotal >= rule.revenue &&
-    rule.check(label)
+    label.stats[rule.hit.key] >= rule.hit.need
   );
 };
 

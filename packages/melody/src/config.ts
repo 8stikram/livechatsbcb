@@ -18,6 +18,10 @@ export const CFG = {
     fixedCosts: [200, 1_000, 5_000, 20_000, 80_000, 300_000],
     songBudgetCap: [15_000, 60_000, 250_000, 1_000_000, 5_000_000, Number.POSITIVE_INFINITY],
     loanCap: [20_000, 100_000, 500_000, 3_000_000, 20_000_000, 100_000_000],
+    /** Legend producers from Mainstream; stars ask this much less advance from an Empire. */
+    legendTier: 4,
+    empireTier: 5,
+    starDiscount: 0.25,
   },
 
   energy: {
@@ -48,8 +52,9 @@ export const CFG = {
     beatPrice: [0, 400, 3_000, 0],
     studioPrice: [0, 1_500, 8_000, 40_000],
     studioDelay: [0, 0, 1, 1],
-    producerLevel: [48, 57, 63, 68],
-    producerPrice: [0, 1_000, 5_500, 40_000],
+    /** The 5th is the legend producer (Mainstream tier and up). */
+    producerLevel: [48, 57, 63, 68, 74],
+    producerPrice: [0, 1_000, 5_500, 40_000, 150_000],
     /** Studio prices follow the size of the label: a small label pays small-label prices. */
     tierPrice: [0.15, 0.4, 1, 1, 1, 1],
   },
@@ -95,12 +100,13 @@ export const CFG = {
     /** Each extra concert the same week draws this much less. */
     repeatPenalty: 0.25,
     venues: [
-      { name: 'Bar', seats: 100, price: 10, fixed: 100 },
-      { name: 'Club', seats: 500, price: 18, fixed: 1_500 },
-      { name: 'Salle', seats: 2_000, price: 30, fixed: 8_000 },
-      { name: 'Grande salle', seats: 6_000, price: 45, fixed: 40_000 },
-      { name: 'Arène', seats: 15_000, price: 65, fixed: 150_000 },
-      { name: 'Stade', seats: 60_000, price: 80, fixed: 800_000 },
+      { name: 'Bar', seats: 100, price: 10, fixed: 100, minTier: 1 },
+      { name: 'Club', seats: 500, price: 18, fixed: 1_500, minTier: 1 },
+      { name: 'Salle', seats: 2_000, price: 30, fixed: 8_000, minTier: 1 },
+      { name: 'Grande salle', seats: 6_000, price: 45, fixed: 40_000, minTier: 1 },
+      { name: 'Arène', seats: 15_000, price: 65, fixed: 150_000, minTier: 1 },
+      // Stadiums: Empire only.
+      { name: 'Stade', seats: 60_000, price: 80, fixed: 800_000, minTier: 5 },
     ],
   },
 

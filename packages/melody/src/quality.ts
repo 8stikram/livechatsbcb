@@ -8,7 +8,7 @@ import { perfectEnergy, SHIFT_MALUS, storyBonus, tightness } from './skills.ts';
 import type { Artist, Producer, SongLevels } from './types.ts';
 
 const Q = CFG.quality;
-type Level = 1 | 2 | 3 | 4;
+type Level = 1 | 2 | 3 | 4 | 5;
 const at = (table: readonly number[], level: Level): number => table[level - 1] ?? 0;
 
 /** A producer of a given level tier. The affinity says how well he knows the chosen beat. */

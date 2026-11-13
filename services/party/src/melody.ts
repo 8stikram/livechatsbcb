@@ -17,7 +17,9 @@ import { nextParisTick } from './melody-time';
 export { nextParisTick };
 
 const LevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
-const LevelsSchema = z.object({ theme: LevelSchema, beat: LevelSchema, producer: LevelSchema, studio: LevelSchema });
+// The producer has a 5th level: the legend producer (Mainstream tier and up).
+const ProducerLevelSchema = z.union([LevelSchema, z.literal(5)]);
+const LevelsSchema = z.object({ theme: LevelSchema, beat: LevelSchema, producer: ProducerLevelSchema, studio: LevelSchema });
 const IdSchema = z.string().min(1).max(64);
 // A song cover: a small square picture the app has already shrunk (about 10 kB).
 const COVER_MAX = 40_000;
@@ -93,6 +95,10 @@ export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('release'), songId: IdSchema, inWeeks: z.number().int().min(1).max(8), marketing: z.array(IdSchema).max(12) }),
   z.object({ type: z.literal('gig'), artistId: IdSchema }),
   z.object({ type: z.literal('loan'), amount: z.number().min(1).max(1e9), weeks: z.union([z.literal(8), z.literal(16), z.literal(24)]) }),
+  z.object({ type: z.literal('asset_loan'), amount: z.number().int().min(1_000).max(1e10), weeks: z.union([z.literal(13), z.literal(26), z.literal(52)]) }),
+  z.object({ type: z.literal('repay'), kind: z.enum(['classic', 'emergency', 'asset']) }),
+  z.object({ type: z.literal('buyback'), songId: IdSchema }),
+  z.object({ type: z.literal('tier_seen') }),
 ]);
 
 export const MelodyCoversSchema = z.object({ ids: z.array(IdSchema).max(60) });

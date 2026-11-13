@@ -162,6 +162,8 @@ export interface Label {
   stats: LabelStats;
   /** Last party of the label (morale). */
   partyTick?: number;
+  /** The tier just reached, until the player closes the party screen. */
+  tierParty?: number;
   /** Role of each artist (none: "free"), and the week it was last changed. */
   roles?: Record<string, RoleId>;
   roleTicks?: Record<string, number>;
@@ -179,7 +181,8 @@ export type RoleId = 'headliner' | 'prospect' | 'pillar' | 'free';
 export interface SongLevels {
   theme: 1 | 2 | 3 | 4;
   beat: 1 | 2 | 3 | 4;
-  producer: 1 | 2 | 3 | 4;
+  /** 5: a legend producer (Mainstream tier and up). */
+  producer: 1 | 2 | 3 | 4 | 5;
   studio: 1 | 2 | 3 | 4;
 }
 
@@ -228,6 +231,8 @@ export interface Song {
   promo?: PromoResult[];
   /** Streams week by week since the release (at most 12). */
   history?: number[];
+  /** Seized by the bank for an unpaid asset loan: it earns nothing for the label until bought back. */
+  seized?: { tick: number };
   /** A disstrack: the label it goes after. */
   diss?: string;
   /** The EP or album it belongs to. */
@@ -244,7 +249,9 @@ export interface PromoResult {
 
 export interface Loan {
   labelId: string;
-  kind: 'classic' | 'emergency';
+  kind: 'classic' | 'emergency' | 'asset';
+  /** Asset loan: the week the bank warned it would seize songs. */
+  warnTick?: number;
   remaining: number;
   ratePerTick: number;
   ticksLeft: number;

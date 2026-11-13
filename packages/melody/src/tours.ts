@@ -83,9 +83,9 @@ export const onTour = (world: World, artistId: string): boolean => {
 /** The crowd one date draws, and the venue it fills. */
 const dateDemand = (fans: number, hype: number): number => CFG.live.demandFactor * Math.sqrt(fans) * (0.5 + hype / 50) * TOURS.demandBonus;
 
-const bestVenue = (demand: number): { name: string; seats: number; price: number; fixed: number; audience: number; profit: number } => {
+const bestVenue = (demand: number, tier = 6): { name: string; seats: number; price: number; fixed: number; audience: number; profit: number } => {
   let best: ReturnType<typeof bestVenue> | null = null;
-  for (const venue of CFG.live.venues) {
+  for (const venue of CFG.live.venues.filter((v) => v.minTier <= tier)) {
     const audience = Math.min(demand, venue.seats);
     const profit = audience * venue.price * CFG.live.margin - venue.fixed;
     if (!best || profit > best.profit) best = { ...venue, audience: Math.round(audience), profit: Math.round(profit) };
@@ -104,8 +104,8 @@ export interface TourQuote {
 
 /** What a tour would look like, before announcing it. */
 /** split: the co-headliner is another player's artist, whose label takes half the money. */
-export const tourQuote = (fans: number, hype: number, dates: number, merch: boolean, partnerFans = 0, split = false, crowd = 1): TourQuote => {
-  const venue = bestVenue(dateDemand(fans + partnerFans, hype) * crowd);
+export const tourQuote = (fans: number, hype: number, dates: number, merch: boolean, partnerFans = 0, split = false, crowd = 1, tier = 6): TourQuote => {
+  const venue = bestVenue(dateDemand(fans + partnerFans, hype) * crowd, tier);
   const setup = Math.round(venue.fixed * TOURS.setupShare * dates);
   const items = Math.round(venue.audience * TOURS.merchBuy * dates);
   const merchCost = merch ? items * TOURS.merchCost : 0;
@@ -155,7 +155,7 @@ export const announceTour = (
     openerId = opener.id;
   }
   if (toursOf(world).length >= TOURS.maxPerWorld) fail('Trop de tournées sur ce serveur. Réessaie la semaine prochaine.');
-  const quote = tourQuote(artist.fans, artist.hype, dates, request.merch ?? false, partnerFans, false, crowdBoost(world, label.id) * stageBoost(artist));
+  const quote = tourQuote(artist.fans, artist.hype, dates, request.merch ?? false, partnerFans, false, crowdBoost(world, label.id) * stageBoost(artist), label.tier);
   const cost = quote.setup + quote.merchCost;
   if (cost > label.cash) fail(`Pas assez de cash : la tournée coûte ${cost.toLocaleString('fr-FR')} € à monter.`);
   label.cash -= cost;
@@ -277,7 +277,7 @@ export const tickTours = (
     let merch = 0;
     let crowd = 0;
     for (let i = 0; i < tonight; i += 1) {
-      const venue = bestVenue(dateDemand(artist.fans + (partner?.fans ?? 0), artist.hype) * crowdBoost(world, label.id) * stageBoost(artist) * rng.range(0.85, 1.15));
+      const venue = bestVenue(dateDemand(artist.fans + (partner?.fans ?? 0), artist.hype) * crowdBoost(world, label.id) * stageBoost(artist) * rng.range(0.85, 1.15), label.tier);
       crowd += venue.audience;
       money += venue.profit > 0 ? venue.profit * CFG.live.labelShare : venue.profit;
       if (tour.merch && tour.merchStock > 0) {

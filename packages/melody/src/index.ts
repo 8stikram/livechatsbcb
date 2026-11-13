@@ -57,6 +57,7 @@ export {
 } from './lending.ts';
 export { LETDOWN, usualNote, isLetdown, judgeRelease } from './letdown.ts';
 export { studioCardsFor, STUDIO_CONTENT } from './studio.ts';
+export { ESTATE, TIER_TABLE, assetBase, assetLoanCap, buyBack, buybackPrice, estateView, repayLoans, takeAssetLoan, tickAssetLoan, tierProgress, type EstateView, type TierRow, type TierCondition } from './estate.ts';
 export { FORM, ROLES, ROLE_IDS, ROLE_RULES, formWeeks, inForm, lightUp, roleCounts, roleOf, roleSlots, setRole, supportBoost, type RoleDef, type SupportKind } from './support.ts';
 export {
   CLASH, startClash, answerClash, refuseClash, throwShade, answerInterview, interviewView, shadeView, clashesView, rivalsView, rivalsOf, tickClashes,

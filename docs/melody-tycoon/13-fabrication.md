@@ -327,3 +327,17 @@ Choix du propriétaire : **pas de superfans**, pas de fan club, pas de précomma
 - **Places** : 1 par rôle au palier Maison, une de plus à chaque palier. Un changement de rôle par artiste et par semaine. **Pas de jalousie.**
 - **En pleine forme** (idée du propriétaire, comme les cartes spéciales d'un jeu de foot) : après un n°1 du top global ou un disque d'or ou de platine, la carte de l'artiste brille 4 semaines : note +3, promo et ventes +10 %.
 - Seuls les labels des joueurs ont des rôles et la pleine forme. Les onglets seront revus à la fin, avant la sortie.
+
+## Étape 19 — prêt sur patrimoine et paliers Mainstream et Empire (fait)
+
+Choix du propriétaire : prêt de **40 %** du patrimoine, durée **au choix 13, 26 ou 52 semaines**, si on ne paie plus **la banque saisit des sons**, avec une **alerte 2 semaines avant**. **Mainstream** : producteurs légende. **Empire** : stades réservés et stars moins chères (**−25 %**). À la montée : **annonce à toute la party, moral +5, écran de fête**. Une **barre par condition** pour le palier suivant. Les plus : **racheter les sons saisis**, **rembourser en avance**, **tableau des 6 paliers**.
+
+- **Prêt sur patrimoine** (Banque, dès le palier Respecté) : jusqu'à 40 % du patrimoine (valeur des sons + moitié de la valeur des artistes), arrondi au millier. 0,6 % d'intérêts par semaine, 13, 26 ou 52 semaines. Un seul à la fois, en plus du prêt classique.
+- **Impayé** : si le cash est dans le rouge (ou qu'un prêt d'urgence court encore) alors qu'un prêt sur patrimoine est en cours, alerte dans le bilan et la Banque. 2 semaines après, si rien n'a changé, la banque saisit les sons qui rapportent le plus jusqu'à couvrir la dette. Un son saisi ne rapporte plus rien et ne compte plus dans le catalogue.
+- **Rachat** : à la Banque, un son saisi se rachète à sa valeur + 25 % (1 000 € au moins).
+- **Rembourser en avance** : chaque type de prêt (classique, patrimoine, urgence) se rembourse d'un coup, sans frais.
+- **Producteur légende** (studio, dès Mainstream) : 150 000 €, le plus fort du jeu (niveau 74 contre 68 pour une star de la prod), et moins de risque de rater.
+- **Stades** (60 000 places) : réservés à l'Empire, pour les concerts et les tournées.
+- **Stars moins chères** : un artiste de plus de 5 M de fans demande 25 % d'avance en moins à un Empire.
+- **Montée de palier** : moral +5 pour tous les artistes, « X devient Empire ! » dans les news de toute la party, et un écran de fête avec des confettis.
+- **Onglet Label** : « Ton palier » avec une barre par condition (réputation, fans, argent gagné, hits) et le tableau des 6 paliers. Le tableau ne dit que ce qui change vraiment avec le palier (taille des artistes signables, budget par son, prêt, et les nouveautés).

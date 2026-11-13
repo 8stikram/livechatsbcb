@@ -104,9 +104,11 @@ export interface Offer {
 }
 
 /** What the artist expects. The multi-round negotiation will build on this. */
-export const expectedOffer = (artist: Artist): Offer => {
+/** An Empire pays the stars (artists only Mainstream labels and up can sign) less advance. */
+export const expectedOffer = (artist: Artist, tier = 1): Offer => {
   const value = artistValue(artist);
-  return { advance: Math.round(value * CFG.advanceShare), royaltyRate: 0.22, weeklyAllowance: 0, months: 18 };
+  const discount = tier >= CFG.tiers.empireTier && fameTier(artist) >= CFG.tiers.legendTier ? 1 - CFG.tiers.starDiscount : 1;
+  return { advance: Math.round(value * CFG.advanceShare * discount), royaltyRate: 0.22, weeklyAllowance: 0, months: 18 };
 };
 
 /** Signs a free agent if the offer reaches what he expects. */
@@ -119,7 +121,7 @@ export const signArtist = (world: World, labelId: string, artistId: string, offe
   if (fameTier(artist) > label.tier || (generalRating(artist) >= 80 && label.tier < 3)) {
     return fail(`${artist.name} ne signe pas dans un label de ce palier.`);
   }
-  const expected = expectedOffer(artist);
+  const expected = expectedOffer(artist, label.tier);
   const score =
     60 * (expected.advance === 0 ? 1 : Math.min(1.5, offer.advance / expected.advance)) +
     40 * Math.min(1.5, offer.royaltyRate / expected.royaltyRate) +
@@ -169,6 +171,7 @@ export const createSong = (world: World, labelId: string, request: SongRequest):
   const artist = artistOf(world, request.artistId);
   if (contractOf(world, artist.id)?.labelId !== labelId) return fail(`${artist.name} n'est pas dans ton label.`);
   const feat = request.featArtistId ? artistOf(world, request.featArtistId) : null;
+  if (request.levels.producer === 5 && label.tier < CFG.tiers.legendTier) return fail(`Les producteurs légende arrivent au palier ${CFG.tiers.names[CFG.tiers.legendTier - 1]}.`);
   const planned = songCost(request.levels, request.producer, label.tier) + (request.featFee ?? 0);
   // What studio events cost on top may go past the budget of the tier: it is only taken from the cash.
   const cost = planned + (request.eventCost ?? 0);

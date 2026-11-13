@@ -831,6 +831,7 @@ export const startSession = (world: World, label: Label, request: { artistId: st
     if (!offers.themes.some((t) => t.id === request.themeId)) fail('Ce thème n’est pas proposé cette semaine.');
     if (!offers.beats.some((b) => b.id === request.beatId)) fail('Ce beat n’est pas proposé cette semaine.');
   }
+  if (request.levels.producer === 5 && label.tier < CFG.tiers.legendTier) fail(`Les producteurs légende arrivent au palier ${CFG.tiers.names[CFG.tiers.legendTier - 1]}.`);
   const cost = songCost(request.levels, houseProducer(world, label.id, producerOfLevel(request.levels.producer)), label.tier);
   const cap = CFG.tiers.songBudgetCap[label.tier - 1] ?? 15_000;
   if (cost > cap) fail('Ce son dépasse le budget autorisé pour ton palier.');

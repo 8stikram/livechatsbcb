@@ -27,7 +27,8 @@ import { answerDeal, askFeat, cancelDeal, dealsView, otherArtists, type FeatDeal
 import { afterAction, isGuarded, nextStep, refund, skipTutorial, startTutorial, tutorialView, type TutorialView } from './tutorial.ts';
 import { leaveTalk, makeOffer, openTalk, talkBlocked, talkNews, talksOfLabel, type TalkNews, type TalkView } from './negotiation.ts';
 import { cancelSession, finishSession, offerFeat, useDeal, reactToEvent, sessionOf, sessionView, skipFeat, startSession, type SessionView } from './studio.ts';
-import { formWeeks, roleCounts, roleSlots, setRole, supportBoost } from './support.ts';
+import { formWeeks, setRole, supportBoost } from './support.ts';
+import { buyBack, estateView, repayLoans, takeAssetLoan, type EstateView } from './estate.ts';
 import type { RoleId } from './types.ts';
 
 export const MAX_PLAYER_LABELS = 20;
@@ -101,7 +102,7 @@ export const foundLabel = (world: World, ownerId: string, name: string): Label =
 };
 
 /** The producer the studio finds for a level and a beat this month: how well he knows the beat varies. */
-export const producerFor = (world: World, level: 1 | 2 | 3 | 4, beatId: string): Producer => {
+export const producerFor = (world: World, level: SongLevels['producer'], beatId: string): Producer => {
   const month = Math.floor(world.tick / CFG.ticksPerMonth);
   const roll = createRng(world.seed ^ hashString(`producer:${month}:${level}:${beatId}`)).next();
   return producerOfLevel(level, roll < 0.3 ? 1 : roll < 0.75 ? 0.85 : 0.7);
@@ -167,7 +168,11 @@ export type MelodyAction =
   | { type: 'lend'; artistId: string; weeks: number; fee: number }
   | { type: 'lend_cancel'; lendingId: string }
   | { type: 'borrow'; lendingId: string }
-  | { type: 'loan'; amount: number; weeks: 8 | 16 | 24 };
+  | { type: 'loan'; amount: number; weeks: 8 | 16 | 24 }
+  | { type: 'asset_loan'; amount: number; weeks: number }
+  | { type: 'repay'; kind: 'classic' | 'emergency' | 'asset' }
+  | { type: 'buyback'; songId: string }
+  | { type: 'tier_seen' };
 
 const labelOfOwner = (world: World, ownerId: string): Label => {
   const label = Object.values(world.labels).find((l) => l.ownerId === ownerId && !l.bankrupt);
@@ -394,6 +399,18 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
     case 'loan':
       takeLoan(world, label.id, action.amount, action.weeks);
       return;
+    case 'asset_loan':
+      takeAssetLoan(world, label, action.amount, action.weeks);
+      return;
+    case 'repay':
+      repayLoans(world, label, action.kind);
+      return;
+    case 'buyback':
+      buyBack(world, label, action.songId);
+      return;
+    case 'tier_seen':
+      delete label.tierParty;
+      return;
   }
 };
 
@@ -576,8 +593,10 @@ export interface MelodyView {
     songBudgetCap: number;
     loanCap: number;
     distress: number;
-    loans: Pick<Loan, 'kind' | 'remaining' | 'ticksLeft'>[];
+    loans: Pick<Loan, 'kind' | 'remaining' | 'ticksLeft' | 'ratePerTick'>[];
   };
+  /** Asset loan, seized songs, tiers. Null without a label. */
+  estate: EstateView | null;
   /** The centre de formation: youths, scout, mission. Null without a label. */
   academy: AcademyView | null;
   /** What happened on the market these last weeks. */
@@ -730,7 +749,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
   const market: MarketView[] = label
     ? freeAgents(world)
         .map((artist) => {
-          const expected = expectedOffer(artist);
+          const expected = expectedOffer(artist, label.tier);
           const blocked = talkBlocked(world, label, artist) ?? (expected.advance * 0.8 > label.cash ? 'Avance trop chère' : null);
           return { ...artistView(artist, viewer, 20), country: countryOf(artist), age: ageOf(artist), lockedBy: null as string | null, fav: favs.has(artist.id), advance: expected.advance, royaltyRate: expected.royaltyRate, blocked };
         })
@@ -748,6 +767,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     staff: label ? staffView(world, label) : null,
     dynamics: label ? dynamicsView(world, label) : null,
     crowdBoost: label ? crowdBoost(world, label.id) : 1,
+    estate: label ? estateView(world, label) : null,
     trends: world.trends,
     label: label && {
       id: label.id,
@@ -763,7 +783,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
       songBudgetCap: CFG.tiers.songBudgetCap[label.tier - 1] ?? 15_000,
       loanCap: CFG.tiers.loanCap[label.tier - 1] ?? 20_000,
       distress: label.distress,
-      loans: world.loans.filter((l) => l.labelId === label.id).map((l) => ({ kind: l.kind, remaining: Math.round(l.remaining), ticksLeft: l.ticksLeft })),
+      loans: world.loans.filter((l) => l.labelId === label.id).map((l) => ({ kind: l.kind, remaining: Math.round(l.remaining), ticksLeft: l.ticksLeft, ratePerTick: l.ratePerTick })),
     },
     academy: label ? academyView(world, label.id) : null,
     news: (world.marketNews ?? []).slice(-8).reverse().map((n) => n.text),
@@ -772,7 +792,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
       const contract = contractOf(world, artist.id);
       const gigsBooked = world.gigs.filter((g) => g.artistId === artist.id).length;
       const crowd = (label ? crowdBoost(world, label.id) : 1) * stageBoost(artist);
-      const gig = playGig(artist, gigsBooked, crowd);
+      const gig = playGig(artist, gigsBooked, crowd, label?.tier ?? 1);
       return {
         ...artistView(artist, viewer, 12),
         evolution: label ? evolutionView(world, label, artist) : null,
