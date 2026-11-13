@@ -10,6 +10,7 @@ import { tickClashes } from './clash.ts';
 import { tickProjects } from './projects.ts';
 import { tickSeason } from './seasons.ts';
 import { coachBoost, crowdBoost, gigEnergy, tickStaff } from './staff.ts';
+import { tickMorale } from './morale.ts';
 import { tickTours } from './tours.ts';
 import { cleanTalks } from './negotiation.ts';
 import { countryOf, noteCombo } from './craft.ts';
@@ -388,6 +389,10 @@ export const runTick = (world: World): TickReport => {
     },
     tell,
   );
+  // Morale: ranks, what each artist expects, what hurts him, and a word from one of them now and then.
+  tickMorale(world, tell, (text) => {
+    world.marketNews = [...(world.marketNews ?? []), { tick: world.tick, text }];
+  });
   tickDeals(world, tell);
   tickTransfers(world, tell);
   tickClashes(world, tell);

@@ -252,3 +252,17 @@ Choix du propriétaire : **les 4 postes essentiels**, embauche **comme les recru
 - **Débauchage entre amis** : on propose +20 %, +50 % ou +100 % de salaire au staff d'un autre joueur. Son label a 2 semaines pour s'aligner (il garde la personne, plus chère) ou la laisser partir. Sans réponse, elle part. Après une arrivée ou un alignement, personne ne peut la débaucher pendant 4 semaines. Un point rouge sur l'onglet Staff prévient le joueur visé.
 - **Petites phrases** : une semaine sur trois environ, quelqu'un du staff dit une bêtise dans le bilan de la semaine.
 - Limites (gratuité) : 3 offres en cours par label, 100 par serveur.
+
+## Étape 14 — moral détaillé (fait)
+
+Choix du propriétaire : **rangs automatiques**, les **4 nouvelles causes** de baisse, des conséquences **progressives**, et tous les plus (remonter le moral, onglet Dynamique, leaders, bulles d'humeur).
+
+- **Rangs** (calculés chaque semaine avec la note et les fans) : Tête d'affiche (10 % du haut, au moins 1), Établi (30 %), Espoir (40 %), Développement (le reste). Visibles dans l'Effectif et l'onglet Dynamique.
+- **Attentes** : une Tête d'affiche veut un son toutes les 4 semaines, un Établi toutes les 6, un Espoir toutes les 8. Le Développement n'attend rien. Un son programmé suffit à le rassurer.
+- **Ce qui fait baisser le moral, chaque semaine** : pas de son à temps (−1), mis de côté plus de 6 semaines sans rien faire (−1, sauf si le coach le suit), injustice de salaire (−3 : un rang plus bas gagne plus de 10 % de plus que lui). **Jalousie** (−4, une fois) : un autre artiste de même rang ou plus bas sort un son avec une promo au moins 3 fois plus grosse que sa dernière (et au moins 3 000 € × le palier). Déjà là avant : flops, fatigue, embrouilles, piques.
+- **Ce qui le fait remonter** : tubes, concerts pleins, le coach qui le suit (+1 par semaine). Quand rien ne le dérange, le moral revient d'un point par semaine vers 60 (63 avec un **leader** dans le label : 12 % des artistes le sont, toujours les mêmes).
+- **Moral bas, progressif** : sous 40, plus d'embrouilles en studio. Sous 30, il refuse le studio une semaine sur trois environ et **demande à partir** (annoncé dans les nouvelles du marché). Sous 15, **grève** : ni studio, ni concert, ni tournée. Dès 80, de meilleurs sons (déjà là).
+- **Remonter le moral** (prix × le palier) : Prime 500 € (+8, toutes les 4 semaines), Voyage d'inspiration 2 000 € (+15 et fin de la page blanche, toutes les 8 semaines), Soirée du label 1 000 € (+5 pour tous, toutes les 4 semaines). **Augmenter** : ajoute juste ce qu'il faut à son allocation pour finir une injustice.
+- **Onglet Dynamique** : le moral du label (les têtes d'affiche comptent plus), chaque artiste avec son rang, sa paie garantie, ses attentes, son moral et ses soucis en rouge, et les boutons. Un point rouge sur l'onglet quand un artiste demande à partir ou fait grève. Le bilan prévient une fois quand une injustice commence.
+- **Bulles d'humeur** : environ une semaine sur trois, un artiste dit comment il va dans le bilan, selon son plus gros souci.
+- Un joueur absent toute une saison : son artiste finit par demander à partir, sans aller jusqu'à la grève.

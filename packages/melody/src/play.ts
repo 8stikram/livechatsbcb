@@ -14,6 +14,7 @@ import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer,
 import { GameError, addPlayerLabel, bookGig, createSong, expectedOffer, freeAgents, scheduleRelease, takeLoan, type Offer } from './world.ts';
 import { addDeluxe, createProject, projectsView, type ProjectKind, type ProjectView } from './projects.ts';
 import { announceTour, answerTourInvite, cancelTour, tourGuests, toursView, type TourView } from './tours.ts';
+import { cheerUp, dynamicsView, raisePay, ranksOf, RANK_NAMES, type CheerKind, type DynamicsView } from './morale.ts';
 import { answerPoach, cancelPoach, crowdBoost, fireStaff, focusCoach, hireStaff, houseProducer, poachStaff, staffView, type StaffRole, type StaffView } from './staff.ts';
 import { enterSeason, honoursOf, pickGoals, seasonView, watchCeremony, type Honour, type SeasonView } from './seasons.ts';
 import { answerClash, answerInterview, clashesView, interviewView, refuseClash, rivalsView, shadeView, startClash, throwShade, type ClashView, type InterviewView, type RivalView, type ShadeView, type Tone } from './clash.ts';
@@ -149,6 +150,8 @@ export type MelodyAction =
   | { type: 'staff_poach'; labelId: string; role: StaffRole; raise: number }
   | { type: 'staff_poach_answer'; offerId: string; match: boolean }
   | { type: 'staff_poach_cancel'; offerId: string }
+  | { type: 'cheer'; kind: CheerKind; artistId: string | null }
+  | { type: 'raise'; artistId: string }
   | { type: 'loan'; amount: number; weeks: 8 | 16 | 24 };
 
 const labelOfOwner = (world: World, ownerId: string): Label => {
@@ -338,6 +341,12 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
     case 'staff_poach_cancel':
       cancelPoach(world, label, action.offerId);
       return;
+    case 'cheer':
+      cheerUp(world, label, action.kind, action.artistId);
+      return;
+    case 'raise':
+      raisePay(world, label, action.artistId);
+      return;
     case 'loan':
       takeLoan(world, label.id, action.amount, action.weeks);
       return;
@@ -361,6 +370,9 @@ export interface RosterView extends ArtistView {
   attrs: Artist['attrs'];
   energy: number;
   morale: number;
+  /** His rank in the label (Tête d’affiche…), and whether he asked to leave. */
+  rankName: string;
+  wantsOut: boolean;
   creativeFatigue: number;
   weeksLeft: number;
   unrecouped: number;
@@ -484,6 +496,8 @@ export interface MelodyView {
   seasonInfo: SeasonView;
   /** The label's staff, the candidates of the week, and the poaching between players. */
   staff: StaffView | null;
+  /** Ranks, pay and morale of the artists of the label. */
+  dynamics: DynamicsView | null;
   /** Crowd bonus of the booker, for the tour quote. */
   crowdBoost: number;
   trends: Trends;
@@ -634,6 +648,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
   const label = Object.values(world.labels).find((l) => l.ownerId === ownerId && !l.bankrupt) ?? null;
   const viewer = label?.id ?? ownerId;
   const roster = label ? rosterOf(world, label.id) : [];
+  const ranks = label ? ranksOf(world, label.id) : new Map<string, never>();
   const top = (entries: ChartEntry[], size: number): ChartEntry[] => entries.slice(0, size);
 
   const favs = new Set(label ? (world.favourites?.[label.id] ?? []) : []);
@@ -657,6 +672,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     weekOfSeason: (world.tick % CFG.ticksPerSeason) + 1,
     seasonInfo: seasonView(world, label ?? undefined),
     staff: label ? staffView(world, label) : null,
+    dynamics: label ? dynamicsView(world, label) : null,
     crowdBoost: label ? crowdBoost(world, label.id) : 1,
     trends: world.trends,
     label: label && {
@@ -687,6 +703,8 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
         attrs: artist.attrs,
         energy: Math.round(artist.energy),
         morale: Math.round(artist.morale),
+        rankName: RANK_NAMES[ranks.get(artist.id) ?? 'development'],
+        wantsOut: artist.wantsOut ?? false,
         creativeFatigue: Math.round(artist.creativeFatigue),
         weeksLeft: (contract?.endTick ?? world.tick) - world.tick,
         unrecouped: Math.round(contract?.unrecouped ?? 0),

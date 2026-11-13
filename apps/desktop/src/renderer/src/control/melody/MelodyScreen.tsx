@@ -49,6 +49,7 @@ import {
   ROLE_NAMES,
   type StaffRole,
   type StaffView,
+  type DynamicsView,
 } from '@livechatsbcb/melody';
 import type { MelodyRoute } from '../../../../shared/ipc';
 import { LibraryPicker, type Shelf } from '../LibraryPicker';
@@ -61,11 +62,12 @@ import './melody.css';
 type MelodyState = { view: MelodyView; nextTickAt: number };
 type Answer<T> = { ok: true; data: T } | { ok: false; message: string };
 type Levels = { theme: 1 | 2 | 3 | 4; beat: 1 | 2 | 3 | 4; producer: 1 | 2 | 3 | 4; studio: 1 | 2 | 3 | 4 };
-type Tab = 'home' | 'squad' | 'studio' | 'releases' | 'academy' | 'staff' | 'market' | 'labels' | 'charts' | 'bank';
+type Tab = 'home' | 'squad' | 'dynamics' | 'studio' | 'releases' | 'academy' | 'staff' | 'market' | 'labels' | 'charts' | 'bank';
 
 const TABS: Array<{ id: Tab; name: string }> = [
   { id: 'home', name: 'Accueil' },
   { id: 'squad', name: 'Effectif' },
+  { id: 'dynamics', name: 'Dynamique' },
   { id: 'studio', name: 'Studio' },
   { id: 'releases', name: 'Sorties' },
   { id: 'academy', name: 'Recrutement' },
@@ -446,6 +448,12 @@ const Squad = ({
                 Ses sons tournent autour de {artist.expectedNote}
               </span>
               <span className={`mt-pill${artist.weeksLeft <= 8 ? ' mt-pill-warn' : ''}`}>Contrat : {artist.weeksLeft} sem.</span>
+              <span className="mt-pill">{artist.rankName}</span>
+              {artist.morale < (view.dynamics?.thresholds.strike ?? 15) ? (
+                <span className="mt-pill mt-pill-warn">En grève</span>
+              ) : (
+                artist.wantsOut && <span className="mt-pill mt-pill-warn">Veut partir</span>
+              )}
               {artist.real && <span className="mt-pill">Vrai artiste</span>}
             </div>
             {artist.lastSong && (
@@ -3160,6 +3168,135 @@ const Academy = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: Melo
   );
 };
 
+/* ---------------------------------- Dynamique ---------------------------------- */
+
+// Morale colour: red under the strike line, orange when he refuses the studio, plain when fine, gold when happy.
+const moraleTone = (morale: number, t: DynamicsView['thresholds']): string =>
+  morale < t.strike ? 'is-strike' : morale < t.refuse ? 'is-low' : morale < t.trouble ? 'is-meh' : morale >= t.happy ? 'is-happy' : '';
+
+const DynamicsRow = ({ artist, view, onAct, busy }: { artist: DynamicsView['artists'][number]; view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const dyn = view.dynamics!;
+  const cash = view.label?.cash ?? 0;
+  const tone = moraleTone(artist.morale, dyn.thresholds);
+  return (
+    <li className={`mt-dyn-row ${tone}`}>
+      <Avatar id={artist.id} genre={artist.genre} className="mt-deal-art" mood={artist.morale < 35 ? 'angry' : null} />
+      <div className="mt-dyn-who">
+        <b>{artist.name}</b>
+        <span className="mt-chips">
+          <span className={`mt-rank is-${artist.rank}`}>{artist.rankName}</span>
+          {artist.leader && <span className="mt-rank is-leader">Leader</span>}
+        </span>
+        <span className="mt-sub">
+          {money(artist.pay)} / sem. garantis ·{' '}
+          {artist.expects === null ? 'n’attend pas de sortie' : `attend un son toutes les ${artist.expects} sem.`}
+          {artist.sinceRelease !== null ? ` · dernier son il y a ${artist.sinceRelease} sem.` : ' · pas encore de son chez toi'}
+        </span>
+      </div>
+      <div className="mt-dyn-mood">
+        <span className="mt-dyn-num">
+          <b>{artist.morale}</b>
+          <small>moral</small>
+        </span>
+        <span className="mt-dyn-bar" role="img" aria-label={`Moral ${artist.morale} sur 100`}>
+          <i style={{ width: `${artist.morale}%` }} />
+          {[dyn.thresholds.strike, dyn.thresholds.refuse, dyn.thresholds.trouble, dyn.thresholds.happy].map((t) => (
+            <s key={t} style={{ left: `${t}%` }} />
+          ))}
+        </span>
+      </div>
+      <ul className="mt-dyn-worries">
+        {artist.worries.length === 0 ? (
+          <li className="is-ok">{artist.morale >= dyn.thresholds.happy ? 'Aux anges : ses sons sont meilleurs.' : 'Rien ne le dérange.'}</li>
+        ) : (
+          artist.worries.map((w) => (
+            <li key={w.kind} className={w.kind === 'tired' ? 'is-warn' : ''}>
+              {w.text}
+            </li>
+          ))
+        )}
+      </ul>
+      <div className="mt-acts">
+        {artist.raise !== null && (
+          <button type="button" className="mt-go" disabled={busy} onClick={() => onAct({ type: 'raise', artistId: artist.id })}>
+            Augmenter · +{money(artist.raise)} / sem.
+          </button>
+        )}
+        <button
+          type="button"
+          className="mt-ghost"
+          disabled={busy || artist.bonusIn > 0 || dyn.cheers.bonus.cost > cash}
+          onClick={() => onAct({ type: 'cheer', kind: 'bonus', artistId: artist.id })}
+        >
+          {artist.bonusIn > 0 ? `Prime dans ${artist.bonusIn} sem.` : `Prime · ${money(dyn.cheers.bonus.cost)}`}
+        </button>
+        <button
+          type="button"
+          className="mt-ghost"
+          disabled={busy || artist.tripIn > 0 || dyn.cheers.trip.cost > cash}
+          onClick={() => onAct({ type: 'cheer', kind: 'trip', artistId: artist.id })}
+        >
+          {artist.tripIn > 0 ? `Voyage dans ${artist.tripIn} sem.` : `Voyage d’inspiration · ${money(dyn.cheers.trip.cost)}`}
+        </button>
+      </div>
+    </li>
+  );
+};
+
+const DynamicsTab = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean; onGo: (tab: Tab) => void }) => {
+  const dyn = view.dynamics;
+  if (!dyn) return null;
+  if (dyn.artists.length === 0)
+    return (
+      <div className="mt-view mt-in">
+        <button type="button" className="mt-empty" onClick={() => onGo('academy')}>
+          Pas encore d’artiste. <b>Va au centre de formation</b>
+        </button>
+      </div>
+    );
+  const t = dyn.thresholds;
+  return (
+    <div className="mt-view mt-in">
+      <section className="mt-section mt-dyn-head">
+        <div className={`mt-dyn-label ${moraleTone(dyn.labelMorale, t)}`}>
+          <Label>Moral du label</Label>
+          <b className="mt-gt">{dyn.labelMorale}</b>
+          <span className="mt-sub">Les têtes d’affiche comptent plus.</span>
+        </div>
+        <div className="mt-dyn-help">
+          <span className="mt-sub">
+            Quand rien ne le dérange, le moral revient doucement vers {dyn.calm}
+            {dyn.leaders.length > 0 ? ` (au lieu de 60, grâce à ${dyn.leaders.join(' et ')}, leader${dyn.leaders.length > 1 ? 's' : ''})` : ''}.
+          </span>
+          <span className="mt-sub">
+            Sous {t.trouble} : plus d’embrouilles en studio. Sous {t.refuse} : refuse parfois le studio et demande à partir. Sous {t.strike} : grève. Dès {t.happy} : de meilleurs sons.
+          </span>
+          <button
+            type="button"
+            className="mt-go"
+            disabled={busy || dyn.partyIn > 0 || dyn.cheers.party.cost > (view.label?.cash ?? 0)}
+            onClick={() => onAct({ type: 'cheer', kind: 'party', artistId: null })}
+          >
+            {dyn.partyIn > 0 ? `Prochaine soirée dans ${dyn.partyIn} sem.` : `Soirée du label · ${money(dyn.cheers.party.cost)} · +${dyn.cheers.party.morale} pour tous`}
+          </button>
+        </div>
+      </section>
+      <section className="mt-section">
+        <Label>Tes artistes, par rang</Label>
+        <ul className="mt-dyn">
+          {dyn.artists.map((artist) => (
+            <DynamicsRow key={artist.id} artist={artist} view={view} onAct={onAct} busy={busy} />
+          ))}
+        </ul>
+        <span className="mt-sub">
+          Le rang se calcule chaque semaine avec la note et les fans. Prime : +{dyn.cheers.bonus.morale}, une fois toutes les {dyn.cheers.bonus.every} semaines. Voyage : +
+          {dyn.cheers.trip.morale} et fin de la page blanche, une fois toutes les {dyn.cheers.trip.every} semaines. Augmenter : ajouté à son allocation chaque semaine.
+        </span>
+      </section>
+    </div>
+  );
+};
+
 /* ---------------------------------- Staff ---------------------------------- */
 
 const STAFF_RAISE = (raise: number): string => `+${Math.round(raise * 100)} %`;
@@ -4029,6 +4166,8 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'staff_poach') say('Offre envoyée. Ils ont 2 semaines pour s’aligner.');
       if (action.type === 'staff_poach_answer') say(action.match ? 'Tu t’alignes : il reste chez toi.' : 'Il fait ses cartons.');
       if (action.type === 'staff_poach_cancel') say('Offre retirée.');
+      if (action.type === 'cheer') say(action.kind === 'bonus' ? 'Prime versée. Il a le sourire.' : action.kind === 'trip' ? 'Bon voyage ! Il revient plein d’idées.' : 'Quelle soirée ! Tout le label est de bonne humeur.');
+      if (action.type === 'raise') say('Augmentation signée.');
       if (action.type === 'sell') say('Artiste vendu.');
       if (action.type === 'transfer_ask') say('Offre envoyée.');
       if (action.type === 'transfer_answer' && action.answer === 'accept') say('Accord des labels. L’artiste doit encore signer.');
@@ -4158,6 +4297,9 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
               <button key={t.id} type="button" data-tuto={`nav-${t.id}`} aria-current={tab === t.id ? 'page' : undefined} onClick={() => go(t.id)}>
                 {t.name}
                 {t.id === 'staff' && (view.staff?.offersIn.length ?? 0) > 0 && <i className="mt-navdot" aria-label="On veut débaucher ton staff" />}
+                {t.id === 'dynamics' && view.dynamics?.artists.some((a) => a.worries.some((w) => w.kind === 'strike' || w.kind === 'out')) && (
+                  <i className="mt-navdot" aria-label="Un artiste va très mal" />
+                )}
               </button>
             ))}
           </nav>
@@ -4200,6 +4342,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
           {!talkWith && tab === 'releases' && <Releases view={view} onAct={run} busy={busy} onGo={go} />}
           {!talkWith && tab === 'academy' && <Academy view={view} onAct={run} busy={busy} />}
           {!talkWith && tab === 'staff' && <StaffTab view={view} onAct={run} busy={busy} />}
+          {!talkWith && tab === 'dynamics' && <DynamicsTab view={view} onAct={run} busy={busy} onGo={go} />}
           {!talkWith && tab === 'market' && <TransferMarket view={view} onTalk={(id) => void openTalk(id)} onAct={run} busy={busy} />}
           {!talkWith && tab === 'labels' && <LabelsTab view={view} onAct={run} onTalk={(id) => void openTalk(id)} onCeremony={() => setReplay(true)} busy={busy} />}
           {!talkWith && tab === 'charts' && <Charts view={view} />}

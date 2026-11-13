@@ -7,6 +7,7 @@ import {
   makeOffer, openTalk, talkOf, talkBlocked, contractOf, studioOffers, BEATS, THEMES,
   releaseBlocked, promoViews, secretCombos, trendOf, rollSurprise, langOf, inventTitle, academyOf, LOOKS, lookOf, parseLook, seasonsOf,
   STAFF, staffOf, staffWage, coachBoost, producerShare, houseProducer, viewsBoost, crowdBoost, gigEnergy,
+  MORALE, RANKS, ranksOf, isLeader, worriesOf, moraleBlock, tickMorale, dynamicsView,
 } from '../src/index.ts';
 import type { Artist, StaffMember, World } from '../src/index.ts';
 
@@ -1158,5 +1159,159 @@ describe('staff', () => {
     expect(staffOf(world, a)[0]!.premium).toBe(1);
     expect(events[a]!.events.some((e) => e.includes('rejoint ton staff'))).toBe(true);
     expect(events[b]!.events.some((e) => e.includes('est parti chez'))).toBe(true);
+  });
+});
+
+describe('moral', () => {
+  // A label with three artists: the starter, and two more from the catalogue.
+  const bigLabel = (): { world: World; labelId: string; artists: Artist[] } => {
+    const { world, labelId, artist } = worldWithLabel();
+    const label = world.labels[labelId]!;
+    label.cash = 2_000_000;
+    label.tier = 3;
+    const others = freeAgents(world).filter((a) => a.id !== artist.id).slice(0, 2);
+    for (const other of others) signArtist(world, labelId, other.id, expectedOffer(other));
+    return { world, labelId, artists: rosterOf(world, labelId) };
+  };
+
+  it('ranks the artists of a label from their rating and fans, with at least one star', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    expect(ranksOf(world, labelId).get(artist.id)).toBe('star');
+    const big = bigLabel();
+    const ranks = ranksOf(big.world, big.labelId);
+    expect([...ranks.values()].filter((r) => r === 'star')).toHaveLength(1);
+    expect(new Set(ranks.values()).size).toBeGreaterThan(1);
+    const view = buildView(big.world, 'u1');
+    expect(view.dynamics!.artists.map((a) => a.rank)[0]).toBe('star');
+    expect(view.roster.every((a) => a.rankName.length > 0)).toBe(true);
+  });
+
+  it('settles back toward calm when nothing is wrong, and higher with a leader', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    artist.morale = 50;
+    artist.lastActiveTick = 0;
+    artist.lastReleaseTick = 0;
+    world.contracts.find((c) => c.artistId === artist.id)!.startTick = 0;
+    tickMorale(world, () => {}, () => {});
+    expect(artist.morale).toBe(51);
+    artist.morale = 70;
+    tickMorale(world, () => {}, () => {});
+    expect(artist.morale).toBe(69);
+    expect(dynamicsView(world, world.labels[labelId]!).calm).toBe(isLeader(artist.id) ? 63 : 60);
+  });
+
+  it('hurts the artists left without a release, left aside, or paid less than a lower rank', () => {
+    const { world, labelId, artists } = bigLabel();
+    const ranks = ranksOf(world, labelId);
+    const star = artists.find((a) => ranks.get(a.id) === 'star')!;
+    const low = artists.find((a) => ranks.get(a.id) !== 'star')!;
+    world.tick = 20;
+    star.lastReleaseTick = 5;
+    star.lastActiveTick = 5;
+    for (const c of world.contracts) if (c.labelId === labelId) c.startTick = 0;
+    star.morale = 60;
+    const worries = worriesOf(world, labelId, star).map((w) => w.kind);
+    expect(worries).toContain('late');
+    expect(worries).toContain('aside');
+    // The lower rank gets a much bigger allowance: injustice for the star.
+    world.contracts.find((c) => c.artistId === low.id)!.weeklyAllowance = 5_000;
+    expect(worriesOf(world, labelId, star).map((w) => w.kind)).toContain('injustice');
+    const told: string[] = [];
+    tickMorale(world, (_, text) => told.push(text), () => {});
+    expect(star.morale).toBe(60 + MORALE.late + MORALE.aside + MORALE.injustice);
+    expect(told.filter((t) => t.startsWith(star.name) && t.includes('gagne plus que lui'))).toHaveLength(1);
+    tickMorale(world, (_, text) => told.push(text), () => {});
+    expect(told.filter((t) => t.startsWith(star.name) && t.includes('gagne plus que lui'))).toHaveLength(1);
+    // Raising his pay ends the injustice.
+    applyAction(world, 'u1', { type: 'raise', artistId: star.id });
+    expect(worriesOf(world, labelId, star).map((w) => w.kind)).not.toContain('injustice');
+    expect(() => applyAction(world, 'u1', { type: 'raise', artistId: star.id })).toThrow(/pas de souci/);
+    // The coach following him: no longer left aside.
+    world.staff = { [labelId]: [{ id: 'st1', role: 'coach', name: 'Coach', rank: 'Coach', stars: 1, hiredTick: 0, starTick: 0, premium: 0, focusId: star.id, shieldUntil: 0 }] };
+    expect(worriesOf(world, labelId, star).map((w) => w.kind)).not.toContain('aside');
+  });
+
+  it('makes the others jealous of a much bigger promo', () => {
+    const { world, labelId, artists } = bigLabel();
+    const ranks = ranksOf(world, labelId);
+    const order = [...artists].sort((a, b) => RANKS.indexOf(ranks.get(a.id)!) - RANKS.indexOf(ranks.get(b.id)!));
+    const [top, , bottom] = order;
+    // The lowest rank gets a huge promo: the star is jealous.
+    world.songs.push({
+      id: 'jealous_song', labelId, artistId: bottom!.id, featArtistId: null, title: 'Gros son', themeId: 'x', beatId: 'x',
+      levels: { theme: 1, beat: 1, producer: 1, studio: 1 }, quality: 50, cost: 0, state: 'released', createdTick: 0, availableTick: 0,
+      releaseTick: world.tick, marketingReach: 0, marketingCost: 50_000, streamsLast: 0, streamsTotal: 0, decay: 0, hitScore: 40,
+      peakGlobal: null, peakGenre: null, weeksOut: 0,
+    });
+    top!.morale = 60;
+    tickMorale(world, () => {}, () => {});
+    expect(top!.jealous).toMatchObject({ name: bottom!.name, tick: world.tick });
+    expect(worriesOf(world, labelId, top!).map((w) => w.kind)).toContain('jealous');
+    expect(top!.morale).toBeLessThan(60);
+  });
+
+  it('refuses the studio sometimes under 30, strikes under 15, and asks to leave', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    applyAction(world, 'u1', { type: 'tuto', move: 'skip' });
+    const told: string[] = [];
+    const news: string[] = [];
+    artist.morale = 10;
+    expect(moraleBlock(world, artist, 'gig')).toMatch(/grève/);
+    expect(() => bookGig(world, labelId, artist.id)).toThrow(/grève/);
+    tickMorale(world, (_, text) => told.push(text), (text) => news.push(text));
+    expect(artist.onStrike).toBe(true);
+    expect(artist.wantsOut).toBe(true);
+    expect(told.some((t) => t.includes('grève'))).toBe(true);
+    expect(news.some((t) => t.includes('voudrait quitter'))).toBe(true);
+    // Between 15 and 30: no strike, but some weeks no studio at all.
+    artist.morale = 25;
+    world.contracts.find((c) => c.artistId === artist.id)!.endTick = 1_000;
+    let refused = 0;
+    for (let t = 0; t < 40; t += 1) {
+      world.tick = 100 + t;
+      if (moraleBlock(world, artist, 'studio')) refused += 1;
+      expect(moraleBlock(world, artist, 'gig')).toBeNull();
+    }
+    expect(refused).toBeGreaterThan(3);
+    expect(refused).toBeLessThan(25);
+    // Back above 40: he stays.
+    artist.morale = 45;
+    tickMorale(world, (_, text) => told.push(text), () => {});
+    expect(artist.wantsOut).toBe(false);
+    expect(artist.onStrike).toBe(false);
+  });
+
+  it('cheers them up: a bonus, a trip, a party, each with its price and its wait', () => {
+    const { world, labelId, artists } = bigLabel();
+    const label = world.labels[labelId]!;
+    const [a, b] = artists;
+    a!.morale = 40;
+    b!.morale = 40;
+    a!.creativeFatigue = 50;
+    const cash = label.cash;
+    applyAction(world, 'u1', { type: 'cheer', kind: 'bonus', artistId: a!.id });
+    expect(a!.morale).toBe(40 + MORALE.cheers.bonus.morale);
+    expect(label.cash).toBe(cash - MORALE.cheers.bonus.cost * label.tier);
+    expect(() => applyAction(world, 'u1', { type: 'cheer', kind: 'bonus', artistId: a!.id })).toThrow(/semaine/);
+    applyAction(world, 'u1', { type: 'cheer', kind: 'trip', artistId: a!.id });
+    expect(a!.creativeFatigue).toBe(0);
+    applyAction(world, 'u1', { type: 'cheer', kind: 'party', artistId: null });
+    expect(b!.morale).toBe(40 + MORALE.cheers.party.morale);
+    expect(() => applyAction(world, 'u1', { type: 'cheer', kind: 'party', artistId: null })).toThrow(/soirée/);
+    const view = buildView(world, 'u1').dynamics!;
+    expect(view.partyIn).toBe(MORALE.cheers.party.every);
+    expect(view.artists.find((x) => x.id === a!.id)!.tripIn).toBe(MORALE.cheers.trip.every);
+    for (let i = 0; i < MORALE.cheers.bonus.every; i += 1) runTick(world);
+    applyAction(world, 'u1', { type: 'cheer', kind: 'bonus', artistId: a!.id });
+    label.cash = 0;
+    expect(() => applyAction(world, 'u1', { type: 'cheer', kind: 'bonus', artistId: b!.id })).toThrow(/cash/);
+  });
+
+  it('lets an artist say how he feels now and then', () => {
+    const { world, labelId } = worldWithLabel();
+    world.labels[labelId]!.cash = 2_000_000;
+    let bubbles = 0;
+    for (let i = 0; i < 20; i += 1) bubbles += runTick(world).labels[labelId]!.events.filter((e) => e.startsWith('«') && e.includes('Nova')).length;
+    expect(bubbles).toBeGreaterThan(0);
   });
 });

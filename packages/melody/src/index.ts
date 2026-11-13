@@ -67,6 +67,10 @@ export {
   coachBoost, producerShare, houseProducer, viewsBoost, crowdBoost, gigEnergy,
   type StaffRole, type StaffMember, type StaffOffer, type StaffView, type StaffMemberView,
 } from './staff.ts';
+export {
+  MORALE, RANKS, RANK_NAMES, ranksOf, payOf, isLeader, worriesOf, moraleBlock, cheerUp, raisePay, tickMorale, dynamicsView,
+  type Rank, type CheerKind, type WorryKind, type Worry, type DynamicsView, type DynamicsArtist,
+} from './morale.ts';
 export { runTick, type TickReport, type ReleaseReport, type LabelReport } from './tick.ts';
 export { simulate, STRATEGIES, type Strategy, type Snapshot } from './sim.ts';
 export { HAIRS, HATS, FACES, lookOf, parseLook, type Look, type Hair, type Hat, type Face } from './avatar.ts';

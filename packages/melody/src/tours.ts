@@ -7,6 +7,7 @@ import { contractOf, rosterOf } from './economy.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
 import type { Artist, Label, World } from './types.ts';
 import { crowdBoost } from './staff.ts';
+import { moraleBlock } from './morale.ts';
 import { GameError } from './world.ts';
 
 const fail = (message: string): never => {
@@ -129,6 +130,8 @@ export const announceTour = (
   if (dates < TOURS.minDates || dates > TOURS.maxDates) fail(`Une tournée a ${TOURS.minDates} à ${TOURS.maxDates} dates.`);
   if (tourOf(world, artist.id)) fail(`${artist.name} a déjà une tournée prévue.`);
   if (artist.energy < TOURS.minEnergy) fail(`${artist.name} est trop fatigué pour partir en tournée.`);
+  const unwilling = moraleBlock(world, artist, 'tour');
+  if (unwilling) fail(unwilling);
   let partner: Tour['partner'] = null;
   let partnerFans = 0;
   if (request.partnerId) {

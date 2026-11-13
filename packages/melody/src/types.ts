@@ -89,6 +89,15 @@ export interface Artist {
   growth: number;
   lastActiveTick: number;
   lastReleaseTick: number;
+  /** Last time the label gave him a bonus or a trip. */
+  cheers?: { bonus?: number; trip?: number };
+  /** Very low morale: he asked to leave. On strike: nothing at all. */
+  wantsOut?: boolean;
+  onStrike?: boolean;
+  /** Another artist of the label got a much bigger promo. */
+  jealous?: { name: string; tick: number };
+  /** The lower rank he knows is better paid (told once). */
+  grudge?: string;
 }
 
 export interface Contract {
@@ -129,6 +138,8 @@ export interface Label {
   distress: number;
   bankrupt: boolean;
   stats: LabelStats;
+  /** Last party of the label (morale). */
+  partyTick?: number;
 }
 
 /** Level 1 (free, capped) to 4 for each paid choice of a song. */
