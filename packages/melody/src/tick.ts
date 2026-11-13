@@ -11,7 +11,7 @@ import { returnLoans, shareLoan, tickLending } from './lending.ts';
 import { tickClashes } from './clash.ts';
 import { tickProjects } from './projects.ts';
 import { judgeRelease } from './letdown.ts';
-import { supportBoost } from './support.ts';
+import { lightUp, supportBoost } from './support.ts';
 import { tickSeason } from './seasons.ts';
 import { coachBoost, crowdBoost, gigEnergy, tickStaff } from './staff.ts';
 import { tickMorale } from './morale.ts';
@@ -280,6 +280,8 @@ export const runTick = (world: World): TickReport => {
     if (rank === 1 && before !== 1) {
       label.stats.numberOnes += 1;
       label.reputation += (3 * (100 - label.reputation)) / 100;
+      const star = world.artists[song.artistId];
+      if (star) lightUp(world, label.id, star, `n°1 du top global avec « ${song.title} »`, (_, text) => report(reports, label).events.push(text));
     }
     song.peakGlobal = Math.min(before ?? 999, rank);
     const artist = world.artists[song.artistId];

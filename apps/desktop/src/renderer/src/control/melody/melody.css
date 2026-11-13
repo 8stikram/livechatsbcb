@@ -3222,47 +3222,7 @@ button.mt-goal:hover {
   display: none;
 }
 
-/* ---------- Soutien du label, ventes de CD et vinyles ---------- */
-.mt-support-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.mt-support-list li {
-  display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(140px, 2fr) 52px;
-  gap: 4px 14px;
-  align-items: center;
-  padding: 10px 12px;
-  border: 1px solid var(--mt-line);
-  background: var(--mt-panel2);
-}
-.mt-support-list li.is-high {
-  border-color: color-mix(in srgb, var(--mt-ok) 45%, var(--mt-line));
-}
-.mt-support-list li.is-low {
-  border-color: color-mix(in srgb, var(--mt-warn) 45%, var(--mt-line));
-}
-.mt-support-list li > .mt-sub {
-  grid-column: 1 / -1;
-}
-.mt-support-who {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.mt-support-list input[type='range'] {
-  width: 100%;
-  accent-color: var(--mt-a2);
-}
-.mt-support-pct {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
+/* ---------- Ventes de CD et vinyles ---------- */
 .mt-cert {
   align-self: flex-start;
   padding: 2px 8px;
@@ -3276,12 +3236,63 @@ button.mt-goal:hover {
 .mt-cert.is-platinum {
   background: linear-gradient(135deg, #f2f4f8, #a9b3c4);
 }
-@media (max-width: 640px) {
-  .mt-support-list li {
-    grid-template-columns: 1fr auto;
+
+/* ---------- Rôles dans le label, pleine forme ---------- */
+.mt-role-help,
+.mt-role-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.mt-role-help {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.mt-role-help li,
+.mt-role-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--mt-line);
+  background: var(--mt-panel2);
+}
+.mt-role-list li.is-hot {
+  border-color: #f2c14e;
+}
+.mt-hot {
+  align-self: flex-start;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #1a1305;
+  background: linear-gradient(135deg, #ffe08a, #f2a630);
+}
+.mt-card.is-hot {
+  border-color: #f2c14e;
+  box-shadow: 0 0 0 1px #f2c14e, 0 0 22px rgba(242, 166, 48, 0.45);
+  animation: mt-hot-glow 2.4s ease-in-out infinite;
+}
+@keyframes mt-hot-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px #f2c14e, 0 0 14px rgba(242, 166, 48, 0.3);
   }
-  .mt-support-list input[type='range'] {
-    grid-column: 1 / -1;
-    grid-row: 2;
+  50% {
+    box-shadow: 0 0 0 1px #ffe08a, 0 0 28px rgba(242, 166, 48, 0.6);
   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mt-card.is-hot {
+    animation: none;
+  }
+}
+.mt-support-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }

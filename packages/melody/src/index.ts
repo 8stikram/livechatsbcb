@@ -57,7 +57,7 @@ export {
 } from './lending.ts';
 export { LETDOWN, usualNote, isLetdown, judgeRelease } from './letdown.ts';
 export { studioCardsFor, STUDIO_CONTENT } from './studio.ts';
-export { SUPPORT, boostOf, levelFor, setSupport, sharesOf, snubbedBy, supportBoost, supportLevel, supportShares, supportWeights, type SupportKind } from './support.ts';
+export { FORM, ROLES, ROLE_IDS, ROLE_RULES, formWeeks, inForm, lightUp, roleCounts, roleOf, roleSlots, setRole, supportBoost, type RoleDef, type SupportKind } from './support.ts';
 export {
   CLASH, startClash, answerClash, refuseClash, throwShade, answerInterview, interviewView, shadeView, clashesView, rivalsView, rivalsOf, tickClashes,
   type Clash, type ClashStatus, type Tone, type ClashView, type RivalView, type InterviewView, type ShadeView,

@@ -40,11 +40,10 @@ import {
   PROJECTS,
   SALES,
   salesQuote,
-  SUPPORT,
-  boostOf,
-  levelFor,
-  sharesOf,
-  snubbedBy,
+  ROLES,
+  ROLE_IDS,
+  FORM,
+  roleSlots,
   TOURS,
   projectCost,
   tourQuote,
@@ -175,8 +174,10 @@ const ArtistCard = ({
   pressed?: boolean;
   onClick?: () => void;
   children?: ReactNode;
-}) => (
-  <button type="button" className="mt-card" aria-pressed={pressed ?? false} onClick={onClick}>
+}) => {
+  const form = 'form' in artist ? (artist as RosterView).form : 0;
+  return (
+  <button type="button" className={`mt-card${form > 0 ? ' is-hot' : ''}`} aria-pressed={pressed ?? false} onClick={onClick}>
     <Avatar id={artist.id} genre={artist.genre} mood={'morale' in artist ? moodOf(artist as RosterView) : null} />
     <span className="mt-note">
       {artist.gen}
@@ -186,11 +187,13 @@ const ArtistCard = ({
       {artist.real && <span className="mt-real">Vrai artiste</span>}
       <span className="mt-nm">{artist.name}</span>
       {artist.skills?.length > 0 && <span className="mt-card-skills">{artist.skills.join(' · ')}</span>}
+      {form > 0 && <span className="mt-hot">En pleine forme · {form} sem.</span>}
       {energy !== undefined && <Meter value={energy} />}
       {children}
     </span>
   </button>
-);
+  );
+};
 
 /* ---------------------------------- Found ---------------------------------- */
 
@@ -3487,68 +3490,55 @@ const DynamicsRow = ({ artist, view, onAct, busy }: { artist: DynamicsView['arti
   );
 };
 
-const signed = (boost: number): string => {
-  const value = Math.round((boost - 1) * 100);
-  return `${value >= 0 ? '+' : '−'}${Math.abs(value)} %`;
-};
-
-// The label's support: one slider per artist, his share and what it does, saved together.
-const SupportPanel = ({ dyn, onAct, busy }: { dyn: DynamicsView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
-  const saved = Object.fromEntries(dyn.artists.map((a) => [a.id, a.support.weight])) as Record<string, number>;
-  const key = JSON.stringify(saved);
-  const [weights, setWeights] = useState<Record<string, number>>(saved);
-  useEffect(() => setWeights(JSON.parse(key) as Record<string, number>), [key]);
-  const shares = sharesOf(weights);
-  const snubs = snubbedBy(dyn.artists, shares);
-  const changed = dyn.artists.some((a) => weights[a.id] !== a.support.weight);
-  const none = dyn.artists.every((a) => (weights[a.id] ?? 0) === 0);
+// The label's roles: each artist gets one. A role gives a bonus and takes nothing from the others.
+const RolesPanel = ({ dyn, tier, onAct, busy }: { dyn: DynamicsView; tier: number; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const slots = roleSlots(tier);
+  const used = (role: string): number => dyn.artists.filter((a) => a.role === role).length;
   return (
-    <section className="mt-section mt-support">
-      <Label>Soutien du label · 100 % à partager</Label>
+    <section className="mt-section mt-roles">
+      <Label>Rôles dans le label</Label>
       <span className="mt-sub">
-        Plus un artiste est soutenu, plus il a de promo, de ventes de CD et vinyles, de progrès et de moral. Les moins soutenus en ont un peu moins. Un artiste est jaloux si
-        un plus petit que lui est plus soutenu.
+        Chaque rôle donne un bonus, sans rien enlever aux autres. {slots} place{slots > 1 ? 's' : ''} par rôle à ton palier, une de plus à chaque palier. Un changement par
+        artiste et par semaine. Après un n°1 ou un disque d’or, un artiste est en pleine forme {FORM.weeks} semaines : sa carte brille, note +{FORM.quality}, promo et ventes +
+        {Math.round((FORM.boost - 1) * 100)} %.
       </span>
-      <ul className="mt-support-list">
-        {dyn.artists.map((a) => {
-          const share = shares[a.id] ?? 0;
-          const level = levelFor(share, dyn.artists.length);
-          const effect =
-            Math.abs(level) < 0.05
-              ? 'Part égale : rien ne change.'
-              : `Promo ${signed(boostOf(level, 'promo'))} · ventes ${signed(boostOf(level, 'sales'))} · progrès ${signed(boostOf(level, 'grow'))}${level >= SUPPORT.backedAt ? ' · moral +1 / sem.' : level <= -SUPPORT.backedAt ? ' · moral en baisse' : ''}`;
-          return (
-            <li key={a.id} className={level < 0 ? 'is-low' : level > 0 ? 'is-high' : ''}>
-              <span className="mt-support-who">
-                <b>{a.name}</b>
-                <span className={`mt-rank is-${a.rank}`}>{a.rankName}</span>
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={SUPPORT.max}
-                step={1}
-                value={weights[a.id] ?? 0}
-                aria-label={`Soutien de ${a.name}`}
-                onChange={(event) => setWeights((w) => ({ ...w, [a.id]: Number(event.target.value) }))}
-              />
-              <b className="mt-support-pct">{Math.round(share * 100)} %</b>
-              <span className="mt-sub">{effect}</span>
-              {snubs[a.id] && <span className="mt-sub mt-warn">Jaloux : {snubs[a.id]} a un rang plus bas mais plus de soutien.</span>}
-            </li>
-          );
-        })}
+      <ul className="mt-role-help">
+        {ROLE_IDS.map((id) => (
+          <li key={id}>
+            <b>
+              {ROLES[id].name}
+              {id !== 'free' ? ` · ${used(id)}/${slots}` : ''}
+            </b>
+            <span className="mt-sub">{ROLES[id].about}</span>
+          </li>
+        ))}
       </ul>
-      <div className="mt-acts">
-        <button type="button" className="mt-go" disabled={busy || !changed || none} onClick={() => onAct({ type: 'support', weights })}>
-          Valider le soutien
-        </button>
-        {changed && (
-          <button type="button" className="mt-ghost" onClick={() => setWeights(saved)}>
-            Annuler
-          </button>
-        )}
-      </div>
+      <ul className="mt-role-list">
+        {dyn.artists.map((a) => (
+          <li key={a.id} className={a.form > 0 ? 'is-hot' : ''}>
+            <span className="mt-support-who">
+              <b>{a.name}</b>
+              <span className={`mt-rank is-${a.rank}`}>{a.rankName}</span>
+              {a.form > 0 && <span className="mt-hot">En pleine forme · {a.form} sem.</span>}
+            </span>
+            <div className="mt-chips">
+              {ROLE_IDS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="mt-chipbtn"
+                  aria-pressed={a.role === id}
+                  disabled={busy || a.role === id || a.roleLocked || (id !== 'free' && used(id) >= slots)}
+                  onClick={() => onAct({ type: 'role', artistId: a.id, role: id })}
+                >
+                  {ROLES[id].name}
+                </button>
+              ))}
+            </div>
+            {a.roleLocked && <span className="mt-sub">Rôle changé cette semaine.</span>}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 };
@@ -3591,7 +3581,7 @@ const DynamicsTab = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (ac
           </button>
         </div>
       </section>
-      {dyn.artists.length >= 2 && <SupportPanel dyn={dyn} onAct={onAct} busy={busy} />}
+      <RolesPanel dyn={dyn} tier={view.label?.tier ?? 1} onAct={onAct} busy={busy} />
       <section className="mt-section">
         <Label>Tes artistes, par rang</Label>
         <ul className="mt-dyn">
@@ -4730,7 +4720,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'staff_poach_cancel') say('Offre retirée.');
       if (action.type === 'cheer') say(action.kind === 'bonus' ? 'Prime versée. Il a le sourire.' : action.kind === 'trip' ? 'Bon voyage ! Il revient plein d’idées.' : 'Quelle soirée ! Tout le label est de bonne humeur.');
       if (action.type === 'raise') say('Augmentation signée.');
-      if (action.type === 'support') say('Soutien du label mis à jour.');
+      if (action.type === 'role') say(`Nouveau rôle : ${ROLES[action.role].name}.`);
       if (action.type === 'genre_change') say('Changement de genre lancé. Laisse-lui le temps de trouver son son.');
       if (action.type === 'genre_wish_refuse') say('Tu as dit non. Il fait un peu la tête.');
       if (action.type === 'auction_start') say('Enchère lancée. Les offres arrivent dans le Marché.');

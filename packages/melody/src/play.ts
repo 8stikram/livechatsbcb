@@ -27,7 +27,8 @@ import { answerDeal, askFeat, cancelDeal, dealsView, otherArtists, type FeatDeal
 import { afterAction, isGuarded, nextStep, refund, skipTutorial, startTutorial, tutorialView, type TutorialView } from './tutorial.ts';
 import { leaveTalk, makeOffer, openTalk, talkBlocked, talkNews, talksOfLabel, type TalkNews, type TalkView } from './negotiation.ts';
 import { cancelSession, finishSession, offerFeat, useDeal, reactToEvent, sessionOf, sessionView, skipFeat, startSession, type SessionView } from './studio.ts';
-import { setSupport, supportBoost } from './support.ts';
+import { formWeeks, roleCounts, roleSlots, setRole, supportBoost } from './support.ts';
+import type { RoleId } from './types.ts';
 
 export const MAX_PLAYER_LABELS = 20;
 
@@ -143,7 +144,7 @@ export type MelodyAction =
   | { type: 'release'; songId: string; inWeeks: number; marketing: string[] }
   | { type: 'gig'; artistId: string }
   | { type: 'project'; artistId: string; kind: ProjectKind; title: string; songIds: string[]; inWeeks: number; cover?: string; signing?: boolean }
-  | { type: 'support'; weights: Record<string, number> }
+  | { type: 'role'; artistId: string; role: RoleId }
   | { type: 'deluxe'; projectId: string; songIds: string[] }
   | { type: 'tour'; artistId: string; dates: number; partnerId?: string | null; openerId?: string | null; merch?: boolean }
   | { type: 'tour_answer'; tourId: string; accept: boolean }
@@ -362,8 +363,8 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
       notLent(world, action.artistId, 'augmenter');
       raisePay(world, label, action.artistId);
       return;
-    case 'support':
-      setSupport(world, label, action.weights);
+    case 'role':
+      setRole(world, label, action.artistId, action.role);
       return;
     case 'genre_change':
       notLent(world, action.artistId, 'changer de genre');
@@ -443,7 +444,9 @@ export interface RosterView extends ArtistView {
   clause: number | null;
   /** The note his songs turn around, with choices that fit. */
   expectedNote: number;
-  /** The label's support on his CD and vinyl sales (1 for an equal share). */
+  /** Weeks of "en pleine forme" left (0: none). */
+  form: number;
+  /** His role and his form on his CD and vinyl sales (1: nothing). */
   salesBoost: number;
   /** Borrowed from another label: who lent him and when he goes back. */
   loan: { lenderName: string; weeksLeft: number } | null;
@@ -794,6 +797,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
         clause: clauseOf(world, artist.id),
         expectedNote: Math.round(generalRating(artist) + experienceBonus(world, artist)),
         salesBoost: label ? supportBoost(world, label.id, artist.id, 'sales') : 1,
+        form: formWeeks(world, artist),
         loan: contract?.loan ? { lenderName: world.labels[contract.loan.lenderId]?.name ?? '?', weeksLeft: Math.max(0, contract.loan.until - world.tick) } : null,
         onAuction: !!auctionOf(world, artist.id),
         lendListed: (world.lendings ?? []).some((l) => l.artistId === artist.id && l.status === 'listed'),

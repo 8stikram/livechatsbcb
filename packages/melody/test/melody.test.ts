@@ -9,7 +9,7 @@ import {
   STAFF, staffOf, staffWage, coachBoost, producerShare, houseProducer, viewsBoost, crowdBoost, gigEnergy,
   MORALE, RANKS, ranksOf, isLeader, worriesOf, moraleBlock, tickMorale, dynamicsView,
   shareLoan, returnLoans, STUDIO_CONTENT, studioCardsFor, usualNote, isLetdown, judgeRelease,
-  SALES, salesQuote, createProject, tickProjects, SUPPORT, setSupport, supportBoost, supportShares, boostOf,
+  SALES, salesQuote, createProject, tickProjects, supportBoost, ROLES, ROLE_RULES, FORM, roleSlots, inForm, lightUp, experienceBonus,
   SKILL_IDS, skillsOf, skillLevel, skillPlus, stageBoost, tirelessFactor, PROFILES, EVOLUTION, GENRE_CHANGE, profileOf, profileGrowth, afterRelease, tickEvolution, GENRES,
 } from '../src/index.ts';
 import type { Artist, Song, StaffMember, World } from '../src/index.ts';
@@ -1937,7 +1937,8 @@ describe('ventes de CD et vinyles, et soutien du label', () => {
     project.deluxe = { songIds: [], tick: world.tick + 1 };
     world.tick += 1;
     tickProjects(world, (_, text) => told.push(text), (text) => news.push(text), (_, amount) => paid.push(amount));
-    const album = salesQuote({ fans: 1_000_000, hype: 30, kind: 'album', quality: project.quality!, cover: false, signing: false, boost: 1 });
+    // Gold lit him up: in form, he sells a little more.
+    const album = salesQuote({ fans: 1_000_000, hype: 30, kind: 'album', quality: project.quality!, cover: false, signing: false, boost: FORM.boost });
     expect(project.deluxe.sales).toBe(Math.round(album.units * SALES.deluxe));
     expect(paid[1]).toBe(project.deluxe.sales! * SALES.price);
     expect(project.cert).toBe('platinum');
@@ -1950,50 +1951,69 @@ describe('ventes de CD et vinyles, et soutien du label', () => {
     expect(view).toMatchObject({ sales: project.sales! + project.deluxe.sales!, cert: 'platinum', signing: true });
   });
 
-  it('shares the support with sliders: more promo, sales and progress above an equal share, a little less below', () => {
+  it('gives roles with bonuses that take nothing from the others, places by tier, once a week', () => {
     const { world, label, artist } = players();
-    expect(() => applyAction(world, 'u1', { type: 'support', weights: { [artist.id]: 5 } })).toThrow(/deux artistes/);
     for (const free of freeAgents(world).slice(0, 2)) signArtist(world, label.id, free.id, expectedOffer(free));
+    label.tier = 1;
     const [a, b, c] = rosterOf(world, label.id);
-    expect(supportShares(world, label.id)[a!.id]).toBeCloseTo(1 / 3);
     expect(supportBoost(world, label.id, a!.id, 'promo')).toBe(1);
-    expect(() => applyAction(world, 'u1', { type: 'support', weights: { [a!.id]: 11 } })).toThrow(/0 à 10/);
-    expect(() => applyAction(world, 'u1', { type: 'support', weights: { [a!.id]: 0, [b!.id]: 0, [c!.id]: 0 } })).toThrow(/au moins un/);
-    expect(() => applyAction(world, 'u1', { type: 'support', weights: { fic_inconnu: 3 } })).toThrow(/pas dans ton label/);
-    applyAction(world, 'u1', { type: 'support', weights: { [a!.id]: 10, [b!.id]: 5, [c!.id]: 0 } });
-    // a: two thirds of the support (level 1), c: nothing (level -1).
-    expect(supportBoost(world, label.id, a!.id, 'promo')).toBeCloseTo(1 + SUPPORT.promo.up);
-    expect(supportBoost(world, label.id, a!.id, 'sales')).toBeCloseTo(1 + SUPPORT.sales.up);
-    expect(supportBoost(world, label.id, c!.id, 'grow')).toBeCloseTo(1 - SUPPORT.grow.down);
-    expect(boostOf(-1, 'sales')).toBeCloseTo(0.8);
-    expect(buildView(world, 'u1').roster.find((r) => r.id === a!.id)?.salesBoost).toBeCloseTo(1.3);
-    const dyn = buildView(world, 'u1').dynamics!.artists.find((x) => x.id === a!.id)!;
-    expect(dyn.support).toMatchObject({ weight: 10, level: 1 });
-    expect(dyn.support.share).toBeCloseTo(2 / 3);
-    // A game label is never touched.
+    applyAction(world, 'u1', { type: 'role', artistId: a!.id, role: 'headliner' });
+    expect(supportBoost(world, label.id, a!.id, 'promo')).toBeCloseTo(ROLES.headliner.promo);
+    expect(supportBoost(world, label.id, a!.id, 'sales')).toBeCloseTo(ROLES.headliner.sales);
+    // The others lose nothing.
+    expect(supportBoost(world, label.id, b!.id, 'promo')).toBe(1);
+    expect(supportBoost(world, label.id, c!.id, 'grow')).toBe(1);
+    // One place per role at Maison, two at Underground.
+    expect(roleSlots(1)).toBe(1);
+    expect(() => applyAction(world, 'u1', { type: 'role', artistId: b!.id, role: 'headliner' })).toThrow(/Plus de place/);
+    label.tier = 2;
+    applyAction(world, 'u1', { type: 'role', artistId: b!.id, role: 'headliner' });
+    // Once a week per artist.
+    expect(() => applyAction(world, 'u1', { type: 'role', artistId: b!.id, role: 'prospect' })).toThrow(/cette semaine/);
+    expect(() => applyAction(world, 'u1', { type: 'role', artistId: b!.id, role: 'headliner' })).toThrow(/déjà ce rôle|cette semaine/);
+    world.tick += 1;
+    applyAction(world, 'u1', { type: 'role', artistId: b!.id, role: 'prospect' });
+    expect(supportBoost(world, label.id, b!.id, 'grow')).toBeCloseTo(ROLES.prospect.grow);
+    expect(() => applyAction(world, 'u1', { type: 'role', artistId: 'fic_inconnu', role: 'pillar' })).toThrow(/pas dans ton label/);
+    const dyn = buildView(world, 'u1').dynamics!.artists.find((x) => x.id === b!.id)!;
+    expect(dyn).toMatchObject({ role: 'prospect', roleName: 'Pépite', roleLocked: true, form: 0 });
+    expect(artist).toBeDefined();
+    // A game label never has roles.
     const npc = Object.values(world.labels).find((l) => l.kind !== 'player')!;
     expect(supportBoost(world, npc.id, rosterOf(world, npc.id)[0]!.id, 'promo')).toBe(1);
   });
 
-  it('makes the bigger artists jealous of a smaller one better supported, and tells it once', () => {
+  it('lets a pillar in a good mood lift the others, without any jealousy', () => {
     const { world, label } = players();
     for (const free of freeAgents(world).slice(0, 2)) signArtist(world, label.id, free.id, expectedOffer(free));
-    const ranks = ranksOf(world, label.id);
-    const roster = rosterOf(world, label.id);
-    const star = roster.find((x) => ranks.get(x.id) === 'star')!;
-    const small = roster.find((x) => ranks.get(x.id) === 'development' || ranks.get(x.id) === 'hope')!;
-    applyAction(world, 'u1', { type: 'support', weights: Object.fromEntries(roster.map((x) => [x.id, x.id === small.id ? 10 : x.id === star.id ? 1 : 3])) });
-    expect(worriesOf(world, label.id, star).find((w) => w.kind === 'snubbed')).toMatchObject({ name: small.name });
-    expect(worriesOf(world, label.id, small).some((w) => w.kind === 'snubbed')).toBe(false);
-    star.morale = 70;
+    const [a, b] = rosterOf(world, label.id);
+    applyAction(world, 'u1', { type: 'role', artistId: a!.id, role: 'pillar' });
+    const calm = buildView(world, 'u1').dynamics!.calm;
+    a!.morale = 80;
+    b!.morale = calm;
+    tickMorale(world, () => undefined, () => undefined);
+    // b is at his calm point: only the pillar moves him.
+    expect(b!.morale).toBe(calm + ROLE_RULES.pillar);
+    expect(worriesOf(world, label.id, b!).map((w) => w.kind)).not.toContain('jealous');
+  });
+
+  it('lights an artist up after a gold record: his card shines 4 weeks with a little more of everything', () => {
+    const { world, label, artist } = players();
+    const before = experienceBonus(world, artist);
     const told: string[] = [];
-    tickMorale(world, (_, text) => told.push(text), () => undefined);
-    expect(told.filter((t) => t.startsWith(star.name) && t.includes(`soutient plus ${small.name}`))).toHaveLength(1);
-    expect(star.morale).toBeLessThanOrEqual(70 + SUPPORT.snub);
-    tickMorale(world, (_, text) => told.push(text), () => undefined);
-    expect(told.filter((t) => t.startsWith(star.name) && t.includes(`soutient plus ${small.name}`))).toHaveLength(1);
-    // Hardly any support, with nobody smaller above him: a little let down.
-    applyAction(world, 'u1', { type: 'support', weights: Object.fromEntries(roster.map((x) => [x.id, x.id === small.id ? 0 : 5])) });
-    expect(worriesOf(world, label.id, small).map((w) => w.kind)).toContain('unsupported');
+    lightUp(world, label.id, artist, 'disque d’or', (_, text) => told.push(text));
+    expect(inForm(world, artist)).toBe(true);
+    expect(told[0]).toMatch(/en pleine forme/);
+    expect(experienceBonus(world, artist)).toBeCloseTo(before + FORM.quality);
+    expect(supportBoost(world, label.id, artist.id, 'promo')).toBeCloseTo(FORM.boost);
+    expect(supportBoost(world, label.id, artist.id, 'grow')).toBe(1);
+    expect(buildView(world, 'u1').roster.find((r) => r.id === artist.id)?.form).toBe(FORM.weeks);
+    world.tick += FORM.weeks;
+    expect(inForm(world, artist)).toBe(false);
+    // A game label's artist never lights up.
+    const npc = Object.values(world.labels).find((l) => l.kind !== 'player')!;
+    const theirs = rosterOf(world, npc.id)[0]!;
+    lightUp(world, npc.id, theirs, 'n°1', () => undefined);
+    expect(inForm(world, theirs)).toBe(false);
   });
 });

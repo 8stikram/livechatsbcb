@@ -5,7 +5,7 @@ import { priceScale } from './quality.ts';
 import { clamp } from './rng.ts';
 import { albumBonus } from './skills.ts';
 import { judgeRelease } from './letdown.ts';
-import { supportBoost } from './support.ts';
+import { lightUp, supportBoost } from './support.ts';
 import type { Label, Song, World } from './types.ts';
 import { GameError } from './world.ts';
 
@@ -92,7 +92,7 @@ export const salesQuote = (input: SalesInput): { units: number; money: number } 
   return { units, money: units * SALES.price };
 };
 
-const certify = (project: Project, label: Label, artistName: string, tell: (labelId: string, text: string) => void, news: (text: string) => void): void => {
+const certify = (world: World, project: Project, label: Label, artistName: string, tell: (labelId: string, text: string) => void, news: (text: string) => void): void => {
   if (project.cert === 'platinum') return;
   const total = (project.sales ?? 0) + (project.deluxe?.sales ?? 0);
   const cert = total >= SALES.platinum ? 'platinum' : total >= SALES.gold ? 'gold' : null;
@@ -103,6 +103,8 @@ const certify = (project: Project, label: Label, artistName: string, tell: (labe
   const word = cert === 'platinum' ? 'disque de platine' : 'disque d’or';
   tell(label.id, `« ${project.title} » est ${word} : ${total.toLocaleString('fr-FR')} CD et vinyles vendus. Réputation +${reputation}.`);
   news(`${artistName} (${label.name}) : ${word} pour « ${project.title} ».`);
+  const artist = world.artists[project.artistId];
+  if (artist) lightUp(world, label.id, artist, word, tell);
 };
 
 /** Mixing, mastering and pressing: small labels pay small-label prices. */
@@ -227,7 +229,7 @@ export const tickProjects = (
         project.deluxe.money = project.deluxe.sales * SALES.price;
         if (project.deluxe.money > 0) pay(label.id, project.deluxe.money, artist.id);
         tell(project.labelId, `Deluxe de « ${project.title} » : ${project.deluxe.sales.toLocaleString('fr-FR')} CD et vinyles vendus (+${project.deluxe.money.toLocaleString('fr-FR')} €).`);
-        certify(project, label, artist.name, tell, news);
+        certify(world, project, label, artist.name, tell, news);
       }
     }
     if (project.state !== 'scheduled' || project.releaseTick > world.tick) continue;
@@ -253,7 +255,7 @@ export const tickProjects = (
       sold = ` ${sale.units.toLocaleString('fr-FR')} CD et vinyles vendus (+${sale.money.toLocaleString('fr-FR')} €)${project.signing ? `, avec la séance de dédicace (énergie −${SALES.signingEnergy})` : ''}.`;
     }
     tell(project.labelId, `${name} est sorti : ${streams.toLocaleString('fr-FR')} streams la première semaine, note ${project.quality}.${sold}`);
-    if (label && artist) certify(project, label, artist.name, tell, news);
+    if (label && artist) certify(world, project, label, artist.name, tell, news);
     if (label && artist) news(`${artist.name} (${label.name}) sort son ${name}.`);
     if (label && project.kind === 'album' && project.quality >= PROJECTS.goodAlbum) {
       label.reputation = clamp(label.reputation + PROJECTS.goodAlbumReputation, 0, 100);

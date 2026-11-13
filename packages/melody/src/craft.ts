@@ -53,12 +53,17 @@ export const isPerfect = (artist: Pick<Artist, 'genre' | 'secondary'>, themeId: 
 /* ---------------------------------- Experience ---------------------------------- */
 
 /** Fame and songs already made: a newcomer makes weaker songs, the artist grows with the fans and the work. */
+/** "En pleine forme": weeks, note bonus, and promo and sales boost. */
+export const FORM = { weeks: 4, quality: 3, boost: 1.1 } as const;
+
+export const inForm = (world: World, artist: Pick<Artist, 'formUntil'>): boolean => (artist.formUntil ?? -1) > world.tick;
+
 export const experienceBonus = (world: World, artist: Artist): number => {
   const songs = world.songs.filter((s) => s.artistId === artist.id).length;
   const fame = clamp(1.5 * Math.log10(Math.max(artist.fans, 1_000) / 10_000), -2, 5);
   const work = Math.min(5, 1.5 * Math.sqrt(songs));
   const newcomer = songs === 0 ? -2 : 0;
-  return fame + work + newcomer;
+  return fame + work + newcomer + (inForm(world, artist) ? FORM.quality : 0);
 };
 
 /* ---------------------------------- Weekly offers ---------------------------------- */

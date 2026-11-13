@@ -75,7 +75,7 @@ export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('staff_poach_cancel'), offerId: IdSchema }),
   z.object({ type: z.literal('cheer'), kind: z.enum(['bonus', 'trip', 'party']), artistId: IdSchema.nullable() }),
   z.object({ type: z.literal('raise'), artistId: IdSchema }),
-  z.object({ type: z.literal('support'), weights: z.record(IdSchema, z.number().int().min(0).max(10)).refine((w) => Object.keys(w).length <= 40, 'Trop d’artistes.') }),
+  z.object({ type: z.literal('role'), artistId: IdSchema, role: z.enum(['headliner', 'prospect', 'pillar', 'free']) }),
   z.object({ type: z.literal('genre_change'), artistId: IdSchema, genre: z.string().min(1).max(32) }),
   z.object({ type: z.literal('genre_wish_refuse'), artistId: IdSchema }),
   z.object({ type: z.literal('auction_start'), artistId: IdSchema, start: z.number().min(1).max(1e9), weeks: z.number().int().min(1).max(3), reserve: z.number().min(1).max(1e9).nullable() }),
