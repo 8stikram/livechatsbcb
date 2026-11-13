@@ -6,6 +6,8 @@ import { canTierUp, contractOf, debtOf, netWorth, playGig, rosterOf } from './ec
 import { tickAcademy } from './academy.ts';
 import { tickDeals } from './featdeals.ts';
 import { tickTransfers } from './transfers.ts';
+import { tickAuctions } from './auctions.ts';
+import { returnLoans, shareLoan, tickLending } from './lending.ts';
 import { tickClashes } from './clash.ts';
 import { tickProjects } from './projects.ts';
 import { tickSeason } from './seasons.ts';
@@ -280,6 +282,11 @@ export const runTick = (world: World): TickReport => {
     if (artist && rank <= 10) artist.hype = clamp(artist.hype + CFG.hype.top10Global, 0, 100);
   });
 
+  const toLender = (lenderId: string, cut: number): void => {
+    const lender = world.labels[lenderId];
+    if (lender && !lender.bankrupt) earn(reports, lender, cut);
+  };
+
   // 4. Streaming money. The artist's royalties first repay his advance.
   for (const song of world.songs) {
     const label = world.labels[song.labelId];
@@ -293,7 +300,9 @@ export const runTick = (world: World): TickReport => {
       contract.unrecouped -= recouped;
       paidToArtist = share - recouped;
     }
-    earn(reports, label, gross - paidToArtist);
+    // A borrowed artist: 30 % of what his songs made here bring goes back to his label.
+    const kept = shareLoan(world, song.artistId, label.id, gross - paidToArtist, (lenderId, cut) => toLender(lenderId, cut), song.createdTick);
+    earn(reports, label, kept);
   }
 
   // 5. Concerts booked for this week.
@@ -311,16 +320,16 @@ export const runTick = (world: World): TickReport => {
     artist.lastActiveTick = tick;
     activeArtists.add(artist.id);
     if (result.fill >= 0.8) artist.morale = clamp(artist.morale + CFG.morale.gigFull, 0, 100);
-    earn(reports, label, result.profit > 0 ? result.profit * CFG.live.labelShare : result.profit);
+    earn(reports, label, result.profit > 0 ? shareLoan(world, artist.id, label.id, result.profit * CFG.live.labelShare, toLender) : result.profit);
   }
   world.gigs = world.gigs.filter((g) => g.tick > tick);
 
   // 5 bis. Tours on the road.
   const touring = tickTours(
     world,
-    (labelId, amount) => {
+    (labelId, amount, artistId) => {
       const label = world.labels[labelId];
-      if (label) earn(reports, label, amount);
+      if (label) earn(reports, label, artistId ? shareLoan(world, artistId, labelId, amount, toLender) : amount);
     },
     (labelId, text) => {
       const label = world.labels[labelId];
@@ -370,6 +379,11 @@ export const runTick = (world: World): TickReport => {
     const inDistress = label.cash < 0 || debtOf(world, label.id) > Math.max(0, netWorth(world, label));
     label.distress = inDistress ? label.distress + 1 : Math.max(0, label.distress - 2);
     if (label.distress >= CFG.bank.bankruptcyTicks) {
+      // Borrowed artists go home first.
+      returnLoans(world, label.id, (labelId, text) => {
+        const other = world.labels[labelId];
+        if (other && other.kind === 'player' && !other.bankrupt) report(reports, other).events.push(text);
+      });
       label.bankrupt = true;
       world.contracts = world.contracts.filter((c) => c.labelId !== label.id);
       world.loans = world.loans.filter((l) => l.labelId !== label.id);
@@ -403,6 +417,15 @@ export const runTick = (world: World): TickReport => {
   tickEvolution(world, before, tell);
   tickDeals(world, tell);
   tickTransfers(world, tell);
+  tickAuctions(world, tell);
+  tickLending(
+    world,
+    (labelId, amount) => {
+      const label = world.labels[labelId];
+      if (label && !label.bankrupt) earn(reports, label, amount);
+    },
+    tell,
+  );
   tickClashes(world, tell);
   tickProjects(world, tell, (text) => {
     world.marketNews = [...(world.marketNews ?? []), { tick: world.tick, text }];

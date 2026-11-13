@@ -50,6 +50,8 @@ import {
   type StaffRole,
   type StaffView,
   type DynamicsView,
+  type AuctionView,
+  type LendingView,
   SKILL_PLUS,
 } from '@livechatsbcb/melody';
 import type { MelodyRoute } from '../../../../shared/ipc';
@@ -495,7 +497,7 @@ const EvolutionBlock = ({ artist, cash, onAct, busy }: { artist: RosterView; cas
             <button
               type="button"
               className="mt-go"
-              disabled={busy || !!evo.genres.blocked || (wished?.cost ?? 0) > cash}
+              disabled={busy || !!evo.genres.blocked || !!artist.loan || (wished?.cost ?? 0) > cash}
               onClick={() => onAct({ type: 'genre_change', artistId: artist.id, genre: wish.genre })}
             >
               Oui
@@ -544,10 +546,12 @@ const EvolutionBlock = ({ artist, cash, onAct, busy }: { artist: RosterView; cas
         </div>
       ) : (
         <div className="mt-acts">
-          <button type="button" className="mt-ghost" disabled={busy || !!evo.genres.blocked} onClick={() => setPicking(true)}>
+          <button type="button" className="mt-ghost" disabled={busy || !!evo.genres.blocked || !!artist.loan} onClick={() => setPicking(true)}>
             Changer de genre
           </button>
-          {evo.genres.blocked && <span className="mt-sub">{evo.genres.blocked}</span>}
+          {(evo.genres.blocked ?? (artist.loan ? 'Il est prêté : son label décide de son genre.' : null)) && (
+            <span className="mt-sub">{evo.genres.blocked ?? 'Il est prêté : son label décide de son genre.'}</span>
+          )}
         </div>
       )}
     </div>
@@ -635,6 +639,11 @@ const Squad = ({
                 artist.wantsOut && <span className="mt-pill mt-pill-warn">Veut partir</span>
               )}
               {artist.real && <span className="mt-pill">Vrai artiste</span>}
+              {artist.loan && (
+                <span className="mt-pill mt-pill-warn">
+                  Prêté par {artist.loan.lenderName} · retour dans {artist.loan.weeksLeft} sem.
+                </span>
+              )}
             </div>
             {artist.lastSong && (
               <div className="mt-lastsong">
@@ -686,9 +695,12 @@ const Squad = ({
                   Renouveler le contrat
                 </button>
               )}
-              <SellButton key={artist.id} name={artist.name} price={artist.salePrice} busy={busy} onSell={() => onAct({ type: 'sell', artistId: artist.id })} />
-              <ClauseControl key={`c${artist.id}`} artistId={artist.id} clause={artist.clause} onAct={onAct} busy={busy} />
+              {!artist.loan && !artist.onAuction && (
+                <SellButton key={artist.id} name={artist.name} price={artist.salePrice} busy={busy} onSell={() => onAct({ type: 'sell', artistId: artist.id })} />
+              )}
+              {!artist.loan && <ClauseControl key={`c${artist.id}`} artistId={artist.id} clause={artist.clause} onAct={onAct} busy={busy} />}
             </div>
+            <MarketControl key={`m${artist.id}`} artist={artist} onAct={onAct} onGo={onGo} busy={busy} />
             {artist.gigsBooked > 0 && (
               <span className="mt-sub">
                 {artist.gigsBooked} concert{artist.gigsBooked > 1 ? 's' : ''} prévu{artist.gigsBooked > 1 ? 's' : ''} cette semaine.
@@ -2953,6 +2965,11 @@ const TransferRow = ({ deal, onAct, onTalk, busy }: { deal: TransferView; onAct:
         <Label>{sent ? 'Offre envoyée' : 'Offre reçue'}</Label>
         <b>{who}</b>
         <span className="mt-sub">{line}</span>
+        {deal.swap && (
+          <span className="mt-sub">
+            En échange : {deal.swap.name} ({deal.swap.gen}) {sent ? 'part chez eux' : 'arrive chez toi'}
+          </span>
+        )}
       </div>
       <div className="mt-acts mt-deal-acts">
         {deal.myTurn && !countering && (
@@ -2974,7 +2991,7 @@ const TransferRow = ({ deal, onAct, onTalk, busy }: { deal: TransferView; onAct:
             <button
               type="button"
               className="mt-go"
-              disabled={busy || fee < 1 || fee === deal.fee}
+              disabled={busy || (fee < 1 && !deal.swap) || fee === deal.fee}
               onClick={() => {
                 onAct({ type: 'transfer_answer', transferId: deal.id, answer: 'counter', fee });
                 setCountering(false);
@@ -3053,7 +3070,9 @@ const OtherPlayers = ({ view, onAct, busy }: { view: MelodyView; onAct: (action:
   const [buying, setBuying] = useState<OtherArtistView | null>(null);
   const [fee, setFee] = useState(0);
   const [price, setPrice] = useState(0);
+  const [swapId, setSwapId] = useState('');
   const cash = view.label?.cash ?? 0;
+  const tradable = view.roster.filter((a) => !a.loan && !a.onAuction && !a.lendListed);
   if (view.others.length === 0) return <span className="mt-sub">Aucun autre joueur n’a encore de label sur ce serveur.</span>;
   return (
     <div className="mt-deck">
@@ -3070,19 +3089,33 @@ const OtherPlayers = ({ view, onAct, busy }: { view: MelodyView; onAct: (action:
           {buying?.id === artist.id ? (
             <div className="mt-ask">
               <MoneyInput value={price} onChange={setPrice} label="Prix du transfert" />
+              <select className="mt-select" aria-label="Un de tes artistes en échange" value={swapId} onChange={(event) => setSwapId(event.target.value)}>
+                <option value="">Sans échange</option>
+                {tradable.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    + {a.name} ({a.gen})
+                  </option>
+                ))}
+              </select>
               <span className="mt-sub">
-                {artist.clause !== null && price >= artist.clause ? 'Prix de la clause : son label ne peut pas refuser.' : 'Prix libre. Il devra ensuite signer chez toi.'}
+                {artist.clause !== null && price >= artist.clause
+                  ? 'Prix de la clause : son label ne peut pas refuser.'
+                  : swapId
+                    ? 'Ton artiste part chez eux s’ils acceptent. L’argent peut être à 0.'
+                    : 'Prix libre. Il devra ensuite signer chez toi.'}
               </span>
               <button
                 type="button"
                 className="mt-go"
-                disabled={busy || price < 1 || price > cash}
+                disabled={busy || (price < 1 && !swapId) || price > cash}
                 onClick={() => {
-                  onAct({ type: 'transfer_ask', artistId: artist.id, fee: price });
+                  onAct({ type: 'transfer_ask', artistId: artist.id, fee: price, swapId: swapId || null });
                   setBuying(null);
+                  setSwapId('');
                 }}
               >
                 Envoyer · {money(price)}
+                {swapId ? ' + échange' : ''}
               </button>
               <button type="button" className="mt-ghost" onClick={() => setBuying(null)}>
                 Annuler
@@ -3698,6 +3731,256 @@ const countryName = (code: string): string => COUNTRIES[code] ?? code;
 const MAX_PRICES = [0, 2_000, 10_000, 50_000, 250_000];
 const PAGE = 36;
 
+/* ---------------------------------- Enchères et prêts ---------------------------------- */
+
+const AUCTION_STATUS: Record<AuctionView['status'], string> = {
+  open: 'En cours',
+  signing: 'Le gagnant négocie',
+  sold: 'Vendu',
+  unsold: 'Pas vendu',
+  cancelled: 'Arrêtée',
+};
+
+// One auction: the best offer, the time left, and a bid box for the friends.
+const AuctionRow = ({ a, view, onAct, onTalk, busy }: { a: AuctionView; view: MelodyView; onAct: (action: MelodyAction) => void; onTalk: (artistId: string) => void; busy: boolean }) => {
+  const [amount, setAmount] = useState(a.nextBid);
+  // Someone bid in the meantime: the box follows the new minimum.
+  useEffect(() => setAmount((v) => Math.max(v, a.nextBid)), [a.nextBid]);
+  const cash = view.label?.cash ?? 0;
+  const myTalk = view.transfers.find((t) => t.fromAuction && t.status === 'agreed' && t.direction === 'sent' && t.artistId === a.artistId);
+  const best = a.best ? `${money(a.best.amount)} (${a.best.mine ? 'toi' : a.best.labelName})` : 'aucune';
+  const reserve =
+    a.reserve !== null
+      ? ` · Réserve secrète ${money(a.reserve)} : ${a.reserveMet ? 'atteinte' : 'pas atteinte'}`
+      : a.reserveMet === false
+        ? ' · Prix de réserve pas atteint'
+        : '';
+  return (
+    <div className={`mt-deal${a.outbid || myTalk ? ' is-turn' : ''}${a.status === 'sold' ? ' is-accepted' : a.status !== 'open' && a.status !== 'signing' ? ' is-expired' : ''}`}>
+      <Avatar id={a.artistId} genre={a.genre} className="mt-deal-art" />
+      <div className="mt-deal-text">
+        <Label>{a.mine ? 'Ton enchère' : `Enchère · ${a.sellerName}`}</Label>
+        <b>
+          {a.artistName} · {a.gen}
+        </b>
+        <span className="mt-sub">
+          {a.status === 'open'
+            ? `Meilleure offre : ${best} · fin dans ${a.weeksLeft} sem.${reserve}`
+            : myTalk
+              ? `Tu l’as remporté à ${money(myTalk.fee)} : négocie son contrat sous ${myTalk.weeksLeft} sem.`
+              : `${AUCTION_STATUS[a.status]}${a.best ? ` · ${best}` : ''}`}
+        </span>
+        {a.outbid && <span className="mt-sub mt-warn">Quelqu’un a mis plus que toi.</span>}
+        {a.skills.length > 0 && <span className="mt-card-skills">{a.skills.join(' · ')}</span>}
+      </div>
+      <div className="mt-acts mt-deal-acts">
+        {a.status === 'open' && !a.mine && !a.best?.mine && (
+          <>
+            <MoneyInput value={amount} onChange={setAmount} label={`Ton offre pour ${a.artistName}`} />
+            <button
+              type="button"
+              className="mt-go"
+              disabled={busy || amount < a.nextBid || amount > cash}
+              onClick={() => onAct({ type: 'auction_bid', auctionId: a.id, amount })}
+            >
+              Enchérir
+            </button>
+          </>
+        )}
+        {a.status === 'open' && a.best?.mine && !a.mine && <span className="mt-dealtag">Tu mènes</span>}
+        {a.status === 'open' && a.mine && !a.locked && (
+          <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'auction_cancel', auctionId: a.id })}>
+            Arrêter
+          </button>
+        )}
+        {myTalk && (
+          <button type="button" className="mt-go" disabled={busy} onClick={() => onTalk(a.artistId)}>
+            Négocier son contrat
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// One loan: a friend's listing to take, my listing, or a loan running.
+const LoanRow = ({ l, onAct, busy }: { l: LendingView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const line =
+    l.side === 'offer'
+      ? `${l.weeks} semaines · frais ${money(l.fee)}. Tu gardes 70 % de ce qu’il rapporte et les sons faits chez toi.`
+      : l.status === 'listed'
+        ? `Ton annonce : ${l.weeks} semaines, frais ${money(l.fee)}. Retirée dans ${l.weeksLeft} sem. si personne ne le prend.`
+        : l.status === 'running'
+          ? l.side === 'lent'
+            ? `Prêté à ${l.borrowerName} · retour dans ${l.weeksLeft} sem. · ta part : ${money(l.earned)}`
+            : `Emprunté à ${l.lenderName} · retour dans ${l.weeksLeft} sem. 30 % de ce qu’il rapporte part chez eux.`
+          : l.status === 'done'
+            ? `Prêt fini · ta part : ${money(l.earned)}`
+            : 'Annonce retirée';
+  return (
+    <div className={`mt-deal${l.side === 'offer' && !l.blocked ? ' is-turn' : ''}${l.status === 'done' || l.status === 'cancelled' || l.status === 'expired' ? ' is-expired' : ''}`}>
+      <Avatar id={l.artistId} genre={l.genre} className="mt-deal-art" />
+      <div className="mt-deal-text">
+        <Label>{l.side === 'offer' ? `À prêter · ${l.lenderName}` : l.side === 'lent' ? 'Ton artiste prêté' : 'Artiste emprunté'}</Label>
+        <b>
+          {l.artistName} · {l.gen}
+        </b>
+        <span className="mt-sub">{line}</span>
+        {l.side === 'offer' && l.blocked && <span className="mt-sub mt-warn">{l.blocked}</span>}
+      </div>
+      <div className="mt-acts mt-deal-acts">
+        {l.side === 'offer' && (
+          <button type="button" className="mt-go" disabled={busy || !!l.blocked} onClick={() => onAct({ type: 'borrow', lendingId: l.id })}>
+            Emprunter · {money(l.fee)}
+          </button>
+        )}
+        {l.side === 'lent' && l.status === 'listed' && (
+          <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'lend_cancel', lendingId: l.id })}>
+            Retirer
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// The auctions of the server and the loans, at the top of the market.
+const AuctionsAndLoans = ({ view, onAct, onTalk, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; onTalk: (artistId: string) => void; busy: boolean }) => (
+  <section className="mt-section mt-bourse" aria-label="Enchères et prêts">
+    <Label>Enchères et prêts</Label>
+    {view.auctions.length === 0 && view.lendings.length === 0 ? (
+      <span className="mt-sub">Rien en ce moment. Pour vendre aux enchères ou prêter un de tes artistes, va dans sa fiche (Effectif).</span>
+    ) : (
+      <>
+        {view.auctions.map((a) => (
+          <AuctionRow key={a.id} a={a} view={view} onAct={onAct} onTalk={onTalk} busy={busy} />
+        ))}
+        {view.lendings.map((l) => (
+          <LoanRow key={l.id} l={l} onAct={onAct} busy={busy} />
+        ))}
+      </>
+    )}
+  </section>
+);
+
+// In the artist sheet: put him up for auction or for a loan, or see where he is.
+const MarketControl = ({ artist, onAct, onGo, busy }: { artist: RosterView; onAct: (action: MelodyAction) => void; onGo: (tab: Tab) => void; busy: boolean }) => {
+  const [mode, setMode] = useState<'none' | 'auction' | 'loan'>('none');
+  const [start, setStart] = useState(Math.max(100, Math.round((artist.value * 0.6) / 100) * 100));
+  const [weeks, setWeeks] = useState(2);
+  const [reserve, setReserve] = useState(0);
+  const [loanWeeks, setLoanWeeks] = useState(8);
+  const [fee, setFee] = useState(artist.fairFee);
+  if (artist.loan) return null;
+  if (artist.onAuction || artist.lendListed) {
+    return (
+      <div className="mt-acts">
+        <span className="mt-pill mt-pill-on">{artist.onAuction ? 'Aux enchères' : 'Proposé en prêt'}</span>
+        <button type="button" className="mt-ghost" onClick={() => onGo('market')}>
+          Voir le Marché
+        </button>
+      </div>
+    );
+  }
+  if (mode === 'auction') {
+    return (
+      <div className="mt-sellform">
+        <Label>Mettre aux enchères</Label>
+        <span className="mt-sub">Valeur estimée : {money(artist.value)}. Les amis enchérissent, et un label du jeu aussi. Le gagnant doit ensuite le faire signer.</span>
+        <div className="mt-acts">
+          <Label>Départ</Label>
+          <MoneyInput value={start} onChange={setStart} label="Prix de départ" />
+          <div className="mt-chips" role="group" aria-label="Durée">
+            {[1, 2, 3].map((w) => (
+              <button key={w} type="button" className="mt-chipbtn" aria-pressed={weeks === w} onClick={() => setWeeks(w)}>
+                {w} sem.
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-acts">
+          <Label>Réserve secrète</Label>
+          <MoneyInput value={reserve} onChange={setReserve} label="Prix de réserve secret (facultatif)" />
+          <span className="mt-sub">{reserve > 0 ? 'Réserve secrète : en dessous, il ne part pas.' : 'Pas de réserve : la meilleure offre gagne.'}</span>
+        </div>
+        <div className="mt-acts">
+          <button
+            type="button"
+            className="mt-go"
+            disabled={busy || start < 1 || (reserve > 0 && reserve < start)}
+            onClick={() => {
+              onAct({ type: 'auction_start', artistId: artist.id, start, weeks, reserve: reserve > 0 ? reserve : null });
+              setMode('none');
+            }}
+          >
+            Lancer l’enchère
+          </button>
+          <button type="button" className="mt-ghost" onClick={() => setMode('none')}>
+            Retour
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (mode === 'loan') {
+    const fair = Math.round((artist.fairFee * loanWeeks) / 8 / 100) * 100;
+    return (
+      <div className="mt-sellform">
+        <Label>Prêter</Label>
+        <span className="mt-sub">L’emprunteur paie les frais, garde 70 % de ce qu’il rapporte et les sons faits chez lui. Toi, tu touches 30 %. Il revient à la fin.</span>
+        <div className="mt-acts">
+          <label className="mt-money">
+            <select className="mt-select" aria-label="Durée du prêt" value={loanWeeks} onChange={(event) => setLoanWeeks(Number(event.target.value))}>
+              {Array.from({ length: 11 }, (_, i) => i + 4).map((w) => (
+                <option key={w} value={w}>
+                  {w} semaines
+                </option>
+              ))}
+            </select>
+          </label>
+          <Label>Frais</Label>
+          <MoneyInput value={fee} onChange={setFee} label="Frais de prêt" />
+          <span className="mt-sub">Prix juste ≈ {money(fair)}</span>
+        </div>
+        <div className="mt-acts">
+          <button
+            type="button"
+            className="mt-go"
+            disabled={busy}
+            onClick={() => {
+              onAct({ type: 'lend', artistId: artist.id, weeks: loanWeeks, fee });
+              setMode('none');
+            }}
+          >
+            Proposer en prêt
+          </button>
+          <button type="button" className="mt-ghost" onClick={() => setMode('none')}>
+            Retour
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-acts">
+      <button type="button" className="mt-ghost" disabled={busy} onClick={() => setMode('auction')}>
+        Mettre aux enchères
+      </button>
+      <button
+        type="button"
+        className="mt-ghost"
+        disabled={busy}
+        onClick={() => {
+          setFee(artist.fairFee);
+          setMode('loan');
+        }}
+      >
+        Prêter
+      </button>
+    </div>
+  );
+};
+
 const TransferMarket = ({ view, onTalk, onAct, busy }: { view: MelodyView; onTalk: (artistId: string) => void; onAct: (action: MelodyAction) => void; busy: boolean }) => {
   const [search, setSearch] = useState('');
   const [genre, setGenre] = useState('');
@@ -3721,6 +4004,7 @@ const TransferMarket = ({ view, onTalk, onAct, busy }: { view: MelodyView; onTal
     .sort((a, b) => freeFirst(a, b) || MARKET_SORTS[sort].by(a, b));
   return (
     <div className="mt-view mt-in">
+      <AuctionsAndLoans view={view} onAct={onAct} onTalk={onTalk} busy={busy} />
       {view.news.length > 0 && (
         <section className="mt-news" aria-label="Nouvelles du marché">
           <Label>Nouvelles du marché</Label>
@@ -4351,6 +4635,12 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'raise') say('Augmentation signée.');
       if (action.type === 'genre_change') say('Changement de genre lancé. Laisse-lui le temps de trouver son son.');
       if (action.type === 'genre_wish_refuse') say('Tu as dit non. Il fait un peu la tête.');
+      if (action.type === 'auction_start') say('Enchère lancée. Les offres arrivent dans le Marché.');
+      if (action.type === 'auction_bid') say('Offre posée.');
+      if (action.type === 'auction_cancel') say('Enchère arrêtée.');
+      if (action.type === 'lend') say('Annonce de prêt publiée dans le Marché.');
+      if (action.type === 'lend_cancel') say('Annonce retirée.');
+      if (action.type === 'borrow') say('Il arrive chez toi pour le prêt !');
       if (action.type === 'sell') say('Artiste vendu.');
       if (action.type === 'transfer_ask') say('Offre envoyée.');
       if (action.type === 'transfer_answer' && action.answer === 'accept') say('Accord des labels. L’artiste doit encore signer.');
@@ -4481,6 +4771,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
                 {t.name}
                 {t.id === 'staff' && (view.staff?.offersIn.length ?? 0) > 0 && <i className="mt-navdot" aria-label="On veut débaucher ton staff" />}
                 {t.id === 'squad' && view.roster.some((a) => a.evolution?.wish) && <i className="mt-navdot" aria-label="Un artiste veut changer de genre" />}
+                {t.id === 'market' && view.auctions.some((a) => a.outbid) && <i className="mt-navdot" aria-label="Quelqu’un a mis plus que toi" />}
                 {t.id === 'dynamics' && view.dynamics?.artists.some((a) => a.worries.some((w) => w.kind === 'strike' || w.kind === 'out')) && (
                   <i className="mt-navdot" aria-label="Un artiste va très mal" />
                 )}

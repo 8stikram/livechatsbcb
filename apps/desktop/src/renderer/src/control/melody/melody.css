@@ -2207,6 +2207,24 @@ img.mt-cover-img {
   letter-spacing: 0.1em;
 }
 
+/* enchères et prêts */
+.mt-bourse {
+  padding: 12px 14px;
+  border: 1px solid var(--mt-line);
+  background: var(--mt-panel);
+}
+.mt-bourse .mt-deal {
+  background: var(--mt-bg);
+}
+.mt-sellform {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--mt-line);
+  background: var(--mt-bg);
+}
+
 /* évolution */
 .mt-evo {
   display: flex;

@@ -21,6 +21,8 @@ import { answerPoach, cancelPoach, crowdBoost, fireStaff, focusCoach, hireStaff,
 import { enterSeason, honoursOf, pickGoals, seasonView, watchCeremony, type Honour, type SeasonView } from './seasons.ts';
 import { answerClash, answerInterview, clashesView, interviewView, refuseClash, rivalsView, shadeView, startClash, throwShade, type ClashView, type InterviewView, type RivalView, type ShadeView, type Tone } from './clash.ts';
 import { answerTransfer, askTransfer, cancelTransfer, clauseOf, setClause, transfersView, type TransferView } from './transfers.ts';
+import { auctionOf, auctionsView, bid, cancelAuction, startAuction, type AuctionView } from './auctions.ts';
+import { borrow, cancelListing, fairFee, lendingsView, listLoan, type LendingView } from './lending.ts';
 import { answerDeal, askFeat, cancelDeal, dealsView, otherArtists, type FeatDealView, type OtherArtistView } from './featdeals.ts';
 import { afterAction, isGuarded, nextStep, refund, skipTutorial, startTutorial, tutorialView, type TutorialView } from './tutorial.ts';
 import { leaveTalk, makeOffer, openTalk, talkBlocked, talkNews, talksOfLabel, type TalkNews, type TalkView } from './negotiation.ts';
@@ -120,7 +122,7 @@ export type MelodyAction =
   | { type: 'feat_ask'; guestId: string; fee: number }
   | { type: 'feat_answer'; dealId: string; answer: 'accept' | 'refuse' | 'counter'; fee?: number }
   | { type: 'feat_cancel'; dealId: string }
-  | { type: 'transfer_ask'; artistId: string; fee: number }
+  | { type: 'transfer_ask'; artistId: string; fee: number; swapId?: string | null }
   | { type: 'transfer_answer'; transferId: string; answer: 'accept' | 'refuse' | 'counter'; fee?: number }
   | { type: 'transfer_cancel'; transferId: string }
   | { type: 'clause'; artistId: string; amount: number | null }
@@ -156,6 +158,12 @@ export type MelodyAction =
   | { type: 'raise'; artistId: string }
   | { type: 'genre_change'; artistId: string; genre: string }
   | { type: 'genre_wish_refuse'; artistId: string }
+  | { type: 'auction_start'; artistId: string; start: number; weeks: number; reserve: number | null }
+  | { type: 'auction_bid'; auctionId: string; amount: number }
+  | { type: 'auction_cancel'; auctionId: string }
+  | { type: 'lend'; artistId: string; weeks: number; fee: number }
+  | { type: 'lend_cancel'; lendingId: string }
+  | { type: 'borrow'; lendingId: string }
   | { type: 'loan'; amount: number; weeks: 8 | 16 | 24 };
 
 const labelOfOwner = (world: World, ownerId: string): Label => {
@@ -197,7 +205,7 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
       cancelDeal(world, label, action.dealId);
       return;
     case 'transfer_ask':
-      askTransfer(world, label, action.artistId, action.fee);
+      askTransfer(world, label, action.artistId, action.fee, action.swapId ?? null);
       return;
     case 'transfer_answer':
       answerTransfer(world, label, action.transferId, action.answer, action.fee);
@@ -349,10 +357,30 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
       cheerUp(world, label, action.kind, action.artistId);
       return;
     case 'raise':
+      notLent(world, action.artistId, 'augmenter');
       raisePay(world, label, action.artistId);
       return;
     case 'genre_change':
+      notLent(world, action.artistId, 'changer de genre');
       changeGenre(world, label, action.artistId, action.genre);
+      return;
+    case 'auction_start':
+      startAuction(world, label, action.artistId, action.start, action.weeks, action.reserve);
+      return;
+    case 'auction_bid':
+      bid(world, label, action.auctionId, action.amount);
+      return;
+    case 'auction_cancel':
+      cancelAuction(world, label, action.auctionId);
+      return;
+    case 'lend':
+      listLoan(world, label, action.artistId, action.weeks, action.fee);
+      return;
+    case 'lend_cancel':
+      cancelListing(world, label, action.lendingId);
+      return;
+    case 'borrow':
+      borrow(world, label, action.lendingId);
       return;
     case 'genre_wish_refuse':
       refuseWish(world, label, action.artistId);
@@ -410,6 +438,13 @@ export interface RosterView extends ArtistView {
   clause: number | null;
   /** The note his songs turn around, with choices that fit. */
   expectedNote: number;
+  /** Borrowed from another label: who lent him and when he goes back. */
+  loan: { lenderName: string; weeksLeft: number } | null;
+  /** Up for auction, or listed for a loan. */
+  onAuction: boolean;
+  lendListed: boolean;
+  /** Fair loan fee for 8 weeks, to start from; and his value, to set an auction. */
+  fairFee: number;
 }
 
 export interface SongView {
@@ -551,6 +586,9 @@ export interface MelodyView {
   /** Featuring requests with other players, sent and received. */
   featDeals: FeatDealView[];
   transfers: TransferView[];
+  /** Auctions of the server, and the artists lent between labels. */
+  auctions: AuctionView[];
+  lendings: LendingView[];
   clashes: ClashView[];
   projects: ProjectView[];
   tours: TourView[];
@@ -638,6 +676,12 @@ const toggleFavourite = (world: World, label: Label, artistId: string): void => 
   world.favourites = { ...world.favourites, [label.id]: next };
 };
 
+/** A borrowed artist stays as he is: his own label decides on his contract, his pay and his genre. */
+const notLent = (world: World, artistId: string, what: string): void => {
+  const artist = world.artists[artistId];
+  if (artist && contractOf(world, artistId)?.loan) throw new GameError(`${artist.name} est prêté : tu ne peux pas ${what}.`);
+};
+
 /** Weeks an artist stays before the label can sell him. */
 const SELL_AFTER = 8;
 
@@ -650,6 +694,9 @@ const sellArtist = (world: World, label: Label, artistId: string): void => {
   if (contractOf(world, artistId)?.labelId !== label.id) throw new GameError(`${artist.name} n'est pas dans ton label.`);
   if (sessionOf(world, label.id)?.artistId === artistId) throw new GameError('Il est en studio : finis ou quitte la session.');
   if (tutorialView(world, label.id)) throw new GameError('Finis le tutoriel avant de vendre un artiste.');
+  if (contractOf(world, artistId)?.loan) throw new GameError(`${artist.name} est prêté : il n’est pas à toi.`);
+  if (auctionOf(world, artistId)) throw new GameError(`${artist.name} est aux enchères.`);
+  if (world.lendings?.some((l) => l.artistId === artistId && l.status === 'listed')) throw new GameError(`${artist.name} est proposé en prêt. Retire d’abord l’annonce.`);
   // No quick flip: an artist signed (or promoted from the academy) stays at least a few weeks.
   const since = world.tick - (contractOf(world, artistId)?.startTick ?? 0);
   if (since < SELL_AFTER) throw new GameError(`${artist.name} vient de signer : tu pourras le vendre dans ${SELL_AFTER - since} semaine${SELL_AFTER - since > 1 ? 's' : ''}.`);
@@ -739,6 +786,10 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
         salePrice: salePrice(artist),
         clause: clauseOf(world, artist.id),
         expectedNote: Math.round(generalRating(artist) + experienceBonus(world, artist)),
+        loan: contract?.loan ? { lenderName: world.labels[contract.loan.lenderId]?.name ?? '?', weeksLeft: Math.max(0, contract.loan.until - world.tick) } : null,
+        onAuction: !!auctionOf(world, artist.id),
+        lendListed: (world.lendings ?? []).some((l) => l.artistId === artist.id && l.status === 'listed'),
+        fairFee: fairFee(world, artist.id, 8),
       };
     }),
     songs: label
@@ -790,6 +841,8 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     tutorial: label ? tutorialView(world, label.id) : null,
     featDeals: label ? dealsView(world, label.id) : [],
     transfers: label ? transfersView(world, label.id) : [],
+    auctions: label ? auctionsView(world, label.id) : [],
+    lendings: label ? lendingsView(world, label.id) : [],
     clashes: label ? clashesView(world, label.id) : [],
     projects: label ? projectsView(world, label.id) : [],
     tours: label ? toursView(world, label.id) : [],

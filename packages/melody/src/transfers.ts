@@ -5,6 +5,8 @@
 import { generalRating } from './artists.ts';
 import { contractOf, rosterOf } from './economy.ts';
 import { CFG } from './config.ts';
+import { sessionOf } from './studio.ts';
+import { tourOf } from './tours.ts';
 import type { GenreId, Label, World } from './types.ts';
 import { GameError } from './world.ts';
 
@@ -31,6 +33,10 @@ export interface Transfer {
   signBy: number;
   /** The price matched the release clause: the seller had no say. */
   byClause: boolean;
+  /** One of the buyer's artists offered on top of (or instead of) the money. */
+  swapId?: string;
+  /** Won at an auction. */
+  auctionId?: string;
   updatedTick: number;
 }
 
@@ -64,6 +70,7 @@ export const setClause = (world: World, label: Label, artistId: string, amount: 
   const artist = world.artists[artistId] ?? fail('Artiste introuvable.');
   const contract = contractOf(world, artistId);
   if (!contract || contract.labelId !== label.id) fail(`${artist.name} n'est pas dans ton label.`);
+  if (contract!.loan) fail(`${artist.name} est prêté : pas de clause pendant le prêt.`);
   if (amount === null) {
     delete contract!.releaseClause;
     return;
@@ -91,13 +98,38 @@ const agree = (world: World, t: Transfer): void => {
   if (artist && buyer && seller) news(world, `${buyer.name} et ${seller.name} sont d'accord pour ${artist.name} (${t.fee.toLocaleString('fr-FR')} €). Il doit encore signer.`);
 };
 
-/** The buyer offers a price for an artist of another player. Matching the release clause makes it agreed at once. */
-export const askTransfer = (world: World, label: Label, artistId: string, fee: number): Transfer => {
+/** Weeks an artist stays before his label can trade him (as for a sale). */
+const SWAP_AFTER = 8;
+
+/** Why this artist of the buyer cannot be offered in exchange, or null. */
+export const swapBlocked = (world: World, buyerId: string, swapId: string): string | null => {
+  const artist = world.artists[swapId];
+  const contract = contractOf(world, swapId);
+  if (!artist || !contract || contract.labelId !== buyerId) return 'Cet artiste n’est pas dans ton label.';
+  if (contract.loan) return `${artist.name} est prêté.`;
+  if (world.auctions?.some((a) => a.artistId === swapId && (a.status === 'open' || a.status === 'signing'))) return `${artist.name} est aux enchères.`;
+  if (world.lendings?.some((l) => l.artistId === swapId && l.status === 'listed')) return `${artist.name} est proposé en prêt.`;
+  const since = world.tick - contract.startTick;
+  if (since < SWAP_AFTER) return `${artist.name} vient de signer : échange possible dans ${SWAP_AFTER - since} sem.`;
+  if (sessionOf(world, buyerId)?.artistId === swapId) return `${artist.name} est en studio.`;
+  if (tourOf(world, swapId)) return `${artist.name} a une tournée prévue.`;
+  return null;
+};
+
+/** The buyer offers a price for an artist of another player, maybe with one of his own artists in exchange. Matching the release clause makes it agreed at once. */
+export const askTransfer = (world: World, label: Label, artistId: string, fee: number, swapId?: string | null): Transfer => {
   const artist = world.artists[artistId] ?? fail('Artiste introuvable.');
+  if (contractOf(world, artistId)?.loan) return fail(`${artist.name} est prêté : attends son retour.`);
   const seller = playerLabelOf(world, artistId);
   if (!seller || seller.id === label.id) return fail(`${artist.name} n'est pas chez un autre joueur.`);
+  if (world.auctions?.some((a) => a.artistId === artistId && (a.status === 'open' || a.status === 'signing'))) return fail(`${artist.name} est aux enchères : enchéris dans le Marché.`);
+  const swap = swapId ? swapId : undefined;
+  if (swap) {
+    const why = swapBlocked(world, label.id, swap);
+    if (why) return fail(why);
+  }
   const price = Math.round(fee);
-  if (price < 1) return fail('Propose une somme.');
+  if (price < (swap ? 0 : 1)) return fail('Propose une somme.');
   if (price > label.cash) return fail('Pas assez de cash pour cette offre.');
   const max = CFG.tiers.maxArtists[label.tier - 1] ?? 5;
   if (rosterOf(world, label.id).length >= max) return fail('Ton effectif est complet pour ce palier.');
@@ -116,6 +148,7 @@ export const askTransfer = (world: World, label: Label, artistId: string, fee: n
     answerBy: world.tick + TRANSFERS.answerTicks,
     signBy: 0,
     byClause: false,
+    ...(swap ? { swapId: swap } : {}),
     updatedTick: world.tick,
   };
   world.nextId += 1;
@@ -149,7 +182,7 @@ export const answerTransfer = (world: World, label: Label, id: string, answer: '
   }
   if (answer === 'counter') {
     const price = Math.round(fee ?? 0);
-    if (price < 1) fail('Propose une somme.');
+    if (price < (t.swapId ? 0 : 1)) fail('Propose une somme.');
     if (price === t.fee) fail('Change le prix, ou accepte celui-ci.');
     t.fee = price;
     t.turn = t.turn === 'seller' ? 'buyer' : 'seller';
@@ -182,21 +215,42 @@ export const completeTransfer = (world: World, buyer: Label, artistId: string): 
   if (!seller || playerLabelOf(world, artistId)?.id !== seller.id) fail(`${artist.name} n'est plus dans ce label.`);
   if (world.sessions?.[seller!.id]?.artistId === artistId) fail(`${artist.name} est en studio chez ${seller!.name}. Réessaie après sa session.`);
   if (buyer.cash < t.fee) fail('Pas assez de cash pour payer le transfert.');
+  const swap = t.swapId ? world.artists[t.swapId] : undefined;
+  if (t.swapId) {
+    const why = swapBlocked(world, buyer.id, t.swapId);
+    if (why) fail(`Échange impossible : ${why}`);
+  }
   buyer.cash -= t.fee;
   seller!.cash += t.fee;
   seller!.stats.revenueTotal += t.fee;
   world.contracts = world.contracts.filter((c) => c.artistId !== artistId);
   world.gigs = world.gigs.filter((g) => g.artistId !== artistId);
+  // The artist given in exchange joins the seller with his contract as it is.
+  if (swap) {
+    const contract = contractOf(world, swap.id)!;
+    contract.labelId = seller!.id;
+    contract.startTick = world.tick;
+    delete contract.releaseClause;
+    world.gigs = world.gigs.filter((g) => g.artistId !== swap.id);
+  }
   t.status = 'done';
   t.updatedTick = world.tick;
-  // Every other offer for him is over.
+  // Every other offer for him (and for the one given in exchange) is over.
   for (const other of transfersOf(world)) {
-    if (other !== t && other.artistId === artistId && isOpen(other)) {
+    if (other !== t && (other.artistId === artistId || (swap && (other.artistId === swap.id || other.swapId === swap.id))) && isOpen(other)) {
       other.status = 'cancelled';
       other.updatedTick = world.tick;
     }
   }
-  news(world, `Transfert : ${artist.name} quitte ${seller!.name} pour ${buyer.name} (${t.fee.toLocaleString('fr-FR')} €).`);
+  if (!t.auctionId) news(world, `Transfert : ${artist.name} quitte ${seller!.name} pour ${buyer.name} (${t.fee.toLocaleString('fr-FR')} €${swap ? ` + ${swap.name}` : ''}).`);
+};
+
+/** The artist walked out of the talks: the agreement falls at once (at an auction, the next bidder gets his chance). */
+export const dropAgreed = (world: World, buyerId: string, artistId: string): void => {
+  const t = agreedTransfer(world, buyerId, artistId);
+  if (!t) return;
+  t.status = 'expired';
+  t.updatedTick = world.tick;
 };
 
 /** Weekly: unanswered prices become a no, unsigned agreements fall, old ones are forgotten. */
@@ -230,6 +284,9 @@ export interface TransferView {
   status: TransferStatus;
   myTurn: boolean;
   byClause: boolean;
+  /** The artist offered in exchange, if any. */
+  swap: { id: string; name: string; gen: number } | null;
+  fromAuction: boolean;
   /** Weeks left to answer (pending) or for the artist to sign (agreed). */
   weeksLeft: number;
 }
@@ -252,6 +309,8 @@ export const transfersView = (world: World, labelId: string): TransferView[] =>
         status: t.status,
         myTurn: t.status === 'pending' && (t.turn === 'seller') !== sent,
         byClause: t.byClause,
+        swap: t.swapId && world.artists[t.swapId] ? { id: t.swapId, name: world.artists[t.swapId]!.name, gen: generalRating(world.artists[t.swapId]!) } : null,
+        fromAuction: !!t.auctionId,
         weeksLeft: Math.max(0, (t.status === 'agreed' ? t.signBy : t.answerBy) - world.tick),
       } satisfies TransferView;
     })

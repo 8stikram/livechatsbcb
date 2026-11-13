@@ -279,3 +279,18 @@ Choix du propriétaire : **profils cachés + hauts et bas**, **une dizaine de ta
 - **Envie de changer** : un artiste créatif avec au moins 6 sorties demande parfois à passer à un autre genre. Oui : moitié prix et moral +10. Non, ou pas de réponse en 4 semaines : moral −5. Un point rouge sur l'onglet Effectif prévient.
 - **Bilan des progrès** : une ligne chaque semaine dans le bilan (« Progrès de la semaine : X +1 · Y −1 »).
 - **Courbe de la note** : les 28 dernières semaines dans la fiche de l'artiste, avec le gain ou la perte.
+
+## Étape 16 — enchères, prêts et échanges (fait)
+
+Choix du propriétaire : **enchères simples**, **prêt simple**, **les potes + les labels du jeu**, et les plus « alerte dépassé », « échange d'artistes » et « prix de réserve secret ». **Pas de fil de la partie, pas de prix d'achat immédiat, pas d'option d'achat sur un prêt.**
+
+- **Mettre aux enchères** (fiche de l'artiste) : un prix de départ, 1, 2 ou 3 semaines, et un **prix de réserve secret** si on veut. Possible 8 semaines après sa signature, pas pendant le studio, pas s'il est prêté. 2 enchères ouvertes par label, 40 par serveur.
+- **Enchérir** (Marché, en haut) : au moins 5 % de plus que la meilleure offre (100 € minimum). Il faut l'argent et une place dans l'effectif. Le vendeur peut annuler tant qu'aucun joueur n'a enchéri.
+- **Labels du jeu** : un label du jeu de niveau suffisant enchérit aussi, jusqu'à 55 à 100 % de la valeur de l'artiste (caché). Il monte jusqu'à la réserve s'il en a les moyens. S'il gagne, il paie et l'artiste part chez lui.
+- **Alerte dépassé** : dès qu'on est dépassé, une ligne dans le bilan et un point rouge sur l'onglet Marché.
+- **Fin de l'enchère** : le gagnant doit ensuite **négocier le contrat** avec l'artiste (comme un transfert). S'il échoue, la meilleure offre suivante a sa chance la semaine d'après. Si personne n'atteint la réserve : « Personne n'a atteint ton prix de réserve », l'artiste reste.
+- **Prêter un artiste** (fiche de l'artiste) : 4 à 14 semaines, des frais choisis (un « prix juste » est proposé). Il faut que son contrat dure plus longtemps que le prêt. 3 offres par label, 60 par serveur. Une offre reste 4 semaines au Marché.
+- **Pendant le prêt** : le label qui l'emprunte paie les frais, garde **70 %** de ce que l'artiste rapporte (streams, concerts, tournées), les 30 % vont au prêteur. **Les sons faits pendant le prêt restent** au label qui l'emprunte. Son contrat est gelé : pas de vente, d'enchère, de clause, de renouvellement, de changement de genre ni d'augmentation. Une tournée doit finir avant son retour.
+- **Labels du jeu** : environ 3 fois sur 10, un label du jeu prend une offre de prêt au prix juste ou moins, et verse aussi 30 %.
+- **Retour** : l'artiste rentre à la fin, ou plus tôt si le label qui l'emprunte fait faillite. Si le prêteur a fait faillite, il est libre.
+- **Échange d'artistes** : dans une offre de transfert à un pote, on peut ajouter un de ses artistes en plus (ou à la place) de l'argent. Possible 8 semaines après sa signature.

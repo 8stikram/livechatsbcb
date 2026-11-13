@@ -46,6 +46,15 @@ export {
   TRANSFERS, askTransfer, answerTransfer, cancelTransfer, completeTransfer, setClause, clauseOf, agreedTransfer, transfersView, tickTransfers,
   type Transfer, type TransferStatus, type TransferView,
 } from './transfers.ts';
+export { swapBlocked, dropAgreed } from './transfers.ts';
+export {
+  AUCTIONS, auctionOf, auctionsView, bid, cancelAuction, nextBid, startAuction, tickAuctions,
+  type Auction, type AuctionStatus, type AuctionView, type Bid,
+} from './auctions.ts';
+export {
+  LENDING, borrow, cancelListing, fairFee, lendingsView, listLoan, loanOf, returnLoans, shareLoan, tickLending,
+  type Lending, type LendingStatus, type LendingView,
+} from './lending.ts';
 export {
   CLASH, startClash, answerClash, refuseClash, throwShade, answerInterview, interviewView, shadeView, clashesView, rivalsView, rivalsOf, tickClashes,
   type Clash, type ClashStatus, type Tone, type ClashView, type RivalView, type InterviewView, type ShadeView,

@@ -2,7 +2,7 @@
 // counter-offers and grudges. Also used to renew the contract of an artist already in the label.
 // Every draw comes from the world's seed: asking twice gives the same answer.
 import { generalRating } from './artists.ts';
-import { agreedTransfer, completeTransfer } from './transfers.ts';
+import { agreedTransfer, completeTransfer, dropAgreed } from './transfers.ts';
 import { CFG } from './config.ts';
 import { contractOf, fameTier, rosterOf } from './economy.ts';
 import { clamp, rngFor } from './rng.ts';
@@ -80,6 +80,7 @@ export const talkBlocked = (world: World, label: Label, artist: Artist): string 
       const max = CFG.tiers.maxArtists[label.tier - 1] ?? 5;
       return rosterOf(world, label.id).length >= max ? 'Effectif complet' : null;
     }
+    if (contract.loan) return 'Prêté : pas de renouvellement';
     if (contract.endTick - world.tick > TALK.renewWindow) return 'Contrat encore long';
     return null;
   }
@@ -280,6 +281,7 @@ export const makeOffer = (world: World, label: Label, artistId: string, raw: Off
   if (score < 40 && !guided) {
     say('vexed', line(world, talk, 'vexed'));
     closeTalk(world, talk, TALK.grudgeTicks, true);
+    if (!talk.renewal) dropAgreed(world, label.id, artistId);
     if (talk.renewal) {
       const artist = world.artists[artistId];
       if (artist) artist.morale = clamp(artist.morale - 10, 0, 100);
@@ -310,6 +312,7 @@ export const makeOffer = (world: World, label: Label, artistId: string, raw: Off
   if (talk.patience <= 0 || talk.rounds >= TALK.maxRounds) {
     say('tired', line(world, talk, 'tired'));
     closeTalk(world, talk, TALK.retryTicks, false);
+    if (!talk.renewal) dropAgreed(world, label.id, artistId);
     return 'tired';
   }
   return mood;

@@ -130,6 +130,8 @@ export const announceTour = (
   const dates = Math.round(request.dates);
   if (dates < TOURS.minDates || dates > TOURS.maxDates) fail(`Une tournée a ${TOURS.minDates} à ${TOURS.maxDates} dates.`);
   if (tourOf(world, artist.id)) fail(`${artist.name} a déjà une tournée prévue.`);
+  const loan = contractOf(world, artist.id)?.loan;
+  if (loan && world.tick + TOURS.notice + weeksOf(dates) > loan.until) fail(`${artist.name} rentre de prêt avant la fin de cette tournée.`);
   if (artist.energy < TOURS.minEnergy) fail(`${artist.name} est trop fatigué pour partir en tournée.`);
   const unwilling = moraleBlock(world, artist, 'tour');
   if (unwilling) fail(unwilling);
@@ -249,7 +251,7 @@ const roadEvent = (rng: Rng, artist: Artist): RoadEvent => {
 /** Weekly: the tours on the road play their dates, sell merch and write their story. */
 export const tickTours = (
   world: World,
-  pay: (labelId: string, amount: number) => void,
+  pay: (labelId: string, amount: number, artistId?: string) => void,
   tell: (labelId: string, text: string) => void,
 ): Set<string> => {
   const busy = new Set<string>();
@@ -314,7 +316,7 @@ export const tickTours = (
     // The money: a co-headliner from another player takes his share.
     const total = Math.round(money + merch);
     const theirs = partner && tour.partner!.labelId !== label.id ? Math.round(Math.max(0, total) * TOURS.partnerShare) : 0;
-    pay(label.id, total - theirs);
+    pay(label.id, total - theirs, artist.id);
     if (theirs > 0) pay(tour.partner!.labelId, theirs);
     tour.totals.audience += crowd;
     tour.totals.money += total - theirs;

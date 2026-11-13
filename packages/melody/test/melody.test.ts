@@ -8,6 +8,7 @@ import {
   releaseBlocked, promoViews, secretCombos, trendOf, rollSurprise, langOf, inventTitle, academyOf, LOOKS, lookOf, parseLook, seasonsOf,
   STAFF, staffOf, staffWage, coachBoost, producerShare, houseProducer, viewsBoost, crowdBoost, gigEnergy,
   MORALE, RANKS, ranksOf, isLeader, worriesOf, moraleBlock, tickMorale, dynamicsView,
+  shareLoan, returnLoans,
   SKILL_IDS, skillsOf, skillLevel, skillPlus, stageBoost, tirelessFactor, PROFILES, EVOLUTION, GENRE_CHANGE, profileOf, profileGrowth, afterRelease, tickEvolution, GENRES,
 } from '../src/index.ts';
 import type { Artist, StaffMember, World } from '../src/index.ts';
@@ -1504,5 +1505,203 @@ describe('évolution des artistes', () => {
     for (let i = 0; i < 40; i += 1) runTick(world);
     expect(artist.genHistory!.length).toBe(EVOLUTION.history);
     expect(buildView(world, 'u1').roster[0]!.evolution!.history).toHaveLength(EVOLUTION.history);
+  });
+});
+
+describe('enchères, prêts et échanges', () => {
+  const labels = (count = 3) => {
+    const world = createWorld(42);
+    const users = ['u1', 'u2', 'u3'].slice(0, count);
+    for (const user of users) {
+      applyAction(world, user, { type: 'found', name: `Label ${user}` });
+      applyAction(world, user, { type: 'tuto', move: 'skip' });
+    }
+    const [seller, buyer, third] = users.map((u) => Object.values(world.labels).find((l) => l.ownerId === u)!);
+    for (const l of [seller, buyer, third]) if (l) l.cash = 200_000;
+    // Old enough contracts, long enough to lend.
+    for (const c of world.contracts) {
+      if (world.labels[c.labelId]?.kind !== 'player') continue;
+      c.startTick = -20;
+      c.endTick = 1_000;
+    }
+    const artist = rosterOf(world, seller!.id)[0]!;
+    return { world, seller: seller!, buyer: buyer!, third: third!, artist };
+  };
+  const generous = (artist: Artist) => {
+    const e = expectedOffer(artist);
+    return { advance: Math.round(e.advance * 1.5) + 500, royaltyRate: Math.min(0.5, e.royaltyRate * 1.5), months: 12 as const, weeklyAllowance: 100 };
+  };
+  // No label of the game in this auction: only the friends bid.
+  const quiet = (world: World): string => {
+    const a = world.auctions!.at(-1)!;
+    a.npc = null;
+    a.bids = [];
+    return a.id;
+  };
+
+  it('sells to the best friend at the end, who then signs the artist', () => {
+    const { world, seller, buyer, artist } = labels(2);
+    applyAction(world, 'u1', { type: 'auction_start', artistId: artist.id, start: 1_000, weeks: 2, reserve: null });
+    const id = quiet(world);
+    expect(() => applyAction(world, 'u1', { type: 'sell', artistId: artist.id })).toThrow(/enchères/);
+    expect(() => applyAction(world, 'u2', { type: 'auction_bid', auctionId: id, amount: 900 })).toThrow(/au moins/);
+    applyAction(world, 'u2', { type: 'auction_bid', auctionId: id, amount: 1_000 });
+    expect(buildView(world, 'u2').auctions[0]).toMatchObject({ best: { amount: 1_000, mine: true }, nextBid: 1_100 });
+    expect(() => applyAction(world, 'u1', { type: 'auction_cancel', auctionId: id })).toThrow(/déjà enchéri/);
+    runTick(world);
+    expect(world.auctions![0]!.status).toBe('open');
+    const told = runTick(world).labels[buyer.id]!.events;
+    expect(told.some((t) => t.includes('remportes'))).toBe(true);
+    expect(world.auctions![0]!.status).toBe('signing');
+    expect(buildView(world, 'u2').transfers[0]).toMatchObject({ status: 'agreed', fromAuction: true, fee: 1_000 });
+    const cash = seller.cash;
+    applyAction(world, 'u2', { type: 'offer', artistId: artist.id, offer: generous(artist) });
+    expect(contractOf(world, artist.id)!.labelId).toBe(buyer.id);
+    expect(seller.cash).toBe(cash + 1_000);
+    runTick(world);
+    expect(world.auctions![0]!.status).toBe('sold');
+  });
+
+  it('tells the outbid friend, and gives the next one his chance when the winner does not sign', () => {
+    const { world, seller, buyer, third, artist } = labels(3);
+    applyAction(world, 'u1', { type: 'auction_start', artistId: artist.id, start: 1_000, weeks: 1, reserve: null });
+    const id = quiet(world);
+    applyAction(world, 'u2', { type: 'auction_bid', auctionId: id, amount: 1_000 });
+    applyAction(world, 'u3', { type: 'auction_bid', auctionId: id, amount: 2_000 });
+    expect(buildView(world, 'u2').auctions[0]!.outbid).toBe(true);
+    let report = runTick(world);
+    expect(report.labels[buyer.id]!.events.some((t) => t.includes('plus que toi'))).toBe(true);
+    expect(report.labels[third.id]!.events.some((t) => t.includes('remportes'))).toBe(true);
+    // The winner lets the two weeks pass: the next bidder gets the artist's talks.
+    runTick(world);
+    report = runTick(world);
+    if (!report.labels[buyer.id]!.events.some((t) => t.includes('remportes'))) report = runTick(world);
+    expect(report.labels[buyer.id]!.events.some((t) => t.includes('remportes'))).toBe(true);
+    expect(buildView(world, 'u2').transfers.find((t) => t.status === 'agreed')!.fee).toBe(1_000);
+    expect(contractOf(world, artist.id)!.labelId).toBe(seller.id);
+  });
+
+  it('keeps the reserve secret and does not sell under it', () => {
+    const { world, seller, artist } = labels(2);
+    applyAction(world, 'u1', { type: 'auction_start', artistId: artist.id, start: 1_000, weeks: 1, reserve: 50_000 });
+    const id = quiet(world);
+    applyAction(world, 'u2', { type: 'auction_bid', auctionId: id, amount: 3_000 });
+    expect(buildView(world, 'u2').auctions[0]).toMatchObject({ reserve: null, reserveMet: false });
+    expect(buildView(world, 'u1').auctions[0]).toMatchObject({ reserve: 50_000, reserveMet: false });
+    const told = runTick(world).labels[seller.id]!.events;
+    expect(told.some((t) => t.includes('prix de réserve'))).toBe(true);
+    expect(world.auctions![0]!.status).toBe('unsold');
+    expect(contractOf(world, artist.id)!.labelId).toBe(seller.id);
+  });
+
+  it('lets a label of the game bid up to its price, and buy at once when it wins', () => {
+    const { world, seller, artist } = labels(2);
+    const npc = Object.values(world.labels).find((l) => l.kind === 'npc' && !l.bankrupt)!;
+    applyAction(world, 'u1', { type: 'auction_start', artistId: artist.id, start: 1_000, weeks: 1, reserve: null });
+    const a = world.auctions![0]!;
+    a.bids = [];
+    a.npc = { labelId: npc.id, max: 5_000 };
+    applyAction(world, 'u2', { type: 'auction_bid', auctionId: a.id, amount: 1_000 });
+    expect(a.bids.at(-1)).toMatchObject({ labelId: npc.id, amount: 1_100 });
+    applyAction(world, 'u2', { type: 'auction_bid', auctionId: a.id, amount: 4_000 });
+    expect(a.bids.at(-1)).toMatchObject({ labelId: npc.id, amount: 4_200 });
+    const cash = seller.cash;
+    // The friend gives up: the label of the game wins and pays at once.
+    runTick(world);
+    expect(a.status).toBe('sold');
+    expect(contractOf(world, artist.id)!.labelId).toBe(npc.id);
+    expect(seller.cash).toBeGreaterThanOrEqual(cash + 4_200 - 5_000);
+    // A label of the game is always interested in a fresh auction, when the start price is fair.
+    const { world: w2, artist: other } = labels(2);
+    applyAction(w2, 'u1', { type: 'auction_start', artistId: other.id, start: 1, weeks: 1, reserve: null });
+    expect(w2.auctions![0]!.bids[0]!.amount).toBe(1);
+  });
+
+  it('lends an artist: fee, 70/30 split, rules frozen, and back home at the end', () => {
+    const { world, seller: lender, buyer: borrower, artist } = labels(2);
+    applyAction(world, 'u1', { type: 'lend', artistId: artist.id, weeks: 4, fee: 2_000 });
+    const offer = buildView(world, 'u2').lendings.find((l) => l.side === 'offer')!;
+    expect(offer).toMatchObject({ fee: 2_000, weeks: 4, blocked: null });
+    applyAction(world, 'u2', { type: 'borrow', lendingId: offer.id });
+    expect(lender.cash).toBe(202_000);
+    expect(borrower.cash).toBe(198_000);
+    expect(contractOf(world, artist.id)).toMatchObject({ labelId: borrower.id, loan: { lenderId: lender.id } });
+    expect(buildView(world, 'u2').roster.find((a) => a.id === artist.id)!.loan).toMatchObject({ weeksLeft: 4 });
+    expect(buildView(world, 'u2').roster.find((a) => a.id === artist.id)!.renewBlocked).toMatch(/Prêté/);
+    expect(() => applyAction(world, 'u2', { type: 'sell', artistId: artist.id })).toThrow(/prêté/);
+    expect(() => applyAction(world, 'u2', { type: 'clause', artistId: artist.id, amount: 10 })).toThrow(/prêté/);
+    expect(() => applyAction(world, 'u2', { type: 'raise', artistId: artist.id })).toThrow(/prêté/);
+    expect(() => applyAction(world, 'u2', { type: 'tour', artistId: artist.id, dates: 12 })).toThrow(/rentre de prêt/);
+    // The 30 % of what he earns go back to his label; old money stays where it is.
+    const paid: number[] = [];
+    expect(shareLoan(world, artist.id, borrower.id, 1_000, (_, cut) => paid.push(cut))).toBe(700);
+    expect(paid).toEqual([300]);
+    expect(shareLoan(world, artist.id, borrower.id, 1_000, () => paid.push(-1), world.tick - 5)).toBe(1_000);
+    let told: string[] = [];
+    for (let i = 0; i < 4; i += 1) told = runTick(world).labels[lender.id]!.events;
+    expect(told.some((t) => t.includes('rentre de prêt'))).toBe(true);
+    expect(contractOf(world, artist.id)!.labelId).toBe(lender.id);
+    expect(contractOf(world, artist.id)!.loan).toBeUndefined();
+  });
+
+  it('lets a label of the game borrow a fair listing, and sends the lender his share', () => {
+    const { world, seller: lender, artist } = labels(1);
+    let taken = false;
+    for (let round = 0; round < 15 && !taken; round += 1) {
+      applyAction(world, 'u1', { type: 'lend', artistId: artist.id, weeks: 4, fee: 0 });
+      for (let i = 0; i < 4 && !taken; i += 1) {
+        runTick(world);
+        taken = world.labels[contractOf(world, artist.id)!.labelId]!.kind === 'npc';
+      }
+      while (!taken && world.lendings!.some((l) => l.status === 'listed')) runTick(world);
+    }
+    expect(taken).toBe(true);
+    const lending = world.lendings!.find((l) => l.status === 'running')!;
+    runTick(world);
+    expect(lending.earned).toBeGreaterThan(0);
+    for (let i = 0; i < 4; i += 1) runTick(world);
+    expect(contractOf(world, artist.id)!.labelId).toBe(lender.id);
+  });
+
+  it('sends a borrowed artist home when the borrower goes bankrupt', () => {
+    const { world, seller: lender, buyer: borrower, artist } = labels(2);
+    applyAction(world, 'u1', { type: 'lend', artistId: artist.id, weeks: 6, fee: 0 });
+    applyAction(world, 'u2', { type: 'borrow', lendingId: world.lendings![0]!.id });
+    returnLoans(world, borrower.id, () => {});
+    expect(contractOf(world, artist.id)!.labelId).toBe(lender.id);
+  });
+
+  it('trades an artist of the buyer in a transfer, with or without money', () => {
+    const { world, seller, buyer, artist } = labels(2);
+    const mine = rosterOf(world, buyer.id)[0]!;
+    applyAction(world, 'u2', { type: 'transfer_ask', artistId: artist.id, fee: 0, swapId: mine.id });
+    const received = buildView(world, 'u1').transfers[0]!;
+    expect(received.swap).toMatchObject({ id: mine.id, name: mine.name });
+    applyAction(world, 'u1', { type: 'transfer_answer', transferId: received.id, answer: 'accept' });
+    applyAction(world, 'u2', { type: 'offer', artistId: artist.id, offer: generous(artist) });
+    expect(contractOf(world, artist.id)!.labelId).toBe(buyer.id);
+    expect(contractOf(world, mine.id)!.labelId).toBe(seller.id);
+    expect(() => applyAction(world, 'u2', { type: 'transfer_ask', artistId: mine.id, fee: 0 })).toThrow(/somme/);
+  });
+});
+
+describe('enchères : le label du jeu et la réserve', () => {
+  it('goes up to the reserve when its price allows it', () => {
+    const world = createWorld(42);
+    for (const user of ['u1', 'u2']) {
+      applyAction(world, user, { type: 'found', name: `Label ${user}` });
+      applyAction(world, user, { type: 'tuto', move: 'skip' });
+    }
+    const seller = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    Object.values(world.labels).find((l) => l.ownerId === 'u2')!.cash = 50_000;
+    const artist = rosterOf(world, seller.id)[0]!;
+    contractOf(world, artist.id)!.startTick = -20;
+    applyAction(world, 'u1', { type: 'auction_start', artistId: artist.id, start: 100, weeks: 1, reserve: 2_000 });
+    const a = world.auctions![0]!;
+    a.bids = [];
+    a.npc = { labelId: Object.values(world.labels).find((l) => l.kind === 'npc')!.id, max: 3_000 };
+    applyAction(world, 'u2', { type: 'auction_bid', auctionId: a.id, amount: 100 });
+    expect(a.bids.at(-1)).toMatchObject({ labelId: a.npc.labelId, amount: 2_000 });
+    expect(buildView(world, 'u2').auctions[0]).toMatchObject({ reserveMet: true, outbid: true });
   });
 });

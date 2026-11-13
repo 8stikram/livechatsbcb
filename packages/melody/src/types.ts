@@ -128,6 +128,8 @@ export interface Contract {
   royaltyRate: number;
   /** Price at which another player can buy him without asking (transfers between players). */
   releaseClause?: number;
+  /** Lent to the label in labelId until this tick: he then goes back to the lender. */
+  loan?: { id: string; lenderId: string; startTick: number; until: number };
 }
 
 export type LabelKind = 'player' | 'npc';
@@ -298,6 +300,9 @@ export interface World {
   /** Featuring requests between players. */
   featDeals?: import('./featdeals.ts').FeatDeal[];
   transfers?: import('./transfers.ts').Transfer[];
+  auctions?: import('./auctions.ts').Auction[];
+  /** Artists lent between labels. */
+  lendings?: import('./lending.ts').Lending[];
   clashes?: import('./clash.ts').Clash[];
   projects?: import('./projects.ts').Project[];
   tours?: import('./tours.ts').Tour[];
