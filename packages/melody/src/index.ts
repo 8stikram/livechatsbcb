@@ -71,6 +71,13 @@ export {
   MORALE, RANKS, RANK_NAMES, ranksOf, payOf, isLeader, worriesOf, moraleBlock, cheerUp, raisePay, tickMorale, dynamicsView,
   type Rank, type CheerKind, type WorryKind, type Worry, type DynamicsView, type DynamicsArtist,
 } from './morale.ts';
+export {
+  SKILLS, SKILL_IDS, SKILL_PLUS, skillsOf, skillLevel, skillPlus, stageBoost, tirelessFactor, type SkillId,
+} from './skills.ts';
+export {
+  PROFILES, EVOLUTION, GENRE_CHANGE, profileOf, profileKnown, profileGrowth, afterRelease, genreOptions, changeGenre, refuseWish, ratingsBefore, tickEvolution, evolutionView,
+  type GrowthProfile, type GenreOption, type EvolutionView,
+} from './evolution.ts';
 export { runTick, type TickReport, type ReleaseReport, type LabelReport } from './tick.ts';
 export { simulate, STRATEGIES, type Strategy, type Snapshot } from './sim.ts';
 export { HAIRS, HATS, FACES, lookOf, parseLook, type Look, type Hair, type Hat, type Face } from './avatar.ts';

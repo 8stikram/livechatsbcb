@@ -50,6 +50,7 @@ import {
   type StaffRole,
   type StaffView,
   type DynamicsView,
+  SKILL_PLUS,
 } from '@livechatsbcb/melody';
 import type { MelodyRoute } from '../../../../shared/ipc';
 import { LibraryPicker, type Shelf } from '../LibraryPicker';
@@ -175,6 +176,7 @@ const ArtistCard = ({
     <span className="mt-card-foot">
       {artist.real && <span className="mt-real">Vrai artiste</span>}
       <span className="mt-nm">{artist.name}</span>
+      {artist.skills?.length > 0 && <span className="mt-card-skills">{artist.skills.join(' · ')}</span>}
       {energy !== undefined && <Meter value={energy} />}
       {children}
     </span>
@@ -374,6 +376,184 @@ const SellButton = ({ name, price, busy, onSell }: { name: string; price: number
   );
 };
 
+/* ---------------------------------- Evolution ---------------------------------- */
+
+const pct = (x: number): number => Math.round(x * 100);
+const lossText = ([a, b]: [number, number]): string => (b === 0 ? 'aucun fan perdu' : a === b ? `−${pct(a)} % de fans` : `−${pct(a)} à ${pct(b)} % de fans`);
+
+// His rating over the last weeks, as a small line, with how much it moved.
+const RatingCurve = ({ values }: { values: number[] }) => {
+  if (values.length < 2) return <span className="mt-sub">La courbe de sa note se dessine semaine après semaine.</span>;
+  const w = 240;
+  const h = 56;
+  const low = Math.min(...values) - 1;
+  const high = Math.max(...values) + 1;
+  const x = (i: number): number => (i / (values.length - 1)) * w;
+  const y = (v: number): number => h - ((v - low) / (high - low)) * h;
+  const first = values[0] ?? 0;
+  const last = values[values.length - 1] ?? 0;
+  const delta = last - first;
+  return (
+    <div className="mt-curve">
+      <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label={`Sa note sur ${values.length} semaines : de ${first} à ${last}`}>
+        <defs>
+          <linearGradient id="mt-curve-g" x1="0" x2="1">
+            <stop offset="0" style={{ stopColor: 'var(--mt-a1)' }} />
+            <stop offset="1" style={{ stopColor: 'var(--mt-a2)' }} />
+          </linearGradient>
+        </defs>
+        <polyline points={values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')} />
+        <circle cx={x(values.length - 1)} cy={y(last)} r="3.5" />
+      </svg>
+      <span className={`mt-curve-delta${delta > 0 ? ' is-up' : delta < 0 ? ' is-down' : ''}`}>
+        <b>
+          {delta > 0 ? '+' : delta < 0 ? '−' : ''}
+          {Math.abs(delta)}
+        </b>
+        <small>en {values.length} sem.</small>
+      </span>
+    </div>
+  );
+};
+
+// How he grows: his hidden profile, his signature skills, his rating curve, and changing genre.
+const EvolutionBlock = ({ artist, cash, onAct, busy }: { artist: RosterView; cash: number; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const [picking, setPicking] = useState(false);
+  const [sure, setSure] = useState<string | null>(null);
+  const evo = artist.evolution;
+  if (!evo) return null;
+  const toPlus = Math.max(1, SKILL_PLUS.releases - evo.releases);
+  const wish = evo.wish;
+  const wished = wish ? evo.genres.options.find((o) => o.genre === wish.genre) : undefined;
+  const options = [...evo.genres.options].sort((a, b) => Number(b.wished) - Number(a.wished) || a.loss[1] - b.loss[1] || a.name.localeCompare(b.name));
+  const close = (): void => {
+    setPicking(false);
+    setSure(null);
+  };
+  return (
+    <div className="mt-evo">
+      <div className="mt-evo-head">
+        <Label>Évolution</Label>
+        <span className={`mt-pill${evo.profile ? ' mt-pill-on' : ''}`}>{evo.profile ? evo.profile.name : 'Profil inconnu'}</span>
+      </div>
+      <span className="mt-sub">
+        {evo.profile
+          ? evo.profile.text
+          : `On saura comment il progresse dans ${evo.profileIn} semaine${evo.profileIn > 1 ? 's' : ''}. Un coach 3 étoiles le voit tout de suite.`}
+      </span>
+      <RatingCurve values={evo.history} />
+      <div className="mt-streak">
+        {[0, 1, 2].map((i) => (
+          <i key={i} className={i < evo.streak ? 'is-on' : ''} />
+        ))}
+        <span className="mt-sub">
+          {evo.streak}/3 très bons sons d’affilée : à 3, son plafond monte.
+        </span>
+      </div>
+      {evo.skills.length > 0 ? (
+        <ul className="mt-skills">
+          {evo.skills.map((s) => (
+            <li key={s.id} className={s.plus ? 'is-plus' : ''}>
+              <b>
+                {s.name}
+                {s.plus && <em>+</em>}
+              </b>
+              <span>{s.text}</span>
+              {s.next && (
+                <small>
+                  Niveau + dans {toPlus} sortie{toPlus > 1 ? 's' : ''} (ou à 80 de note) : {s.next}
+                </small>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <span className="mt-sub">Pas de talent spécial.</span>
+      )}
+      {evo.shift && (
+        <div className="mt-evo-note is-shift">
+          En transition depuis le {evo.shift.from} : un peu moins fort au studio encore {evo.shift.weeksLeft} sem.
+        </div>
+      )}
+      {evo.audienceWeeks > 0 && (
+        <div className="mt-evo-note">
+          Nouveau public : ses sons de {genreName(artist.genre)} touchent plus de nouveaux auditeurs encore {evo.audienceWeeks} sem.
+        </div>
+      )}
+      {wish && (
+        <div className="mt-deal is-turn">
+          <Avatar id={artist.id} genre={artist.genre} className="mt-deal-art" />
+          <div className="mt-deal-text">
+            <Label>Il a une envie</Label>
+            <b>Passer au {wish.name}</b>
+            <span className="mt-sub">
+              À moitié prix{wished ? ` : ${money(wished.cost)}` : ''}. Oui : moral +10. Non, ou pas de réponse dans {wish.weeksLeft} sem. : moral −5.
+              {evo.genres.blocked && ` ${evo.genres.blocked}`}
+            </span>
+          </div>
+          <div className="mt-acts mt-deal-acts">
+            <button
+              type="button"
+              className="mt-go"
+              disabled={busy || !!evo.genres.blocked || (wished?.cost ?? 0) > cash}
+              onClick={() => onAct({ type: 'genre_change', artistId: artist.id, genre: wish.genre })}
+            >
+              Oui
+            </button>
+            <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'genre_wish_refuse', artistId: artist.id })}>
+              Non
+            </button>
+          </div>
+        </div>
+      )}
+      {picking && !evo.genres.blocked ? (
+        <div className="mt-genres">
+          <div className="mt-evo-head">
+            <Label>Changer de genre</Label>
+            <button type="button" className="mt-ghost" onClick={close}>
+              Fermer
+            </button>
+          </div>
+          <span className="mt-sub">
+            Une fois par saison. Il est moins fort quelques semaines et garde son ancien genre en second. Si ce n’est pas son idée, son moral baisse de 10.
+          </span>
+          <div className="mt-genre-list">
+            {options.map((o) => (
+              <button
+                key={o.genre}
+                type="button"
+                className={`mt-genre-opt${sure === o.genre ? ' is-sure' : ''}${o.wished ? ' is-wished' : ''}`}
+                disabled={busy || o.cost > cash}
+                onBlur={() => setSure((s) => (s === o.genre ? null : s))}
+                onClick={() => {
+                  if (sure !== o.genre) return setSure(o.genre);
+                  onAct({ type: 'genre_change', artistId: artist.id, genre: o.genre });
+                  close();
+                }}
+              >
+                <b>
+                  {sure === o.genre ? `Sûr ? ${o.name}` : o.name}
+                  {o.wished && ' · son envie'}
+                </b>
+                <span>
+                  {money(o.cost)} · {o.weeks} sem. · {lossText(o.loss)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-acts">
+          <button type="button" className="mt-ghost" disabled={busy || !!evo.genres.blocked} onClick={() => setPicking(true)}>
+            Changer de genre
+          </button>
+          {evo.genres.blocked && <span className="mt-sub">{evo.genres.blocked}</span>}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Squad = ({
   view,
   picked,
@@ -515,6 +695,7 @@ const Squad = ({
               </span>
             )}
             <TourBlock key={`t${artist.id}`} view={view} artist={artist} onAct={onAct} busy={busy} />
+            <EvolutionBlock key={`e${artist.id}`} artist={artist} cash={view.label?.cash ?? 0} onAct={onAct} busy={busy} />
           </div>
         )}
       </div>
@@ -1208,7 +1389,7 @@ const Featuring = ({
           {session.guests.map((g) => (
             <div key={g.id} className="mt-offer">
               <ArtistCard
-                artist={{ id: g.id, name: g.name, real: g.real, genre: g.genre as ArtistView['genre'], gen: g.gen, potentialMin: 0, potentialMax: 0, fans: g.fans, hype: 0, value: 0 }}
+                artist={{ id: g.id, name: g.name, real: g.real, genre: g.genre as ArtistView['genre'], gen: g.gen, potentialMin: 0, potentialMax: 0, fans: g.fans, hype: 0, value: 0, skills: [] }}
                 onClick={() => {
                   if (g.blocked || busy) return;
                   if (g.dealId) {
@@ -2168,7 +2349,7 @@ const TourPlanner = ({ view, artist, onAct, onClose, busy }: { view: MelodyView;
   const [merch, setMerch] = useState(true);
   const others = view.roster.filter((a) => a.id !== artist.id);
   const partner = others.find((a) => a.id === partnerId) ?? view.tourGuests.find((g) => g.id === partnerId);
-  const quote = tourQuote(artist.fans, artist.hype, dates, merch, partner?.fans ?? 0, view.tourGuests.some((g) => g.id === partnerId), view.crowdBoost);
+  const quote = tourQuote(artist.fans, artist.hype, dates, merch, partner?.fans ?? 0, view.tourGuests.some((g) => g.id === partnerId), artist.crowd);
   const cost = quote.setup + quote.merchCost;
   return (
     <div className="mt-tourplan">
@@ -2361,7 +2542,7 @@ const Negotiation = ({
   const artist: ArtistView | undefined =
     view.market.find((a) => a.id === artistId) ??
     view.roster.find((a) => a.id === artistId) ??
-    (other ? { id: other.id, name: other.name, real: other.real, genre: other.genre, gen: other.gen, potentialMin: 0, potentialMax: 0, fans: other.fans, hype: 0, value: other.value } : undefined);
+    (other ? { id: other.id, name: other.name, real: other.real, genre: other.genre, gen: other.gen, potentialMin: 0, potentialMax: 0, fans: other.fans, hype: 0, value: other.value, skills: other.skills } : undefined);
   const hint = talk?.hint ?? { advance: 0, royaltyRate: 0.2, months: 18, weeklyAllowance: 0 };
   const [offer, setOffer] = useState<Offer>(() => ({
     advance: Math.round((hint.advance * 0.9) / 100) * 100,
@@ -2879,7 +3060,7 @@ const OtherPlayers = ({ view, onAct, busy }: { view: MelodyView; onAct: (action:
       {view.others.map((artist) => (
         <div key={artist.id} className="mt-offer">
           <ArtistCard
-            artist={{ id: artist.id, name: artist.name, real: artist.real, genre: artist.genre, gen: artist.gen, potentialMin: 0, potentialMax: 0, fans: artist.fans, hype: 0, value: 0 }}
+            artist={{ id: artist.id, name: artist.name, real: artist.real, genre: artist.genre, gen: artist.gen, potentialMin: 0, potentialMax: 0, fans: artist.fans, hype: 0, value: 0, skills: artist.skills }}
           >
             <span className="mt-card-sub">
               {artist.labelName} · {compact(artist.fans)} fans
@@ -4168,6 +4349,8 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'staff_poach_cancel') say('Offre retirée.');
       if (action.type === 'cheer') say(action.kind === 'bonus' ? 'Prime versée. Il a le sourire.' : action.kind === 'trip' ? 'Bon voyage ! Il revient plein d’idées.' : 'Quelle soirée ! Tout le label est de bonne humeur.');
       if (action.type === 'raise') say('Augmentation signée.');
+      if (action.type === 'genre_change') say('Changement de genre lancé. Laisse-lui le temps de trouver son son.');
+      if (action.type === 'genre_wish_refuse') say('Tu as dit non. Il fait un peu la tête.');
       if (action.type === 'sell') say('Artiste vendu.');
       if (action.type === 'transfer_ask') say('Offre envoyée.');
       if (action.type === 'transfer_answer' && action.answer === 'accept') say('Accord des labels. L’artiste doit encore signer.');
@@ -4297,6 +4480,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
               <button key={t.id} type="button" data-tuto={`nav-${t.id}`} aria-current={tab === t.id ? 'page' : undefined} onClick={() => go(t.id)}>
                 {t.name}
                 {t.id === 'staff' && (view.staff?.offersIn.length ?? 0) > 0 && <i className="mt-navdot" aria-label="On veut débaucher ton staff" />}
+                {t.id === 'squad' && view.roster.some((a) => a.evolution?.wish) && <i className="mt-navdot" aria-label="Un artiste veut changer de genre" />}
                 {t.id === 'dynamics' && view.dynamics?.artists.some((a) => a.worries.some((w) => w.kind === 'strike' || w.kind === 'out')) && (
                   <i className="mt-navdot" aria-label="Un artiste va très mal" />
                 )}

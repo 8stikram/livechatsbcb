@@ -8,6 +8,7 @@ import { contractOf } from './economy.ts';
 import { onTour } from './tours.ts';
 import { houseProducer } from './staff.ts';
 import { moraleBlock } from './morale.ts';
+import { magnetChance, magnetDemand } from './skills.ts';
 import { estimateQuality, featChance, featDemand, producerOfLevel, songCost, songEnergy } from './quality.ts';
 import { clamp, rngFor } from './rng.ts';
 import type { Artist, Label, SessionEvent, SongLevels, StudioSession, StudioStage, World } from './types.ts';
@@ -629,10 +630,10 @@ const memoryFor = (world: World, labelId: string, guestId: string) => {
 
 /** What a guest asks now: +10 % after each refusal of the week. */
 export const guestDemand = (world: World, labelId: string, guest: Artist, host?: Artist): number =>
-  Math.round(featDemand(guest, 0, host) * 1.1 ** memoryFor(world, labelId, guest.id).tries);
+  Math.round(featDemand(guest, 0, host) * 1.1 ** memoryFor(world, labelId, guest.id).tries * (host ? magnetDemand(host) : 1));
 
 /** Extra chance when the guest makes the same kind of music. */
-export const guestBonus = (host: Artist, guest: Artist): number => (GENRES[host.genre].family === GENRES[guest.genre].family ? 0.05 : 0);
+export const guestBonus = (host: Artist, guest: Artist): number => (GENRES[host.genre].family === GENRES[guest.genre].family ? 0.05 : 0) + magnetChance(host);
 
 /** Why a guest will not talk this week, or null. */
 export const guestBlocked = (world: World, labelId: string, guest: Artist): string | null => {

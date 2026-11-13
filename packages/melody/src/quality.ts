@@ -4,6 +4,7 @@ import { CFG } from './config.ts';
 import { choiceScore } from './craft.ts';
 import { GENRES, beatById } from './data/content.ts';
 import { clamp, type Rng } from './rng.ts';
+import { perfectEnergy, SHIFT_MALUS, storyBonus, tightness } from './skills.ts';
 import type { Artist, Producer, SongLevels } from './types.ts';
 
 const Q = CFG.quality;
@@ -50,6 +51,7 @@ export const songEnergy = (levels: SongLevels, hasFeat: boolean, artist?: Artist
   const costly = [levels.theme, levels.beat, levels.producer, levels.studio].filter((l) => l >= 3).length;
   let cost = CFG.energy.songBase + costly * CFG.energy.perCostlyChoice + (hasFeat ? CFG.energy.feat : 0);
   if (artist?.energyProfile === 'lazy') cost += 5;
+  if (artist) cost += perfectEnergy(artist);
   if (artist?.energyProfile === 'oiseau_de_nuit') cost += levels.studio === 1 ? -5 : levels.studio >= 3 ? 5 : 0;
   return cost;
 };
@@ -67,10 +69,12 @@ export const estimateQuality = (plan: SongPlan): QualityEstimate => {
   const beat = beatById(plan.beatId);
   const family = GENRES[beat.genres[0] ?? artist.genre].family;
   // Off his genre the artist loses a little; the bigger cost is in the choices score (and the risk).
-  const skill = artisticSkill(artist.attrs, family) * (0.8 + 0.2 * genreAffinity(artist, beat.genres));
+  // During a genre change he is weaker for a few weeks.
+  const skill = artisticSkill(artist.attrs, family) * (0.8 + 0.2 * genreAffinity(artist, beat.genres)) * (artist.shift ? SHIFT_MALUS : 1);
   // The note turns around what the artist is worth. Good choices move it a little, never far above him.
   let center = skill + clamp((choiceScore(artist, plan.themeId, plan.beatId) - Q.choiceEven) * Q.choiceWeight, -Q.choiceDown, Q.choiceUp);
   center += plan.experience ?? 0;
+  center += storyBonus(artist, plan.themeId);
 
   center += clamp((artist.morale - 50) / 10, -5, 5);
   if (artist.energy < CFG.energy.lowEnergyThreshold) center -= CFG.energy.lowEnergyPenalty;
@@ -81,7 +85,8 @@ export const estimateQuality = (plan: SongPlan): QualityEstimate => {
 
   // What the label pays for (text, beat, producer, studio) does not lift the note: it takes away the risk of a miss.
   const gear = levels.theme + levels.beat + levels.producer + levels.studio - 4 + (producer.affinity >= 0.95 ? 1 : 0);
-  const down = Math.max(Q.riskMin, Q.riskFree - Q.riskPerGear * gear + 3 * randomChoices - (plan.directorLevel ?? 0));
+  // The perfectionist misses less.
+  const down = Math.max(1, Math.max(Q.riskMin, Q.riskFree - Q.riskPerGear * gear + 3 * randomChoices - (plan.directorLevel ?? 0)) - tightness(artist));
   const up = Q.upside;
   const cap = 99;
   return {

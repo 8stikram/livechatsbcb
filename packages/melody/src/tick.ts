@@ -11,6 +11,8 @@ import { tickProjects } from './projects.ts';
 import { tickSeason } from './seasons.ts';
 import { coachBoost, crowdBoost, gigEnergy, tickStaff } from './staff.ts';
 import { tickMorale } from './morale.ts';
+import { afterRelease, profileGrowth, ratingsBefore, tickEvolution } from './evolution.ts';
+import { stageBoost, tirelessFactor } from './skills.ts';
 import { tickTours } from './tours.ts';
 import { cleanTalks } from './negotiation.ts';
 import { countryOf, noteCombo } from './craft.ts';
@@ -121,6 +123,8 @@ export const runTick = (world: World): TickReport => {
   const releases: ReleaseReport[] = [];
   const players = Object.values(world.labels).filter((l) => l.kind === 'player' && !l.bankrupt);
   const activeArtists = new Set<string>();
+  // Ratings before the week, to tell each label how its artists moved.
+  const before = ratingsBefore(world);
 
   cleanTalks(world);
 
@@ -178,6 +182,8 @@ export const runTick = (world: World): TickReport => {
     artist.lastReleaseTick = tick;
     artist.lastActiveTick = tick;
     activeArtists.add(artist.id);
+    // Evolution: the fit with a new genre, the streak toward a higher ceiling, the late bloom.
+    for (const text of afterRelease(world, artist, song)) if (label.kind === 'player') report(reports, label).events.push(text);
     if (week.hitScore >= 50) artist.morale = clamp(artist.morale + CFG.morale.hit, 0, 100);
     if (week.hitScore < 25) {
       artist.morale = clamp(artist.morale + CFG.morale.flop, 0, 100);
@@ -295,11 +301,11 @@ export const runTick = (world: World): TickReport => {
   for (const gig of world.gigs.filter((g) => g.tick === tick)) {
     const artist = world.artists[gig.artistId];
     const label = world.labels[gig.labelId];
-    const tiring = gigEnergy(world, label?.id ?? '');
+    const tiring = Math.round(gigEnergy(world, label?.id ?? '') * (artist ? tirelessFactor(artist) : 1));
     if (!artist || !label || label.bankrupt || artist.energy < tiring) continue;
     const already = gigsPlayed.get(artist.id) ?? 0;
     gigsPlayed.set(artist.id, already + 1);
-    const result = playGig(artist, already, crowdBoost(world, label.id));
+    const result = playGig(artist, already, crowdBoost(world, label.id) * stageBoost(artist));
     artist.energy -= tiring;
     artist.fans += Math.round(result.audience * CFG.fans.gigGain);
     artist.lastActiveTick = tick;
@@ -348,7 +354,7 @@ export const runTick = (world: World): TickReport => {
       if (idle > CFG.hype.idleTicks) artist.hype = Math.max(0, artist.hype - CFG.hype.idlePenalty);
       if (idle > CFG.fans.idleTicks) artist.fans = Math.round(artist.fans * (1 - CFG.fans.idleLoss));
       if (artist.energy < 20) artist.morale = clamp(artist.morale + CFG.morale.lowEnergy, 0, 100);
-      growArtist(artist, activeArtists.has(artist.id) || artist.lastActiveTick >= tick - 1, rng, coachBoost(world, label.id, artist.id));
+      growArtist(artist, activeArtists.has(artist.id) || artist.lastActiveTick >= tick - 1, rng, coachBoost(world, label.id, artist.id) * profileGrowth(world, artist));
     }
 
     if (label.cash < 0) {
@@ -393,6 +399,8 @@ export const runTick = (world: World): TickReport => {
   tickMorale(world, tell, (text) => {
     world.marketNews = [...(world.marketNews ?? []), { tick: world.tick, text }];
   });
+  // Evolution: profiles revealed, ground lost when idle, transitions, wishes, and the progress of the week.
+  tickEvolution(world, before, tell);
   tickDeals(world, tell);
   tickTransfers(world, tell);
   tickClashes(world, tell);

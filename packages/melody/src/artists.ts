@@ -2,6 +2,7 @@
 import { CFG } from './config.ts';
 import { GENRES, isGenre } from './data/content.ts';
 import { clamp, createRng, hashString } from './rng.ts';
+import { skillsOf } from './skills.ts';
 import type { Artist, Attributes, CatalogArtist, EnergyProfile, GenreFamily, GenreId } from './types.ts';
 
 type Technical = 'voix' | 'ecriture' | 'instrument' | 'production' | 'scene' | 'creativite';
@@ -55,9 +56,11 @@ export const generalRating = (artist: Pick<Artist, 'attrs' | 'genre'>): number =
   Math.round(artisticSkill(artist.attrs, GENRES[artist.genre].family));
 
 /** 1.00-1.10 for the main genre, lower for the others. */
-export const genreAffinity = (artist: Pick<Artist, 'genre' | 'secondary'>, beatGenres: readonly GenreId[]): number => {
-  if (beatGenres.includes(artist.genre)) return 1.05;
-  if (artist.secondary.some((g) => beatGenres.includes(g))) return 0.9;
+export const genreAffinity = (artist: Pick<Artist, 'genre' | 'secondary'> & Partial<Pick<Artist, 'id' | 'mainFit'>>, beatGenres: readonly GenreId[]): number => {
+  // Right after a genre change, the new genre is not yet his best one.
+  if (beatGenres.includes(artist.genre)) return artist.mainFit ?? 1.05;
+  // The chameleon is more at ease in his other genres.
+  if (artist.secondary.some((g) => beatGenres.includes(g))) return 0.9 + (artist.id && skillsOf(artist.id).includes('chameleon') ? 0.05 : 0);
   if (GENRES[artist.genre].neighbours.some((g) => beatGenres.includes(g))) return 0.75;
   return 0.6;
 };

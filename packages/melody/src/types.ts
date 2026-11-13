@@ -98,6 +98,22 @@ export interface Artist {
   jealous?: { name: string; tick: number };
   /** The lower rank he knows is better paid (told once). */
   grudge?: string;
+  /** Evolution: weeks with a player's label, releases, the profile once known, the late bloom, the streak toward a higher ceiling, the rating curve. */
+  career?: number;
+  releases?: number;
+  profileKnown?: boolean;
+  goodSongs?: number;
+  bloomed?: boolean;
+  streak?: number;
+  ceiling?: { season: number; gained: number };
+  genHistory?: number[];
+  /** Genre change: the transition, the fit with the new genre, the new audience, the season of the change, and his own wish. */
+  shift?: { from: GenreId; until: number };
+  mainFit?: number;
+  audienceUntil?: number;
+  genreSeason?: number;
+  wish?: { genre: GenreId; until: number };
+  wishSeason?: number;
 }
 
 export interface Contract {
@@ -140,6 +156,8 @@ export interface Label {
   stats: LabelStats;
   /** Last party of the label (morale). */
   partyTick?: number;
+  /** Genre changes made this season. */
+  genreChanges?: { season: number; count: number };
 }
 
 /** Level 1 (free, capped) to 4 for each paid choice of a song. */

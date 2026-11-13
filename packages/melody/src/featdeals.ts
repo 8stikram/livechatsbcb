@@ -3,6 +3,7 @@
 // Once accepted the fee is paid, and the deal can be used in the studio for four weeks, without the wheel.
 import { generalRating } from './artists.ts';
 import { featDemand } from './quality.ts';
+import { SKILLS, skillsOf } from './skills.ts';
 import { artistValue, contractOf } from './economy.ts';
 import type { Artist, GenreId, Label, World } from './types.ts';
 import { GameError } from './world.ts';
@@ -232,6 +233,8 @@ export interface OtherArtistView {
   bidding: boolean;
   /** A rough idea of his worth, to start a transfer offer. */
   value: number;
+  /** Names of his signature skills. */
+  skills: string[];
 }
 
 /** The artists of the other players, to ask for a featuring. */
@@ -254,6 +257,7 @@ export const otherArtists = (world: World, labelId: string): OtherArtistView[] =
       clause: contractOf(world, artist.id)?.releaseClause ?? null,
       bidding: (world.transfers ?? []).some((t) => (t.status === 'pending' || t.status === 'agreed') && t.buyerId === labelId && t.artistId === artist.id),
       value: artistValue(artist),
+      skills: skillsOf(artist.id).map((id) => SKILLS[id].name),
     }))
     .sort((a, b) => b.fans - a.fans)
     .slice(0, 60);

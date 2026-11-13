@@ -8,6 +8,7 @@ import { clamp, rngFor, type Rng } from './rng.ts';
 import type { Artist, Label, World } from './types.ts';
 import { crowdBoost } from './staff.ts';
 import { moraleBlock } from './morale.ts';
+import { stageBoost } from './skills.ts';
 import { GameError } from './world.ts';
 
 const fail = (message: string): never => {
@@ -152,7 +153,7 @@ export const announceTour = (
     openerId = opener.id;
   }
   if (toursOf(world).length >= TOURS.maxPerWorld) fail('Trop de tournées sur ce serveur. Réessaie la semaine prochaine.');
-  const quote = tourQuote(artist.fans, artist.hype, dates, request.merch ?? false, partnerFans, false, crowdBoost(world, label.id));
+  const quote = tourQuote(artist.fans, artist.hype, dates, request.merch ?? false, partnerFans, false, crowdBoost(world, label.id) * stageBoost(artist));
   const cost = quote.setup + quote.merchCost;
   if (cost > label.cash) fail(`Pas assez de cash : la tournée coûte ${cost.toLocaleString('fr-FR')} € à monter.`);
   label.cash -= cost;
@@ -274,7 +275,7 @@ export const tickTours = (
     let merch = 0;
     let crowd = 0;
     for (let i = 0; i < tonight; i += 1) {
-      const venue = bestVenue(dateDemand(artist.fans + (partner?.fans ?? 0), artist.hype) * crowdBoost(world, label.id) * rng.range(0.85, 1.15));
+      const venue = bestVenue(dateDemand(artist.fans + (partner?.fans ?? 0), artist.hype) * crowdBoost(world, label.id) * stageBoost(artist) * rng.range(0.85, 1.15));
       crowd += venue.audience;
       money += venue.profit > 0 ? venue.profit * CFG.live.labelShare : venue.profit;
       if (tour.merch && tour.merchStock > 0) {

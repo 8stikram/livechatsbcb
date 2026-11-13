@@ -5,6 +5,7 @@ import { trendBoost } from './craft.ts';
 import { beatById, coherence } from './data/content.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
 import { viewsBoost } from './staff.ts';
+import { decayBonus, discoveryBoost, hitBonus, NEW_AUDIENCE, viralFactor } from './skills.ts';
 import type { Artist, PromoResult, Song, Trends, World } from './types.ts';
 
 const R = CFG.release;
@@ -72,6 +73,11 @@ export interface FirstWeekInput {
   marketingReach: number;
   /** Bigger same-genre releases the same week (each one costs 10 % of reach, max 3). */
   rivals: number;
+  /** The artist's skills: more discovery, more chance to go viral, a better hit score, a slower fall. */
+  discovery?: number;
+  viral?: number;
+  hitBonus?: number;
+  decayBonus?: number;
 }
 
 export interface FirstWeek {
@@ -102,21 +108,21 @@ export const firstWeek = (input: FirstWeekInput, rng: Rng): FirstWeek => {
   const reach = (paidReach + R.organicReach * effectiveFans) * (1 + input.hype / R.hypeReach) * competition;
 
   const luck = clamp(Math.exp(rng.normal() * 0.2), 0.6, 1.8);
-  const viral = rng.chance(R.viralChance);
+  const viral = rng.chance(R.viralChance * (input.viral ?? 1));
   const engagement = fanEngagement(effectiveFans);
   const fanStreams = effectiveFans * engagement * q * luck;
-  const discovery = reach * R.discoveryRate * input.fit * q * luck * (viral ? rng.range(10, 40) : 1);
+  const discovery = reach * R.discoveryRate * input.fit * q * luck * (input.discovery ?? 1) * (viral ? rng.range(10, 40) : 1);
   const streams = Math.round(fanStreams + discovery);
 
   const baseline = Math.max(1, engagement * effectiveFans);
   const spread = 1 + 0.15 * Math.log10(Math.max(1, streams) / baseline);
-  const hitScore = Math.round(clamp(50 * q * input.fit * luck * spread, 0, 100));
+  const hitScore = Math.round(clamp(50 * q * input.fit * luck * spread + (input.hitBonus ?? 0), 0, 100));
   return {
     streams,
     fanStreams: Math.round(fanStreams),
     discovery: Math.round(discovery),
     hitScore,
-    decay: R.decayBase + (R.decayHit * hitScore) / 100,
+    decay: R.decayBase + (R.decayHit * hitScore) / 100 + (input.decayBonus ?? 0),
     newFans: Math.round(discovery * R.fanConversion * q * q * input.fit),
     hypeChange: (hitScore - 50) / 4,
     viral,
@@ -142,7 +148,20 @@ export const releaseWeek = (world: World, song: Song, artist: Artist, tick: numb
   const genres = [artist.genre, ...beatById(song.beatId).genres];
   const fit = clamp(publicFit(artist, song.themeId, song.beatId, world.trends) * trendBoost(world, tick, genres, song.themeId, song.beatId), 0.5, 2.2);
   const week = firstWeek(
-    { quality: song.quality, fans: artist.fans, featFans: feat?.fans ?? 0, hype: artist.hype, fit, marketingReach: reach, rivals },
+    {
+      quality: song.quality,
+      fans: artist.fans,
+      featFans: feat?.fans ?? 0,
+      hype: artist.hype,
+      fit,
+      marketingReach: reach,
+      rivals,
+      // After a genre change, his songs of the new genre reach more new listeners for a while.
+      discovery: discoveryBoost(artist) * (!artist.shift && artist.audienceUntil !== undefined && tick < artist.audienceUntil && genres.slice(1).includes(artist.genre) ? NEW_AUDIENCE : 1),
+      viral: viralFactor(artist),
+      hitBonus: hitBonus(artist, !song.projectId),
+      decayBonus: decayBonus(artist),
+    },
     rngFor(world.seed, tick, song.id),
   );
   return { week, promo };

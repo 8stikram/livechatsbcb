@@ -8,6 +8,7 @@ import {
   releaseBlocked, promoViews, secretCombos, trendOf, rollSurprise, langOf, inventTitle, academyOf, LOOKS, lookOf, parseLook, seasonsOf,
   STAFF, staffOf, staffWage, coachBoost, producerShare, houseProducer, viewsBoost, crowdBoost, gigEnergy,
   MORALE, RANKS, ranksOf, isLeader, worriesOf, moraleBlock, tickMorale, dynamicsView,
+  SKILL_IDS, skillsOf, skillLevel, skillPlus, stageBoost, tirelessFactor, PROFILES, EVOLUTION, GENRE_CHANGE, profileOf, profileGrowth, afterRelease, tickEvolution, GENRES,
 } from '../src/index.ts';
 import type { Artist, StaffMember, World } from '../src/index.ts';
 
@@ -1313,5 +1314,195 @@ describe('moral', () => {
     let bubbles = 0;
     for (let i = 0; i < 20; i += 1) bubbles += runTick(world).labels[labelId]!.events.filter((e) => e.startsWith('«') && e.includes('Nova')).length;
     expect(bubbles).toBeGreaterThan(0);
+  });
+});
+
+describe('évolution des artistes', () => {
+  const findId = (test: (id: string) => boolean): string => CATALOG_ARTISTS.map((a) => a.id).find(test)!;
+  const cheap = { theme: 1, beat: 1, producer: 1, studio: 1 } as const;
+  const song = (artistId: string, labelId: string, quality: number) => ({
+    id: `s_${Math.random()}`, labelId, artistId, featArtistId: null, title: 'Son', themeId: 'amour', beatId: 'trap',
+    levels: cheap, quality, cost: 0, state: 'released' as const, createdTick: 0, availableTick: 0, releaseTick: 0,
+    marketingReach: 0, marketingCost: 0, streamsLast: 0, streamsTotal: 0, decay: 0, hitScore: 50, peakGlobal: null, peakGenre: null, weeksOut: 0,
+  });
+
+  it('gives each artist a hidden profile and 0 to 2 skills, always the same', () => {
+    const profiles = new Set(CATALOG_ARTISTS.map((a) => profileOf(a.id)));
+    expect(profiles.size).toBe(6);
+    for (const a of CATALOG_ARTISTS.slice(0, 50)) {
+      expect(profileOf(a.id)).toBe(profileOf(a.id));
+      expect(skillsOf(a.id)).toEqual(skillsOf(a.id));
+      expect(skillsOf(a.id).length).toBeLessThanOrEqual(2);
+      expect(new Set(skillsOf(a.id)).size).toBe(skillsOf(a.id).length);
+    }
+    expect(new Set(CATALOG_ARTISTS.flatMap((a) => skillsOf(a.id))).size).toBe(SKILL_IDS.length);
+  });
+
+  it('reveals the profile after 8 weeks, and tells the label', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    world.labels[labelId]!.cash = 1_000_000;
+    expect(buildView(world, 'u1').roster[0]!.evolution!.profile).toBeNull();
+    const told: string[] = [];
+    for (let i = 0; i < EVOLUTION.revealWeeks; i += 1) told.push(...runTick(world).labels[labelId]!.events);
+    expect(told.filter((t) => t.includes(`profil de ${artist.name}`))).toHaveLength(1);
+    expect(buildView(world, 'u1').roster[0]!.evolution!.profile!.name).toBe(PROFILES[profileOf(artist.id)].name);
+  });
+
+  it('makes the early profile fast then slow, the late one the other way, and the late bloomer jump', () => {
+    const world = createWorld(1);
+    const early = world.artists[findId((id) => profileOf(id) === 'early')]!;
+    const late = world.artists[findId((id) => profileOf(id) === 'late')]!;
+    expect(profileGrowth(world, early)).toBe(1.5);
+    expect(profileGrowth(world, late)).toBe(0.7);
+    early.career = 30;
+    late.career = 30;
+    expect(profileGrowth(world, early)).toBe(0.5);
+    expect(profileGrowth(world, late)).toBe(1.4);
+    const bloomer = world.artists[CATALOG_ARTISTS.find((a) => profileOf(a.id) === 'bloomer' && a.gen < 70)!.id]!;
+    expect(profileGrowth(world, bloomer)).toBe(0.3);
+    const before = generalRating(bloomer);
+    let told: string[] = [];
+    for (let i = 0; i < EVOLUTION.bloomSongs; i += 1) told = afterRelease(world, bloomer, song(bloomer.id, 'x', 70));
+    expect(bloomer.bloomed).toBe(true);
+    expect(told.some((t) => t.includes('Éclosion'))).toBe(true);
+    expect(generalRating(bloomer)).toBeGreaterThanOrEqual(before + EVOLUTION.bloomMin - 1);
+    expect(profileGrowth(world, bloomer)).toBe(1);
+  });
+
+  it('raises the ceiling after three very good songs in a row, six times a season at most', () => {
+    const world = createWorld(2);
+    const artist = world.artists[findId((id) => profileOf(id) !== 'bloomer')]!;
+    const potential = artist.potential;
+    const good = (): number => generalRating(artist) + EVOLUTION.streakMargin;
+    afterRelease(world, artist, song(artist.id, 'x', good()));
+    afterRelease(world, artist, song(artist.id, 'x', good()));
+    afterRelease(world, artist, song(artist.id, 'x', 10));
+    expect(artist.streak).toBe(0);
+    for (let i = 0; i < 3; i += 1) afterRelease(world, artist, song(artist.id, 'x', good()));
+    expect(artist.potential).toBe(potential + 1);
+    for (let i = 0; i < 30; i += 1) afterRelease(world, artist, song(artist.id, 'x', good()));
+    expect(artist.potential).toBe(potential + EVOLUTION.ceilingPerSeason);
+    expect(artist.releases).toBe(36);
+  });
+
+  it('loses ground when idle for long, unless the coach follows him', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    world.labels[labelId]!.cash = 1_000_000;
+    const sum = (): number => Object.values(artist.attrs).reduce((a, b) => a + b, 0);
+    artist.lastActiveTick = world.tick - 20;
+    const start = sum();
+    for (let i = 0; i < 6; i += 1) {
+      world.tick += 1;
+      tickEvolution(world, new Map(), () => {});
+    }
+    expect(sum()).toBeLessThan(start);
+    world.staff = { [labelId]: [{ id: 'st1', role: 'coach', name: 'Coach', rank: 'Coach', stars: 1, hiredTick: 0, starTick: 0, premium: 0, focusId: artist.id, shieldUntil: 0 }] };
+    const held = sum();
+    for (let i = 0; i < 6; i += 1) {
+      world.tick += 1;
+      tickEvolution(world, new Map(), () => {});
+    }
+    expect(sum()).toBe(held);
+  });
+
+  it('lets the skills change the studio, the releases and the concerts', () => {
+    const world = createWorld(3);
+    const withSkill = (skill: string): Artist => world.artists[findId((id) => skillsOf(id).includes(skill as never))]!;
+    const stage = withSkill('stage');
+    expect(stageBoost(stage)).toBeCloseTo(skillPlus(stage) ? 1.3 : 1.15);
+    const tireless = withSkill('tireless');
+    expect(tirelessFactor(tireless)).toBeLessThan(1);
+    const perfect = withSkill('perfect');
+    const plain = { ...perfect, id: findId((id) => skillsOf(id).length === 0) };
+    const beat = BEATS.find((b) => b.genres.includes(perfect.genre))!;
+    const a = estimateQuality({ artist: perfect, themeId: beat.themes[0]!, beatId: beat.id, levels: cheap, producer: producerOfLevel(1) });
+    const b = estimateQuality({ artist: plain, themeId: beat.themes[0]!, beatId: beat.id, levels: cheap, producer: producerOfLevel(1) });
+    expect(a.max - a.min).toBeLessThan(b.max - b.min);
+    const story = withSkill('story');
+    const storyBeat = BEATS.find((x) => x.themes.includes('rue'))!;
+    const told = estimateQuality({ artist: story, themeId: 'rue', beatId: storyBeat.id, levels: cheap, producer: producerOfLevel(1) });
+    const flat = estimateQuality({ artist: { ...story, id: plain.id }, themeId: 'rue', beatId: storyBeat.id, levels: cheap, producer: producerOfLevel(1) });
+    expect(told.center).toBeGreaterThan(flat.center);
+    const input = { quality: 68, fans: 3_200, featFans: 0, hype: 12, fit: 1.3, marketingReach: 60_000, rivals: 0 };
+    const base = firstWeek(input, createRng(5));
+    const boosted = firstWeek({ ...input, discovery: 1.2, hitBonus: 10, decayBonus: 0.03 }, createRng(5));
+    expect(boosted.discovery).toBeGreaterThan(base.discovery);
+    expect(boosted.hitScore).toBeGreaterThan(base.hitScore);
+    expect(boosted.decay).toBeGreaterThan(base.decay);
+    // The "+" level: ten releases.
+    const fresh = withSkill('hook');
+    if (!skillPlus(fresh)) {
+      fresh.releases = 10;
+      expect(skillLevel(fresh, 'hook')).toBe(2);
+    }
+  });
+
+  it('changes genre with a price, a transition, fans lost and the old genre kept', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    const label = world.labels[labelId]!;
+    label.cash = 1_000_000;
+    const from = artist.genre;
+    const neighbour = GENRES[from].neighbours[0]!;
+    const fans = artist.fans;
+    const view = buildView(world, 'u1').roster[0]!.evolution!;
+    const option = view.genres.options.find((o) => o.genre === neighbour)!;
+    expect(option.weeks).toBe(skillLevel(artist, 'chameleon') === 2 ? GENRE_CHANGE.chameleonWeeks : GENRE_CHANGE.weeks);
+    const beat = BEATS.find((b) => b.genres.includes(neighbour))!;
+    const plan = { themeId: beat.themes[0]!, beatId: beat.id, levels: cheap, producer: producerOfLevel(1) };
+    const cash = label.cash;
+    applyAction(world, 'u1', { type: 'genre_change', artistId: artist.id, genre: neighbour });
+    expect(label.cash).toBe(cash - option.cost);
+    expect(artist.genre).toBe(neighbour);
+    expect(artist.secondary[0]).toBe(from);
+    expect(artist.fans).toBe(Math.round(fans * (1 - option.loss[0])));
+    const during = estimateQuality({ artist, ...plan }).center;
+    expect(() => applyAction(world, 'u1', { type: 'genre_change', artistId: artist.id, genre: from })).toThrow(/transition/);
+    const told: string[] = [];
+    for (let i = 0; i < option.weeks; i += 1) told.push(...runTick(world).labels[labelId]!.events);
+    expect(artist.shift).toBeUndefined();
+    expect(told.some((t) => t.includes('a fini sa transition'))).toBe(true);
+    expect(estimateQuality({ artist, ...plan }).center).toBeGreaterThan(during);
+    expect(() => applyAction(world, 'u1', { type: 'genre_change', artistId: artist.id, genre: from })).toThrow(/cette saison/);
+    expect(() => applyAction(world, 'u1', { type: 'genre_change', artistId: artist.id, genre: 'nope' })).toThrow(/inconnu/);
+  });
+
+  it('lets the artist ask for a genre: half price and happy if yes, upset if no or no answer', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    world.labels[labelId]!.cash = 1_000_000;
+    artist.releases = 10;
+    artist.attrs.creativite = 90;
+    let weeks = 0;
+    while (!artist.wish && weeks < 200) {
+      world.contracts.find((c) => c.artistId === artist.id)!.endTick = world.tick + 100;
+      artist.wishSeason = undefined;
+      runTick(world);
+      weeks += 1;
+    }
+    expect(artist.wish).toBeDefined();
+    const wish = artist.wish!;
+    const option = buildView(world, 'u1').roster[0]!.evolution!.genres.options.find((o) => o.genre === wish.genre)!;
+    expect(option.wished).toBe(true);
+    expect(option.cost).toBe((GENRE_CHANGE.cost * world.labels[labelId]!.tier) / 2);
+    artist.morale = 50;
+    applyAction(world, 'u1', { type: 'genre_change', artistId: artist.id, genre: wish.genre });
+    expect(artist.morale).toBe(50 + GENRE_CHANGE.wished);
+    expect(artist.wish).toBeUndefined();
+    // Saying no.
+    artist.wish = { genre: 'pop', until: world.tick + 4 };
+    applyAction(world, 'u1', { type: 'genre_wish_refuse', artistId: artist.id });
+    expect(artist.morale).toBe(50 + GENRE_CHANGE.wished + GENRE_CHANGE.refused);
+    expect(() => applyAction(world, 'u1', { type: 'genre_wish_refuse', artistId: artist.id })).toThrow(/rien demandé/);
+  });
+
+  it('tells the progress of the week and keeps the rating curve', () => {
+    const { world, labelId, artist } = worldWithLabel();
+    world.labels[labelId]!.cash = 1_000_000;
+    const told: string[] = [];
+    const before = new Map([[artist.id, generalRating(artist) - 2]]);
+    tickEvolution(world, before, (_, text) => told.push(text));
+    expect(told).toContain(`Progrès de la semaine : ${artist.name} +2.`);
+    for (let i = 0; i < 40; i += 1) runTick(world);
+    expect(artist.genHistory!.length).toBe(EVOLUTION.history);
+    expect(buildView(world, 'u1').roster[0]!.evolution!.history).toHaveLength(EVOLUTION.history);
   });
 });

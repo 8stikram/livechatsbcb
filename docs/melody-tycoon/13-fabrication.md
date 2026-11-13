@@ -266,3 +266,16 @@ Choix du propriétaire : **rangs automatiques**, les **4 nouvelles causes** de b
 - **Onglet Dynamique** : le moral du label (les têtes d'affiche comptent plus), chaque artiste avec son rang, sa paie garantie, ses attentes, son moral et ses soucis en rouge, et les boutons. Un point rouge sur l'onglet quand un artiste demande à partir ou fait grève. Le bilan prévient une fois quand une injustice commence.
 - **Bulles d'humeur** : environ une semaine sur trois, un artiste dit comment il va dans le bilan, selon son plus gros souci.
 - Un joueur absent toute une saison : son artiste finit par demander à partir, sans aller jusqu'à la grève.
+
+## Étape 15 — évolution des artistes (fait)
+
+Choix du propriétaire : **profils cachés + hauts et bas**, **une dizaine de talents**, changement de genre **avec transition**, et les plus « bilan des progrès », « courbe de la note » et « envie de changer ». **Pas de traits de caractère.**
+
+- **6 profils cachés** (toujours les mêmes pour un artiste) : Précoce (très vite ses 20 premières semaines, puis lent), Tardif (l'inverse), Régulier, Explosif (des semaines rien, d'autres énorme), Fragile (progresse vite mais perd plus vite), Éclosion tardive (presque rien jusqu'à son 6e son noté 65 ou plus, puis un bond de 4 à 8 points). Le profil se révèle après 8 semaines au label, tout de suite avec un coach 3 étoiles.
+- **Perdre ses acquis** : après 6 semaines sans rien faire, −1 sur une compétence toutes les 3 semaines (toutes les 2 si Fragile). Pas si le coach le suit.
+- **Repousser ses limites** : 3 sons d'affilée notés au moins 5 points au-dessus de sa note → son plafond monte de 1. 6 fois par saison au plus.
+- **10 talents** (0 à 2 par artiste, environ 1 sur 3 n'en a pas) : Refrain contagieux, Bête de scène, Perfectionniste, Machine à tubes, Artiste d'album, Aimant à featurings, Infatigable, Caméléon, Viral, Storyteller. Chacun touche un système qui existe déjà (streams, concerts, studio, albums, featurings). **Niveau +** après 10 sorties ou à 80 de note. Les talents s'affichent sur les cartes (effectif, marché, artistes des potes).
+- **Changer de genre** (bouton dans l'Effectif) : 3 000 € × le palier, moitié prix si c'est son envie. 8 semaines un peu moins fort au studio (4 avec un coach ou un producteur maison 3 étoiles, 2 pour un Caméléon +). Fans perdus : 3 % vers un genre voisin, 8 à 20 % vers un genre lointain (moitié avec un community manager 3 étoiles, rien pour un Caméléon +). L'ancien genre reste en second. Après la transition, ses sons du nouveau genre touchent plus de nouveaux auditeurs pendant 8 semaines. Une fois par saison par artiste, 3 par label. Moral −10 si ce n'est pas son idée.
+- **Envie de changer** : un artiste créatif avec au moins 6 sorties demande parfois à passer à un autre genre. Oui : moitié prix et moral +10. Non, ou pas de réponse en 4 semaines : moral −5. Un point rouge sur l'onglet Effectif prévient.
+- **Bilan des progrès** : une ligne chaque semaine dans le bilan (« Progrès de la semaine : X +1 · Y −1 »).
+- **Courbe de la note** : les 28 dernières semaines dans la fiche de l'artiste, avec le gain ou la perte.

@@ -14,6 +14,8 @@ import type { Artist, CatalogArtist, ChartEntry, GenreId, Label, Loan, Producer,
 import { GameError, addPlayerLabel, bookGig, createSong, expectedOffer, freeAgents, scheduleRelease, takeLoan, type Offer } from './world.ts';
 import { addDeluxe, createProject, projectsView, type ProjectKind, type ProjectView } from './projects.ts';
 import { announceTour, answerTourInvite, cancelTour, tourGuests, toursView, type TourView } from './tours.ts';
+import { changeGenre, evolutionView, refuseWish, type EvolutionView } from './evolution.ts';
+import { SKILLS, skillsOf, stageBoost } from './skills.ts';
 import { cheerUp, dynamicsView, raisePay, ranksOf, RANK_NAMES, type CheerKind, type DynamicsView } from './morale.ts';
 import { answerPoach, cancelPoach, crowdBoost, fireStaff, focusCoach, hireStaff, houseProducer, poachStaff, staffView, type StaffRole, type StaffView } from './staff.ts';
 import { enterSeason, honoursOf, pickGoals, seasonView, watchCeremony, type Honour, type SeasonView } from './seasons.ts';
@@ -152,6 +154,8 @@ export type MelodyAction =
   | { type: 'staff_poach_cancel'; offerId: string }
   | { type: 'cheer'; kind: CheerKind; artistId: string | null }
   | { type: 'raise'; artistId: string }
+  | { type: 'genre_change'; artistId: string; genre: string }
+  | { type: 'genre_wish_refuse'; artistId: string }
   | { type: 'loan'; amount: number; weeks: 8 | 16 | 24 };
 
 const labelOfOwner = (world: World, ownerId: string): Label => {
@@ -347,6 +351,12 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
     case 'raise':
       raisePay(world, label, action.artistId);
       return;
+    case 'genre_change':
+      changeGenre(world, label, action.artistId, action.genre);
+      return;
+    case 'genre_wish_refuse':
+      refuseWish(world, label, action.artistId);
+      return;
     case 'loan':
       takeLoan(world, label.id, action.amount, action.weeks);
       return;
@@ -364,9 +374,15 @@ export interface ArtistView {
   fans: number;
   hype: number;
   value: number;
+  /** Names of his signature skills. */
+  skills: string[];
 }
 
 export interface RosterView extends ArtistView {
+  /** Profile, skills, rating curve, genre change. */
+  evolution: EvolutionView | null;
+  /** Crowd bonus of the booker and his stage skill, for the tour quote. */
+  crowd: number;
   attrs: Artist['attrs'];
   energy: number;
   morale: number;
@@ -576,6 +592,7 @@ const artistView = (artist: Artist, viewer: string, width: number): ArtistView =
     fans: artist.fans,
     hype: Math.round(artist.hype),
     value: artistValue(artist),
+    skills: skillsOf(artist.id).map((id) => SKILLS[id].name),
   };
 };
 
@@ -697,9 +714,12 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     roster: roster.map((artist) => {
       const contract = contractOf(world, artist.id);
       const gigsBooked = world.gigs.filter((g) => g.artistId === artist.id).length;
-      const gig = playGig(artist, gigsBooked, label ? crowdBoost(world, label.id) : 1);
+      const crowd = (label ? crowdBoost(world, label.id) : 1) * stageBoost(artist);
+      const gig = playGig(artist, gigsBooked, crowd);
       return {
         ...artistView(artist, viewer, 12),
+        evolution: label ? evolutionView(world, label, artist) : null,
+        crowd,
         attrs: artist.attrs,
         energy: Math.round(artist.energy),
         morale: Math.round(artist.morale),

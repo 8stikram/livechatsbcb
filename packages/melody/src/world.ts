@@ -11,6 +11,7 @@ import { marketingById } from './release.ts';
 import { clamp, rngFor } from './rng.ts';
 import { gigEnergy } from './staff.ts';
 import { moraleBlock } from './morale.ts';
+import { tirelessFactor } from './skills.ts';
 import type { Artist, Contract, Label, Producer, Song, SongLevels, Trends, World } from './types.ts';
 
 export class GameError extends Error {}
@@ -282,7 +283,7 @@ export const bookGig = (world: World, labelId: string, artistId: string): void =
   const booked = world.gigs.filter((g) => g.artistId === artistId).length;
   const unwilling = moraleBlock(world, artist, 'gig');
   if (unwilling) return fail(unwilling);
-  if (artist.energy < gigEnergy(world, labelId) * (booked + 1)) return fail(`${artist.name} n'a pas assez d'énergie pour ce concert.`);
+  if (artist.energy < Math.round(gigEnergy(world, labelId) * tirelessFactor(artist)) * (booked + 1)) return fail(`${artist.name} n'a pas assez d'énergie pour ce concert.`);
   if (booked >= 3) return fail('Trois concerts par semaine au maximum.');
   if ((world.tours ?? []).some((t) => (t.state === 'announced' || t.state === 'running') && t.startTick <= world.tick + 1 && (t.artistId === artistId || t.partner?.artistId === artistId || t.openerId === artistId)))
     return fail(`${artist.name} est en tournée.`);
