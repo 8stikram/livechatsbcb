@@ -145,6 +145,10 @@ export interface LabelStats {
   top100Global: number;
   top50Genre: number;
   clashWins?: number;
+  /** Chart duels won, lost, and fled. */
+  duelWins?: number;
+  duelLosses?: number;
+  duelFled?: number;
   clashLosses?: number;
 }
 
@@ -347,6 +351,9 @@ export interface World {
   favourites?: Record<string, string[]>;
   /** What happened on the market lately, for everyone's Monday summary. */
   marketNews?: Array<{ tick: number; text: string }>;
+  /** Press conferences and chart duels between players. */
+  pressConfs?: import('./wars.ts').PressConf[];
+  duels?: import('./wars.ts').Duel[];
   /** Server events running (platforms, trends, money) and card boosts on one song. */
   serverEvents?: import('./events.ts').ServerEvent[];
   lastServerEvents?: string[];

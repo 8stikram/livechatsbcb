@@ -58,6 +58,7 @@ export {
 export { LETDOWN, usualNote, isLetdown, judgeRelease } from './letdown.ts';
 export { studioCardsFor, STUDIO_CONTENT } from './studio.ts';
 export { CARD_IDS, EVENTS, EVENT_CONTENT, SERVER_CONTENT, SERVER_IDS, answerCard, applyStreamEvents, describeEffect, eventsView, streamMult, tickCards, tickServerEvents, type Card, type CardChoice, type CardEffect, type CardView, type EventsView, type ServerEvent } from './events.ts';
+export { WARS, answerDuel, askDuel, duelsView, pressConference, pressOdds, pressUsed, pressView, replyPress, tickDuels, type Duel, type DuelStatus, type DuelView, type PressConf, type PressView } from './wars.ts';
 export { ESTATE, TIER_TABLE, assetBase, assetLoanCap, buyBack, buybackPrice, estateView, repayLoans, takeAssetLoan, tickAssetLoan, tierProgress, type EstateView, type TierRow, type TierCondition } from './estate.ts';
 export { FORM, ROLES, ROLE_IDS, ROLE_RULES, formWeeks, inForm, lightUp, roleCounts, roleOf, roleSlots, setRole, supportBoost, type RoleDef, type SupportKind } from './support.ts';
 export {

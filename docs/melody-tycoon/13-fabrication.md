@@ -353,3 +353,13 @@ Choix du propriétaire : **40 cartes** de vie du label, 2 à 4 réponses, même 
 - **Petits plus** : playlist éditoriale (×1,5 pendant 2 semaines), remix officiel (payant, buzz + ×1,3), session live (fans et buzz).
 - **Événements du serveur** : 13 en tout (panne, pluie, playlist géante d'un genre, un genre qui explose 2 semaines, retour des années 2000, danse virale ou astronaute sur un son d'un joueur, boycott des intros, IA qui sature, chat DJ, taxe surprise, bonus culture, dédommagement des plateformes). Ils s'affichent sur l'Accueil et dans les news de toute la party. Un bonus de streams ne compte que pour sa semaine, il ne s'accumule pas.
 - Les dernières réponses restent visibles sous les cartes.
+
+## Étape 21 — guerres : conférence de presse et guerre de charts (fait)
+
+Début du MVP 3 (le clash existait déjà, étape des clashs). Choix du propriétaire : la conférence est un **pari**, et **plus ton artiste a de buzz face à la cible, plus ça marche** ; **gratuite, 1 par semaine**, **dès le début** ; parle **un de tes artistes ou toi, le patron**. La guerre de charts se gagne au **plus de streams** la 1re semaine, **pour l'honneur** (pas de mise) : buzz, réputation et fans. Refuser : **honte publique**. **2 semaines pour répondre**. Les plus : **duel en direct dans les Charts**, **riposte à la conférence**, **palmarès des duels**. Seulement entre joueurs.
+
+- **Conférence de presse** (onglet Label) : on vise un artiste d'un autre joueur. Chances = 40 % + (médias − 50) × 0,5 % + (buzz de l'orateur − buzz de la cible) × 0,6 % + 5 % par étoile du community manager, entre 10 et 85 %. Le patron parle comme un artiste à 50 en médias et sans buzz. Les chances de chaque orateur s'affichent. Réussi : cible buzz −8, orateur buzz +4. Raté : réputation −2, orateur buzz −4.
+- **Riposte** : le label visé peut répondre gratuitement la semaine même ou la suivante, une fois. Réussie : l'effet est annulé et la cible gagne 4 de buzz.
+- **Guerre de charts** (onglet Label) : on choisit un joueur, son artiste et une semaine (dans 3 à 8 semaines). L'autre accepte avec son artiste ou refuse. Sans réponse en 2 semaines, c'est un refus. Refuser : réputation −2 et « X a fui le duel » dans les news, sauf si celui qui défie est d'un palier plus haut.
+- **Le jour du duel** : on compare le meilleur son de chaque artiste sorti cette semaine-là. Gagnant : buzz +8, réputation +1, et il prend 10 % des nouveaux fans du son perdant. Perdant : buzz −4. Si un seul a sorti un son, il gagne ; si aucun, match nul. 3 duels en cours au plus, un seul avec le même label.
+- **Charts** : les duels acceptés et finis s'affichent en haut, avec une barre des streams des deux sons. **Fiche du label** : duels gagnés, perdus, fuis.

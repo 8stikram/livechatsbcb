@@ -12,6 +12,7 @@ import { tickClashes } from './clash.ts';
 import { tickProjects } from './projects.ts';
 import { ESTATE, tickAssetLoan } from './estate.ts';
 import { applyStreamEvents, tickCards, tickServerEvents } from './events.ts';
+import { tickDuels } from './wars.ts';
 import { judgeRelease } from './letdown.ts';
 import { lightUp, supportBoost } from './support.ts';
 import { tickSeason } from './seasons.ts';
@@ -253,6 +254,9 @@ export const runTick = (world: World): TickReport => {
     const artist = world.artists[song.artistId];
     return artist ? songGenre(song, artist) : null;
   });
+
+  // Chart duels of the week, on the first-week streams; unanswered challenges time out.
+  tickDuels(world, Object.fromEntries(releases.map((r) => [r.songId, r.newFans])), tellEarly);
 
   // 3. Charts.
   interface Line { title: string; artistName: string; labelId: string; streams: number; genre: GenreId; song: Song | null }

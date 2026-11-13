@@ -34,6 +34,7 @@ import {
   type LabelCard,
   type TransferView,
   type ClashView,
+  type DuelView,
   type InterviewView,
   type RivalView,
   type Tone,
@@ -4375,6 +4376,169 @@ const ClashRow = ({ clash, view, onAct, busy }: { clash: ClashView; view: Melody
   );
 };
 
+
+// Press conference: free, once a week. One of your artists, or you, runs down an artist of another player.
+const PressPanel = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const press = view.press;
+  const [targetId, setTargetId] = useState('');
+  const [speaker, setSpeaker] = useState('boss');
+  const [replyWith, setReplyWith] = useState('boss');
+  if (!press || (press.targets.length === 0 && press.toAnswer.length === 0 && press.recent.length === 0)) return null;
+  const target = press.targets.find((t) => t.id === targetId);
+  const asId = (v: string): string | null => (v === 'boss' ? null : v);
+  return (
+    <section className="mt-section mt-press">
+      <Label>Conférence de presse {press.used ? '· déjà faite cette semaine' : '· gratuite, 1 par semaine'}</Label>
+      {press.toAnswer.map((c) => (
+        <div key={c.id} className="mt-deal is-turn">
+          <div className="mt-deal-text">
+            <Label>{c.from} t’attaque</Label>
+            <b>
+              {c.speaker} s’en prend à {c.target}
+            </b>
+            <span className="mt-sub">{c.success ? `Ça a marché : ${c.target} a perdu du buzz. Riposte gratuite cette semaine pour tout annuler.` : 'C’est raté pour eux. Tu peux quand même riposter pour gagner du buzz.'}</span>
+          </div>
+          <div className="mt-acts mt-deal-acts">
+            <select className="mt-select" aria-label="Qui répond" value={replyWith} onChange={(e) => setReplyWith(e.target.value)}>
+              <option value="boss">Toi (le patron)</option>
+              {view.roster.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="mt-go" disabled={busy} onClick={() => onAct({ type: 'press_reply', confId: c.id, speakerId: asId(replyWith) })}>
+              Riposter
+            </button>
+          </div>
+        </div>
+      ))}
+      {press.targets.length > 0 && (
+        <div className="mt-acts">
+          <select className="mt-select" aria-label="Artiste visé" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+            <option value="">Qui tu descends ?</option>
+            {press.targets.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} · {t.label} · buzz {t.hype}
+              </option>
+            ))}
+          </select>
+          <select className="mt-select" aria-label="Qui parle" value={speaker} onChange={(e) => setSpeaker(e.target.value)} disabled={!target}>
+            {(target?.odds ?? [{ speakerId: null, name: 'Toi (le patron)', odds: 0 }]).map((o) => (
+              <option key={o.speakerId ?? 'boss'} value={o.speakerId ?? 'boss'}>
+                {o.name}
+                {target ? ` · ${pct(o.odds)} % de chances` : ''}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="mt-go" disabled={busy || press.used || !target} onClick={() => onAct({ type: 'press', speakerId: asId(speaker), targetId })}>
+            Lancer la conférence
+          </button>
+        </div>
+      )}
+      <span className="mt-sub">Réussi : la cible perd 8 de buzz, ton artiste en gagne 4. Raté : ton label perd 2 de réputation. Plus ton artiste a de buzz face à la cible, plus ça marche.</span>
+      {press.recent.length > 0 && (
+        <ul className="mt-cards-past">
+          {press.recent.map((r, i) => (
+            <li key={i}>{r.text}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+};
+
+const DUEL_STATUS: Record<DuelView['status'], string> = { asked: 'Défi envoyé', accepted: 'Duel accepté', done: 'Terminé', fled: 'Duel fui', void: 'Match nul' };
+
+const duelLine = (d: DuelView): string => {
+  if (d.status === 'asked')
+    return d.mine === 'received'
+      ? `${d.fromLabel} te défie avec ${d.fromArtist}, semaine ${d.week}. Tu as ${d.answerLeft} sem. pour répondre, sinon c’est la honte.`
+      : `${d.toLabel} a ${d.answerLeft} sem. pour répondre. Semaine ${d.week}.`;
+  if (d.status === 'accepted') return `${d.fromArtist} contre ${d.toArtist ?? '?'}, semaine ${d.week}${d.weeksLeft > 0 ? ` (dans ${d.weeksLeft} sem.)` : ''}. Sortez un son de cet artiste cette semaine-là.`;
+  if (d.status === 'fled') return `${d.toLabel} n’a pas relevé le défi.`;
+  if (d.status === 'void') return 'Personne n’a sorti de son.';
+  const [best, worst] = d.winner === d.fromLabel ? [d.fromStreams ?? 0, d.toStreams ?? 0] : [d.toStreams ?? 0, d.fromStreams ?? 0];
+  return `${d.winner} gagne : ${best.toLocaleString('fr-FR')} contre ${worst.toLocaleString('fr-FR')} streams${d.stolenFans > 0 ? ` · ${d.stolenFans.toLocaleString('fr-FR')} fans pris` : ''}.`;
+};
+
+// One duel: the two sides and the score.
+const DuelRow = ({ duel, view, onAct, busy }: { duel: DuelView; view?: MelodyView; onAct?: (action: MelodyAction) => void; busy?: boolean }) => {
+  const [artistId, setArtistId] = useState(view?.roster[0]?.id ?? '');
+  const won = duel.status === 'done' && duel.mine ? (duel.winner === (duel.mine === 'sent' ? duel.fromLabel : duel.toLabel)) : null;
+  const total = Math.max(1, (duel.fromStreams ?? 0) + (duel.toStreams ?? 0));
+  return (
+    <div className={`mt-deal mt-duel is-${duel.status}${won === true ? ' is-win' : won === false ? ' is-lose' : ''}`}>
+      <div className="mt-deal-text">
+        <Label>
+          Guerre de charts · {duel.fromLabel} contre {duel.toLabel}
+        </Label>
+        <b>{DUEL_STATUS[duel.status]}</b>
+        {duel.status === 'done' && (
+          <div className="mt-duel-bar" aria-hidden="true">
+            <span style={{ width: `${((duel.fromStreams ?? 0) / total) * 100}%` }}>{duel.fromSong ?? '—'}</span>
+            <span>{duel.toSong ?? '—'}</span>
+          </div>
+        )}
+        <span className="mt-sub">{duelLine(duel)}</span>
+      </div>
+      {view && onAct && duel.mine === 'received' && duel.status === 'asked' && (
+        <div className="mt-acts mt-deal-acts">
+          <ArtistSelect view={view} value={artistId} onChange={setArtistId} />
+          <button type="button" className="mt-go" disabled={busy || !artistId} onClick={() => onAct({ type: 'duel_answer', duelId: duel.id, accept: true, artistId })}>
+            Accepter le duel
+          </button>
+          <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'duel_answer', duelId: duel.id, accept: false, artistId: null })}>
+            Refuser
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Challenge another player to a chart duel, and your duels.
+const DuelPanel = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const players = view.rivals.filter((r) => r.player);
+  const [target, setTarget] = useState('');
+  const [artistId, setArtistId] = useState(view.roster[0]?.id ?? '');
+  const [wait, setWait] = useState(3);
+  const mine = view.duels.filter((d) => d.mine);
+  if (view.roster.length === 0 || (players.length === 0 && mine.length === 0)) return null;
+  return (
+    <section className="mt-section mt-duels">
+      <Label>Guerre de charts</Label>
+      {mine.map((d) => (
+        <DuelRow key={`${d.id}:${d.status}`} duel={d} view={view} onAct={onAct} busy={busy} />
+      ))}
+      {players.length > 0 && (
+        <div className="mt-acts">
+          <select className="mt-select" aria-label="Label défié" value={target} onChange={(e) => setTarget(e.target.value)}>
+            <option value="">Qui tu défies ?</option>
+            {players.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name} · {r.topArtist}
+              </option>
+            ))}
+          </select>
+          <ArtistSelect view={view} value={artistId} onChange={setArtistId} />
+          <select className="mt-select" aria-label="Semaine du duel" value={wait} onChange={(e) => setWait(Number(e.target.value))}>
+            {[3, 4, 5, 6, 7, 8].map((n) => (
+              <option key={n} value={n}>
+                Dans {n} semaines (semaine {view.tick + n + 1})
+              </option>
+            ))}
+          </select>
+          <button type="button" className="mt-go" disabled={busy || !target || !artistId} onClick={() => onAct({ type: 'duel', targetLabelId: target, artistId, week: view.tick + wait })}>
+            Lancer le défi
+          </button>
+        </div>
+      )}
+      <span className="mt-sub">Chacun sort un son de son artiste la semaine choisie. Le plus de streams la 1re semaine gagne : buzz +8, réputation +1 et 10 % des nouveaux fans du perdant. L’autre a 2 semaines pour répondre ; refuser, c’est la honte.</span>
+    </section>
+  );
+};
+
 // Going after another label: a pique once a week, or a disstrack.
 const Beef = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
   const [target, setTarget] = useState('');
@@ -4439,6 +4603,10 @@ const LabelPage = ({ card, onClose }: { card: LabelCard; onClose: () => void }) 
       <span className="mt-pill">Réputation {card.reputation}</span>
       <span className="mt-pill">
         {card.numberOnes} n°1 · {card.top10} top 10
+      </span>
+      <span className="mt-pill">
+        Duels : {card.duelWins} gagné{card.duelWins > 1 ? 's' : ''} · {card.duelLosses} perdu{card.duelLosses > 1 ? 's' : ''}
+        {card.duelFled > 0 ? ` · ${card.duelFled} fui${card.duelFled > 1 ? 's' : ''}` : ''}
       </span>
       <span className="mt-pill">
         Clashs : {card.clashWins} gagné{card.clashWins > 1 ? 's' : ''} · {card.clashLosses} perdu{card.clashLosses > 1 ? 's' : ''}
@@ -4561,6 +4729,8 @@ const LabelsTab = ({
       )}
       {view.interview && <Interview interview={view.interview} onAct={onAct} busy={busy} />}
       <Beef view={view} onAct={onAct} busy={busy} />
+      <PressPanel view={view} onAct={onAct} busy={busy} />
+      <DuelPanel view={view} onAct={onAct} busy={busy} />
       <section className="mt-section">
         <Label>Labels du serveur</Label>
         <div className="mt-labels">
@@ -4609,8 +4779,17 @@ const Charts = ({ view }: { view: MelodyView }) => {
   const [players, setPlayers] = useState(false);
   const entries = (chart === 'global' ? view.charts.global : (view.charts.genres[chart] ?? [])).filter((e) => !players || e.player).slice(0, 20);
   const mine = view.label?.id;
+  const duels = view.duels.filter((d) => d.status === 'accepted' || d.status === 'done');
   return (
     <div className="mt-view mt-in">
+      {duels.length > 0 && (
+        <section className="mt-deals" aria-label="Guerres de charts">
+          <Label>Guerres de charts en direct</Label>
+          {duels.map((d) => (
+            <DuelRow key={`${d.id}:${d.status}`} duel={d} />
+          ))}
+        </section>
+      )}
       <section className="mt-section">
         <div className="mt-chips">
           <button type="button" className="mt-chipbtn" aria-pressed={chart === 'global'} onClick={() => setChart('global')}>
@@ -4983,6 +5162,10 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'asset_loan') say('Prêt sur patrimoine accordé.');
       if (action.type === 'repay') say('Prêt remboursé.');
       if (action.type === 'buyback') say('Son racheté : il te rapporte de nouveau.');
+      if (action.type === 'press') say(answer.data.view.press?.recent[0]?.text ?? 'Conférence faite.');
+      if (action.type === 'press_reply') say(answer.data.view.press?.recent[0]?.text ?? 'Riposte envoyée.');
+      if (action.type === 'duel') say('Défi lancé. L’autre label a 2 semaines pour répondre.');
+      if (action.type === 'duel_answer') say(action.accept ? 'Duel accepté. Sors un son la bonne semaine !' : 'Duel refusé.');
       if (action.type === 'card') say(answer.data.view.events?.log[0] ?? 'Réponse envoyée.');
       if (action.type === 'role') say(`Nouveau rôle : ${ROLES[action.role].name}.`);
       if (action.type === 'genre_change') say('Changement de genre lancé. Laisse-lui le temps de trouver son son.');

@@ -30,6 +30,7 @@ import { cancelSession, finishSession, offerFeat, useDeal, reactToEvent, session
 import { formWeeks, setRole, supportBoost } from './support.ts';
 import { buyBack, estateView, repayLoans, takeAssetLoan, type EstateView } from './estate.ts';
 import { answerCard, eventsView, type EventsView } from './events.ts';
+import { answerDuel, askDuel, duelsView, pressConference, pressView, replyPress, type DuelView, type PressView } from './wars.ts';
 import type { RoleId } from './types.ts';
 
 export const MAX_PLAYER_LABELS = 20;
@@ -174,7 +175,11 @@ export type MelodyAction =
   | { type: 'repay'; kind: 'classic' | 'emergency' | 'asset' }
   | { type: 'buyback'; songId: string }
   | { type: 'tier_seen' }
-  | { type: 'card'; cardId: string; choiceId: string };
+  | { type: 'card'; cardId: string; choiceId: string }
+  | { type: 'press'; speakerId: string | null; targetId: string }
+  | { type: 'press_reply'; confId: string; speakerId: string | null }
+  | { type: 'duel'; targetLabelId: string; artistId: string; week: number }
+  | { type: 'duel_answer'; duelId: string; accept: boolean; artistId: string | null };
 
 const labelOfOwner = (world: World, ownerId: string): Label => {
   const label = Object.values(world.labels).find((l) => l.ownerId === ownerId && !l.bankrupt);
@@ -416,6 +421,18 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
     case 'card':
       answerCard(world, label, action.cardId, action.choiceId);
       return;
+    case 'press':
+      pressConference(world, label, action.speakerId, action.targetId);
+      return;
+    case 'press_reply':
+      replyPress(world, label, action.confId, action.speakerId);
+      return;
+    case 'duel':
+      askDuel(world, label, action.targetLabelId, action.artistId, action.week);
+      return;
+    case 'duel_answer':
+      answerDuel(world, label, action.duelId, action.accept, action.artistId);
+      return;
   }
 };
 
@@ -541,6 +558,9 @@ export interface LabelCard {
   numberOnes: number;
   top10: number;
   clashWins: number;
+  duelWins: number;
+  duelLosses: number;
+  duelFled: number;
   clashLosses: number;
   /** Past seasons: place and trophies. */
   honours: Honour[];
@@ -561,6 +581,9 @@ const labelCards = (world: World): LabelCard[] =>
       numberOnes: l.stats.numberOnes,
       top10: l.stats.top10Global,
       clashWins: l.stats.clashWins ?? 0,
+      duelWins: l.stats.duelWins ?? 0,
+      duelLosses: l.stats.duelLosses ?? 0,
+      duelFled: l.stats.duelFled ?? 0,
       clashLosses: l.stats.clashLosses ?? 0,
       honours: honoursOf(world, l.id),
       artists: rosterOf(world, l.id).map((a) => ({ id: a.id, name: a.name, genre: a.genre, gen: generalRating(a), fans: a.fans })),
@@ -604,6 +627,9 @@ export interface MelodyView {
   estate: EstateView | null;
   /** Label cards waiting, what the last answers did, and the server events of the week. */
   events: EventsView | null;
+  /** Press conferences (yours and against you) and the chart duels of the server. */
+  press: PressView | null;
+  duels: DuelView[];
   /** The centre de formation: youths, scout, mission. Null without a label. */
   academy: AcademyView | null;
   /** What happened on the market these last weeks. */
@@ -776,6 +802,8 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     crowdBoost: label ? crowdBoost(world, label.id) : 1,
     estate: label ? estateView(world, label) : null,
     events: label ? eventsView(world, label) : null,
+    press: label ? pressView(world, label) : null,
+    duels: duelsView(world, label?.id ?? null),
     trends: world.trends,
     label: label && {
       id: label.id,

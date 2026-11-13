@@ -10,6 +10,7 @@ import {
   MORALE, RANKS, ranksOf, isLeader, worriesOf, moraleBlock, tickMorale, dynamicsView,
   shareLoan, returnLoans, STUDIO_CONTENT, studioCardsFor, usualNote, isLetdown, judgeRelease,
   SALES, salesQuote, createProject, tickProjects, supportBoost, ROLES, ROLE_RULES, FORM, roleSlots, inForm, lightUp, experienceBonus,
+  WARS, pressOdds,
   CARD_IDS, EVENTS, EVENT_CONTENT, SERVER_CONTENT, SERVER_IDS, eventsView, streamMult, tickCards, tickServerEvents, applyStreamEvents,
   ESTATE, TIER_TABLE, assetBase, assetLoanCap, buybackPrice, tickAssetLoan, tierProgress, catalogueValue,
   SKILL_IDS, skillsOf, skillLevel, skillPlus, stageBoost, tirelessFactor, PROFILES, EVOLUTION, GENRE_CHANGE, profileOf, profileGrowth, afterRelease, tickEvolution, GENRES,
@@ -2305,5 +2306,127 @@ describe('événements de label, opportunités et événements du serveur', () =
     }
     expect(fee).toBeGreaterThan(15_000);
     expect(eventsView(world, label).cards.length).toBeGreaterThan(0);
+  });
+});
+
+describe('guerres : conférence de presse et guerre de charts', () => {
+  const setup = () => {
+    const world = createWorld(42);
+    for (const u of ['u1', 'u2']) {
+      applyAction(world, u, { type: 'found', name: `Label ${u}` });
+      applyAction(world, u, { type: 'tuto', move: 'skip' });
+    }
+    world.lastServerEvents = [...SERVER_IDS];
+    const a = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    const b = Object.values(world.labels).find((l) => l.ownerId === 'u2')!;
+    return { world, a, b, artA: rosterOf(world, a.id)[0]!, artB: rosterOf(world, b.id)[0]! };
+  };
+
+  it('gives better press odds with more buzz than the target, once a week, free', () => {
+    const { world, a, artA, artB } = setup();
+    artA.hype = 10;
+    artB.hype = 60;
+    const low = pressOdds(world, a.id, artA, artB);
+    artA.hype = 90;
+    artB.hype = 10;
+    const high = pressOdds(world, a.id, artA, artB);
+    expect(high).toBeGreaterThan(low + 0.3);
+    expect(pressOdds(world, a.id, null, artB)).toBeGreaterThan(0);
+    const cash = a.cash;
+    applyAction(world, 'u1', { type: 'press', speakerId: null, targetId: artB.id });
+    expect(a.cash).toBe(cash);
+    expect(() => applyAction(world, 'u1', { type: 'press', speakerId: artA.id, targetId: artB.id })).toThrow(/par semaine/);
+    expect(() => applyAction(world, 'u2', { type: 'press', speakerId: null, targetId: rosterOf(world, Object.values(world.labels).find((l) => l.ownerId === 'u2')!.id)[0]!.id })).toThrow(/propre/);
+  });
+
+  it('hits the target on success, costs reputation on failure, and a good riposte cancels it', () => {
+    let hits = 0;
+    let misses = 0;
+    for (let seed = 1; seed <= 30; seed += 1) {
+      const { world, a, b, artA, artB } = setup();
+      world.seed = seed;
+      artA.hype = 50;
+      artB.hype = 50;
+      const rep = a.reputation;
+      applyAction(world, 'u1', { type: 'press', speakerId: artA.id, targetId: artB.id });
+      const conf = world.pressConfs![0]!;
+      if (conf.success) {
+        hits += 1;
+        expect(artB.hype).toBe(50 - WARS.hit);
+        expect(artA.hype).toBe(50 + WARS.gain);
+        expect(buildView(world, 'u2').press!.toAnswer).toHaveLength(1);
+        applyAction(world, 'u2', { type: 'press_reply', confId: conf.id, speakerId: artB.id });
+        if (conf.reply!.success) {
+          expect(artB.hype).toBe(50 + WARS.replyGain);
+          expect(artA.hype).toBe(50);
+        }
+        expect(() => applyAction(world, 'u2', { type: 'press_reply', confId: conf.id, speakerId: null })).toThrow(/déjà/);
+      } else {
+        misses += 1;
+        expect(a.reputation).toBeCloseTo(Math.max(0, rep - WARS.failReputation));
+        expect(artA.hype).toBe(50 - WARS.failHype);
+      }
+      expect(b.id).not.toBe(a.id);
+    }
+    expect(hits).toBeGreaterThan(3);
+    expect(misses).toBeGreaterThan(3);
+  });
+
+  const release = (world: World, labelId: string, artist: Artist, week: number, title: string) => {
+    artist.energy = 100;
+    const song = createSong(world, labelId, {
+      artistId: artist.id, title, themeId: 'rupture', beatId: 'lovetrap',
+      levels: { theme: 1, beat: 1, producer: 1, studio: 1 }, producer: producerOfLevel(1, 1),
+    });
+    Object.assign(song, { state: 'scheduled', releaseTick: week, availableTick: 0 });
+    return song;
+  };
+
+  it('settles a duel on first-week streams: buzz, reputation and 10 % of the new fans', () => {
+    const { world, a, b, artA, artB } = setup();
+    world.labels[a.id]!.cash = 1_000_000;
+    expect(() => applyAction(world, 'u1', { type: 'duel', targetLabelId: b.id, artistId: artA.id, week: world.tick + 1 })).toThrow(/entre 3 et 8/);
+    const week = world.tick + 3;
+    applyAction(world, 'u1', { type: 'duel', targetLabelId: b.id, artistId: artA.id, week });
+    const duel = world.duels![0]!;
+    expect(() => applyAction(world, 'u1', { type: 'duel', targetLabelId: b.id, artistId: artA.id, week })).toThrow(/déjà un duel/);
+    applyAction(world, 'u2', { type: 'duel_answer', duelId: duel.id, accept: true, artistId: artB.id });
+    expect(duel.status).toBe('accepted');
+    artA.fans = 200_000;
+    artB.fans = 1_000;
+    release(world, a.id, artA, week, 'Gros son');
+    release(world, b.id, artB, week, 'Petit son');
+    const repA = a.reputation;
+    while (world.tick < week) runTick(world);
+    expect(duel.status).toBe('done');
+    expect(duel.winnerLabelId).toBe(a.id);
+    expect(duel.fromStreams!).toBeGreaterThan(duel.toStreams!);
+    expect(a.stats.duelWins).toBe(1);
+    expect(b.stats.duelLosses).toBe(1);
+    expect(a.reputation).toBeGreaterThan(repA - 1);
+    const view = buildView(world, 'u2').duels[0]!;
+    expect(view).toMatchObject({ mine: 'received', status: 'done', winner: a.name, fromSong: 'Gros son', toSong: 'Petit son' });
+    expect(buildView(world, 'u1').labels.find((l) => l.id === a.id)!.duelWins).toBe(1);
+  });
+
+  it('shames a label that flees or does not answer in 2 weeks, unless the challenger is bigger', () => {
+    const { world, a, b, artA, artB } = setup();
+    applyAction(world, 'u1', { type: 'duel', targetLabelId: b.id, artistId: artA.id, week: world.tick + 4 });
+    const repB = b.reputation;
+    applyAction(world, 'u2', { type: 'duel_answer', duelId: world.duels![0]!.id, accept: false, artistId: null });
+    expect(world.duels![0]!.status).toBe('fled');
+    expect(b.reputation).toBeCloseTo(Math.max(0, repB - WARS.fleeReputation));
+    expect(b.stats.duelFled).toBe(1);
+    expect(world.marketNews!.some((n) => n.text.includes('a fui le duel'))).toBe(true);
+    // No answer: counts as a refusal. A smaller label keeps its honour.
+    a.tier = 2;
+    applyAction(world, 'u1', { type: 'duel', targetLabelId: b.id, artistId: artA.id, week: world.tick + 5 });
+    const rep2 = b.reputation;
+    runTick(world);
+    runTick(world);
+    expect(world.duels!.find((d) => d.askedTick === world.tick - 2)!.status).toBe('fled');
+    expect(b.reputation).toBeGreaterThanOrEqual(rep2 - 0.5);
+    expect(b.stats.duelFled).toBe(1);
+    expect(artB.id).toBeTruthy();
   });
 });

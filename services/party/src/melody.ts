@@ -100,6 +100,10 @@ export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('buyback'), songId: IdSchema }),
   z.object({ type: z.literal('tier_seen') }),
   z.object({ type: z.literal('card'), cardId: IdSchema, choiceId: z.string().min(1).max(20) }),
+  z.object({ type: z.literal('press'), speakerId: IdSchema.nullable(), targetId: IdSchema }),
+  z.object({ type: z.literal('press_reply'), confId: IdSchema, speakerId: IdSchema.nullable() }),
+  z.object({ type: z.literal('duel'), targetLabelId: IdSchema, artistId: IdSchema, week: z.number().int().min(0).max(100_000) }),
+  z.object({ type: z.literal('duel_answer'), duelId: IdSchema, accept: z.boolean(), artistId: IdSchema.nullable() }),
 ]);
 
 export const MelodyCoversSchema = z.object({ ids: z.array(IdSchema).max(60) });
