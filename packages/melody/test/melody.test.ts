@@ -10,6 +10,7 @@ import {
   MORALE, RANKS, ranksOf, isLeader, worriesOf, moraleBlock, tickMorale, dynamicsView,
   shareLoan, returnLoans, STUDIO_CONTENT, studioCardsFor, usualNote, isLetdown, judgeRelease,
   SALES, salesQuote, createProject, tickProjects, supportBoost, ROLES, ROLE_RULES, FORM, roleSlots, inForm, lightUp, experienceBonus,
+  CARD_IDS, EVENTS, EVENT_CONTENT, SERVER_CONTENT, SERVER_IDS, eventsView, streamMult, tickCards, tickServerEvents, applyStreamEvents,
   ESTATE, TIER_TABLE, assetBase, assetLoanCap, buybackPrice, tickAssetLoan, tierProgress, catalogueValue,
   SKILL_IDS, skillsOf, skillLevel, skillPlus, stageBoost, tirelessFactor, PROFILES, EVOLUTION, GENRE_CHANGE, profileOf, profileGrowth, afterRelease, tickEvolution, GENRES,
 } from '../src/index.ts';
@@ -109,6 +110,7 @@ describe('release and tick', () => {
     const { world, labelId, artist } = worldWithLabel();
     const label = world.labels[labelId];
     if (label) label.cash = 30_000;
+    world.lastServerEvents = [...SERVER_IDS];
     const song = createSong(world, labelId, {
       artistId: artist.id, title: 'Rue Glacée', themeId: 'rupture', beatId: 'lovetrap',
       levels: { theme: 2, beat: 2, producer: 2, studio: 2 }, producer: producerOfLevel(2, 1),
@@ -2158,5 +2160,150 @@ describe('prêt sur patrimoine et paliers Mainstream et Empire', () => {
     // At the top, nothing more to show.
     label.tier = 6;
     expect(tierProgress(world, label)).toBeNull();
+  });
+});
+
+describe('événements de label, opportunités et événements du serveur', () => {
+  const setup = () => {
+    const world = createWorld(42);
+    applyAction(world, 'u1', { type: 'found', name: 'Label u1' });
+    applyAction(world, 'u1', { type: 'tuto', move: 'skip' });
+    const label = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    label.cash = 500_000;
+    const artist = rosterOf(world, label.id)[0]!;
+    world.lastServerEvents = [...SERVER_IDS];
+    return { world, label, artist };
+  };
+
+  it('has 40 label cards, 6 opportunities and 13 server events', () => {
+    expect(EVENT_CONTENT).toEqual({ events: 40, chances: 6 });
+    expect(new Set(CARD_IDS).size).toBe(46);
+    expect(SERVER_CONTENT).toBe(13);
+  });
+
+  it('draws at most 3 cards, answers one, and applies the ignore answer after 4 weeks', () => {
+    const { world, label } = setup();
+    for (let i = 0; i < 30 && (label.cards ?? []).length < EVENTS.maxWaiting; i += 1) {
+      world.tick += 1;
+      tickCards(world, () => {});
+    }
+    expect(label.cards).toHaveLength(EVENTS.maxWaiting);
+    world.tick += 1;
+    tickCards(world, () => {});
+    expect((label.cards ?? []).length).toBeLessThanOrEqual(EVENTS.maxWaiting);
+    const view = buildView(world, 'u1').events!;
+    expect(view.cards.length).toBeGreaterThan(0);
+    for (const c of view.cards) expect(c.title + c.text + c.choices.map((x) => x.text).join()).not.toMatch(/\{[abslk]\}/);
+    const card = label.cards![0]!;
+    const choice = card.choices.find((c) => c.odds === undefined)!;
+    applyAction(world, 'u1', { type: 'card', cardId: card.id, choiceId: choice.id });
+    expect(label.cards!.some((c) => c.id === card.id)).toBe(false);
+    expect(label.cardLog![0]).toContain(card.title);
+    expect(() => applyAction(world, 'u1', { type: 'card', cardId: card.id, choiceId: choice.id })).toThrow(/n’existe plus/);
+    // The others wait 4 weeks, then answer themselves.
+    const left = [...label.cards!];
+    world.tick = Math.max(...left.map((c) => c.tick)) + EVENTS.expireWeeks;
+    const told: string[] = [];
+    tickCards(world, (_, text) => told.push(text));
+    for (const c of left) expect(label.cards!.some((x) => x.id === c.id)).toBe(false);
+    if (left.length > 0) expect(told.some((t) => t.includes('Sans réponse'))).toBe(true);
+  });
+
+  it('keeps the dark cards for invented artists', () => {
+    const { world, label, artist } = setup();
+    artist.real = true;
+    for (let i = 0; i < 200; i += 1) {
+      world.tick += 1;
+      label.cards = [];
+      tickCards(world, () => {});
+      for (const c of label.cards) expect(['testament', 'accountant', 'ghost', 'dead_rumour']).not.toContain(c.defId);
+    }
+  });
+
+  it('negotiates a sync at 50/50: half more, or nothing', () => {
+    const { world, label, artist } = setup();
+    const song = createSong(world, label.id, {
+      artistId: artist.id, title: 'Pub', themeId: 'rupture', beatId: 'lovetrap',
+      levels: { theme: 1, beat: 1, producer: 1, studio: 1 }, producer: producerOfLevel(1, 1),
+    });
+    Object.assign(song, { state: 'released', releaseTick: 0, streamsLast: 10_000, quality: 80 });
+    let won = 0;
+    let lost = 0;
+    for (let i = 0; i < 40; i += 1) {
+      const card = {
+        id: `card_t${i}`, defId: 'sync', kind: 'chance' as const, title: 'Sync', text: '', artistId: artist.id, songId: song.id, tick: world.tick,
+        choices: [{ id: 'deal', text: 'Négocier (50 %)', odds: 0.5, win: { cash: 15_000, boost: { mult: 2, weeks: 2 } }, lose: {} }], ignore: 'deal',
+      };
+      label.cards = [card];
+      const cash = label.cash;
+      applyAction(world, 'u1', { type: 'card', cardId: card.id, choiceId: 'deal' });
+      if (label.cash === cash + 15_000) won += 1;
+      else if (label.cash === cash) lost += 1;
+      world.tick += 1;
+    }
+    expect(won + lost).toBe(40);
+    expect(won).toBeGreaterThan(5);
+    expect(lost).toBeGreaterThan(5);
+    // A won sync doubles the song's streams.
+    expect(streamMult(world, song, 'trap')).toBeGreaterThan(1);
+  });
+
+  it('runs 1 or 2 server events a week: money is paid, trends lift a genre, and the boost does not stay', () => {
+    const { world, label, artist } = setup();
+    world.lastServerEvents = [];
+    const song = createSong(world, label.id, {
+      artistId: artist.id, title: 'Tendance', themeId: 'rupture', beatId: 'lovetrap',
+      levels: { theme: 1, beat: 1, producer: 1, studio: 1 }, producer: producerOfLevel(1, 1),
+    });
+    Object.assign(song, { state: 'released', releaseTick: 0, streamsLast: 10_000, decay: 1, quality: 70 });
+    const news: string[] = [];
+    let paid = 0;
+    for (let i = 0; i < 20; i += 1) {
+      world.tick += 1;
+      const before = news.length;
+      tickServerEvents(world, (_, amount) => { paid += Math.abs(amount); }, () => {}, (t) => news.push(t));
+      expect(news.length - before).toBeGreaterThanOrEqual(1);
+      expect(news.length - before).toBeLessThanOrEqual(2);
+    }
+    expect(paid).toBeGreaterThan(0);
+    // A genre trend: +30 % on that genre only, then taken off the next week.
+    world.serverEvents = [{ id: 'x', title: 'Mode', text: '', tick: world.tick, until: world.tick, mult: 1.3, genre: 'trap' }];
+    song.streamsLast = 10_000;
+    applyStreamEvents(world, () => 'trap');
+    expect(song.streamsLast).toBe(13_000);
+    expect(song.eventMult).toBe(1.3);
+    song.streamsLast = 10_000;
+    delete song.eventMult;
+    applyStreamEvents(world, () => 'pop' as never);
+    expect(song.streamsLast).toBe(10_000);
+    song.streamsLast = 13_000;
+    song.eventMult = 1.3;
+    world.serverEvents = [];
+    world.lastServerEvents = [...SERVER_IDS];
+    runTick(world);
+    expect(song.eventMult).toBeUndefined();
+    expect(song.streamsLast).toBeLessThan(13_000);
+  });
+
+  it('only sends festivals and brand promos to known artists, with a fee that grows with the fans', () => {
+    const { world, label, artist } = setup();
+    artist.fans = 2_000;
+    for (let i = 0; i < 60; i += 1) {
+      world.tick += 1;
+      label.cards = [];
+      tickCards(world, () => {});
+      expect(label.cards.some((c) => c.defId === 'brand' || c.defId === 'festival')).toBe(false);
+    }
+    artist.fans = 1_000_000;
+    let fee = 0;
+    for (let i = 0; i < 60 && fee === 0; i += 1) {
+      world.tick += 1;
+      label.cards = [];
+      tickCards(world, () => {});
+      const brand = label.cards.find((c) => c.defId === 'brand');
+      if (brand) fee = brand.choices[0]!.effect!.cash!;
+    }
+    expect(fee).toBeGreaterThan(15_000);
+    expect(eventsView(world, label).cards.length).toBeGreaterThan(0);
   });
 });

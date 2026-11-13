@@ -99,6 +99,7 @@ export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('repay'), kind: z.enum(['classic', 'emergency', 'asset']) }),
   z.object({ type: z.literal('buyback'), songId: IdSchema }),
   z.object({ type: z.literal('tier_seen') }),
+  z.object({ type: z.literal('card'), cardId: IdSchema, choiceId: z.string().min(1).max(20) }),
 ]);
 
 export const MelodyCoversSchema = z.object({ ids: z.array(IdSchema).max(60) });

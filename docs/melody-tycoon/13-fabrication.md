@@ -341,3 +341,15 @@ Choix du propriétaire : prêt de **40 %** du patrimoine, durée **au choix 13, 
 - **Stars moins chères** : un artiste de plus de 5 M de fans demande 25 % d'avance en moins à un Empire.
 - **Montée de palier** : moral +5 pour tous les artistes, « X devient Empire ! » dans les news de toute la party, et un écran de fête avec des confettis.
 - **Onglet Label** : « Ton palier » avec une barre par condition (réputation, fans, argent gagné, hits) et le tableau des 6 paliers. Le tableau ne dit que ce qui change vraiment avec le palier (taille des artistes signables, budget par son, prêt, et les nouveautés).
+
+## Étape 20 — événements de label, opportunités et événements du serveur (fait)
+
+Choix du propriétaire : **40 cartes** de vie du label, 2 à 4 réponses, même ton que le studio (absurde et humour noir sur des artistes inventés, jamais de vrais partis ni de vraies personnes). Une carte sans réponse : **au bout de 4 semaines, « ignorer » s'applique**, 3 cartes au plus en attente. **Événements du serveur pour tout le monde, 1 ou 2 par semaine** : plateformes, mode du moment, drôles, argent. Opportunités : **sync** (pub, série, film, jeu vidéo) avec **négociation à 50/50** (+50 % ou perdue), **offres de festival** à un cachet juste, petits plus (**playlist éditoriale, remix officiel, session live filmée**). **Pas de sponsor chaque semaine** : des **marques** paient une promo aux artistes connus.
+
+- **Cartes** (Accueil) : chaque semaine, environ 40 % de chance d'une carte de vie du label, 10 % d'une deuxième, 30 % d'une opportunité. Les montants suivent le palier. Une carte « pari » affiche ce qui se passe si c'est gagné ou raté. Les 4 cartes les plus noires ne tombent que sur des artistes inventés.
+- **Sync** : cachet selon les fans et le charisme. Accepter : cachet + streams du son ×2 pendant 2 semaines. Négocier : 50 % de chance d'avoir +50 %, sinon l'offre est perdue.
+- **Festival** (artistes de 5 000 fans et plus) : cachet = environ deux concerts, coûte de l'énergie, donne des fans et du buzz.
+- **Marques** (artistes de 100 000 fans et plus) : un paiement unique, qui grandit avec les fans.
+- **Petits plus** : playlist éditoriale (×1,5 pendant 2 semaines), remix officiel (payant, buzz + ×1,3), session live (fans et buzz).
+- **Événements du serveur** : 13 en tout (panne, pluie, playlist géante d'un genre, un genre qui explose 2 semaines, retour des années 2000, danse virale ou astronaute sur un son d'un joueur, boycott des intros, IA qui sature, chat DJ, taxe surprise, bonus culture, dédommagement des plateformes). Ils s'affichent sur l'Accueil et dans les news de toute la party. Un bonus de streams ne compte que pour sa semaine, il ne s'accumule pas.
+- Les dernières réponses restent visibles sous les cartes.

@@ -11,6 +11,7 @@ import { returnLoans, shareLoan, tickLending } from './lending.ts';
 import { tickClashes } from './clash.ts';
 import { tickProjects } from './projects.ts';
 import { ESTATE, tickAssetLoan } from './estate.ts';
+import { applyStreamEvents, tickCards, tickServerEvents } from './events.ts';
 import { judgeRelease } from './letdown.ts';
 import { lightUp, supportBoost } from './support.ts';
 import { tickSeason } from './seasons.ts';
@@ -135,9 +136,31 @@ export const runTick = (world: World): TickReport => {
 
   if (tick % CFG.ticksPerMonth === 1) rollTrends(world, rngFor(world.seed, tick, 'trends'));
 
+  // Server events of the week (platforms, trends, money), for everyone.
+  const tellEarly = (labelId: string, text: string): void => {
+    const label = world.labels[labelId];
+    if (label && label.kind === 'player' && !label.bankrupt) report(reports, label).events.push(text);
+  };
+  tickServerEvents(
+    world,
+    (labelId, amount) => {
+      const label = world.labels[labelId];
+      if (label) earn(reports, label, amount);
+    },
+    tellEarly,
+    (text) => {
+      world.marketNews = [...(world.marketNews ?? []), { tick, text }];
+    },
+  );
+
   // 1. Songs already out lose listeners; background releases too.
   for (const song of world.songs) {
     if (song.state !== 'released') continue;
+    // Last week's event boost does not carry over.
+    if (song.eventMult) {
+      song.streamsLast = Math.round(song.streamsLast / song.eventMult);
+      delete song.eventMult;
+    }
     const artist = world.artists[song.artistId];
     const floor = artist ? artist.fans * CFG.release.catalogFloor * (song.quality / 70) : 0;
     song.streamsLast = Math.round(Math.max(song.streamsLast * song.decay, floor));
@@ -224,6 +247,12 @@ export const runTick = (world: World): TickReport => {
       combo: song.combo ?? null,
     });
   }
+
+  // Server events and card boosts on this week's streams.
+  applyStreamEvents(world, (song) => {
+    const artist = world.artists[song.artistId];
+    return artist ? songGenre(song, artist) : null;
+  });
 
   // 3. Charts.
   interface Line { title: string; artistName: string; labelId: string; streams: number; genre: GenreId; song: Song | null }
@@ -464,6 +493,8 @@ export const runTick = (world: World): TickReport => {
       world.marketNews = [...(world.marketNews ?? []), { tick: world.tick, text }];
     },
   );
+  // Label cards: old ones answer themselves, new ones come.
+  tickCards(world, tell);
   for (const label of players) if (!label.bankrupt) report(reports, label).cash = Math.round(label.cash);
   for (const contract of world.contracts.filter((c) => c.endTick <= tick)) {
     const label = world.labels[contract.labelId];

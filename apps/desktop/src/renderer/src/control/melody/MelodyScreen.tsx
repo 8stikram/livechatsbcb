@@ -242,6 +242,8 @@ const Home = ({ view, onGo, onAct, busy }: { view: MelodyView; onGo: (tab: Tab) 
   return (
     <div className="mt-view mt-in">
       <TrendBanner trend={view.trend} />
+      <ServerNews view={view} />
+      <LabelCards view={view} onAct={onAct} busy={busy} />
       <div className="mt-hub">
         <button type="button" className="mt-tile mt-t-create" data-tuto="hub-studio" onClick={() => onGo('studio')}>
           <span className="mt-vinyl" aria-hidden="true" />
@@ -910,6 +912,81 @@ const TrendBanner = ({ trend }: { trend: Trend }) => (
     </span>
   </div>
 );
+
+// What happens on the whole server this week (platforms, trends, money).
+const ServerNews = ({ view }: { view: MelodyView }) => {
+  const server = view.events?.server ?? [];
+  if (server.length === 0) return null;
+  return (
+    <div className="mt-srv" role="note">
+      <Label>Sur tout le serveur cette semaine</Label>
+      {server.map((e) => (
+        <div key={e.title} className="mt-srv-line">
+          <b>{e.title}</b>
+          <span>{e.text}</span>
+          {e.weeksLeft > 1 && <span className="mt-sub">Encore {e.weeksLeft} sem.</span>}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Label cards: small stories and offers, with 2 to 4 answers. Unanswered for 4 weeks, "ignore" applies.
+const LabelCards = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const events = view.events;
+  const [showLog, setShowLog] = useState(false);
+  if (!events || (events.cards.length === 0 && events.log.length === 0)) return null;
+  const cash = view.label?.cash ?? 0;
+  return (
+    <div className="mt-cards">
+      {events.cards.map((card) => (
+        <div key={card.id} className={`mt-ecard mt-in${card.kind === 'chance' ? ' is-chance' : ''}`}>
+          <div className="mt-ecard-top">
+            <Label>{card.kind === 'chance' ? 'Opportunité' : 'Vie du label'}{card.artist ? ` · ${card.artist}` : ''}</Label>
+            <span className={`mt-sub${card.weeksLeft <= 1 ? ' mt-ecard-late' : ''}`}>
+              {card.weeksLeft <= 1 ? 'Dernière semaine pour répondre' : `${card.weeksLeft} sem. pour répondre`}
+            </span>
+          </div>
+          <b className="mt-ecard-title">{card.title}</b>
+          <p className="mt-ecard-text">{card.text}</p>
+          <div className="mt-ecard-choices">
+            {card.choices.map((choice) => (
+              <button
+                key={choice.id}
+                type="button"
+                className="mt-ecard-choice"
+                disabled={busy || choice.cost > cash}
+                title={choice.cost > cash ? 'Pas assez de cash' : undefined}
+                onClick={() => onAct({ type: 'card', cardId: card.id, choiceId: choice.id })}
+              >
+                <b>{choice.text}</b>
+                {choice.odds === null ? (
+                  <span className="mt-sub">{choice.effect}</span>
+                ) : (
+                  <span className="mt-sub">
+                    Gagné : {choice.win} · Raté : {choice.lose}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      {events.log.length > 0 && (
+        <button type="button" className="mt-ghost mt-cards-log" onClick={() => setShowLog((v) => !v)}>
+          {showLog ? 'Cacher les dernières réponses' : 'Voir les dernières réponses'}
+        </button>
+      )}
+      {showLog && (
+        <ul className="mt-cards-past">
+          {events.log.map((line, i) => (
+            <li key={i}>{line}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 // The combos found by playing: secret ones only work during their season.
 const Notebook = ({ entries, season, onClose }: { entries: NotebookEntry[]; season: number; onClose: () => void }) => (
@@ -4906,6 +4983,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'asset_loan') say('Prêt sur patrimoine accordé.');
       if (action.type === 'repay') say('Prêt remboursé.');
       if (action.type === 'buyback') say('Son racheté : il te rapporte de nouveau.');
+      if (action.type === 'card') say(answer.data.view.events?.log[0] ?? 'Réponse envoyée.');
       if (action.type === 'role') say(`Nouveau rôle : ${ROLES[action.role].name}.`);
       if (action.type === 'genre_change') say('Changement de genre lancé. Laisse-lui le temps de trouver son son.');
       if (action.type === 'genre_wish_refuse') say('Tu as dit non. Il fait un peu la tête.');

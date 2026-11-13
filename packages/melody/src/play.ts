@@ -29,6 +29,7 @@ import { leaveTalk, makeOffer, openTalk, talkBlocked, talkNews, talksOfLabel, ty
 import { cancelSession, finishSession, offerFeat, useDeal, reactToEvent, sessionOf, sessionView, skipFeat, startSession, type SessionView } from './studio.ts';
 import { formWeeks, setRole, supportBoost } from './support.ts';
 import { buyBack, estateView, repayLoans, takeAssetLoan, type EstateView } from './estate.ts';
+import { answerCard, eventsView, type EventsView } from './events.ts';
 import type { RoleId } from './types.ts';
 
 export const MAX_PLAYER_LABELS = 20;
@@ -172,7 +173,8 @@ export type MelodyAction =
   | { type: 'asset_loan'; amount: number; weeks: number }
   | { type: 'repay'; kind: 'classic' | 'emergency' | 'asset' }
   | { type: 'buyback'; songId: string }
-  | { type: 'tier_seen' };
+  | { type: 'tier_seen' }
+  | { type: 'card'; cardId: string; choiceId: string };
 
 const labelOfOwner = (world: World, ownerId: string): Label => {
   const label = Object.values(world.labels).find((l) => l.ownerId === ownerId && !l.bankrupt);
@@ -411,6 +413,9 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
     case 'tier_seen':
       delete label.tierParty;
       return;
+    case 'card':
+      answerCard(world, label, action.cardId, action.choiceId);
+      return;
   }
 };
 
@@ -597,6 +602,8 @@ export interface MelodyView {
   };
   /** Asset loan, seized songs, tiers. Null without a label. */
   estate: EstateView | null;
+  /** Label cards waiting, what the last answers did, and the server events of the week. */
+  events: EventsView | null;
   /** The centre de formation: youths, scout, mission. Null without a label. */
   academy: AcademyView | null;
   /** What happened on the market these last weeks. */
@@ -768,6 +775,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     dynamics: label ? dynamicsView(world, label) : null,
     crowdBoost: label ? crowdBoost(world, label.id) : 1,
     estate: label ? estateView(world, label) : null,
+    events: label ? eventsView(world, label) : null,
     trends: world.trends,
     label: label && {
       id: label.id,

@@ -169,6 +169,10 @@ export interface Label {
   roleTicks?: Record<string, number>;
   /** Genre changes made this season. */
   genreChanges?: { season: number; count: number };
+  /** Label event cards waiting for an answer, the last ones drawn, and what the last answers did. */
+  cards?: import('./events.ts').Card[];
+  lastEvents?: string[];
+  cardLog?: string[];
   /** Embrouilles of the last song made: never the same one twice in a row. */
   lastCards?: string[];
   /** Last week several of its artists let the fans down (reputation). */
@@ -233,6 +237,8 @@ export interface Song {
   history?: number[];
   /** Seized by the bank for an unpaid asset loan: it earns nothing for the label until bought back. */
   seized?: { tick: number };
+  /** This week's streams were multiplied by this (server event, card): taken off before the next decay. */
+  eventMult?: number;
   /** A disstrack: the label it goes after. */
   diss?: string;
   /** The EP or album it belongs to. */
@@ -341,6 +347,9 @@ export interface World {
   favourites?: Record<string, string[]>;
   /** What happened on the market lately, for everyone's Monday summary. */
   marketNews?: Array<{ tick: number; text: string }>;
+  /** Server events running (platforms, trends, money) and card boosts on one song. */
+  serverEvents?: import('./events.ts').ServerEvent[];
+  lastServerEvents?: string[];
   /** Combos each label found by playing. */
   notebooks?: Record<string, import('./craft.ts').NotebookEntry[]>;
 }
