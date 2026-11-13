@@ -79,6 +79,16 @@ const record = (label: Label | undefined, win: boolean): void => {
   else label.stats.clashLosses = (label.stats.clashLosses ?? 0) + 1;
 };
 
+/** Who the artist is fighting right now (the other artist, or the other label), for the studio cards. */
+export const clashRival = (world: World, artistId: string): string | null => {
+  for (const c of world.clashes ?? []) {
+    if (!isOpen(c)) continue;
+    if (c.fromArtistId === artistId) return (c.toArtistId ? world.artists[c.toArtistId]?.name : undefined) ?? world.labels[c.toLabelId]?.name ?? null;
+    if (c.toArtistId === artistId) return world.artists[c.fromArtistId]?.name ?? world.labels[c.fromLabelId]?.name ?? null;
+  }
+  return null;
+};
+
 /* ---------------------------------- Rivals ---------------------------------- */
 
 /** Labels one can go after: the players, and the biggest labels of the game. */

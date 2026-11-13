@@ -1310,7 +1310,7 @@ const EventCard = ({ event, busy, onReact, onNext }: { event: SessionEventView; 
   <div className={`mt-evt${event.kind === 'fluid' ? ' is-good' : ''}`}>
     <Label>{event.kind === 'fluid' ? `${STAGE_NAMES[event.stage]} · ça roule` : `Embrouille · ${STAGE_NAMES[event.stage]?.toLowerCase()}`}</Label>
     <h3>{event.title}</h3>
-    {event.kind === 'clash' && <span className="mt-mute">{event.text}</span>}
+    {event.text && <span className="mt-mute">{event.text}</span>}
     {event.kind === 'clash' && event.reaction === null && <span className="mt-sub">Tu ne sais pas ce que ça va donner : à toi de sentir le coup.</span>}
     {event.kind === 'clash' && event.reaction === null ? (
       <div className="mt-react">

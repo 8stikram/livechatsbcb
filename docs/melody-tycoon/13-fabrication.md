@@ -294,3 +294,17 @@ Choix du propriétaire : **enchères simples**, **prêt simple**, **les potes + 
 - **Labels du jeu** : environ 3 fois sur 10, un label du jeu prend une offre de prêt au prix juste ou moins, et verse aussi 30 %.
 - **Retour** : l'artiste rentre à la fin, ou plus tôt si le label qui l'emprunte fait faillite. Si le prêteur a fait faillite, il est libre.
 - **Échange d'artistes** : dans une offre de transfert à un pote, on peut ajouter un de ses artistes en plus (ou à la place) de l'argent. Possible 8 semaines après sa signature.
+
+## Étape 17 — embrouilles du studio et sorties ratées (fait)
+
+Choix du propriétaire : **pas de mixtape ni de freestyle** (on garde EP, album et deluxe), **40 embrouilles** au studio, **humour absurde et noir**, des **embrouilles selon la situation**, **une dizaine de bonnes surprises** en plus, et le plus « pas deux fois la même ». Il a aussi demandé que **sortir des sons ratés fasse perdre du buzz**, pour que personne ne spamme des sons chaque semaine.
+
+- **40 embrouilles** (il y en avait 26) : 8 après l'écriture, 8 après le beat, 8 avec le producteur, 8 au studio, 8 avec l'invité. Les nouvelles : le parolier est mort, il veut tout réécrire contre son rival, le beat est maudit, « chez mon ancien label c'était mieux », caprices de tête d'affiche, le producteur en garde à vue, il s'endort dans la cabine, et 7 avec l'invité (couplet en vocal depuis Dubaï, couplet trop fort, couplet raté, bagarre, l'invité veut être en tête, extrait posté sans prévenir, l'invité a disparu).
+- **Humour noir** : les cartes les plus noires (mort, malédiction, disparition) ne tombent que sur les artistes inventés, et pour l'invité, que si lui aussi est inventé. Pas de blagues sur des communautés, des personnes réelles ou des attentats.
+- **Selon la situation** (et alors 3 fois plus souvent) : fatigué ou moral bas (énergie ou moral sous 40), en clash, prêté par un autre label, tête d'affiche d'un label d'au moins 3 artistes.
+- **Pas deux fois la même** : les embrouilles du dernier son du label ne retombent pas au son suivant.
+- **15 bonnes surprises** (il y en avait 4), avec une petite phrase : une star passe au studio, refrain écrit aux toilettes, sieste stratégique, le chat sur la console… Même fréquence qu'avant.
+- **Buzz pendant la séance** : certaines réactions donnent ou font perdre du buzz, donné à l'artiste quand le son est fini.
+- **Sorties ratées** : une sortie est ratée si sa note est sous 50, ou 5 points ou plus sous la moyenne de ses 6 derniers sons. Un EP ou un album compte comme une seule sortie, avec sa note. À la 2e sortie ratée sur ses 4 dernières : buzz −5, 1 % de fans en moins, moral −3. À la 3e : le double, à la 4e : le triple. Une sortie au-dessus de sa moyenne efface tout. Sortir souvent n'est pas puni, seulement les sons ratés.
+- **Le label** : si un autre artiste du label a déjà déçu ses fans dans les 4 dernières semaines, la réputation du label baisse de 1 (une fois par semaine au plus).
+- Pas d'alerte avant la sortie : le joueur le découvre dans le bilan de la semaine. Seuls les labels des joueurs sont concernés.

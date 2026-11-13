@@ -10,6 +10,7 @@ import { tickAuctions } from './auctions.ts';
 import { returnLoans, shareLoan, tickLending } from './lending.ts';
 import { tickClashes } from './clash.ts';
 import { tickProjects } from './projects.ts';
+import { judgeRelease } from './letdown.ts';
 import { tickSeason } from './seasons.ts';
 import { coachBoost, crowdBoost, gigEnergy, tickStaff } from './staff.ts';
 import { tickMorale } from './morale.ts';
@@ -186,6 +187,8 @@ export const runTick = (world: World): TickReport => {
     activeArtists.add(artist.id);
     // Evolution: the fit with a new genre, the streak toward a higher ceiling, the late bloom.
     for (const text of afterRelease(world, artist, song)) if (label.kind === 'player') report(reports, label).events.push(text);
+    // Fans tired of weak songs: a track of an EP or an album is judged with its project.
+    if (!song.projectId) judgeRelease(world, label, artist, song.quality, `« ${song.title} »`, (text) => report(reports, label).events.push(text), tick);
     if (week.hitScore >= 50) artist.morale = clamp(artist.morale + CFG.morale.hit, 0, 100);
     if (week.hitScore < 25) {
       artist.morale = clamp(artist.morale + CFG.morale.flop, 0, 100);

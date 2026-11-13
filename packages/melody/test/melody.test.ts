@@ -8,10 +8,10 @@ import {
   releaseBlocked, promoViews, secretCombos, trendOf, rollSurprise, langOf, inventTitle, academyOf, LOOKS, lookOf, parseLook, seasonsOf,
   STAFF, staffOf, staffWage, coachBoost, producerShare, houseProducer, viewsBoost, crowdBoost, gigEnergy,
   MORALE, RANKS, ranksOf, isLeader, worriesOf, moraleBlock, tickMorale, dynamicsView,
-  shareLoan, returnLoans,
+  shareLoan, returnLoans, STUDIO_CONTENT, studioCardsFor, usualNote, isLetdown, judgeRelease,
   SKILL_IDS, skillsOf, skillLevel, skillPlus, stageBoost, tirelessFactor, PROFILES, EVOLUTION, GENRE_CHANGE, profileOf, profileGrowth, afterRelease, tickEvolution, GENRES,
 } from '../src/index.ts';
-import type { Artist, StaffMember, World } from '../src/index.ts';
+import type { Artist, Song, StaffMember, World } from '../src/index.ts';
 
 const starter = (world: World): Artist => {
   const artist = world.artists.fic_nova_kale;
@@ -1703,5 +1703,176 @@ describe('enchères : le label du jeu et la réserve', () => {
     applyAction(world, 'u2', { type: 'auction_bid', auctionId: a.id, amount: 100 });
     expect(a.bids.at(-1)).toMatchObject({ labelId: a.npc.labelId, amount: 2_000 });
     expect(buildView(world, 'u2').auctions[0]).toMatchObject({ reserveMet: true, outbid: true });
+  });
+});
+
+describe('studio : 40 embrouilles, situations et sorties ratées', () => {
+  const players = () => {
+    const world = createWorld(42);
+    applyAction(world, 'u1', { type: 'found', name: 'Label u1' });
+    applyAction(world, 'u1', { type: 'tuto', move: 'skip' });
+    const label = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    label.cash = 500_000;
+    const artist = rosterOf(world, label.id)[0]!;
+    artist.energy = 90;
+    artist.morale = 70;
+    return { world, label, artist };
+  };
+  const past = (world: World, artist: Artist, tick: number, quality: number) =>
+    world.songs.push({ id: `old${tick}`, artistId: artist.id, labelId: contractOf(world, artist.id)!.labelId, state: 'released', releaseTick: tick, quality } as unknown as Song);
+
+  it('has 40 embrouilles and fifteen good surprises', () => {
+    expect(STUDIO_CONTENT).toEqual({ cards: 40, surprises: 15 });
+  });
+
+  it('keeps black humour for invented artists and never repeats the last embrouilles', () => {
+    const { world, label, artist } = players();
+    artist.real = false;
+    expect(studioCardsFor(world, label.id, artist.id, 'theme')).toContain('lyricist_dead');
+    expect(studioCardsFor(world, label.id, artist.id, 'beat')).toContain('cursed_beat');
+    artist.real = true;
+    expect(studioCardsFor(world, label.id, artist.id, 'theme')).not.toContain('lyricist_dead');
+    expect(studioCardsFor(world, label.id, artist.id, 'beat')).not.toContain('cursed_beat');
+    // A real guest keeps the darkest featuring card away, even with an invented host.
+    artist.real = false;
+    const realGuest = Object.values(world.artists).find((a) => a.real)!;
+    const fakeGuest = Object.values(world.artists).find((a) => !a.real && a.id !== artist.id)!;
+    expect(studioCardsFor(world, label.id, artist.id, 'feat', fakeGuest.id)).toHaveLength(8);
+    expect(studioCardsFor(world, label.id, artist.id, 'feat', realGuest.id)).not.toContain('guest_gone');
+    label.lastCards = ['blank_page', 'greedy'];
+    expect(studioCardsFor(world, label.id, artist.id, 'theme')).not.toContain('blank_page');
+    expect(studioCardsFor(world, label.id, artist.id, 'feat', fakeGuest.id)).not.toContain('greedy');
+  });
+
+  it('brings the situation cards only in their situation', () => {
+    const { world, label, artist } = players();
+    const has = (artistId: string, stage: 'theme' | 'beat' | 'producer' | 'studio', id: string) => studioCardsFor(world, label.id, artistId, stage).includes(id);
+    // Tired or low.
+    expect(has(artist.id, 'studio', 'asleep')).toBe(false);
+    artist.energy = 20;
+    expect(has(artist.id, 'studio', 'asleep')).toBe(true);
+    artist.energy = 90;
+    artist.morale = 30;
+    expect(has(artist.id, 'studio', 'asleep')).toBe(true);
+    artist.morale = 70;
+    // On loan.
+    const lender = addPlayerLabel(world, 'u9', 'Prêteur Records');
+    expect(has(artist.id, 'beat', 'loan_compare')).toBe(false);
+    contractOf(world, artist.id)!.loan = { id: 'l1', lenderId: lender.id, startTick: world.tick, until: world.tick + 6 };
+    expect(has(artist.id, 'beat', 'loan_compare')).toBe(true);
+    // In a clash.
+    const rival = Object.values(world.artists).find((a) => a.id !== artist.id && !contractOf(world, a.id))!;
+    expect(has(artist.id, 'theme', 'clash_rewrite')).toBe(false);
+    world.clashes = [
+      { id: 'c1', fromLabelId: lender.id, toLabelId: label.id, fromArtistId: rival.id, fromSongId: 's', toArtistId: artist.id, toSongId: null, status: 'answered', answerBy: 9, resolveTick: 9, winnerLabelId: null, updatedTick: 0 },
+    ] as World['clashes'];
+    expect(has(artist.id, 'theme', 'clash_rewrite')).toBe(true);
+    // The star of a label of three or more.
+    expect(has(artist.id, 'producer', 'star_rider')).toBe(false);
+    label.tier = 3;
+    for (const free of freeAgents(world).slice(0, 2)) signArtist(world, label.id, free.id, expectedOffer(free));
+    const ranks = ranksOf(world, label.id);
+    for (const a of rosterOf(world, label.id)) expect(has(a.id, 'producer', 'star_rider'), a.name).toBe(ranks.get(a.id) === 'star');
+  });
+
+  it('fills the names in the cards, and gives the buzz of the session with the song', () => {
+    const { world, label, artist } = players();
+    for (let week = 0; week < 20; week += 1) {
+      world.tick = week;
+      artist.energy = week % 2 ? 100 : 30;
+      artist.morale = 70;
+      const offers = studioOffers(world, label.id, artist);
+      applyAction(world, 'u1', { type: 'studio', artistId: artist.id, themeId: offers.themes[0]!.id, beatId: offers.beats[0]!.id, levels: { theme: 1, beat: 1, producer: 1, studio: 1 } });
+      for (const event of buildView(world, 'u1').session!.events) {
+        if (event.kind === 'clash') applyAction(world, 'u1', { type: 'react', reactionId: event.reactions.at(-1)!.id });
+      }
+      for (const event of buildView(world, 'u1').session!.events) {
+        expect(`${event.title} ${event.text} ${event.result} ${event.reactions.map((r) => r.text).join(' ')}`).not.toMatch(/[{}]/);
+      }
+      applyAction(world, 'u1', { type: 'studio_cancel' });
+    }
+    // The buzz won during the session reaches the artist with the song, and its embrouilles are remembered.
+    world.tick = 30;
+    artist.energy = 100;
+    const offers = studioOffers(world, label.id, artist);
+    applyAction(world, 'u1', { type: 'studio', artistId: artist.id, themeId: offers.themes[0]!.id, beatId: offers.beats[0]!.id, levels: { theme: 1, beat: 1, producer: 1, studio: 1 } });
+    for (const event of buildView(world, 'u1').session!.events) if (event.kind === 'clash') applyAction(world, 'u1', { type: 'react', reactionId: event.reactions[0]!.id });
+    applyAction(world, 'u1', { type: 'feat_skip' });
+    const session = world.sessions![label.id]!;
+    session.hype = (session.hype ?? 0) + 4;
+    const gained = session.hype;
+    const cards = session.events.filter((e) => e.kind === 'clash').map((e) => e.cardId);
+    artist.hype = 40;
+    applyAction(world, 'u1', { type: 'song', title: 'Buzz' });
+    expect(artist.hype).toBe(Math.min(100, 40 + gained));
+    expect(label.lastCards).toEqual(cards);
+  });
+
+  it('lets the fans down after two weak releases out of four, more each time, until a good one', () => {
+    const { world, label, artist } = players();
+    world.tick = 20;
+    for (const tick of [5, 6, 7]) past(world, artist, tick, 70);
+    expect(usualNote(world, artist.id)).toBe(70);
+    expect([isLetdown(65, 70), isLetdown(66, 70), isLetdown(49, null), isLetdown(60, null)]).toEqual([true, false, true, false]);
+    const told: string[] = [];
+    const tell = (text: string) => told.push(text);
+    Object.assign(artist, { hype: 50, morale: 60, fans: 10_000 });
+    judgeRelease(world, label, artist, 64, '« Un »', tell);
+    judgeRelease(world, label, artist, 68, '« Deux »', tell);
+    expect(told).toEqual([]);
+    expect(artist.hype).toBe(50);
+    judgeRelease(world, label, artist, 60, '« Trois »', tell);
+    expect(told[0]).toMatch(/^« Trois » déçoit les fans de .+ : 2 sorties ratées sur ses 3 dernières\. Buzz −5, 100 fans partis, moral −3\.$/);
+    expect([artist.hype, artist.fans, artist.morale]).toEqual([45, 9_900, 57]);
+    judgeRelease(world, label, artist, 45, '« Quatre »', tell);
+    expect([artist.hype, artist.fans, artist.morale]).toEqual([35, 9_702, 51]);
+    judgeRelease(world, label, artist, 75, '« Cinq »', tell);
+    expect(artist.letdown?.recent).toEqual([]);
+    judgeRelease(world, label, artist, 60, '« Six »', tell);
+    expect(artist.hype).toBe(35);
+    expect(told).toHaveLength(2);
+  });
+
+  it('costs the label a little reputation when several artists miss together, never for the game labels', () => {
+    const { world, label, artist } = players();
+    label.tier = 3;
+    const other = freeAgents(world)[0]!;
+    signArtist(world, label.id, other.id, expectedOffer(other));
+    label.reputation = 30;
+    const told: string[] = [];
+    const tell = (text: string) => told.push(text);
+    artist.letdown = { recent: [true] };
+    other.letdown = { recent: [true] };
+    judgeRelease(world, label, artist, 30, '« A »', tell);
+    expect(label.reputation).toBe(30);
+    world.tick += 1;
+    judgeRelease(world, label, other, 30, '« B »', tell);
+    expect(label.reputation).toBe(29);
+    expect(told.at(-1)).toMatch(/réputation baisse/);
+    judgeRelease(world, label, artist, 30, '« C »', tell);
+    expect(label.reputation).toBe(29);
+    world.tick += 10;
+    judgeRelease(world, label, artist, 30, '« D »', tell);
+    expect(label.reputation).toBe(29);
+    const npc = Object.values(world.labels).find((l) => l.kind !== 'player')!;
+    const npcArtist = rosterOf(world, npc.id)[0]!;
+    judgeRelease(world, npc, npcArtist, 10, '« E »', tell);
+    expect(npcArtist.letdown).toBeUndefined();
+  });
+
+  it('judges a single in the weekly report', () => {
+    const { world, label, artist } = players();
+    // Under 50: a letdown even without a usual note; with one already, the fans react.
+    artist.letdown = { recent: [true] };
+    artist.energy = 100;
+    const song = createSong(world, label.id, {
+      artistId: artist.id, title: 'Raté', themeId: 'rupture', beatId: 'lovetrap',
+      levels: { theme: 1, beat: 1, producer: 1, studio: 1 }, producer: producerOfLevel(1, 1),
+    });
+    song.quality = 30;
+    // The starter song of the label comes out next week: this one the week after.
+    scheduleRelease(world, label.id, song.id, world.tick + 2, []);
+    const events = [...runTick(world).labels[label.id]!.events, ...runTick(world).labels[label.id]!.events];
+    expect(events.filter((e) => e.startsWith('« Raté » déçoit les fans'))).toHaveLength(1);
   });
 });

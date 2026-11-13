@@ -4,6 +4,7 @@ import { contractOf } from './economy.ts';
 import { priceScale } from './quality.ts';
 import { clamp } from './rng.ts';
 import { albumBonus } from './skills.ts';
+import { judgeRelease } from './letdown.ts';
 import type { Label, Song, World } from './types.ts';
 import { GameError } from './world.ts';
 
@@ -157,6 +158,10 @@ export const tickProjects = (world: World, tell: (labelId: string, text: string)
     const label = world.labels[project.labelId];
     const artist = world.artists[project.artistId];
     if (artist) project.quality = Math.min(99, (project.quality ?? 0) + albumBonus(artist));
+    if (label && artist) {
+      const what = project.kind === 'ep' ? `L’EP « ${project.title} »` : `L’album « ${project.title} »`;
+      judgeRelease(world, label, artist, project.quality, what, (text) => tell(project.labelId, text));
+    }
     const name = `${PROJECTS[project.kind].name} « ${project.title} »`;
     tell(project.labelId, `${name} est sorti : ${streams.toLocaleString('fr-FR')} streams la première semaine, note ${project.quality}.`);
     if (label && artist) news(`${artist.name} (${label.name}) sort son ${name}.`);

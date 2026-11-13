@@ -55,6 +55,8 @@ export {
   LENDING, borrow, cancelListing, fairFee, lendingsView, listLoan, loanOf, returnLoans, shareLoan, tickLending,
   type Lending, type LendingStatus, type LendingView,
 } from './lending.ts';
+export { LETDOWN, usualNote, isLetdown, judgeRelease } from './letdown.ts';
+export { studioCardsFor, STUDIO_CONTENT } from './studio.ts';
 export {
   CLASH, startClash, answerClash, refuseClash, throwShade, answerInterview, interviewView, shadeView, clashesView, rivalsView, rivalsOf, tickClashes,
   type Clash, type ClashStatus, type Tone, type ClashView, type RivalView, type InterviewView, type ShadeView,

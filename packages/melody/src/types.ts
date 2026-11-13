@@ -98,6 +98,8 @@ export interface Artist {
   jealous?: { name: string; tick: number };
   /** The lower rank he knows is better paid (told once). */
   grudge?: string;
+  /** Fans tired of weak songs: was each of his last releases a letdown, and when it last cost him. */
+  letdown?: { recent: boolean[]; hitTick?: number };
   /** Evolution: weeks with a player's label, releases, the profile once known, the late bloom, the streak toward a higher ceiling, the rating curve. */
   career?: number;
   releases?: number;
@@ -160,6 +162,10 @@ export interface Label {
   partyTick?: number;
   /** Genre changes made this season. */
   genreChanges?: { season: number; count: number };
+  /** Embrouilles of the last song made: never the same one twice in a row. */
+  lastCards?: string[];
+  /** Last week several of its artists let the fans down (reputation). */
+  letdownTick?: number;
 }
 
 /** Level 1 (free, capped) to 4 for each paid choice of a song. */
@@ -335,6 +341,8 @@ export interface SessionEvent {
   reaction: string | null;
   /** What happened, once known. */
   result: string | null;
+  /** Names the card's text talks about: a artist, g guest, r rival, l lender label. */
+  vars?: Record<string, string>;
 }
 
 export interface StudioSession {
@@ -356,5 +364,7 @@ export interface StudioSession {
   featDone: boolean;
   /** Gambles taken during the session: each one makes a surprise more likely. */
   risk?: number;
+  /** Buzz won or lost during the session, given to the artist when the song is done. */
+  hype?: number;
   lastOffer: { guestId: string; offer: number; chance: number; roll: number | null; outcome: 'accepted' | 'refused' | 'vexed' } | null;
 }

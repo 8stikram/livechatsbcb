@@ -4,13 +4,14 @@
 import { artisticSkill, generalRating } from './artists.ts';
 import { CFG } from './config.ts';
 import { GENRES, beatById } from './data/content.ts';
-import { contractOf } from './economy.ts';
+import { clashRival } from './clash.ts';
+import { contractOf, rosterOf } from './economy.ts';
 import { onTour } from './tours.ts';
 import { houseProducer } from './staff.ts';
-import { moraleBlock } from './morale.ts';
+import { moraleBlock, ranksOf } from './morale.ts';
 import { magnetChance, magnetDemand } from './skills.ts';
 import { estimateQuality, featChance, featDemand, producerOfLevel, songCost, songEnergy } from './quality.ts';
-import { clamp, rngFor } from './rng.ts';
+import { clamp, rngFor, type Rng } from './rng.ts';
 import type { Artist, Label, SessionEvent, SongLevels, StudioSession, StudioStage, World } from './types.ts';
 import { DEALS, checkDealGuest, spendDeal, usableDeals } from './featdeals.ts';
 import { tutorialStep } from './tutorial.ts';
@@ -33,6 +34,8 @@ interface Effect {
   dropFeat?: number;
   /** The guest's fee goes up by this share. */
   featRaise?: number;
+  /** Buzz of the artist, given when the song is done. */
+  hype?: number;
 }
 
 interface Context {
@@ -54,8 +57,25 @@ interface CardDef {
   id: string;
   stage: StudioStage;
   title: string;
+  /** {a} the artist, {g} the guest, {r} his rival, {l} the label that lent him. */
   text: string;
   reactions: ReactionDef[];
+  /** Only in this situation, and then more often. */
+  when?: (s: Situation) => boolean;
+  /** Black humour: only on invented artists (and guests). */
+  dark?: boolean;
+}
+
+/** What is going on around the artist when he enters the studio. */
+interface Situation {
+  artist: Artist;
+  guest: Artist | null;
+  rival: string | null;
+  lender: string | null;
+  /** Head of a label of three artists or more. */
+  star: boolean;
+  /** Tired or low. */
+  worn: boolean;
 }
 
 const price = (table: readonly number[], level: number): number => table[level - 1] ?? 0;
@@ -433,13 +453,247 @@ const CARDS: CardDef[] = [
       },
     ],
   },
+  // The cards added to reach 40 (owner's choice, 2026-11-13): absurd and black humour, the darkest only on
+  // invented artists, and some that only come in a situation (tired or low, in a clash, on loan, the label's star).
+  {
+    id: 'lyricist_dead',
+    stage: 'theme',
+    dark: true,
+    title: 'Le parolier est mort',
+    text: 'Son parolier est mort hier soir. Le texte est à moitié fini, dans son téléphone, et personne n’a le code.',
+    reactions: [
+      {
+        id: 'finish',
+        text: 'Finir le texte à sa place',
+        roll: { chance: discipline, success: () => ({ quality: 1, morale: -2 }), failure: () => ({ quality: -3 }), successText: '{a} finit le texte en pleurant. Son meilleur couplet.', failureText: 'On entend très bien où le mort s’est arrêté.' },
+      },
+      {
+        id: 'medium',
+        text: 'Payer une voyante',
+        roll: { chance: fifty, success: () => ({ cost: 700, quality: 3 }), failure: () => ({ cost: 700 }), successText: 'Le défunt dicte un refrain depuis l’au-delà. Validé.', failureText: 'La voyante ne capte que la radio des voisins.' },
+      },
+      { id: 'tribute', text: 'En faire un hommage', effect: () => ({ hype: 3, morale: -4 }) },
+    ],
+  },
+  {
+    id: 'clash_rewrite',
+    stage: 'theme',
+    when: (s) => s.rival !== null,
+    title: 'Il veut tout réécrire contre {r}',
+    text: '{a} a barré tout le texte pour ne parler que de {r}. Même le couplet sur sa grand-mère.',
+    reactions: [
+      { id: 'let', text: 'Le laisser faire', effect: () => ({ quality: -1, hype: 4 }) },
+      {
+        id: 'reframe',
+        text: 'Le recadrer',
+        roll: { chance: discipline, success: () => ({}), failure: () => ({ morale: -6 }), successText: 'Il garde ses piques pour le disstrack.', failureText: 'Il te soupçonne de bosser pour {r}.' },
+      },
+      { id: 'one', text: 'Une seule pique, pas plus', effect: () => ({ quality: 1, morale: -2 }) },
+    ],
+  },
+  {
+    id: 'cursed_beat',
+    stage: 'beat',
+    dark: true,
+    title: 'Le beat est maudit',
+    text: 'Les trois derniers rappeurs qui ont posé dessus : un en prison, un en cavale, un au cimetière.',
+    reactions: [
+      {
+        id: 'brave',
+        text: 'Poser quand même',
+        roll: { chance: fifty, success: () => ({ quality: 3 }), failure: () => ({ morale: -6, energy: -5 }), successText: 'Maudit, mais lourd. Personne n’est mort. Pour l’instant.', failureText: '{a} jure avoir vu une ombre dans la cabine.' },
+      },
+      { id: 'healer', text: 'Payer un marabout', effect: () => ({ cost: 500, morale: 3 }) },
+      { id: 'other', text: 'Prendre un autre beat', effect: () => ({ quality: -2 }) },
+    ],
+  },
+  {
+    id: 'loan_compare',
+    stage: 'beat',
+    when: (s) => s.lender !== null,
+    title: '« Chez {l}, c’était mieux »',
+    text: '{a} compare tout avec son vrai label : « Chez {l}, les beats étaient payés, eux. »',
+    reactions: [
+      { id: 'better', text: 'Lui payer un meilleur beat', effect: () => ({ cost: 600, quality: 1, morale: 2 }) },
+      {
+        id: 'reframe',
+        text: 'Le recadrer',
+        roll: { chance: discipline, success: () => ({ morale: 2 }), failure: () => ({ morale: -6 }), successText: 'Il admet que chez toi, la cabine sent moins le tabac.', failureText: 'Il appelle {l} en pleine séance pour se plaindre.' },
+      },
+      { id: 'soon', text: '« Tu rentres bientôt, profite »', effect: () => ({ morale: -3, energy: 2 }) },
+    ],
+  },
+  {
+    id: 'star_rider',
+    stage: 'producer',
+    when: (s) => s.star,
+    title: 'Caprices de tête d’affiche',
+    text: '{a} exige une loge, 40 bouteilles d’eau des Alpes, et que le producteur ne le regarde pas dans les yeux.',
+    reactions: [
+      { id: 'all', text: 'Tout lui donner', effect: (ctx) => ({ cost: Math.max(800, Math.round(ctx.baseCost * 0.15)), morale: 5 }) },
+      {
+        id: 'reframe',
+        text: 'Le recadrer',
+        roll: { chance: discipline, success: () => ({ quality: 1 }), failure: () => ({ morale: -8 }), successText: 'Il redescend sur terre. Prise propre.', failureText: 'Il s’enferme dans sa loge. Qui n’existe pas.' },
+      },
+      { id: 'water', text: 'Juste l’eau, pas plus', effect: () => ({ cost: 300, morale: -2 }) },
+    ],
+  },
+  {
+    id: 'custody',
+    stage: 'producer',
+    title: 'Le producteur est en garde à vue',
+    text: 'Il appelle du commissariat : « Les pistes sont sur mon PC. Le PC est sous scellés. »',
+    reactions: [
+      { id: 'lawyer', text: 'Lui payer un avocat', effect: (ctx) => ({ cost: Math.max(800, Math.round(ctx.baseCost * 0.2)) }) },
+      {
+        id: 'cop',
+        text: 'Trouver un policier fan',
+        roll: { chance: fifty, success: () => ({ quality: 2 }), failure: () => ({ delay: 1 }), successText: 'Un stagiaire de la police est fan. Il te grave les pistes.', failureText: 'Les pistes sont « pièces à conviction ». Une semaine de perdue.' },
+      },
+      { id: 'without', text: 'Finir sans lui', effect: () => ({ quality: -3 }) },
+    ],
+  },
+  {
+    id: 'asleep',
+    stage: 'studio',
+    when: (s) => s.worn,
+    title: 'Il s’endort dans la cabine',
+    text: '{a} ronfle entre deux prises. L’ingé a tout enregistré, par principe.',
+    reactions: [
+      { id: 'sleep', text: 'Le laisser dormir', effect: () => ({ energy: 6, quality: -1 }) },
+      {
+        id: 'adlib',
+        text: 'Garder le ronflement en ad-lib',
+        roll: { chance: fifty, success: () => ({ quality: 2, hype: 2 }), failure: () => ({ quality: -3 }), successText: 'Le ronflement devient un son TikTok.', failureText: 'C’est juste un mec qui ronfle sur un beat.' },
+      },
+      { id: 'wake', text: 'Le réveiller de force', effect: () => ({ morale: -5 }) },
+    ],
+  },
+  {
+    id: 'late_verse',
+    stage: 'feat',
+    title: 'Le couplet arrive en vocal',
+    text: '{g} a envoyé son couplet en message vocal, depuis une boîte de nuit à Dubaï.',
+    reactions: [
+      { id: 'wait', text: 'Attendre une vraie prise', effect: () => ({ delay: 1 }) },
+      {
+        id: 'keep',
+        text: 'Garder le vocal',
+        roll: { chance: fifty, success: () => ({ quality: 1, hype: 2 }), failure: () => ({ quality: -3 }), successText: 'Le bruit de la boîte, c’est l’ambiance.', failureText: 'On entend surtout un videur.' },
+      },
+      { id: 'rush', text: 'Payer pour qu’il refasse vite', effect: () => ({ featRaise: 0.15 }) },
+    ],
+  },
+  {
+    id: 'better_verse',
+    stage: 'feat',
+    title: 'L’invité a tué le son',
+    text: '{g} a tellement bien rappé que {a} parle d’arrêter la musique.',
+    reactions: [
+      { id: 'keep', text: 'Garder son couplet', effect: () => ({ quality: 3, morale: -5 }) },
+      {
+        id: 'less',
+        text: 'Lui demander de faire moins bien',
+        roll: { chance: fifty, success: () => ({ quality: 1 }), failure: () => ({ quality: -1, morale: -2 }), successText: 'Il rappe exprès un peu moins bien. Personne ne voit rien.', failureText: 'Il rappe exprès mal. Tout le monde voit tout.' },
+      },
+      { id: 'redo', text: 'Faire refaire le couplet de {a}', effect: () => ({ energy: -5, quality: 1 }) },
+    ],
+  },
+  {
+    id: 'bad_verse',
+    stage: 'feat',
+    title: 'Le couplet est raté',
+    text: '{g} a rappé à côté du tempo. Et dans une langue que personne ne reconnaît.',
+    reactions: [
+      { id: 'keep', text: 'Garder quand même', effect: () => ({ quality: -3 }) },
+      { id: 'redo', text: 'Payer pour refaire', effect: () => ({ featRaise: 0.2 }) },
+      { id: 'cut', text: 'Couper son couplet', effect: () => ({ dropFeat: 1 }) },
+    ],
+  },
+  {
+    id: 'guest_fight',
+    stage: 'feat',
+    title: 'Les deux s’embrouillent',
+    text: '{a} et {g} comparent leurs abonnés. Ça monte. Quelqu’un a lancé une chaise.',
+    reactions: [
+      { id: 'split', text: 'Les séparer', effect: () => ({ morale: -3 }) },
+      { id: 'mediator', text: 'Payer un médiateur', effect: () => ({ cost: 500, morale: 1 }) },
+      {
+        id: 'film',
+        text: 'Filmer et poster',
+        roll: { chance: fifty, success: () => ({ hype: 4 }), failure: () => ({ dropFeat: 0.5, hype: 1 }), successText: 'Deux millions de vues. Le son sort sur la bagarre.', failureText: '{g} part en claquant la porte.' },
+      },
+    ],
+  },
+  {
+    id: 'guest_main',
+    stage: 'feat',
+    title: 'L’invité veut être en tête',
+    text: '{g} veut son nom en premier, sa tête sur la pochette, et que {a} fasse les chœurs.',
+    reactions: [
+      {
+        id: 'refuse',
+        text: 'Refuser',
+        roll: { chance: fifty, success: () => ({}), failure: () => ({ dropFeat: 0.5 }), successText: 'Il accepte de rester invité. En boudant.', failureText: 'Il s’en va.' },
+      },
+      { id: 'accept', text: 'Accepter', effect: () => ({ quality: 1, hype: 2, morale: -6 }) },
+      { id: 'pay', text: 'Payer pour qu’il se calme', effect: () => ({ featRaise: 0.15 }) },
+    ],
+  },
+  {
+    id: 'guest_leak',
+    stage: 'feat',
+    title: 'L’invité a posté un extrait',
+    text: '{g} a mis 15 secondes du son en story. Avec le mauvais titre, et sans citer {a}.',
+    reactions: [
+      { id: 'play', text: 'En jouer', effect: () => ({ hype: 3, morale: -2 }) },
+      { id: 'remove', text: 'Faire supprimer', effect: () => ({ morale: 1 }) },
+      {
+        id: 'reply',
+        text: 'Répondre en story',
+        roll: { chance: fifty, success: () => ({ hype: 4 }), failure: () => ({ morale: -4 }), successText: 'Les fans adorent la petite guerre. Le son est attendu.', failureText: 'Les commentaires sont tous pour {g}.' },
+      },
+    ],
+  },
+  {
+    id: 'guest_gone',
+    stage: 'feat',
+    dark: true,
+    title: 'L’invité a disparu',
+    text: 'Plus de nouvelles de {g}. Son dernier message : « J’arrive, je passe juste voir un mec à Marseille. »',
+    reactions: [
+      {
+        id: 'wait',
+        text: 'Attendre qu’il réapparaisse',
+        roll: { chance: fifty, success: () => ({ quality: 2, delay: 1 }), failure: () => ({ dropFeat: 0.5, delay: 1 }), successText: 'Il réapparaît, bronzé, avec un couplet énorme. Aucune explication.', failureText: 'Il ne réapparaît pas.' },
+      },
+      { id: 'without', text: 'Sortir sans lui', effect: () => ({ dropFeat: 0.5 }) },
+      {
+        id: 'tribute',
+        text: 'Annoncer un son hommage',
+        roll: { chance: fifty, success: () => ({ hype: 5 }), failure: () => ({ hype: -3, morale: -3 }), successText: 'Les fans pleurent. Il était juste au ski.', failureText: 'Il poste une story, bien vivant, pendant l’hommage. Malaise.' },
+      },
+    ],
+  },
 ];
 
-const FLUIDS: Array<{ id: string; title: string; text: string; effect: Effect }> = [
-  { id: 'flow', title: 'Ça coule tout seul', text: 'Qualité +2', effect: { quality: 2 } },
-  { id: 'express', title: 'Session express', text: 'Énergie +3', effect: { energy: 3 } },
-  { id: 'vibe', title: 'Bonne ambiance', text: 'Moral +5', effect: { morale: 5 } },
-  { id: 'genius', title: 'Coup de génie', text: 'Qualité +5', effect: { quality: 5 } },
+const FLUIDS: Array<{ id: string; title: string; flavor?: string; effect: Effect; dark?: boolean }> = [
+  { id: 'flow', title: 'Ça coule tout seul', effect: { quality: 2 } },
+  { id: 'express', title: 'Session express', effect: { energy: 3 } },
+  { id: 'vibe', title: 'Bonne ambiance', effect: { morale: 5 } },
+  { id: 'genius', title: 'Coup de génie', effect: { quality: 5 } },
+  { id: 'star_visit', title: 'Une star passe au studio', flavor: 'Elle a juste dit « c’est chaud ». {a} ne s’en remet pas.', effect: { quality: 1, morale: 4 } },
+  { id: 'toilet_hook', title: 'Refrain écrit aux toilettes', flavor: 'Cinq minutes, porte fermée. Meilleur refrain de l’année.', effect: { quality: 2 } },
+  { id: 'random_knob', title: 'L’ingé tourne un bouton au hasard', flavor: 'C’était le bon.', effect: { quality: 1, energy: 1 } },
+  { id: 'free_hour', title: 'Heure offerte', flavor: 'Le gérant du studio est de bonne humeur. Personne ne sait pourquoi.', effect: { energy: 3, morale: 2 } },
+  { id: 'nap', title: 'Sieste stratégique', flavor: 'Vingt minutes sur le canapé du studio. Il revient neuf.', effect: { energy: 5 } },
+  { id: 'fans_outside', title: 'Des fans devant le studio', flavor: 'Quelqu’un a vu passer {a}. La rue filme la porte.', effect: { hype: 2, morale: 2 } },
+  { id: 'mom_hums', title: 'Sa mère chante le refrain', flavor: 'En faisant la vaisselle. C’est validé.', effect: { quality: 1, morale: 3 } },
+  { id: 'neighbour_rip', title: 'Le voisin bruyant est mort', flavor: 'Plus de perceuse. Paix à son âme, et à la prise.', effect: { quality: 1, energy: 2 }, dark: true },
+  { id: 'ex_married', title: 'Son ex s’est remariée', flavor: 'Il a écrit son meilleur couplet en douze minutes. Il ne va pas bien.', effect: { quality: 2, morale: -3 } },
+  { id: 'first_take', title: 'Première prise, la bonne', flavor: 'Personne n’ose demander une deuxième.', effect: { quality: 1, energy: 2 } },
+  { id: 'studio_cat', title: 'Le chat s’est couché sur la console', flavor: 'Il a lancé un filtre que personne ne retrouve. Incroyable.', effect: { quality: 1 } },
 ];
 
 const cardById = (id: string): CardDef => CARDS.find((c) => c.id === id) ?? fail('Événement inconnu.');
@@ -450,6 +704,54 @@ const RISK = [0.28, 0.2, 0.13, 0.08];
 /** Share of the sessions with two embrouilles instead of one. */
 const TWO_CLASHES = 0.35;
 const STAGES: Array<Exclude<StudioStage, 'feat'>> = ['theme', 'beat', 'producer', 'studio'];
+/** A card tied to the situation comes this many times more often than the others, when it can come. */
+const SITUATION_WEIGHT = 3;
+
+const situationOf = (world: World, labelId: string, artist: Artist, guest: Artist | null = null): Situation => {
+  const lenderId = contractOf(world, artist.id)?.loan?.lenderId;
+  return {
+    artist,
+    guest,
+    rival: clashRival(world, artist.id),
+    lender: lenderId ? (world.labels[lenderId]?.name ?? null) : null,
+    star: rosterOf(world, labelId).length >= 3 && ranksOf(world, labelId).get(artist.id) === 'star',
+    worn: artist.energy < 40 || artist.morale < 40,
+  };
+};
+
+const varsOf = (s: Situation): Record<string, string> => ({
+  a: s.artist.name,
+  ...(s.guest ? { g: s.guest.name } : {}),
+  ...(s.rival ? { r: s.rival } : {}),
+  ...(s.lender ? { l: s.lender } : {}),
+});
+
+const FALLBACK: Record<string, string> = { a: 'ton artiste', g: 'l’invité', r: 'son rival', l: 'son label' };
+const fill = (text: string, vars: Record<string, string> | undefined): string => text.replace(/\{([agrl])\}/g, (_, key: string) => vars?.[key] ?? FALLBACK[key] ?? '');
+
+const darkAllowed = (s: Situation): boolean => !s.artist.real && (!s.guest || !s.guest.real);
+
+/** The cards that can fall at this stage: their situation holds, black humour only on invented artists, not those of the last song. */
+const cardsFor = (stage: StudioStage, s: Situation, avoid: readonly string[]): CardDef[] => {
+  const pool = CARDS.filter((c) => c.stage === stage && (!c.when || c.when(s)) && (!c.dark || darkAllowed(s)));
+  const fresh = pool.filter((c) => !avoid.includes(c.id));
+  return fresh.length > 0 ? fresh : pool;
+};
+
+const drawCard = (rng: Rng, stage: StudioStage, s: Situation, avoid: readonly string[]): CardDef => {
+  const list = cardsFor(stage, s, avoid);
+  const weights = list.map((c) => (c.when ? SITUATION_WEIGHT : 1));
+  let roll = rng.next() * weights.reduce((sum, w) => sum + w, 0);
+  return list.find((_, i) => (roll -= weights[i] ?? 0) < 0) ?? list[0]!;
+};
+
+/** For the tests and the docs: the ids of the cards that can fall now at a stage, and how many cards and good surprises exist. */
+export const studioCardsFor = (world: World, labelId: string, artistId: string, stage: StudioStage, guestId: string | null = null): string[] => {
+  const artist = world.artists[artistId] ?? fail('Artiste introuvable.');
+  const guest = guestId ? (world.artists[guestId] ?? null) : null;
+  return cardsFor(stage, situationOf(world, labelId, artist, guest), world.labels[labelId]?.lastCards ?? []).map((c) => c.id);
+};
+export const STUDIO_CONTENT = { cards: CARDS.length, surprises: FLUIDS.length };
 
 const clashChance = (artist: Artist, level: number, clashesSoFar: number): number => {
   let chance = RISK[level - 1] ?? 0.2;
@@ -486,6 +788,7 @@ const apply = (session: StudioSession, effect: Effect): void => {
   session.delay += effect.delay ?? 0;
   session.morale += effect.morale ?? 0;
   session.energy += effect.energy ?? 0;
+  if (effect.hype) session.hype = (session.hype ?? 0) + effect.hype;
   if (effect.featRaise && session.feat) session.feat.fee = Math.round(session.feat.fee * (1 + effect.featRaise));
   if (effect.dropFeat !== undefined && session.feat) {
     session.cost += Math.round(session.feat.fee * effect.dropFeat);
@@ -496,14 +799,16 @@ const apply = (session: StudioSession, effect: Effect): void => {
 const number = (value: number): string => Math.round(value).toLocaleString('fr-FR').replace(/ | /g, ' ');
 
 /** A few words on what a reaction does, shown on its button. */
-const describe = (effect: Effect, ctx: Context): string => {
+const describe = (effect: Effect, ctx?: Context): string => {
   const parts: string[] = [];
   if (effect.cost) parts.push(`+${number(effect.cost)} €`);
-  if (effect.featRaise) parts.push(`+${number(ctx.featFee * effect.featRaise)} €`);
+  if (effect.featRaise) parts.push(`+${number((ctx?.featFee ?? 0) * effect.featRaise)} €`);
+  if (effect.dropFeat !== undefined) parts.push(effect.dropFeat > 0 && ctx?.featFee ? `L’invité part, ${number(ctx.featFee * effect.dropFeat)} € payés quand même` : 'L’invité part');
   if (effect.quality) parts.push(`Qualité ${effect.quality > 0 ? '+' : '−'}${Math.abs(effect.quality)}`);
   if (effect.delay) parts.push(`+${effect.delay} semaine`);
   if (effect.morale) parts.push(`Moral ${effect.morale > 0 ? '+' : '−'}${Math.abs(effect.morale)}`);
   if (effect.energy) parts.push(`Énergie ${effect.energy > 0 ? '+' : '−'}${Math.abs(effect.energy)}`);
+  if (effect.hype) parts.push(`Buzz ${effect.hype > 0 ? '+' : '−'}${Math.abs(effect.hype)}`);
   return parts.join(' · ') || 'Rien ne change';
 };
 
@@ -537,12 +842,14 @@ export const startSession = (world: World, label: Label, request: { artistId: st
   let clashes = 0;
   // The tutorial: smooth sessions around one easy embrouille with the producer.
   const guided = tutorialStep(world, label.id) === 'song';
+  const situation = situationOf(world, label.id, artist);
+  const vars = varsOf(situation);
   if (guided) {
     events.push(
-      { stage: 'theme', kind: 'fluid', cardId: 'flow', reaction: null, result: fluidById('flow').text },
-      { stage: 'beat', kind: 'fluid', cardId: 'vibe', reaction: null, result: fluidById('vibe').text },
-      { stage: 'producer', kind: 'clash', cardId: 'ghost', reaction: null, result: null },
-      { stage: 'studio', kind: 'fluid', cardId: 'express', reaction: null, result: fluidById('express').text },
+      { stage: 'theme', kind: 'fluid', cardId: 'flow', reaction: null, result: describe(fluidById('flow').effect), vars },
+      { stage: 'beat', kind: 'fluid', cardId: 'vibe', reaction: null, result: describe(fluidById('vibe').effect), vars },
+      { stage: 'producer', kind: 'clash', cardId: 'ghost', reaction: null, result: null, vars },
+      { stage: 'studio', kind: 'fluid', cardId: 'express', reaction: null, result: describe(fluidById('express').effect), vars },
     );
   }
   // Every session has one embrouille, sometimes two: the cheap choices are the ones that break most.
@@ -559,11 +866,11 @@ export const startSession = (world: World, label: Label, request: { artistId: st
     const rng = rngFor(world.seed, world.tick, `studio:${label.id}:${artist.id}:${index}:${stage}`);
     if (troubled.has(stage)) {
       clashes += 1;
-      const card = rng.pick(CARDS.filter((c) => c.stage === stage));
-      events.push({ stage, kind: 'clash', cardId: card.id, reaction: null, result: null });
+      const card = drawCard(rng, stage, situation, label.lastCards ?? []);
+      events.push({ stage, kind: 'clash', cardId: card.id, reaction: null, result: null, vars });
     } else {
-      const fluid = rng.next() < 0.05 ? fluidById('genius') : rng.pick(FLUIDS.filter((f) => f.id !== 'genius'));
-      events.push({ stage, kind: 'fluid', cardId: fluid.id, reaction: null, result: fluid.text });
+      const fluid = rng.next() < 0.05 ? fluidById('genius') : rng.pick(FLUIDS.filter((f) => f.id !== 'genius' && (!f.dark || darkAllowed(situation))));
+      events.push({ stage, kind: 'fluid', cardId: fluid.id, reaction: null, result: describe(fluid.effect), vars });
     }
   }
 
@@ -602,7 +909,7 @@ export const reactToEvent = (world: World, label: Label, reactionId: string): vo
     session.risk = (session.risk ?? 0) + 1;
     const effect = won ? reaction.roll.success(ctx) : reaction.roll.failure(ctx);
     apply(session, effect);
-    event.result = `${won ? reaction.roll.successText : reaction.roll.failureText}${Object.keys(effect).length ? ` ${describe(effect, ctx)}.` : ''}`;
+    event.result = `${fill(won ? reaction.roll.successText : reaction.roll.failureText, event.vars)}${Object.keys(effect).length ? ` ${describe(effect, ctx)}.` : ''}`;
   } else {
     const effect = reaction.effect?.(ctx) ?? {};
     if (effect.cost && effect.cost + session.cost + ctx.baseCost + ctx.featFee > label.cash) fail('Pas assez de cash pour ça.');
@@ -705,9 +1012,11 @@ export const offerFeat = (world: World, label: Label, guestId: string, offer: nu
     session.feat = { guestId: guest.id, fee: price };
     session.featDone = true;
     session.lastOffer = { guestId: guest.id, offer: price, chance, roll, outcome: 'accepted' };
-    // One time in four, the guest asks for more once in the booth.
+    // One time in four, something goes wrong with the guest once in the booth.
     if (!guided && rngFor(world.seed, world.tick, `greedy:${label.id}:${guest.id}`).next() < 0.25) {
-      session.events.push({ stage: 'feat', kind: 'clash', cardId: 'greedy', reaction: null, result: null });
+      const situation = situationOf(world, label.id, host, guest);
+      const card = drawCard(rngFor(world.seed, world.tick, `featcard:${label.id}:${guest.id}`), 'feat', situation, label.lastCards ?? []);
+      session.events.push({ stage: 'feat', kind: 'clash', cardId: card.id, reaction: null, result: null, vars: varsOf(situation) });
     }
     memoryOf(world)[memoryKey(label.id, guest.id)] = { ...memory, tries: memory.tries + 1 };
     return;
@@ -762,6 +1071,9 @@ export const finishSession = (world: World, label: Label, title: string, produce
     safe: tutorialStep(world, label.id) === 'song',
   };
   createSong(world, label.id, request);
+  const artist = world.artists[session.artistId];
+  if (artist && session.hype) artist.hype = clamp(artist.hype + session.hype, 0, 100);
+  label.lastCards = session.events.filter((e) => e.kind === 'clash').map((e) => e.cardId);
   delete sessionsOf(world)[label.id];
 };
 
@@ -839,16 +1151,16 @@ export const sessionView = (world: World, label: Label, producer: SongRequest['p
     events: session.events.map((event) => {
       if (event.kind === 'fluid') {
         const fluid = fluidById(event.cardId);
-        return { stage: event.stage, kind: event.kind, title: fluid.title, text: fluid.text, reactions: [], reaction: null, result: event.result };
+        return { stage: event.stage, kind: event.kind, title: fill(fluid.title, event.vars), text: fill(fluid.flavor ?? '', event.vars), reactions: [], reaction: null, result: event.result };
       }
       const card = cardById(event.cardId);
       return {
         stage: event.stage,
         kind: event.kind,
-        title: card.title,
-        text: card.text,
+        title: fill(card.title, event.vars),
+        text: fill(card.text, event.vars),
         // What a reaction does stays hidden until it is chosen: taking a risk is part of the game.
-        reactions: card.reactions.map((r) => ({ id: r.id, text: r.text, hint: '' })),
+        reactions: card.reactions.map((r) => ({ id: r.id, text: fill(r.text, event.vars), hint: '' })),
         reaction: event.reaction,
         result: event.result,
       };
