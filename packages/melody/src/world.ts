@@ -199,7 +199,10 @@ export const createSong = (world: World, labelId: string, request: SongRequest):
   const perfect = isPerfect(artist, request.themeId, request.beatId);
   const surprise = rollSurprise(rng, riskOf(artist, request.themeId, request.beatId) + (request.gambles ?? 0), artist);
   if (request.safe && surprise.kind === 'flop') surprise.kind = null;
-  const hidden = (secret ? CRAFT.secretBonus : 0) + (perfect ? CRAFT.perfectBonus : 0) + (surprise.kind ? surprise.delta : 0);
+  // A featuring with an artist of an allied label: they know each other, +2.
+  const featLabel = feat ? contractOf(world, feat.id)?.labelId : undefined;
+  const allied = featLabel !== undefined && (label.allies ?? []).includes(featLabel) ? 2 : 0;
+  const hidden = (secret ? CRAFT.secretBonus : 0) + (perfect ? CRAFT.perfectBonus : 0) + (surprise.kind ? surprise.delta : 0) + allied;
   const quality = Math.round(clamp(rollQuality(estimate, rng) + hidden, 1, surprise.kind === 'boom' ? 99 : Math.min(99, estimate.cap + (secret ? CRAFT.secretBonus : 0))));
 
   label.cash -= cost;

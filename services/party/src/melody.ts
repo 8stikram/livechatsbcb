@@ -104,6 +104,14 @@ export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('press_reply'), confId: IdSchema, speakerId: IdSchema.nullable() }),
   z.object({ type: z.literal('duel'), targetLabelId: IdSchema, artistId: IdSchema, week: z.number().int().min(0).max(100_000) }),
   z.object({ type: z.literal('duel_answer'), duelId: IdSchema, accept: z.boolean(), artistId: IdSchema.nullable() }),
+  z.object({ type: z.literal('ally_ask'), targetLabelId: IdSchema }),
+  z.object({ type: z.literal('ally_answer'), offerId: IdSchema, accept: z.boolean() }),
+  z.object({ type: z.literal('ally_break'), labelId: IdSchema }),
+  z.object({ type: z.literal('enemy_add'), labelId: IdSchema }),
+  z.object({ type: z.literal('enemy_remove'), labelId: IdSchema }),
+  z.object({ type: z.literal('gift'), targetLabelId: IdSchema, amount: z.number().int().min(100).max(1_000_000_000) }),
+  z.object({ type: z.literal('friend_loan'), targetLabelId: IdSchema, amount: z.number().int().min(100).max(1_000_000_000), rate: z.union([z.literal(0), z.literal(5), z.literal(10)]), weeks: z.union([z.literal(4), z.literal(8), z.literal(12)]) }),
+  z.object({ type: z.literal('friend_loan_answer'), loanId: IdSchema, accept: z.boolean() }),
 ]);
 
 export const MelodyCoversSchema = z.object({ ids: z.array(IdSchema).max(60) });

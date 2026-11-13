@@ -30,6 +30,7 @@ import { cancelSession, finishSession, offerFeat, useDeal, reactToEvent, session
 import { formWeeks, setRole, supportBoost } from './support.ts';
 import { buyBack, estateView, repayLoans, takeAssetLoan, type EstateView } from './estate.ts';
 import { answerCard, eventsView, type EventsView } from './events.ts';
+import { addEnemy, alliesOf, answerAlly, answerLoan, askAlly, breakAlly, enemiesOf, giveMoney, offerLoan, relationsView, removeEnemy, type RelationsView } from './coop.ts';
 import { answerDuel, askDuel, duelsView, pressConference, pressView, replyPress, type DuelView, type PressView } from './wars.ts';
 import type { RoleId } from './types.ts';
 
@@ -179,7 +180,15 @@ export type MelodyAction =
   | { type: 'press'; speakerId: string | null; targetId: string }
   | { type: 'press_reply'; confId: string; speakerId: string | null }
   | { type: 'duel'; targetLabelId: string; artistId: string; week: number }
-  | { type: 'duel_answer'; duelId: string; accept: boolean; artistId: string | null };
+  | { type: 'duel_answer'; duelId: string; accept: boolean; artistId: string | null }
+  | { type: 'ally_ask'; targetLabelId: string }
+  | { type: 'ally_answer'; offerId: string; accept: boolean }
+  | { type: 'ally_break'; labelId: string }
+  | { type: 'enemy_add'; labelId: string }
+  | { type: 'enemy_remove'; labelId: string }
+  | { type: 'gift'; targetLabelId: string; amount: number }
+  | { type: 'friend_loan'; targetLabelId: string; amount: number; rate: number; weeks: number }
+  | { type: 'friend_loan_answer'; loanId: string; accept: boolean };
 
 const labelOfOwner = (world: World, ownerId: string): Label => {
   const label = Object.values(world.labels).find((l) => l.ownerId === ownerId && !l.bankrupt);
@@ -433,6 +442,30 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
     case 'duel_answer':
       answerDuel(world, label, action.duelId, action.accept, action.artistId);
       return;
+    case 'ally_ask':
+      askAlly(world, label, action.targetLabelId);
+      return;
+    case 'ally_answer':
+      answerAlly(world, label, action.offerId, action.accept);
+      return;
+    case 'ally_break':
+      breakAlly(world, label, action.labelId);
+      return;
+    case 'enemy_add':
+      addEnemy(world, label, action.labelId);
+      return;
+    case 'enemy_remove':
+      removeEnemy(world, label, action.labelId);
+      return;
+    case 'gift':
+      giveMoney(world, label, action.targetLabelId, action.amount);
+      return;
+    case 'friend_loan':
+      offerLoan(world, label, action.targetLabelId, action.amount, action.rate, action.weeks);
+      return;
+    case 'friend_loan_answer':
+      answerLoan(world, label, action.loanId, action.accept);
+      return;
   }
 };
 
@@ -561,6 +594,8 @@ export interface LabelCard {
   duelWins: number;
   duelLosses: number;
   duelFled: number;
+  allies: string[];
+  enemies: string[];
   clashLosses: number;
   /** Past seasons: place and trophies. */
   honours: Honour[];
@@ -584,6 +619,8 @@ const labelCards = (world: World): LabelCard[] =>
       duelWins: l.stats.duelWins ?? 0,
       duelLosses: l.stats.duelLosses ?? 0,
       duelFled: l.stats.duelFled ?? 0,
+      allies: alliesOf(l).map((id) => world.labels[id]?.name ?? '?'),
+      enemies: enemiesOf(l).map((id) => world.labels[id]?.name ?? '?'),
       clashLosses: l.stats.clashLosses ?? 0,
       honours: honoursOf(world, l.id),
       artists: rosterOf(world, l.id).map((a) => ({ id: a.id, name: a.name, genre: a.genre, gen: generalRating(a), fans: a.fans })),
@@ -629,6 +666,8 @@ export interface MelodyView {
   events: EventsView | null;
   /** Press conferences (yours and against you) and the chart duels of the server. */
   press: PressView | null;
+  /** Allies, enemies, alliance offers and loans between players. */
+  relations: RelationsView | null;
   duels: DuelView[];
   /** The centre de formation: youths, scout, mission. Null without a label. */
   academy: AcademyView | null;
@@ -803,6 +842,7 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     estate: label ? estateView(world, label) : null,
     events: label ? eventsView(world, label) : null,
     press: label ? pressView(world, label) : null,
+    relations: label ? relationsView(world, label) : null,
     duels: duelsView(world, label?.id ?? null),
     trends: world.trends,
     label: label && {

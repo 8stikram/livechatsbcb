@@ -13,6 +13,7 @@ import { tickProjects } from './projects.ts';
 import { ESTATE, tickAssetLoan } from './estate.ts';
 import { applyStreamEvents, tickCards, tickServerEvents } from './events.ts';
 import { tickDuels } from './wars.ts';
+import { COOP, tickCoop } from './coop.ts';
 import { judgeRelease } from './letdown.ts';
 import { lightUp, supportBoost } from './support.ts';
 import { tickSeason } from './seasons.ts';
@@ -204,9 +205,12 @@ export const runTick = (world: World): TickReport => {
     song.decay = week.decay;
     song.hitScore = week.hitScore;
     song.weeksOut = 0;
-    artist.fans += week.newFans + (feat ? Math.round(feat.fans * 0.02 * Math.min(1, week.streams / Math.max(1, feat.fans))) : 0);
+    // Allies cross more fans on a featuring.
+    const featLabelId = feat ? contractOf(world, feat.id)?.labelId : undefined;
+    const cross = featLabelId && (label.allies ?? []).includes(featLabelId) ? COOP.allyFans : 1;
+    artist.fans += week.newFans + (feat ? Math.round(feat.fans * 0.02 * cross * Math.min(1, week.streams / Math.max(1, feat.fans))) : 0);
     // The guest gets a share of the new listeners too.
-    if (feat) feat.fans += Math.round(week.newFans * 0.3);
+    if (feat) feat.fans += Math.round(week.newFans * 0.3 * cross);
     artist.hype = clamp(artist.hype + week.hypeChange, 0, 100);
     artist.lastReleaseTick = tick;
     artist.lastActiveTick = tick;
@@ -496,6 +500,15 @@ export const runTick = (world: World): TickReport => {
     (text) => {
       world.marketNews = [...(world.marketNews ?? []), { tick: world.tick, text }];
     },
+  );
+  // Loans between players, alliance offers, allies in danger.
+  tickCoop(
+    world,
+    (labelId, amount) => {
+      const label = world.labels[labelId];
+      if (label) earn(reports, label, amount);
+    },
+    tell,
   );
   // Label cards: old ones answer themselves, new ones come.
   tickCards(world, tell);

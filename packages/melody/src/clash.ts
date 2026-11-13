@@ -10,6 +10,7 @@ import { clamp, rngFor, type Rng } from './rng.ts';
 import type { Artist, Label, World } from './types.ts';
 import { GameError, createSong, releaseBlocked, scheduleRelease } from './world.ts';
 import { producerOfLevel } from './quality.ts';
+import { checkTarget, enemyBoost } from './coop.ts';
 
 const fail = (message: string): never => {
   throw new GameError(message);
@@ -160,6 +161,7 @@ export const startClash = (world: World, label: Label, targetLabelId: string, ar
   const target = world.labels[targetLabelId] ?? fail('Label introuvable.');
   if (target.id === label.id) fail('Tu ne peux pas te clasher toi-même.');
   if (!rivalsOf(world, label.id).some((l) => l.id === target.id)) fail(`${target.name} n’a personne à clasher.`);
+  checkTarget(world, label, target.id);
   const all = clashesOf(world);
   if (all.some((c) => isOpen(c) && ((c.fromLabelId === label.id && c.toLabelId === target.id) || (c.fromLabelId === target.id && c.toLabelId === label.id))))
     fail(`Un clash avec ${target.name} est déjà en cours.`);
@@ -251,10 +253,12 @@ const settle = (world: World, clash: Clash, tell: (labelId: string, text: string
   const winLabel = world.labels[fromWins ? clash.fromLabelId : clash.toLabelId];
   const loseLabel = world.labels[fromWins ? clash.toLabelId : clash.fromLabelId];
   if (winner && loser) {
-    const taken = Math.min(CLASH.maxFans, Math.round(loser.fans * CLASH.fanShare));
+    // 25 % more between declared enemies.
+    const boost = enemyBoost(world, clash.fromLabelId, clash.toLabelId);
+    const taken = Math.min(CLASH.maxFans * boost, Math.round(loser.fans * CLASH.fanShare * boost));
     winner.fans += taken;
     loser.fans = Math.max(0, loser.fans - Math.round(loser.fans * CLASH.fanLoss));
-    bump(winner, CLASH.winHype, 5);
+    bump(winner, Math.round(CLASH.winHype * boost), 5);
     bump(loser, -CLASH.loseHype, -5);
     if (winLabel) winLabel.reputation = clamp(winLabel.reputation + 3, 0, 100);
     if (loseLabel) loseLabel.reputation = clamp(loseLabel.reputation - 2, 0, 100);
@@ -339,6 +343,8 @@ export const throwShade = (world: World, label: Label, targetLabelId: string, li
   const target = world.labels[targetLabelId] ?? fail('Label introuvable.');
   if (target.id === label.id) fail('Tu ne peux pas te clasher toi-même.');
   if (!rivalsOf(world, label.id).some((l) => l.id === target.id)) fail(`${target.name} n’a personne à piquer.`);
+  checkTarget(world, label, target.id);
+  const boost = enemyBoost(world, label.id, target.id);
   if (world.shades?.[label.id] === world.tick) fail('Tu as déjà lancé une pique cette semaine.');
   if (!shadeLines(world, label).includes(line)) fail('Cette phrase n’est pas proposée cette semaine.');
   if (rosterOf(world, label.id).length === 0) fail('Il te faut au moins un artiste pour parler.');
@@ -350,8 +356,8 @@ export const throwShade = (world: World, label: Label, targetLabelId: string, li
     label.reputation = clamp(label.reputation - 2, 0, 100);
     news(world, `${label.name} : « ${text} » Le public trouve ça gênant. Ça se retourne contre eux.`);
   } else {
-    bump(topArtist(world, label.id), 4);
-    bump(topArtist(world, target.id), -2);
+    bump(topArtist(world, label.id), Math.round(4 * boost));
+    bump(topArtist(world, target.id), -Math.round(2 * boost));
     news(world, `${label.name} pique ${target.name} : « ${text} »`);
   }
   return { backfired };
@@ -551,7 +557,9 @@ export interface RivalView {
 }
 
 export const rivalsView = (world: World, labelId: string): RivalView[] =>
-  rivalsOf(world, labelId).map((l) => {
+  rivalsOf(world, labelId)
+    .filter((l) => l.kind !== 'player' || (world.labels[labelId]?.enemies ?? []).includes(l.id))
+    .map((l) => {
     const top = topArtist(world, l.id);
     return { id: l.id, name: l.name, player: l.kind === 'player', topArtist: top?.name ?? '', gen: top ? generalRating(top) : 0 };
   });

@@ -9,6 +9,7 @@ import { contractOf, rosterOf } from './economy.ts';
 import { clamp, rngFor } from './rng.ts';
 import type { Artist, Label, World } from './types.ts';
 import { GameError } from './world.ts';
+import { checkTarget, enemyBoost } from './coop.ts';
 
 const fail = (message: string): never => {
   throw new GameError(message);
@@ -100,11 +101,13 @@ export const pressConference = (world: World, label: Label, speakerId: string | 
   const toLabel = toLabelId ? world.labels[toLabelId] : undefined;
   if (!toLabel || toLabel.kind !== 'player' || toLabel.bankrupt) return fail('On ne vise que les artistes des autres joueurs.');
   if (toLabel.id === label.id) fail('Tu ne vas pas descendre ton propre artiste.');
+  checkTarget(world, label, toLabel.id);
+  const boost = enemyBoost(world, label.id, toLabel.id);
   const speaker = speakerOf(world, label, speakerId);
   const success = rngFor(world.seed, world.tick, `press:${label.id}`).chance(pressOdds(world, label.id, speaker, target));
   if (success) {
-    bumpHype(target, -WARS.hit);
-    bumpHype(speaker, WARS.gain);
+    bumpHype(target, -Math.round(WARS.hit * boost));
+    bumpHype(speaker, Math.round(WARS.gain * boost));
   } else {
     label.reputation = clamp(label.reputation - WARS.failReputation, 0, 100);
     bumpHype(speaker, -WARS.failHype);
@@ -148,8 +151,9 @@ export const replyPress = (world: World, label: Label, confId: string, speakerId
   if (success) {
     // Cancel what the conference did, and the target comes out on top.
     if (conf.success) {
-      bumpHype(target, WARS.hit);
-      bumpHype(attacker, -WARS.gain);
+      const boost = enemyBoost(world, conf.fromLabelId, conf.toLabelId);
+      bumpHype(target, Math.round(WARS.hit * boost));
+      bumpHype(attacker, -Math.round(WARS.gain * boost));
     }
     bumpHype(target, WARS.replyGain);
     news(world, `${nameOf(world, label, speaker)} répond à ${from?.name ?? 'l’attaque'} : retour à l’envoyeur, ${target?.name ?? 'son artiste'} sort grandi.`);
@@ -193,6 +197,7 @@ export const askDuel = (world: World, label: Label, targetLabelId: string, artis
   const target = world.labels[targetLabelId];
   if (!target || target.kind !== 'player' || target.bankrupt || target.id === label.id) return fail('Tu ne peux défier qu’un autre joueur.');
   if (rosterOf(world, target.id).length === 0) fail('Ce label n’a pas d’artiste.');
+  checkTarget(world, label, target.id);
   speakerOf(world, label, artistId);
   if (!Number.isInteger(week) || week < world.tick + WARS.minWeeks || week > world.tick + WARS.maxWeeks)
     fail(`Choisis une semaine entre ${WARS.minWeeks} et ${WARS.maxWeeks} semaines d’ici.`);
@@ -297,10 +302,11 @@ export const tickDuels = (world: World, newFans: Record<string, number>, tell: (
     const loserSong = fromWins ? b : a;
     duel.winnerLabelId = winLabel?.id ?? null;
     // 10 % of the new fans the loser's song brought, taken from him (none if he did not release).
-    const stolen = loserSong && loser ? Math.min(loser.fans, Math.round((newFans[loserSong.id] ?? 0) * WARS.fanShare)) : 0;
+    const boost = enemyBoost(world, duel.fromLabelId, duel.toLabelId);
+    const stolen = loserSong && loser ? Math.min(loser.fans, Math.round((newFans[loserSong.id] ?? 0) * WARS.fanShare * boost)) : 0;
     duel.stolenFans = stolen;
     if (winner) {
-      winner.hype = clamp(winner.hype + WARS.winHype, 0, 100);
+      winner.hype = clamp(winner.hype + Math.round(WARS.winHype * boost), 0, 100);
       winner.fans += stolen;
     }
     if (loser) {
@@ -335,7 +341,7 @@ export interface PressView {
 
 export const pressView = (world: World, label: Label): PressView => {
   const targets = Object.values(world.labels)
-    .filter((l) => l.kind === 'player' && !l.bankrupt && l.id !== label.id)
+    .filter((l) => l.kind === 'player' && !l.bankrupt && l.id !== label.id && (label.enemies ?? []).includes(l.id))
     .flatMap((l) =>
       rosterOf(world, l.id).map((a) => ({
         id: a.id,

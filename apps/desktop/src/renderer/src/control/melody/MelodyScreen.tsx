@@ -4539,6 +4539,165 @@ const DuelPanel = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: Me
   );
 };
 
+// Allies and enemies (2 of each), and helping a player who sinks: a gift or a loan.
+const RelationsPanel = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const rel = view.relations;
+  const [who, setWho] = useState('');
+  const [helpTo, setHelpTo] = useState('');
+  const [amount, setAmount] = useState(5_000);
+  const [rate, setRate] = useState(0);
+  const [weeks, setWeeks] = useState(8);
+  if (!rel || rel.players.length === 0) return null;
+  const taken = new Set([...rel.allies.map((a) => a.id), ...rel.enemies.map((e) => e.id)]);
+  const free = rel.players.filter((p) => !taken.has(p.id));
+  const cash = view.label?.cash ?? 0;
+  const loansIn = rel.loans.filter((l) => l.mine === 'borrowed' && l.status === 'offered');
+  return (
+    <section className="mt-section mt-rel">
+      <Label>Alliés et ennemis · 2 de chaque au plus</Label>
+      {rel.offersIn.map((o) => (
+        <div key={o.id} className="mt-deal mt-rel-row is-turn">
+          <div className="mt-deal-text">
+            <b>{o.from} te propose une alliance</b>
+            <span className="mt-sub">Pas d’attaque entre vous, des featurings meilleurs, pas de honte sur un retard de prêt, et une alerte s’il coule.</span>
+          </div>
+          <div className="mt-acts mt-deal-acts">
+            <button type="button" className="mt-go" disabled={busy} onClick={() => onAct({ type: 'ally_answer', offerId: o.id, accept: true })}>
+              Accepter
+            </button>
+            <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'ally_answer', offerId: o.id, accept: false })}>
+              Refuser
+            </button>
+          </div>
+        </div>
+      ))}
+      <div className="mt-rel-cols">
+        <div className="mt-rel-col is-ally">
+          <Label>Alliés</Label>
+          {rel.allies.length === 0 && <span className="mt-sub">Aucun allié.</span>}
+          {rel.allies.map((a) => (
+            <div key={a.id} className="mt-rel-name">
+              <b>{a.name}</b>
+              {a.danger && <span className="mt-rel-danger">en danger</span>}
+              <button type="button" className="mt-ghost" disabled={busy || !rel.canChange} title={rel.canChange ? undefined : 'Une fois par saison'} onClick={() => onAct({ type: 'ally_break', labelId: a.id })}>
+                Lâcher
+              </button>
+            </div>
+          ))}
+          {rel.offersOut.map((o) => (
+            <span key={o.id} className="mt-sub">
+              Proposition envoyée à {o.to}…
+            </span>
+          ))}
+        </div>
+        <div className="mt-rel-col is-enemy">
+          <Label>Ennemis</Label>
+          {rel.enemies.length === 0 && <span className="mt-sub">Aucun ennemi. Entre joueurs, tu n’attaques que tes ennemis.</span>}
+          {rel.enemies.map((e) => (
+            <div key={e.id} className="mt-rel-name">
+              <b>{e.name}</b>
+              <button type="button" className="mt-ghost" disabled={busy || !rel.canChange} title={rel.canChange ? undefined : 'Une fois par saison'} onClick={() => onAct({ type: 'enemy_remove', labelId: e.id })}>
+                Faire la paix
+              </button>
+            </div>
+          ))}
+          {rel.enemyOf.length > 0 && <span className="mt-sub">T’ont déclaré la guerre : {rel.enemyOf.map((e) => e.name).join(', ')}</span>}
+        </div>
+      </div>
+      {free.length > 0 && (
+        <div className="mt-acts">
+          <select className="mt-select" aria-label="Label" value={who} onChange={(e) => setWho(e.target.value)}>
+            <option value="">Choisis un joueur</option>
+            {free.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="mt-go" disabled={busy || !who || rel.allies.length >= 2} onClick={() => onAct({ type: 'ally_ask', targetLabelId: who })}>
+            Proposer une alliance
+          </button>
+          <button type="button" className="mt-ghost mt-rel-war" disabled={busy || !who || rel.enemies.length >= 2} onClick={() => onAct({ type: 'enemy_add', labelId: who })}>
+            Déclarer ennemi
+          </button>
+        </div>
+      )}
+      <span className="mt-sub">
+        Une alliance se fait à deux ; un ennemi se déclare seul, avec 25 % d’effet en plus sur tes attaques contre lui. Lâcher un allié ou faire la paix : une fois par saison{rel.canChange ? '' : ' (déjà fait cette saison)'}.
+      </span>
+
+      <Label>Aider un joueur</Label>
+      {loansIn.map((l) => (
+        <div key={l.id} className="mt-deal mt-rel-row is-turn">
+          <div className="mt-deal-text">
+            <b>
+              {l.other} te prête {l.amount.toLocaleString('fr-FR')} €
+            </b>
+            <span className="mt-sub">
+              Taux {l.rate} % · tu rends {l.perWeek.toLocaleString('fr-FR')} € par semaine pendant {l.weeks} semaines.
+            </span>
+          </div>
+          <div className="mt-acts mt-deal-acts">
+            <button type="button" className="mt-go" disabled={busy} onClick={() => onAct({ type: 'friend_loan_answer', loanId: l.id, accept: true })}>
+              Accepter
+            </button>
+            <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'friend_loan_answer', loanId: l.id, accept: false })}>
+              Refuser
+            </button>
+          </div>
+        </div>
+      ))}
+      <div className="mt-acts">
+        <select className="mt-select" aria-label="Joueur aidé" value={helpTo} onChange={(e) => setHelpTo(e.target.value)}>
+          <option value="">Qui tu aides ?</option>
+          {rel.players.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+              {p.danger ? ` · en danger (${p.cash.toLocaleString('fr-FR')} €)` : ''}
+            </option>
+          ))}
+        </select>
+        <MoneyInput value={amount} onChange={setAmount} label="Somme" />
+        <button type="button" className="mt-go" disabled={busy || !helpTo || amount < 100 || amount > cash} onClick={() => onAct({ type: 'gift', targetLabelId: helpTo, amount })}>
+          Donner
+        </button>
+      </div>
+      <div className="mt-acts">
+        <select className="mt-select" aria-label="Taux" value={rate} onChange={(e) => setRate(Number(e.target.value))}>
+          {rel.rates.map((r) => (
+            <option key={r} value={r}>
+              Taux {r} %
+            </option>
+          ))}
+        </select>
+        <select className="mt-select" aria-label="Durée" value={weeks} onChange={(e) => setWeeks(Number(e.target.value))}>
+          {rel.weeks.map((w) => (
+            <option key={w} value={w}>
+              Sur {w} semaines
+            </option>
+          ))}
+        </select>
+        <button type="button" className="mt-ghost" disabled={busy || !helpTo || amount < 100 || amount > cash} onClick={() => onAct({ type: 'friend_loan', targetLabelId: helpTo, amount, rate, weeks })}>
+          Proposer un prêt
+        </button>
+      </div>
+      <span className="mt-sub">Un prêt se rend un peu chaque semaine. S’il ne peut pas payer, c’est reporté et il perd 1 de réputation (pas entre alliés).</span>
+      {rel.loans.filter((l) => l.status !== 'offered' || l.mine === 'lent').length > 0 && (
+        <ul className="mt-cards-past">
+          {rel.loans
+            .filter((l) => l.status !== 'offered' || l.mine === 'lent')
+            .map((l) => (
+              <li key={l.id}>
+                {l.mine === 'lent' ? `Prêt à ${l.other}` : `Prêt de ${l.other}`} · {l.amount.toLocaleString('fr-FR')} € ·{' '}
+                {l.status === 'offered' ? 'en attente de réponse' : l.status === 'running' ? `reste ${l.remaining.toLocaleString('fr-FR')} €` : 'remboursé'}
+              </li>
+            ))}
+        </ul>
+      )}
+    </section>
+  );
+};
+
 // Going after another label: a pique once a week, or a disstrack.
 const Beef = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
   const [target, setTarget] = useState('');
@@ -4604,6 +4763,8 @@ const LabelPage = ({ card, onClose }: { card: LabelCard; onClose: () => void }) 
       <span className="mt-pill">
         {card.numberOnes} n°1 · {card.top10} top 10
       </span>
+      {card.allies.length > 0 && <span className="mt-pill mt-pill-ally">Alliés : {card.allies.join(', ')}</span>}
+      {card.enemies.length > 0 && <span className="mt-pill mt-pill-enemy">Ennemis : {card.enemies.join(', ')}</span>}
       <span className="mt-pill">
         Duels : {card.duelWins} gagné{card.duelWins > 1 ? 's' : ''} · {card.duelLosses} perdu{card.duelLosses > 1 ? 's' : ''}
         {card.duelFled > 0 ? ` · ${card.duelFled} fui${card.duelFled > 1 ? 's' : ''}` : ''}
@@ -4728,6 +4889,7 @@ const LabelsTab = ({
         </section>
       )}
       {view.interview && <Interview interview={view.interview} onAct={onAct} busy={busy} />}
+      <RelationsPanel view={view} onAct={onAct} busy={busy} />
       <Beef view={view} onAct={onAct} busy={busy} />
       <PressPanel view={view} onAct={onAct} busy={busy} />
       <DuelPanel view={view} onAct={onAct} busy={busy} />
@@ -5166,6 +5328,14 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'press_reply') say(answer.data.view.press?.recent[0]?.text ?? 'Riposte envoyée.');
       if (action.type === 'duel') say('Défi lancé. L’autre label a 2 semaines pour répondre.');
       if (action.type === 'duel_answer') say(action.accept ? 'Duel accepté. Sors un son la bonne semaine !' : 'Duel refusé.');
+      if (action.type === 'ally_ask') say('Proposition d’alliance envoyée. Il a 2 semaines pour répondre.');
+      if (action.type === 'ally_answer') say(action.accept ? 'Alliance conclue !' : 'Alliance refusée.');
+      if (action.type === 'ally_break') say('Alliance rompue.');
+      if (action.type === 'enemy_add') say('Guerre déclarée !');
+      if (action.type === 'enemy_remove') say('La paix est faite.');
+      if (action.type === 'gift') say('Argent envoyé.');
+      if (action.type === 'friend_loan') say('Prêt proposé. Il a 2 semaines pour accepter.');
+      if (action.type === 'friend_loan_answer') say(action.accept ? 'Prêt accepté : l’argent est sur ton compte.' : 'Prêt refusé.');
       if (action.type === 'card') say(answer.data.view.events?.log[0] ?? 'Réponse envoyée.');
       if (action.type === 'role') say(`Nouveau rôle : ${ROLES[action.role].name}.`);
       if (action.type === 'genre_change') say('Changement de genre lancé. Laisse-lui le temps de trouver son son.');

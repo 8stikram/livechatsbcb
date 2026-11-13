@@ -173,6 +173,11 @@ export interface Label {
   roleTicks?: Record<string, number>;
   /** Genre changes made this season. */
   genreChanges?: { season: number; count: number };
+  /** Allies (both agreed) and enemies (declared alone), 2 of each; the season it last broke one; the week its allies were last warned it is in danger. */
+  allies?: string[];
+  enemies?: string[];
+  relationSeason?: number;
+  dangerTick?: number;
   /** Label event cards waiting for an answer, the last ones drawn, and what the last answers did. */
   cards?: import('./events.ts').Card[];
   lastEvents?: string[];
@@ -351,6 +356,9 @@ export interface World {
   favourites?: Record<string, string[]>;
   /** What happened on the market lately, for everyone's Monday summary. */
   marketNews?: Array<{ tick: number; text: string }>;
+  /** Alliance offers and loans between players. */
+  allyOffers?: import('./coop.ts').AllyOffer[];
+  friendLoans?: import('./coop.ts').FriendLoan[];
   /** Press conferences and chart duels between players. */
   pressConfs?: import('./wars.ts').PressConf[];
   duels?: import('./wars.ts').Duel[];

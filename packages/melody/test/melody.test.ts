@@ -10,7 +10,7 @@ import {
   MORALE, RANKS, ranksOf, isLeader, worriesOf, moraleBlock, tickMorale, dynamicsView,
   shareLoan, returnLoans, STUDIO_CONTENT, studioCardsFor, usualNote, isLetdown, judgeRelease,
   SALES, salesQuote, createProject, tickProjects, supportBoost, ROLES, ROLE_RULES, FORM, roleSlots, inForm, lightUp, experienceBonus,
-  WARS, pressOdds,
+  WARS, pressOdds, COOP, relationsView, enemyBoost, tickCoop,
   CARD_IDS, EVENTS, EVENT_CONTENT, SERVER_CONTENT, SERVER_IDS, eventsView, streamMult, tickCards, tickServerEvents, applyStreamEvents,
   ESTATE, TIER_TABLE, assetBase, assetLoanCap, buybackPrice, tickAssetLoan, tierProgress, catalogueValue,
   SKILL_IDS, skillsOf, skillLevel, skillPlus, stageBoost, tirelessFactor, PROFILES, EVOLUTION, GENRE_CHANGE, profileOf, profileGrowth, afterRelease, tickEvolution, GENRES,
@@ -750,6 +750,9 @@ describe('clashs, piques et interviews', () => {
     }
     const a = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
     const b = Object.values(world.labels).find((l) => l.ownerId === 'u2')!;
+    // Between players, one only attacks one's enemies.
+    expect(() => applyAction(world, 'u1', { type: 'shade', targetLabelId: b.id, line: 0 })).toThrow(/ennemi/);
+    applyAction(world, 'u1', { type: 'enemy_add', labelId: b.id });
     return { world, a, b, artistA: rosterOf(world, a.id)[0]!, artistB: rosterOf(world, b.id)[0]! };
   };
 
@@ -2319,6 +2322,7 @@ describe('guerres : conférence de presse et guerre de charts', () => {
     world.lastServerEvents = [...SERVER_IDS];
     const a = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
     const b = Object.values(world.labels).find((l) => l.ownerId === 'u2')!;
+    applyAction(world, 'u1', { type: 'enemy_add', labelId: b.id });
     return { world, a, b, artA: rosterOf(world, a.id)[0]!, artB: rosterOf(world, b.id)[0]! };
   };
 
@@ -2352,8 +2356,8 @@ describe('guerres : conférence de presse et guerre de charts', () => {
       const conf = world.pressConfs![0]!;
       if (conf.success) {
         hits += 1;
-        expect(artB.hype).toBe(50 - WARS.hit);
-        expect(artA.hype).toBe(50 + WARS.gain);
+        expect(artB.hype).toBe(50 - Math.round(WARS.hit * COOP.enemyBoost));
+        expect(artA.hype).toBe(50 + Math.round(WARS.gain * COOP.enemyBoost));
         expect(buildView(world, 'u2').press!.toAnswer).toHaveLength(1);
         applyAction(world, 'u2', { type: 'press_reply', confId: conf.id, speakerId: artB.id });
         if (conf.reply!.success) {
@@ -2429,4 +2433,118 @@ describe('guerres : conférence de presse et guerre de charts', () => {
     expect(b.stats.duelFled).toBe(1);
     expect(artB.id).toBeTruthy();
   });
+});
+
+describe('coopérations : alliés, ennemis et renflouement', () => {
+  const setup = () => {
+    const world = createWorld(42);
+    for (const u of ['u1', 'u2', 'u3', 'u4']) {
+      applyAction(world, u, { type: 'found', name: `Label ${u}` });
+      applyAction(world, u, { type: 'tuto', move: 'skip' });
+    }
+    world.lastServerEvents = [...SERVER_IDS];
+    const [a, b, c, d] = ['u1', 'u2', 'u3', 'u4'].map((u) => Object.values(world.labels).find((l) => l.ownerId === u)!);
+    return { world, a: a!, b: b!, c: c!, d: d! };
+  };
+
+  it('makes allies when both agree, at most 2, and forbids attacks between them', () => {
+    const { world, a, b, c, d } = setup();
+    applyAction(world, 'u1', { type: 'ally_ask', targetLabelId: b.id });
+    const offer = relationsView(world, b).offersIn[0]!;
+    applyAction(world, 'u2', { type: 'ally_answer', offerId: offer.id, accept: true });
+    expect(a.allies).toEqual([b.id]);
+    expect(b.allies).toEqual([a.id]);
+    expect(() => applyAction(world, 'u1', { type: 'enemy_add', labelId: b.id })).toThrow(/allié/);
+    applyAction(world, 'u1', { type: 'ally_ask', targetLabelId: c.id });
+    applyAction(world, 'u3', { type: 'ally_answer', offerId: relationsView(world, c).offersIn[0]!.id, accept: true });
+    expect(() => applyAction(world, 'u1', { type: 'ally_ask', targetLabelId: d.id })).toThrow(/2 alliés/);
+    // Breaking: once a season.
+    applyAction(world, 'u1', { type: 'ally_break', labelId: c.id });
+    expect(c.allies).toEqual([]);
+    expect(() => applyAction(world, 'u1', { type: 'ally_break', labelId: b.id })).toThrow(/cette saison/);
+    expect(buildView(world, 'u1').labels.find((l) => l.id === a.id)!.allies).toEqual([b.name]);
+  });
+
+  it('lets one declare 2 enemies alone, attack only them among players, with 25 % more', () => {
+    const { world, a, b, c, d } = setup();
+    const artA = rosterOf(world, a.id)[0]!;
+    expect(() => applyAction(world, 'u1', { type: 'clash', targetLabelId: b.id, artistId: artA.id })).toThrow(/ennemi/);
+    expect(buildView(world, 'u1').rivals.some((r) => r.player)).toBe(false);
+    applyAction(world, 'u1', { type: 'enemy_add', labelId: b.id });
+    applyAction(world, 'u1', { type: 'enemy_add', labelId: c.id });
+    expect(() => applyAction(world, 'u1', { type: 'enemy_add', labelId: d.id })).toThrow(/2 ennemis/);
+    expect(relationsView(world, b).enemyOf.map((e) => e.id)).toEqual([a.id]);
+    expect(enemyBoost(world, b.id, a.id)).toBe(COOP.enemyBoost);
+    expect(enemyBoost(world, a.id, d.id)).toBe(1);
+    expect(buildView(world, 'u1').rivals.filter((r) => r.player).map((r) => r.id).sort()).toEqual([b.id, c.id].sort());
+    // b has not declared a: it cannot attack back, but it can still answer.
+    expect(() => applyAction(world, 'u2', { type: 'enemy_add', labelId: a.id })).not.toThrow();
+    applyAction(world, 'u1', { type: 'enemy_remove', labelId: c.id });
+    expect(() => applyAction(world, 'u1', { type: 'enemy_remove', labelId: b.id })).toThrow(/cette saison/);
+    // The labels of the game stay free targets.
+    const npc = buildView(world, 'u1').rivals.find((r) => !r.player)!;
+    expect(() => applyAction(world, 'u1', { type: 'clash', targetLabelId: npc.id, artistId: artA.id })).not.toThrow();
+  });
+
+  it('gives money, and lends with a rate paid back a bit each week', () => {
+    const { world, a, b } = setup();
+    a.cash = 100_000;
+    b.cash = -500;
+    applyAction(world, 'u1', { type: 'gift', targetLabelId: b.id, amount: 5_000 });
+    expect(b.cash).toBe(4_500);
+    expect(world.marketNews!.some((n) => n.text.includes('au secours'))).toBe(true);
+    applyAction(world, 'u1', { type: 'friend_loan', targetLabelId: b.id, amount: 10_000, rate: 10, weeks: 4 });
+    const loan = world.friendLoans![0]!;
+    expect(loan).toMatchObject({ status: 'offered', remaining: 11_000, perWeek: 2_750 });
+    applyAction(world, 'u2', { type: 'friend_loan_answer', loanId: loan.id, accept: true });
+    expect(b.cash).toBe(14_500);
+    expect(a.cash).toBe(85_000);
+    for (let i = 0; i < 4; i += 1) {
+      b.cash = Math.max(b.cash, 50_000);
+      runTick(world);
+    }
+    expect(loan.status).toBe('done');
+    expect(loan.remaining).toBe(0);
+  });
+
+  it('postpones a part it cannot pay with reputation −1, never between allies, and warns allies in danger', () => {
+    const { world, a, b } = setup();
+    a.cash = 100_000;
+    applyAction(world, 'u1', { type: 'friend_loan', targetLabelId: b.id, amount: 10_000, rate: 0, weeks: 4 });
+    applyAction(world, 'u2', { type: 'friend_loan_answer', loanId: world.friendLoans![0]!.id, accept: true });
+    const told: Array<[string, string]> = [];
+    b.cash = 0;
+    let rep = (b.reputation = 50);
+    world.tick += 1;
+    tickCoop(world, () => {}, (id, t) => told.push([id, t]));
+    expect(b.reputation).toBe(rep - COOP.lateReputation);
+    expect(world.friendLoans![0]!.late).toBe(1);
+    expect(told.some(([id, t]) => id === a.id && t.includes('reporté'))).toBe(true);
+    // Allies: no shame, and an alert when the ally is in danger.
+    a.allies = [b.id];
+    b.allies = [a.id];
+    b.cash = -1_000;
+    rep = b.reputation;
+    world.tick += 1;
+    told.length = 0;
+    tickCoop(world, () => {}, (id, t) => told.push([id, t]));
+    expect(b.reputation).toBe(rep);
+    expect(told.some(([id, t]) => id === a.id && t.startsWith('Alerte'))).toBe(true);
+  });
+
+  it('gives +2 quality to a featuring with an allied artist', () => {
+    const make = (allied: boolean) => {
+      const { world, a, b } = setup();
+      a.cash = 1_000_000;
+      if (allied) a.allies = [b.id];
+      const artA = rosterOf(world, a.id)[0]!;
+      artA.energy = 100;
+      return createSong(world, a.id, {
+        artistId: artA.id, title: 'Feat', themeId: 'rupture', beatId: 'lovetrap', featArtistId: rosterOf(world, b.id)[0]!.id,
+        levels: { theme: 1, beat: 1, producer: 1, studio: 1 }, producer: producerOfLevel(1, 1),
+      }).quality;
+    };
+    expect(make(true) - make(false)).toBe(COOP.allyQuality);
+  });
+
 });
