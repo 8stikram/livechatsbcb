@@ -3,6 +3,17 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.25.0',
+    date: '14 novembre 2026',
+    items: [
+      'Question débile : le vote marche pour tout le monde. Les réponses passent une par une sur l’écran des joueurs, comme un vrai LiveChat (sans le nom), puis tout le monde vote pour sa préférée, sauf la sienne',
+      'Qui l’a envoyé ? : plus de coche « prêt » sur les joueurs, juste un compteur « 2 / 4 prêts ». Celui qui a envoyé le meme vote aussi, pour ne pas se griller',
+      'Undercover refait : chacun reçoit un mot secret, l’undercover un mot proche sans le savoir. Chacun son tour poste une image pour son mot (bibliothèque, PC ou Ctrl+V), 3 tours, puis un seul vote',
+      'Undercover : les images se rangent sous le pseudo de chacun. À la fin, on voit les deux mots',
+      'Undercover : le chef du salon peut activer « Mots trash » 🌶️',
+    ],
+  },
+  {
     version: '0.24.0',
     date: '10 novembre 2026',
     items: [

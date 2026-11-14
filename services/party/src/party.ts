@@ -545,6 +545,11 @@ export class Party extends DurableObject<Env> {
       case 'game-leave':
         this.leaveGame(message.data.gameId, memberId);
         break;
+      case 'game-spicy': {
+        const { gameId, on } = message.data;
+        this.playGame(gameId, (game) => games.setSpicy(game, memberId, on));
+        break;
+      }
       case 'game-rematch':
         this.rematchGame(message.data.gameId, memberId);
         break;
@@ -1047,6 +1052,9 @@ export class Party extends DurableObject<Env> {
       deck: [],
       pile: [],
       speakers: [],
+      stock: [],
+      spicy: false,
+      pair: [],
       ...(JSON.parse(raw) as object),
     } as unknown as games.StoredGame;
   }
@@ -1186,7 +1194,7 @@ export class Party extends DurableObject<Env> {
         caption: draft.caption,
         scene: draft.scene,
         textPlace: draft.scene ? draft.textPlace : null,
-      }),
+      }, Date.now(), this.gameScale()),
     );
   }
 

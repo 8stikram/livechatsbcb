@@ -160,8 +160,9 @@ export class PartyConnection {
     this.send({ t: 'game-stop', gameId });
   }
 
-  gameAction(gameId: string, action: 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch' | 'done' | 'bot-add' | 'pass'): void {
+  gameAction(gameId: string, action: 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch' | 'done' | 'bot-add' | 'pass' | 'spicy' | 'mild'): void {
     if (action === 'ready' || action === 'unready') this.send({ t: 'game-ready', gameId, ready: action === 'ready' });
+    else if (action === 'spicy' || action === 'mild') this.send({ t: 'game-spicy', gameId, on: action === 'spicy' });
     else this.send({ t: `game-${action}`, gameId });
   }
 

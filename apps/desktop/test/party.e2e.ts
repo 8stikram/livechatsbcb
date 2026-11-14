@@ -2345,7 +2345,7 @@ describe.skipIf(online)('party flow in the real app', () => {
   });
 
   // Each game in the world of its mascot: opened with two bots, its lobby and its game pictured.
-  const openWorld = async (kind: string, persona: string, withGuest = false) => {
+  const openWorld = async (kind: string, persona: string, withGuest = false, beforeLaunch?: () => Promise<void>) => {
     await openTab(host, 'Jeux');
     await host.control.getByTestId(`game-card-${kind}`).getByRole('button', { name: 'Ouvrir' }).click();
     const lobby = host.control.locator(`[data-testid="game-lobby"].world-${persona}`);
@@ -2359,6 +2359,7 @@ describe.skipIf(online)('party flow in the real app', () => {
       await host.control.getByTestId('game-add-bot').click();
       await host.control.locator('.lobby-faces .toy-face:not(.is-empty)').nth(count).waitFor();
     }
+    await beforeLaunch?.();
     await picture(host.control, `world-${persona}-lobby.png`);
     await lobby.getByRole('button', { name: 'Lancer' }).click();
     await host.control.locator(`[data-testid="game"].world-${persona}`).waitFor();
@@ -2374,46 +2375,57 @@ describe.skipIf(online)('party flow in the real app', () => {
     await openTab(host, 'LiveChat');
   };
 
-  it('dresses Undercover as a police folder: a picture each, words in turn, then the line-up', async () => {
+  it('dresses Undercover as a police folder: a secret word, a picture per turn under each name, then the line-up', async () => {
     const photo = join(sandbox, 'indice.png');
     copyFileSync(join(__dirname, '..', 'src', 'renderer', 'src', 'assets', 'logo.png'), photo);
-    await openWorld('undercover', 'insp');
+    // Whoever runs the lobby can pick the trash words only.
+    await openWorld('undercover', 'insp', false, async () => {
+      await host.control.getByTestId('game-spicy').click();
+      await expect.poll(() => host.control.getByTestId('game-spicy').getAttribute('aria-pressed')).toBe('true');
+    });
     await host.app.evaluate(({ dialog }, files) => {
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: files })) as typeof dialog.showOpenDialog;
     }, [photo]);
-    // With something already played today, the game takes its pictures from there and skips this step.
-    const choose = host.control.getByRole('button', { name: 'Choisir une image' });
-    await choose.or(phase('write')).first().waitFor({ timeout: 30_000 });
-    if (await choose.isVisible()) await choose.click();
     await phase('write').waitFor({ timeout: 30_000 });
-    await host.control.getByTestId('round-banner').waitFor({ state: 'detached' });
-    await picture(host.control, 'world-insp-game.png');
-    // Words come in turn; mine when asked.
-    const deadline = Date.now() + 60_000;
-    while (!(await host.control.locator('[data-testid="game"] .game-choices').isVisible())) {
-      const field = host.control.getByLabel('Ton mot');
-      if (await field.isVisible()) {
-        await field.fill('Lumière');
-        await field.press('Enter');
+    await host.control.getByTestId('under-word').waitFor();
+    expect(await host.control.getByTestId('under-column').count()).toBe(3);
+    // Each one posts in turn, three laps: mine from the PC when asked.
+    let pictured = false;
+    const deadline = Date.now() + 150_000;
+    while (!(await host.control.getByTestId('under-vote').first().isVisible())) {
+      const fromPc = host.control.getByRole('button', { name: 'Depuis le PC' });
+      if (await fromPc.isVisible()) await fromPc.click().catch(() => undefined);
+      if (!pictured && (await host.control.locator('.under-posts .game-media').count()) >= 2) {
+        await picture(host.control, 'world-insp-game.png');
+        pictured = true;
       }
       if (Date.now() > deadline) throw new Error('No vote in Undercover');
       await new Promise((done) => setTimeout(done, 300));
     }
-    // The vote goes by fast with bots: pictured at once.
+    // Every picture sits under the name of whoever posted it.
+    expect(await host.control.locator('.under-column').first().locator('.under-posts > *').count()).toBeGreaterThan(0);
     await host.control.screenshot({ path: join(artifacts, 'world-insp-vote.png') });
     await widePictures(host, 'world-insp-vote');
     await stopWorld('insp');
   });
 
-  it('dresses Question débile as a lab: the question on a chalkboard, answers in jars', async () => {
+  it('dresses Question débile as a lab: the answers go by on screen one by one, then everyone votes', async () => {
     await openWorld('question', 'boum');
     await host.control.getByTestId('game-prompt').waitFor();
     await picture(host.control, 'world-boum-game.png');
     const field = host.control.getByLabel('Réponse en texte');
     await field.fill('Parce que les pigeons ont voté');
     await field.press('Enter');
-    // The bots vote fast: the duel may already be at its reveal.
-    await host.control.locator('[data-testid="game"] .game-duel [data-testid="game-entry"]').first().waitFor({ timeout: 30_000 });
+    // Each answer on the screen of the players, like a LiveChat, without who wrote it.
+    await host.control.getByTestId('question-show').waitFor({ timeout: 30_000 });
+    await host.stage.getByTestId('overlay-profile').filter({ hasText: /Réponse \d+ \/ 3/ }).waitFor({ timeout: 15_000 });
+    await picture(host.control, 'world-boum-show.png');
+    await host.stage.screenshot({ path: join(artifacts, 'world-boum-overlay.png') });
+    // Then every answer at once, and the host votes for one that is not theirs.
+    const choice = host.control.locator('[data-testid="game"] .question-grid [data-testid="game-entry"]:not([disabled])').first();
+    await choice.waitFor({ timeout: 60_000 });
+    expect(await host.control.locator('.question-grid [data-testid="game-entry"]').count()).toBe(3);
+    await choice.click().catch(() => undefined);
     await picture(host.control, 'world-boum-vote.png');
     await widePictures(host, 'world-boum-vote');
     await stopWorld('boum');
@@ -2428,7 +2440,10 @@ describe.skipIf(online)('party flow in the real app', () => {
       await field.fill(text);
       await field.press('Enter');
     }
-    // A round on a meme that isn't mine shows the cards.
+    // Nobody sees who is ready, only how many.
+    await host.control.getByTestId('game-done-count').waitFor();
+    expect(await host.control.locator('.game-faces .toy-badge.is-check').count()).toBe(0);
+    // Every meme shows the cards, even to whoever sent it.
     await host.control.locator('[data-testid="game"] .game-choice').first().waitFor({ timeout: 90_000 });
     await host.control.getByTestId('round-banner').waitFor({ state: 'detached' });
     await picture(host.control, 'world-boule-vote.png');

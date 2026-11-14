@@ -244,7 +244,8 @@ export type GameView = Omit<Game, 'entries' | 'myPicture'> & {
   sending: number;
 };
 
-export type GameAction = 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch' | 'done' | 'bot-add' | 'pass';
+// Undercover: « spicy » and « mild » switch the trash words on and off.
+export type GameAction = 'join' | 'ready' | 'unready' | 'launch' | 'leave' | 'rematch' | 'done' | 'bot-add' | 'pass' | 'spicy' | 'mild';
 // A reaction floating by for a few seconds.
 export type GameReactionView = { id: number; memberId: string; emoji: GameReaction };
 // A lobby someone opened, that this member has not joined: on screen, even in game, for a few seconds.
@@ -386,6 +387,8 @@ export type AppState = {
   game: GameView | null;
   gameReactions: GameReactionView[];
   gameInvite: GameInviteView | null;
+  // Question débile: the answer on screen now, like a LiveChat, only for the players of the game.
+  gameShow: PlaybackView | null;
   // One of the excluded apps is in front: nothing shows or plays here until it isn't.
   excludedNow: boolean;
   favorites: FavoriteView[];

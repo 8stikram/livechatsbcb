@@ -459,6 +459,7 @@ function start(): void {
       game: snapshot?.game && connection ? gameView(snapshot.game, connection) : null,
       gameReactions,
       gameInvite: gameInvite(),
+      gameShow: gameShow(),
       favorites: library.favorites(),
       localReplay: localReplayView(),
       skippedBy,
@@ -499,6 +500,57 @@ function start(): void {
     return Date.now() < inviteSeen.until ? { gameId: game.id, kind: game.kind, starterName: game.starterName } : null;
   };
 
+  // Question débile: each answer goes over the screen of the players like a LiveChat, without who sent it.
+  const shownSince = new Map<string, number>();
+  const gameShow = (): PlaybackView | null => {
+    const current = connection?.current();
+    const game = current?.game;
+    const entry = game?.entries[0];
+    if (!connection || !current || !game || !entry || game.kind !== 'question' || game.phase !== 'write' || !game.players.includes(current.memberId)) {
+      shownSince.clear();
+      return null;
+    }
+    if (!shownSince.has(entry.id)) {
+      shownSince.set(entry.id, Date.now());
+      setTimeout(() => {
+        syncOverlay();
+        publishState();
+      }, 50);
+    }
+    const startAt = shownSince.get(entry.id)!;
+    const urlOf = (file: GameFile | undefined) => (file ? cache.urlOf(gameKey(file.id), file.id) : null);
+    const picture = pictureOf(entry.files);
+    const sound = soundOf(entry.files);
+    return {
+      hiddenForMe: null,
+      id: `game-${entry.id}`,
+      senderId: '',
+      whisper: false,
+      senderName: `Réponse ${game.showIndex} / ${game.showTotal}`,
+      senderAvatarUrl: null,
+      kind: mediaKindOf(entry.files),
+      caption: entry.caption,
+      textPlace: entry.textPlace,
+      fileName: fileNamesOf(entry.files),
+      clipStartMs: 0,
+      durationMs: Math.max(1_000, connection.toLocalTime(game.endsAt) - startAt),
+      startAt,
+      mediaUrl: urlOf(picture ?? sound ?? undefined),
+      hasSound: picture !== null && sound !== null,
+      soundUrl: picture ? urlOf(sound ?? undefined) : null,
+      videoMuted: false,
+      soundMuted: false,
+      speak: false,
+      scene:
+        entry.scene?.map(({ file: index, ...layer }) => {
+          if (layer.link) return { ...layer, kind: 'link' as const, url: null };
+          const file = entry.files[index];
+          return { ...layer, kind: file && fileKindOf(file.contentType) === 'video' ? ('video' as const) : ('image' as const), url: urlOf(file) };
+        }) ?? null,
+      link: null,
+    };
+  };
+
   // A poll is on everyone's screen while it runs, then its winner for a moment. The overlay counts the same time.
   const POLL_RESULT_MS = 8_000;
   let pollRunning: string | null = null;
@@ -527,7 +579,7 @@ function start(): void {
     const playing = head?.startAt != null && hiddenReason(head) === null && !excludedNow();
     // Asked for on this PC, like the test: it shows even for someone who keeps the overlay off.
     const showsPoll =
-      settings.current.overlayEnabled && !settings.current.clean && !excludedNow() && (pollOnScreen() || gameInvite() !== null);
+      settings.current.overlayEnabled && !settings.current.clean && !excludedNow() && (pollOnScreen() || gameInvite() !== null || gameShow() !== null);
     const wanted = wheelOpen !== null || overlayTest || localReplay?.startAt != null || (playing && settings.current.overlayEnabled) || showsPoll;
 
     if (wanted && !stageWindow.isVisible()) {
@@ -2258,7 +2310,7 @@ function start(): void {
   });
 
   handle(IpcChannel.GameAction, (gameId: unknown, action: unknown) => {
-    const actions = ['join', 'ready', 'unready', 'launch', 'leave', 'rematch', 'done', 'bot-add', 'pass'] as const;
+    const actions = ['join', 'ready', 'unready', 'launch', 'leave', 'rematch', 'done', 'bot-add', 'pass', 'spicy', 'mild'] as const;
     const known = actions.find((one) => one === action);
     if (typeof gameId === 'string' && known) connection?.gameAction(gameId, known);
   });
@@ -2300,11 +2352,14 @@ function start(): void {
     // Devine Vite, round 3: whoever speaks shows one thing at a time, of any kind.
     if (game.kind === 'guess')
       return game.phase === 'write' && game.round === 3 && game.turn === snapshot?.memberId ? { gameId, left: 1, picturesOnly: false } : null;
+    // Undercover: whoever's turn it is posts one picture, a GIF or a video.
+    if (game.kind === 'undercover')
+      return game.phase === 'write' && game.turn === snapshot?.memberId && gameSending === 0 ? { gameId, left: 1, picturesOnly: false } : null;
     if (game.phase !== 'collect' || game.iAmDone) return null;
     return {
       gameId,
       left: GAME_ENTRIES_PER_PLAYER[game.kind] - game.mySent - gameSending,
-      picturesOnly: game.kind === 'joke' || game.kind === 'undercover',
+      picturesOnly: game.kind === 'joke',
     };
   };
 

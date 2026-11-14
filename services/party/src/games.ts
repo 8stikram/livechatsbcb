@@ -79,6 +79,10 @@ export type StoredGame = {
   deck: string[];
   pile: string[];
   speakers: string[];
+  // Undercover: pictures of the day the bots post, whether the words are the trash ones, and the two words (civilians first).
+  stock: StoredEntry[];
+  spicy: boolean;
+  pair: string[];
 };
 
 // A finished game still shows its ranking for a while.
@@ -86,8 +90,11 @@ export const GAME_KEPT_MS = 60_000;
 // A vote waits at most this long for its first one, then lasts 30 s.
 export const VOTE_WAIT_MS = 120_000;
 export const VOTE_AFTER_FIRST_MS = 30_000;
-// Undercover: each player has this long to write their word.
-export const WORD_TURN_MS = 20_000;
+// Undercover: each player has this long to post a picture for their word, in each of the laps.
+export const IMAGE_TURN_MS = 30_000;
+const UNDERCOVER_LAPS = 3;
+// Question débile: each answer stays on screen this long, one after the other, like a LiveChat.
+export const SHOW_EACH_MS = 7_000;
 // Devine Vite: each one speaks this long, and the game has about this many words per player.
 export const GUESS_TURN_MS = 30_000;
 const GUESS_WORDS_EACH = 5;
@@ -182,9 +189,32 @@ export const HOUSE_WORDS = [
   "Baguette", "Sumo", "Igloo", "Yoga", "Sous-marin", "Clown", "Hérisson", "Disco",
 ];
 
-export const BOT_NAMES = ["Bot Gaston", "Bot Josiane", "Bot Kevin", "Bot Mamie Lulu", "Bot Fernand", "Bot Jessica"];
+// Undercover: two close words. Most players get one, the undercover the other, and nobody knows which is which.
+export const WORD_PAIRS: [string, string][] = [
+  ["Pizza", "Tacos"], ["Chat", "Chien"], ["Plage", "Piscine"], ["Mcdo", "KFC"], ["Licorne", "Cheval"],
+  ["Vampire", "Zombie"], ["Prof", "Surveillant"], ["Fusée", "Avion"], ["Pirate", "Viking"], ["Requin", "Dauphin"],
+  ["Mamie", "Papi"], ["Raclette", "Fondue"], ["Ninja", "Samouraï"], ["Clown", "Mime"], ["Trottinette", "Skate"],
+  ["Croissant", "Pain au chocolat"], ["Pompier", "Policier"], ["Fantôme", "Momie"], ["Karaoké", "Concert"], ["Pingouin", "Manchot"],
+  ["Sirène", "Poisson"], ["Château", "Prison"], ["Banane", "Concombre"], ["Hamster", "Souris"], ["Mariage", "Anniversaire"],
+  ["Dinosaure", "Dragon"], ["Robot", "Alien"], ["Café", "Thé"], ["Neige", "Pluie"], ["Rappeur", "Chanteur"],
+  ["Barbe", "Moustache"], ["Lunettes", "Masque"], ["Bébé", "Vieillard"], ["Muscu", "Yoga"], ["Kebab", "Burger"],
+  ["Cactus", "Sapin"], ["Escargot", "Limace"], ["Discothèque", "Fête foraine"], ["Taxi", "Bus"], ["Football", "Rugby"],
+  ["Pet", "Rot"], ["Gueule de bois", "Mal de mer"], ["Chaussette", "Chausson"], ["Tondeuse", "Aspirateur"], ["Sumo", "Catcheur"],
+];
 
-const BOT_WORDS = ["Bizarre", "Flou", "Drôle", "Bleu", "Dehors", "Animal", "Rapide", "Bruyant", "Vieux", "Chaud", "Brillant", "Mignon"];
+// Only when whoever runs the lobby asks for them: trash words, between adults.
+export const SPICY_PAIRS: [string, string][] = [
+  ["Strip-tease", "Lap dance"], ["Préservatif", "Ballon de baudruche"], ["String", "Slip"], ["Plan cul", "Ex"], ["Fesses", "Seins"],
+  ["Sextape", "Vlog"], ["Menottes", "Fouet"], ["Gueule de bois", "Lendemain de soirée"], ["Tinder", "Grindr"], ["Bisou", "Suçon"],
+  ["Nudiste", "Naturiste"], ["Lingerie", "Maillot de bain"], ["Walk of shame", "Retour de soirée"], ["Plan à trois", "Couple"],
+  ["Jacuzzi", "Sauna"], ["Shot de vodka", "Shot de tequila"], ["Vomi", "Diarrhée"], ["Pole dance", "Zumba"], ["Pyjama party", "Soirée mousse"],
+  ["Coup d’un soir", "Rencard"], ["Body shot", "Beer pong"], ["Sexto", "Nude"], ["Poitrine", "Pectoraux"], ["Aubergine", "Pêche"],
+  ["Club libertin", "Boîte de nuit"], ["Cougar", "Milf"], ["Gode", "Banane"], ["Kamasutra", "Yoga"], ["Chippendale", "Maître-nageur"],
+  ["Lit qui grince", "Voisins bruyants"],
+];
+
+export const BOT_NAMES =["Bot Gaston", "Bot Josiane", "Bot Kevin", "Bot Mamie Lulu", "Bot Fernand", "Bot Jessica"];
+
 const BOT_ANSWERS = [
   "Parce que les pigeons ont voté.",
   "Une chaussette, mais en colère.",
@@ -354,13 +384,21 @@ export const leave = (
     else nextTurn(game, now, scale);
   }
   game.turnOrder = game.turnOrder.filter((id) => id !== memberId);
+  if (game.kind === "undercover") game.speakers = game.speakers.filter((id) => id !== memberId);
+  return true;
+};
+
+// Undercover: whoever runs the lobby picks the trash words only.
+export const setSpicy = (game: StoredGame, memberId: string, on: boolean): boolean => {
+  if (game.phase !== "lobby" || game.kind !== "undercover" || game.chefId !== memberId || game.spicy === on) return false;
+  game.spicy = on;
   return true;
 };
 
 // The lobby becomes the game, with whoever is in it.
 export const launch = (game: StoredGame, now: number, scale: number, history: StoredEntry[]): void => {
   const fresh = createGame(game.kind, game.starterName, game.players, now, scale);
-  Object.assign(game, { ...fresh, id: game.id, chefId: game.chefId, bots: game.bots });
+  Object.assign(game, { ...fresh, id: game.id, chefId: game.chefId, bots: game.bots, spicy: game.spicy });
   startCollect(game, now, scale, history);
 };
 
@@ -382,6 +420,7 @@ export const rematch = (
     phase: "lobby",
     chefId,
     bots,
+    spicy: game.spicy,
     ready: [memberId, ...bots.map(({ id }) => id)],
   };
   armLobby(next, now, scale);
@@ -445,19 +484,21 @@ export const createGame = (
     deck: [],
     pile: [],
     speakers: [],
+    stock: [],
+    spicy: false,
+    pair: [],
   };
 };
 
 const botIds = (game: StoredGame): string[] => game.bots.map(({ id }) => id).filter((id) => game.players.includes(id));
 
 // What the bots send comes at once: pictures of the day for the picture games, a silly answer for the question.
-// Undercover skips sending altogether when the day already played enough pictures.
+// Undercover sends nothing at the start: the pictures come turn by turn, and the bots take theirs from the day.
 const startCollect = (game: StoredGame, now: number, scale: number, history: StoredEntry[]): void => {
-  if (game.kind === "undercover" && history.length >= 3) {
-    game.pool = shuffle(history);
-    return startUndercoverRound(game, now, scale);
+  if (game.kind === "undercover") {
+    game.stock = shuffle(history);
+    return startUndercover(game, now, scale);
   }
-  if (game.kind === "undercover") game.pool = [...history];
   for (const bot of botIds(game)) {
     if (game.kind === "joke") {
       for (const picture of shuffle(history).slice(0, GAME_MIN_ENTRIES.joke))
@@ -479,6 +520,11 @@ export const acceptsEntry = (
   // Devine Vite, round 3: whoever speaks shows a picture, a GIF or a sound, without writing.
   if (game.kind === "guess")
     return game.phase === "write" && game.round === 3 && game.turn === memberId && files.length === 1 && caption === "" && scene === null;
+  // Undercover: whoever's turn it is posts one picture (or a GIF, a video) for their word.
+  if (game.kind === "undercover")
+    return (
+      game.phase === "write" && game.turn === memberId && files.length === 1 && ["image", "video"].includes(fileKindOf(files[0]!.contentType)) && caption === "" && scene === null
+    );
   if (game.phase !== "collect" || !game.players.includes(memberId))
     return false;
   if (sentBy(game, memberId).length >= GAME_ENTRIES_PER_PLAYER[game.kind])
@@ -491,12 +537,14 @@ export const acceptsEntry = (
   return files.length > 0 || caption.length > 0;
 };
 
-export const addEntry = (game: StoredGame, entry: StoredEntry): boolean => {
+export const addEntry = (game: StoredGame, entry: StoredEntry, now = Date.now(), scale = 1): boolean => {
   if (!acceptsEntry(game, entry.ownerId, entry.files, entry.caption, entry.scene ?? null))
     return false;
   game.pool.push(entry);
   // What is shown now: a new one replaces the last.
   if (game.kind === "guess") game.current = [entry.id];
+  // Undercover: posted, the next one plays.
+  if (game.kind === "undercover") nextTurn(game, now, scale);
   return true;
 };
 
@@ -531,12 +579,7 @@ export const say = (
     game.jokes[entryId] = { ...game.jokes[entryId], [memberId]: text };
     return true;
   }
-  if (game.kind === "undercover") {
-    if (game.turn !== memberId) return false;
-    game.said[memberId] = text;
-    nextTurn(game, now, scale);
-    return true;
-  }
+  if (game.kind !== "question") return false;
   if (!game.assign[memberId]) return false;
   game.said[memberId] = text;
   return true;
@@ -607,17 +650,17 @@ const ownerOf = (game: StoredGame, entryId: string): string | undefined =>
 const authorsOf = (game: StoredGame, entryId: string | undefined): string[] =>
   entryId ? Object.keys(game.jokes[entryId] ?? {}) : [];
 
-// Who has nothing to choose: whoever sent what is shown, or wrote in the duel.
+// Who has nothing to choose: whoever wrote in the duel, or has only their own answer to look at.
+// Qui l'a envoyé: whoever sent it votes too, for show, so that nobody spots them.
 const sitsOut = (game: StoredGame, memberId: string): boolean => {
-  if (game.kind === "who" || game.kind === "question")
-    return game.current.some((id) => ownerOf(game, id) === memberId);
+  if (game.kind === "question") return choices(game, memberId).length === 0;
   if (game.kind === "joke") return authorsOf(game, game.current[0]).includes(memberId);
   return false;
 };
 
 const choices = (game: StoredGame, memberId: string): string[] => {
   if (game.kind === "joke") return authorsOf(game, game.current[0]);
-  if (game.kind === "question") return game.current;
+  if (game.kind === "question") return game.current.filter((id) => ownerOf(game, id) !== memberId);
   return game.players.filter((id) => id !== memberId);
 };
 
@@ -659,7 +702,7 @@ export const acted = (game: StoredGame): string[] => {
       );
     case "write":
       // Devine Vite: only time ends a turn.
-      if (game.kind === "guess") return [];
+      if (game.kind === "guess" || game.kind === "question") return [];
       if (game.kind === "joke") return game.players.filter((id) => jokeTasksDone(game, id));
       if (game.kind === "undercover") return game.players.filter((id) => !game.turnOrder.includes(id) && game.turn !== id);
       return game.players.filter((id) => !game.assign[id] || id in game.said);
@@ -672,7 +715,7 @@ export const acted = (game: StoredGame): string[] => {
 
 // What the reveal shows, one after the other.
 const revealCount = (game: StoredGame): number => {
-  if (game.kind === "undercover") return Object.keys(game.said).length;
+  if (game.kind === "undercover") return game.players.length;
   if (game.kind === "joke") return 2;
   if (game.kind === "guess") return 0;
   return Math.max(1, game.current.length);
@@ -765,45 +808,57 @@ const nextDuel = (game: StoredGame, now: number, scale: number): void => {
   return startJokeRound(game, now, scale);
 };
 
-// The next one to write their word, or the vote once everybody has.
+// Undercover: the next one posts a picture, the next lap once everybody has, then the vote after the last lap.
 const nextTurn = (game: StoredGame, now: number, scale: number): void => {
   game.turn = game.turnOrder.shift() ?? null;
-  if (game.turn === null) return enter(game, "vote", now, scale);
-  game.endsAt = now + WORD_TURN_MS * scale;
+  if (game.turn === null) {
+    if (game.round >= game.rounds) return enter(game, "vote", now, scale);
+    game.round += 1;
+    game.turnOrder = game.speakers.filter((id) => game.players.includes(id));
+    return nextTurn(game, now, scale);
+  }
+  game.endsAt = now + IMAGE_TURN_MS * scale;
 };
 
-// Everyone has the same picture, except the impostor who has none.
-const startUndercoverRound = (
-  game: StoredGame,
-  now: number,
-  scale: number,
-): void => {
-  const fresh = shuffle(game.pool.filter(({ id }) => !game.used.includes(id)));
-  const shared = fresh[0] ?? shuffle(game.pool)[0];
-  if (!shared) return finish(game, now, "few");
-  const impostor = shuffle(game.players)[0]!;
-  game.used.push(shared.id);
-  game.current = [shared.id];
+// Everyone gets the same word, except the undercover who gets a close one. Nobody is told which is which.
+const startUndercover = (game: StoredGame, now: number, scale: number): void => {
+  const pair = shuffle(pickOne(game.spicy ? SPICY_PAIRS : WORD_PAIRS));
+  const impostor = pickOne(game.players);
+  game.pair = pair;
   game.answer = impostor;
-  game.assign = Object.fromEntries(game.players.filter((id) => id !== impostor).map((id) => [id, shared.id]));
+  game.assign = Object.fromEntries(game.players.map((id) => [id, id === impostor ? pair[1]! : pair[0]!]));
+  game.pool = [];
+  game.current = [];
+  game.round = 1;
+  game.rounds = UNDERCOVER_LAPS;
   enter(game, "write", now, scale);
-  game.turnOrder = shuffle(game.players);
+  game.speakers = shuffle(game.players);
+  game.turnOrder = [...game.speakers];
   nextTurn(game, now, scale);
 };
 
-// Two at a time, or three when one would be left alone.
-const startDuel = (game: StoredGame, now: number, scale: number, history: StoredEntry[]): void => {
-  if (game.order.length >= 2) {
-    game.current = game.order.splice(0, game.order.length === 3 ? 3 : 2);
-    return enter(game, "vote", now, scale);
+// Question débile: the next answer on screen, then the vote on all of them.
+const showNext = (game: StoredGame, now: number, scale: number): void => {
+  const next = game.order.shift();
+  if (next) {
+    game.current = [next];
+    game.phase = "write";
+    game.endsAt = now + SHOW_EACH_MS * scale;
+    return;
   }
-  game.order = [];
+  game.current = shuffle(game.pool.map(({ id }) => id));
+  enter(game, "vote", now, scale);
+};
+
+// Question débile: a new question, or the end.
+const nextQuestion = (game: StoredGame, now: number, scale: number, history: StoredEntry[]): void => {
   if (game.round >= game.rounds) return finish(game, now);
   game.round += 1;
   admit(game);
   game.prompt = pickQuestion(game.asked);
   game.asked.push(game.prompt);
   game.pool = [];
+  game.order = [];
   game.current = [];
   enter(game, "collect", now, scale);
   startCollect(game, now, scale, history);
@@ -832,6 +887,8 @@ const score = (game: StoredGame): void => {
       const owner = ownerOf(game, game.current[0]!) ?? null;
       game.answer = owner;
       for (const [voter, choice] of Object.entries(game.votes)) {
+        // Whoever sent it only voted for show.
+        if (voter === owner) continue;
         if (choice === owner) add(voter, 1);
         else if (owner) add(owner, 1);
       }
@@ -866,22 +923,20 @@ export const advance = (game: StoredGame, now: number, scale: number, history: S
         game.rounds = Math.max(1, Math.min(3, Math.floor(game.pool.length / game.players.length)));
         return startJokeRound(game, now, scale);
       }
-      if (game.kind === "undercover") {
-        if (game.pool.length < 1) return finish(game, now, "few");
-        return startUndercoverRound(game, now, scale);
-      }
+      if (game.kind === "undercover") return startUndercover(game, now, scale);
       if (game.kind === "who") {
         if (game.pool.length === 0) return finish(game, now, "few");
         game.order = shuffle(game.pool.map(({ id }) => id));
         game.current = [game.order.shift()!];
         return enter(game, "vote", now, scale);
       }
-      if (game.pool.length < 2 && game.round === 1 && game.rounds === 1)
-        return finish(game, now, "few");
+      // Question débile: the answers on screen one by one, then everyone votes.
+      if (game.pool.length < 2) return game.round === 1 ? finish(game, now, "few") : nextQuestion(game, now, scale, history);
       game.order = shuffle(game.pool.map(({ id }) => id));
-      return startDuel(game, now, scale, history);
+      return showNext(game, now, scale);
     case "write":
-      // Undercover: time ran out on this turn, the next one writes.
+      if (game.kind === "question") return showNext(game, now, scale);
+      // Undercover: time ran out on this turn, the next one posts.
       if (game.kind === "undercover") return nextTurn(game, now, scale);
       if (game.kind === "guess") return nextSpeaker(game, now, scale);
       if (game.kind === "joke") {
@@ -898,7 +953,7 @@ export const advance = (game: StoredGame, now: number, scale: number, history: S
         game.round += 1;
         return startGuessRound(game, now, scale);
       }
-      if (game.kind === "question") return startDuel(game, now, scale, history);
+      if (game.kind === "question") return nextQuestion(game, now, scale, history);
       if (game.kind === "joke") return nextDuel(game, now, scale);
       if (game.kind === "who") {
         if (game.order.length === 0) return finish(game, now);
@@ -906,10 +961,8 @@ export const advance = (game: StoredGame, now: number, scale: number, history: S
         game.answer = null;
         return enter(game, "vote", now, scale);
       }
-      if (game.round >= game.rounds) return finish(game, now);
-      game.round += 1;
-      admit(game);
-      return startUndercoverRound(game, now, scale);
+      // Undercover: one vote after the three laps, then it is over.
+      return finish(game, now);
     case "done":
     case "lobby":
       return;
@@ -930,7 +983,8 @@ export const planBots = (game: StoredGame, now: number, scale: number): void => 
   game.botStep = step;
   const wanted =
     botIds(game).length > 0 &&
-    ((game.phase === "write" && (!["undercover", "guess"].includes(game.kind) || isBotId(game.turn ?? ""))) || game.phase === "vote");
+    ((game.phase === "write" && (game.kind === "joke" || (["undercover", "guess"].includes(game.kind) && isBotId(game.turn ?? "")))) ||
+      game.phase === "vote");
   game.botDueAt = wanted ? now + (1_500 + Math.random() * 3_500) * scale : null;
 };
 
@@ -940,7 +994,14 @@ export const botsPlay = (game: StoredGame, now: number, scale: number): void => 
   for (const bot of botIds(game)) {
     if (game.phase === "write" && game.kind === "joke")
       for (const entryId of game.tasks[bot] ?? []) say(game, bot, pickOne(HOUSE_JOKES), now, scale, entryId);
-    if (game.phase === "write" && game.kind === "undercover" && game.turn === bot) say(game, bot, pickOne(BOT_WORDS), now, scale);
+    // Undercover: a picture of the day, whatever the word. Without one, the turn passes.
+    if (game.phase === "write" && game.kind === "undercover" && game.turn === bot) {
+      const picture = game.stock.shift();
+      const posted =
+        picture !== undefined &&
+        addEntry(game, { ...picture, id: `${picture.id}:${bot}:${game.round}`, ownerId: bot, caption: "", scene: null, textPlace: null }, now, scale);
+      if (!posted) nextTurn(game, now, scale);
+    }
     // Devine Vite: someone at random finds it, or the bot passes.
     if (game.phase === "write" && game.kind === "guess" && game.turn === bot) {
       const others = game.players.filter((id) => id !== bot);
@@ -994,7 +1055,6 @@ export const gameView = (game: StoredGame, memberId: string): Game => {
       mine: true,
     }));
   } else if (game.phase !== "done" && game.phase !== "lobby") {
-    if (game.kind === "undercover") myPicture = picture(game.assign[memberId]);
     if (game.kind === "joke" && game.phase === "write") {
       // The pictures this player writes on, with what they wrote so far.
       entries = (game.tasks[memberId] ?? []).map((entryId) => ({
@@ -1021,16 +1081,28 @@ export const gameView = (game: StoredGame, memberId: string): Game => {
       }));
     }
     if (game.kind === "undercover") {
-      // Each word as it comes, with who wrote it.
-      entries = Object.entries(game.said).map(([id, caption]) => ({
+      // Each picture as it comes, with who posted it. At the reveal, one more line per player with their votes.
+      entries = game.pool.map(({ id, ownerId, files }) => ({
         id,
-        ownerId: id,
-        files: [],
-        caption,
+        ownerId,
+        files,
+        caption: "",
         ...plain,
-        votes: shown ? (counts.get(id) ?? 0) : null,
-        mine: id === memberId,
+        votes: null,
+        mine: ownerId === memberId,
       }));
+      if (shown)
+        entries.push(
+          ...game.players.map((id) => ({
+            id,
+            ownerId: id,
+            files: [],
+            caption: game.assign[id] ?? "",
+            ...plain,
+            votes: counts.get(id) ?? 0,
+            mine: id === memberId,
+          })),
+        );
     }
     if (game.kind === "question" || game.kind === "who") {
       entries = game.current.flatMap((id) => {
@@ -1073,7 +1145,9 @@ export const gameView = (game: StoredGame, memberId: string): Game => {
     entries,
     myPicture,
     mySent: game.kind === "guess" ? (game.words[memberId]?.length ?? 0) : sentBy(game, memberId).length,
-    acted: acted(game),
+    // Qui l'a envoyé: nobody sees who is done, only how many.
+    acted: game.kind === "who" ? [] : acted(game),
+    doneCount: acted(game).length,
     myChoice: game.votes[memberId] ?? null,
     answer: shown ? game.answer : null,
     reason: game.reason,
@@ -1083,7 +1157,13 @@ export const gameView = (game: StoredGame, memberId: string): Game => {
     bots: game.bots,
     voteStarted: game.voteStarted,
     turn: game.turn,
-    iAmImpostor: game.kind === "undercover" && (game.phase === "write" || game.phase === "vote") && game.answer === memberId,
+    // Undercover: nobody knows whether they are the one.
+    iAmImpostor: false,
+    myWord: game.kind === "undercover" && game.phase !== "lobby" ? (game.assign[memberId] ?? null) : null,
+    wordPair: game.kind === "undercover" && (shown || game.phase === "done") && game.pair.length === 2 ? game.pair : null,
+    spicy: game.spicy,
+    showIndex: game.kind === "question" && game.phase === "write" ? game.pool.length - game.order.length : 0,
+    showTotal: game.kind === "question" && game.phase === "write" ? game.pool.length : 0,
     iAmDone: game.finished.includes(memberId),
     secret: game.kind === "guess" && game.phase === "write" && game.turn === memberId ? (game.pile[0] ?? null) : null,
   };

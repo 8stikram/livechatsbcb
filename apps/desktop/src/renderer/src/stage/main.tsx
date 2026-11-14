@@ -28,9 +28,11 @@ const Stage = () => {
   const { current } = state.queue;
   const shared = settings.overlayEnabled && !state.excludedNow && current?.startAt != null && !current.hiddenForMe ? current : null;
   const replay = state.localReplay?.playback ?? null;
-  const playing = shared ?? replay;
+  // Question débile: the answers go by like LiveChats, for the players only, when nothing else plays.
+  const gameShow = settings.overlayEnabled && !settings.clean && !state.excludedNow ? state.gameShow : null;
+  const playing = shared ?? replay ?? gameShow;
   const volume = settings.muted ? 0 : settings.volume / 100;
-  const scene = shared ? 'playing' : replay ? 'replay' : overlayTest ? 'test' : 'idle';
+  const scene = shared ? 'playing' : replay ? 'replay' : gameShow ? 'game' : overlayTest ? 'test' : 'idle';
 
   return (
     <main className="stage" data-testid="stage" data-state={scene}>

@@ -432,7 +432,8 @@ export const GAME_MIN_ENTRIES: Record<GameKind, number> = { joke: 2, question: 1
 export const MAX_GAME_BOTS = 6;
 export const isBotId = (id: string): boolean => id.startsWith('bot:');
 // What each player sends at the start: pictures for the jokes, one LiveChat for the others.
-export const GAME_ENTRIES_PER_PLAYER: Record<GameKind, number> = { joke: 5, question: 1, who: 1, undercover: 1, guess: 3 };
+// Undercover: no pictures at the start, one per turn during the game.
+export const GAME_ENTRIES_PER_PLAYER: Record<GameKind, number> = { joke: 5, question: 1, who: 1, undercover: 0, guess: 3 };
 
 const GameFileSchema = z.object({ id: z.uuid(), name: z.string(), contentType: MediaContentTypeSchema, size: z.number() });
 export type GameFile = z.infer<typeof GameFileSchema>;
@@ -492,6 +493,15 @@ export const GameSchema = z.object({
   iAmDone: z.boolean().default(false),
   // Devine Vite: the word to have guessed, only for whoever speaks.
   secret: z.string().nullable().default(null),
+  // Undercover: this player's secret word, both words once it is over, and whether the words are the trash ones.
+  myWord: z.string().nullable().default(null),
+  wordPair: z.array(z.string()).nullable().default(null),
+  spicy: z.boolean().default(false),
+  // Qui l'a envoyé: how many are done, without saying who, so nobody gets spotted.
+  doneCount: z.number().int().default(0),
+  // Question débile: which answer is on screen, out of how many.
+  showIndex: z.number().int().default(0),
+  showTotal: z.number().int().default(0),
 });
 export type Game = z.infer<typeof GameSchema>;
 
@@ -517,6 +527,8 @@ export const ClientMessageSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('game-launch'), gameId: z.string() }),
   z.object({ t: z.literal('game-leave'), gameId: z.string() }),
   z.object({ t: z.literal('game-rematch'), gameId: z.string() }),
+  // Undercover: whoever runs the lobby picks the trash words only.
+  z.object({ t: z.literal('game-spicy'), gameId: z.string(), on: z.boolean() }),
   z.object({ t: z.literal('game-react'), gameId: z.string(), emoji: GameReactionSchema }),
   z.object({ t: z.literal('ready'), mediaId: z.string() }),
   z.object({ t: z.literal('skip'), mediaId: z.string() }),

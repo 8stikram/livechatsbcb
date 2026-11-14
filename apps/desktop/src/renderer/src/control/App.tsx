@@ -301,7 +301,11 @@ export const App = () => {
       const takesPictures =
         game !== null &&
         game.players.includes(me) &&
-        (game.kind === 'guess' ? game.phase === 'write' && game.round === 3 && game.turn === me : game.phase === 'collect');
+        (game.kind === 'guess'
+          ? game.phase === 'write' && game.round === 3 && game.turn === me
+          : game.kind === 'undercover'
+            ? game.phase === 'write' && game.turn === me
+            : game.phase === 'collect');
       if (view === 'games' && game && takesPictures) {
         const image = pasted[0];
         if (!image) return;
