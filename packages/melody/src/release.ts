@@ -3,6 +3,7 @@ import { genreAffinity } from './artists.ts';
 import { CFG } from './config.ts';
 import { trendBoost } from './craft.ts';
 import { seasonFit } from './calendar.ts';
+import { regionReach } from './regions.ts';
 import { beatById, coherence } from './data/content.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
 import { viewsBoost } from './staff.ts';
@@ -20,6 +21,10 @@ export interface MarketingOption {
   cost: number;
   /** Views for each "buzz point" of the artist (see buzzOf). */
   power: number;
+  /** Views the influencer brings by himself, whatever the artist. */
+  base?: number;
+  /** An influencer: twice the chance to go viral, but 1 in 10 misses (half the views, buzz −3). */
+  risky?: boolean;
 }
 
 /** Promo like on the real networks: the views depend on the artist's buzz, not only on the money. */
@@ -27,7 +32,9 @@ export const MARKETING: MarketingOption[] = [
   { id: 'posts', name: 'Posts Insta & TikTok', note: 'Ton artiste poste lui-même', cost: 0, power: 1 },
   { id: 'story', name: 'Stories et teasing', note: 'Des extraits avant la sortie', cost: 150, power: 1.5 },
   { id: 'tiktok_ads', name: 'Pub TikTok', note: 'Le son passe dans les « Pour toi »', cost: 600, power: 3 },
-  { id: 'influence', name: 'Influenceurs', note: 'Des créateurs dansent dessus', cost: 2_000, power: 6 },
+  { id: 'influence', name: 'Micro-influenceurs', note: 'Dix créateurs de quartier dansent dessus', cost: 3_000, power: 6, base: 30_000, risky: true },
+  { id: 'influence_big', name: 'Gros influenceur', note: 'Un créateur à 2 millions d’abonnés', cost: 20_000, power: 10, base: 300_000, risky: true },
+  { id: 'influence_star', name: 'Star des réseaux', note: 'Le créateur que tout le monde connaît', cost: 100_000, power: 15, base: 2_000_000, risky: true },
   { id: 'playlist', name: 'Pitch playlists', note: 'Placé dans des playlists', cost: 2_500, power: 6 },
   { id: 'clip', name: 'Clip YouTube', note: 'Tourné avec les potes', cost: 3_500, power: 8 },
   { id: 'clip_pro', name: 'Clip pro', note: 'Vrai réalisateur, vrai décor', cost: 15_000, power: 16 },
@@ -47,13 +54,17 @@ export const marketingById = (id: string): MarketingOption => {
 export const buzzOf = (artist: Pick<Artist, 'fans' | 'hype'>): number => Math.round((300 + artist.fans * 0.04) * (1 + artist.hype / 50));
 
 /** The views each promo makes the week of the release. About one in thirty goes viral. */
-export const promoViews = (ids: readonly string[], artist: Pick<Artist, 'fans' | 'hype'>, rng: Rng): Array<{ id: string; views: number; viral: boolean }> => {
+export const INFLUENCER_FLOP = 0.1;
+
+export const promoViews = (ids: readonly string[], artist: Pick<Artist, 'fans' | 'hype'>, rng: Rng): PromoResult[] => {
   const buzz = buzzOf(artist);
   return [...new Set(ids)].map((id) => {
     const option = marketingById(id);
-    const viral = rng.chance(1 / 30);
+    const viral = rng.chance(option.risky ? 2 / 30 : 1 / 30);
     const luck = clamp(Math.exp(rng.normal() * 0.35), 0.4, 2.5);
-    return { id: option.id, views: Math.round(option.power * buzz * luck * (viral ? rng.range(5, 15) : 1)), viral };
+    const flop = !!option.risky && !viral && rng.chance(INFLUENCER_FLOP);
+    const views = Math.round((option.power * buzz + (option.base ?? 0)) * luck * (viral ? rng.range(5, 15) : 1) * (flop ? 0.5 : 1));
+    return flop ? { id: option.id, views, viral, flop } : { id: option.id, views, viral };
   });
 };
 
@@ -146,7 +157,7 @@ export const releaseWeek = (world: World, song: Song, artist: Artist, tick: numb
   const promo = song.marketingIds
     ? promoViews(song.marketingIds, artist, rngFor(world.seed, tick, `promo:${song.id}`)).map((p) => ({ ...p, views: Math.round(p.views * views) }))
     : [];
-  const reach = song.marketingIds ? promo.reduce((sum, p) => sum + p.views, 0) : song.marketingReach;
+  const reach = (song.marketingIds ? promo.reduce((sum, p) => sum + p.views, 0) : song.marketingReach) * regionReach(artist, song.region);
   const genres = [artist.genre, ...beatById(song.beatId).genres];
   const fit = clamp(
     publicFit(artist, song.themeId, song.beatId, world.trends) * trendBoost(world, tick, genres, song.themeId, song.beatId) * seasonFit(tick, song.themeId, song.beatId),

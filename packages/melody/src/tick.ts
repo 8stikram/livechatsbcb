@@ -16,6 +16,8 @@ import { tickDuels } from './wars.ts';
 import { COOP, tickCoop } from './coop.ts';
 import { tickFestival } from './festival.ts';
 import { tickScandals } from './scandals.ts';
+import { tickRadio } from './radio.ts';
+import { REGION_IDS, REGION_IN, sharesOf, steerFans } from './regions.ts';
 import { judgeRelease } from './letdown.ts';
 import { lightUp, supportBoost } from './support.ts';
 import { tickSeason } from './seasons.ts';
@@ -210,7 +212,17 @@ export const runTick = (world: World): TickReport => {
     // Allies cross more fans on a featuring.
     const featLabelId = feat ? contractOf(world, feat.id)?.labelId : undefined;
     const cross = featLabelId && (label.allies ?? []).includes(featLabelId) ? COOP.allyFans : 1;
+    const fansBefore = artist.fans;
     artist.fans += week.newFans + (feat ? Math.round(feat.fans * 0.02 * cross * Math.min(1, week.streams / Math.max(1, feat.fans))) : 0);
+    steerFans(artist, fansBefore, artist.fans - fansBefore, song.region);
+    // An influencer who missed: a little bad buzz, and the party laughs.
+    if (promo.some((p) => p.flop)) {
+      artist.hype = clamp(artist.hype - 3, 0, 100);
+      if (label.kind === 'player') {
+        world.marketNews = [...(world.marketNews ?? []), { tick, text: `L’influenceur payé pour « ${song.title} » a dansé sur le mauvais son. Pendant 40 secondes. En direct.` }];
+        report(reports, label).events.push(`Ton influenceur s’est planté sur « ${song.title} » : moitié moins de vues, buzz −3.`);
+      }
+    }
     // The guest gets a share of the new listeners too.
     if (feat) feat.fans += Math.round(week.newFans * 0.3 * cross);
     artist.hype = clamp(artist.hype + week.hypeChange, 0, 100);
@@ -261,19 +273,29 @@ export const runTick = (world: World): TickReport => {
     return artist ? songGenre(song, artist) : null;
   });
 
+  // Radio rotations: extra streams, rights and buzz; a top-50 song moves up to the mainstream radio.
+  tickRadio(
+    world,
+    (labelId, amount) => {
+      const label = world.labels[labelId];
+      if (label) earn(reports, label, amount);
+    },
+    tellEarly,
+  );
+
   // Chart duels of the week, on the first-week streams; unanswered challenges time out.
   tickDuels(world, Object.fromEntries(releases.map((r) => [r.songId, r.newFans])), tellEarly);
 
   // 3. Charts.
-  interface Line { title: string; artistName: string; labelId: string; streams: number; genre: GenreId; song: Song | null }
+  interface Line { title: string; artistName: string; labelId: string; streams: number; genre: GenreId; song: Song | null; artist: Artist | null }
   const lines: Line[] = [];
   for (const song of world.songs) {
     const artist = world.artists[song.artistId];
     if (song.state !== 'released' || !artist) continue;
-    lines.push({ title: song.title, artistName: artist.name, labelId: song.labelId, streams: song.streamsLast, genre: songGenre(song, artist), song });
+    lines.push({ title: song.title, artistName: artist.name, labelId: song.labelId, streams: song.streamsLast, genre: songGenre(song, artist), song, artist });
   }
   for (const npc of world.npcSongs) {
-    lines.push({ title: npc.title ?? `${npc.artistName} — single`, artistName: npc.artistName, labelId: npc.labelId, streams: npc.streams, genre: npc.genre, song: null });
+    lines.push({ title: npc.title ?? `${npc.artistName} — single`, artistName: npc.artistName, labelId: npc.labelId, streams: npc.streams, genre: npc.genre, song: null, artist: world.artists[npc.artistId] ?? null });
   }
   lines.sort((a, b) => b.streams - a.streams);
   const toEntries = (list: Line[], size: number): ChartEntry[] =>
@@ -289,6 +311,22 @@ export const runTick = (world: World): TickReport => {
     }));
   const globalLines = lines.filter((l) => l.streams >= CFG.charts.globalMin);
   world.charts.global = toEntries(globalLines, 100);
+  // Charts by region: each song counts the streams of the region, by the artist's fans there.
+  world.charts.regions = {};
+  for (const region of REGION_IDS) {
+    const regionLines = lines
+      .map((l) => ({ ...l, streams: Math.round(l.streams * (l.artist ? sharesOf(l.artist)[region] : 0.2)) }))
+      .filter((l) => l.streams >= CFG.charts.genreMin)
+      .sort((a, b) => b.streams - a.streams);
+    world.charts.regions[region] = toEntries(regionLines, 50);
+    const first = regionLines[0]?.song;
+    const firstLabel = first ? world.labels[first.labelId] : undefined;
+    if (first && firstLabel?.kind === 'player' && !(first.regionTops ?? []).includes(region)) {
+      first.regionTops = [...(first.regionTops ?? []), region];
+      world.marketNews = [...(world.marketNews ?? []), { tick, text: `« ${first.title} » de ${world.artists[first.artistId]?.name ?? '?'} est n°1 ${REGION_IN[region]} !` }];
+      report(reports, firstLabel).events.push(`« ${first.title} » est n°1 ${REGION_IN[region]} !`);
+    }
+  }
   world.charts.genres = {};
   for (const genre of Object.keys(GENRES) as GenreId[]) {
     const genreLines = lines.filter((l) => l.genre === genre && l.streams >= CFG.charts.genreMin);

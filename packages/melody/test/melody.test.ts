@@ -11,6 +11,7 @@ import {
   shareLoan, returnLoans, STUDIO_CONTENT, studioCardsFor, usualNote, isLetdown, judgeRelease,
   SALES, salesQuote, createProject, tickProjects, supportBoost, ROLES, ROLE_RULES, FORM, roleSlots, inForm, lightUp, experienceBonus,
   WARS, pressOdds, COOP, relationsView, enemyBoost, tickCoop, FESTIVAL, festivalView, nextFestivalTick, runFestival,
+  RADIO, MAINSTREAM, stationFor, startRadio, tickRadio, radioOf, REGION_IDS, REGIONS, regionOfCountry, homeRegion, sharesOf, steerFans, topRegion, reactionsOf, MEDIA, MARKETING, INFLUENCER_FLOP,
   SCANDALS, SCANDAL_TEXTS, startScandal, scandalChance, tickScandals, scandalsView, PERIODS, periodAt, weekOfYear, seasonFit, liveBoost, salesBoost, merchBoost, seasonTip, calendarView,
   CARD_IDS, EVENTS, EVENT_CONTENT, SERVER_CONTENT, SERVER_IDS, eventsView, streamMult, tickCards, tickServerEvents, applyStreamEvents,
   ESTATE, TIER_TABLE, assetBase, assetLoanCap, buybackPrice, tickAssetLoan, tierProgress, catalogueValue,
@@ -2796,5 +2797,112 @@ describe('calendrier', () => {
     expect(cal.releases.find((r) => r.inWeeks === 3)).toMatchObject({ artistName: artist.name, mine: true });
     expect(JSON.stringify(cal)).not.toContain('Secret');
     expect(PERIODS).toHaveLength(4);
+  });
+});
+
+describe('radio, influenceurs, régions, presse', () => {
+  const setup = () => {
+    const world = createWorld(42);
+    applyAction(world, 'u1', { type: 'found', name: 'Label u1' });
+    applyAction(world, 'u1', { type: 'tuto', move: 'skip' });
+    world.lastServerEvents = [...SERVER_IDS];
+    const label = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    label.cash = 1_000_000;
+    const artist = rosterOf(world, label.id)[0]!;
+    const song = { ...(world.songs[0] as Song), id: 'r_song', artistId: artist.id, labelId: label.id, state: 'released', releaseTick: world.tick, weeksOut: 0, quality: 70, hitScore: 60, streamsLast: 1000, streamsTotal: 1000, beatId: 'trap', title: 'Bitume' } as Song;
+    delete song.radio;
+    world.songs.push(song);
+    return { world, label, artist, song };
+  };
+
+  it('sends a song to the radio of its genre for 4 weeks: streams, rights and buzz', () => {
+    const { world, label, song } = setup();
+    expect(stationFor('trap').name).toBe('Bitume FM');
+    expect(stationFor('jazz').audience).toBeLessThan(stationFor('pop').audience);
+    const cash = label.cash;
+    applyAction(world, 'u1', { type: 'radio', songId: song.id });
+    expect(label.cash).toBe(cash - RADIO.costPerTier * label.tier);
+    expect(() => applyAction(world, 'u1', { type: 'radio', songId: song.id })).toThrow(/déjà/);
+    const paid: number[] = [];
+    world.tick += 1;
+    const before = song.streamsLast;
+    tickRadio(world, (_, m) => paid.push(m), () => {});
+    expect(song.streamsLast).toBeGreaterThan(before);
+    expect(paid[0]).toBeGreaterThan(0);
+    expect(radioOf(world, song, label)).toMatchObject({ on: true, station: 'Bitume FM', mainstream: false });
+  });
+
+  it('moves a top-50 song up to the mainstream radio', () => {
+    const { world, song } = setup();
+    applyAction(world, 'u1', { type: 'radio', songId: song.id });
+    world.charts.global = [{ rank: 1, title: song.title, artistName: 'x', labelId: song.labelId, streams: 1, songId: song.id }];
+    world.tick += 1;
+    tickRadio(world, () => {}, () => {});
+    expect(song.radio).toMatchObject({ mainstream: true, stationId: MAINSTREAM.id });
+    expect(world.marketNews!.some((n) => n.text.includes(MAINSTREAM.name))).toBe(true);
+  });
+
+  it('refuses a song out for too long', () => {
+    const { world, song } = setup();
+    song.weeksOut = RADIO.maxWeeksOut + 1;
+    expect(() => applyAction(world, 'u1', { type: 'radio', songId: song.id })).toThrow(/vieux/);
+  });
+
+  it('has 3 sizes of influencers, riskier but more viral', () => {
+    expect(MARKETING.filter((m) => m.risky).map((m) => m.cost)).toEqual([3_000, 20_000, 100_000]);
+    let flops = 0;
+    let virals = 0;
+    for (let i = 0; i < 600; i += 1) {
+      const [p] = promoViews(['influence_big'], { fans: 10_000, hype: 30 }, createRng(i));
+      if (p!.flop) flops += 1;
+      if (p!.viral) virals += 1;
+    }
+    expect(flops / 600).toBeGreaterThan(INFLUENCER_FLOP / 2);
+    expect(flops / 600).toBeLessThan(INFLUENCER_FLOP * 2);
+    expect(virals / 600).toBeGreaterThan(1 / 30);
+  });
+
+  it('splits fans per region, steers new fans to the aimed region, and ranks each region', () => {
+    const { world, artist } = setup();
+    expect(regionOfCountry('BE')).toBe('fr');
+    expect(regionOfCountry('NG')).toBe('afrique');
+    const shares = sharesOf(artist);
+    expect(Object.values(shares).reduce((x, y) => x + y, 0)).toBeCloseTo(1);
+    expect(shares[homeRegion(artist)]).toBeCloseTo(REGIONS.home);
+    artist.fans = 10_000;
+    steerFans(artist, 10_000, 10_000, 'uk');
+    expect(sharesOf(artist).uk).toBeGreaterThan(shares.uk + 0.3);
+    expect(Object.values(sharesOf(artist)).reduce((x, y) => x + y, 0)).toBeCloseTo(1);
+    runTick(world);
+    for (const r of REGION_IDS) expect(world.charts.regions![r]!.length).toBeGreaterThan(0);
+    expect(buildView(world, 'u1').roster[0]!.regions.uk).toBeGreaterThan(0);
+  });
+
+  it('aims a release at a region and announces a regional n°1', () => {
+    const { world, label, artist } = setup();
+    const vault = { ...(world.songs[0] as Song), id: 'aim_song', artistId: artist.id, labelId: label.id, state: 'vault', releaseTick: null, availableTick: 0, title: 'Visé' } as Song;
+    world.songs.push(vault);
+    applyAction(world, 'u1', { type: 'release', songId: vault.id, inWeeks: 5, marketing: [], region: 'afrique' });
+    expect(vault.region).toBe('afrique');
+    // A huge song only heard in the UK.
+    const { song } = { song: world.songs.find((x) => x.id === 'r_song')! };
+    song.streamsLast = 50_000_000;
+    song.decay = 1;
+    artist.regions = { fr: 0, us: 0, uk: 1, afrique: 0, monde: 0 };
+    runTick(world);
+    expect(song.regionTops).toContain('uk');
+    expect(world.marketNews!.some((n) => n.text.includes('n°1 au Royaume-Uni'))).toBe(true);
+  });
+
+  it('gives each released song 2 reviews and 4 tweets, always the same', () => {
+    const { world, song } = setup();
+    const r = reactionsOf(world, song)!;
+    expect(r.reviews).toHaveLength(2);
+    expect(r.tweets).toHaveLength(4);
+    expect(MEDIA).toContain(r.reviews[0]!.media as (typeof MEDIA)[number]);
+    expect(reactionsOf(world, song)).toEqual(r);
+    expect(r.reviews.every((x) => x.score >= 1 && x.score <= 10)).toBe(true);
+    expect(JSON.stringify(r)).not.toContain('{a}');
+    expect(reactionsOf(world, { ...song, state: 'vault' })).toBeNull();
   });
 });

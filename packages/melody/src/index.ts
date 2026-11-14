@@ -8,7 +8,7 @@ export {
   estimateQuality, rollQuality, qualityWord, songCost, priceScale, songDelay, songEnergy, producerOfLevel, featDemand, featChance,
   type SongPlan, type QualityEstimate,
 } from './quality.ts';
-export { MARKETING, marketingById, publicFit, firstWeek, hitWord, buzzOf, promoViews, releaseWeek, type FirstWeek, type FirstWeekInput } from './release.ts';
+export { INFLUENCER_FLOP, MARKETING, marketingById, publicFit, firstWeek, hitWord, buzzOf, promoViews, releaseWeek, type FirstWeek, type FirstWeekInput } from './release.ts';
 export {
   CRAFT, choiceScore, riskOf, isPerfect, isSecret, secretCombos, themeFits, beatFits, experienceBonus, studioOffers, trendOf, trendBoost,
   notebookOf, noteCombo, rollSurprise, countryOf, type StudioOffers, type Offered, type Trend, type NotebookEntry, type Surprise,
@@ -58,6 +58,9 @@ export {
 export { LETDOWN, usualNote, isLetdown, judgeRelease } from './letdown.ts';
 export { studioCardsFor, STUDIO_CONTENT } from './studio.ts';
 export { CARD_IDS, EVENTS, EVENT_CONTENT, SERVER_CONTENT, SERVER_IDS, answerCard, applyStreamEvents, describeEffect, eventsView, streamMult, tickCards, tickServerEvents, type Card, type CardChoice, type CardEffect, type CardView, type EventsView, type ServerEvent } from './events.ts';
+export { REGIONS, REGION_IDS, REGION_NAMES, REGION_IN, fansByRegion, homeRegion, regionOfCountry, regionReach, sharesOf, steerFans, topRegion, type RegionId } from './regions.ts';
+export { MAINSTREAM, RADIO, STATIONS, onRadio, radioChart, radioCost, radioOf, startRadio, stationFor, tickRadio, type RadioLine, type Rotation, type Station } from './radio.ts';
+export { MEDIA, reactionsOf, type Reactions } from './press.ts';
 export { SCANDALS, SCANDAL_TEXTS, KIND_NAMES, ANSWER_NAMES, answerScandal, awayFor, describeDamage, payCost, scandalRisk, scandalChance, scandalsView, startScandal, talkOdds, tickScandals, type Scandal, type ScandalAnswer, type ScandalDamage, type ScandalKind, type ScandalView } from './scandals.ts';
 export { PERIODS, MONTHS, calendarView, liveBoost, merchBoost, monthOf, periodAt, salesBoost, seasonFit, seasonTip, weekOfYear, type CalendarView, type Period, type PeriodId } from './calendar.ts';
 export { FESTIVAL, bestHeadBid, bidHeadliner, currentFestival, festivalPrizes, festivalView, headStart, mainFee, nextFestivalTick, nextHeadBid, registerFestival, runFestival, tickFestival, withdrawFestival, type Festival, type FestivalAct, type FestivalEntry, type FestivalResult, type FestivalView, type Stage } from './festival.ts';

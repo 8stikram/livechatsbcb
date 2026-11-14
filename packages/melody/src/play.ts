@@ -30,6 +30,9 @@ import { cancelSession, finishSession, offerFeat, useDeal, reactToEvent, session
 import { formWeeks, setRole, supportBoost } from './support.ts';
 import { buyBack, estateView, repayLoans, takeAssetLoan, type EstateView } from './estate.ts';
 import { answerCard, eventsView, type EventsView } from './events.ts';
+import { radioChart, radioOf, startRadio, type RadioLine } from './radio.ts';
+import { reactionsOf, type Reactions } from './press.ts';
+import { REGION_IDS, fansByRegion, homeRegion, topRegion, type RegionId } from './regions.ts';
 import { answerScandal, scandalsView, type ScandalAnswer, type ScandalView } from './scandals.ts';
 import { calendarView, type CalendarView } from './calendar.ts';
 import { bidHeadliner, festivalPrizes, festivalView, registerFestival, withdrawFestival, type FestivalView } from './festival.ts';
@@ -148,7 +151,7 @@ export type MelodyAction =
   | { type: 'studio_cancel' }
   /** cover: the image itself is kept by the server; the rules only note that there is one. */
   | { type: 'song'; title: string; cover?: string }
-  | { type: 'release'; songId: string; inWeeks: number; marketing: string[] }
+  | { type: 'release'; songId: string; inWeeks: number; marketing: string[]; region?: RegionId }
   | { type: 'gig'; artistId: string }
   | { type: 'project'; artistId: string; kind: ProjectKind; title: string; songIds: string[]; inWeeks: number; cover?: string; signing?: boolean }
   | { type: 'role'; artistId: string; role: RoleId }
@@ -190,6 +193,7 @@ export type MelodyAction =
   | { type: 'enemy_add'; labelId: string }
   | { type: 'enemy_remove'; labelId: string }
   | { type: 'gift'; targetLabelId: string; amount: number }
+  | { type: 'radio'; songId: string }
   | { type: 'scandal'; scandalId: string; answer: ScandalAnswer }
   | { type: 'festival_register'; artistId: string; stage: 'main' | 'discovery' }
   | { type: 'festival_withdraw'; artistId: string }
@@ -340,7 +344,7 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
       return;
     }
     case 'release':
-      scheduleRelease(world, label.id, action.songId, world.tick + Math.max(1, Math.round(action.inWeeks)), action.marketing);
+      scheduleRelease(world, label.id, action.songId, world.tick + Math.max(1, Math.round(action.inWeeks)), action.marketing, action.region && REGION_IDS.includes(action.region) ? action.region : undefined);
       return;
     case 'gig':
       bookGig(world, label.id, action.artistId);
@@ -464,6 +468,9 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
     case 'enemy_remove':
       removeEnemy(world, label, action.labelId);
       return;
+    case 'radio':
+      startRadio(world, label, action.songId);
+      return;
     case 'scandal':
       answerScandal(world, label, action.scandalId, action.answer);
       return;
@@ -546,6 +553,10 @@ export interface RosterView extends ArtistView {
   lendListed: boolean;
   /** Fair loan fee for 8 weeks, to start from; and his value, to set an auction. */
   fairFee: number;
+  /** Fans per region, where he comes from, and where most of his fans are. */
+  regions: Record<RegionId, number>;
+  homeRegion: RegionId;
+  topRegion: RegionId;
 }
 
 export interface SongView {
@@ -584,6 +595,12 @@ export interface SongView {
   /** Week it came out (for sorting), null before. */
   releasedTick: number | null;
   hitScore: number;
+  region: RegionId | null;
+  radio: ReturnType<typeof radioOf>;
+  reactions: Reactions | null;
+  regionTops: RegionId[];
+  /** An influencer missed. */
+  flop: boolean;
   peakGlobal: number | null;
   peakGenre: number | null;
   weeksOut: number;
@@ -705,7 +722,7 @@ export interface MelodyView {
   songs: SongView[];
   market: MarketView[];
   ranking: RankingLine[];
-  charts: { global: ChartEntry[]; genres: Record<string, ChartEntry[]> };
+  charts: { global: ChartEntry[]; genres: Record<string, ChartEntry[]>; regions: Record<string, ChartEntry[]>; radio: RadioLine[] };
   /** The song being recorded, with its events and featuring talks. */
   session: SessionView | null;
   /** The guided first week, while it runs. */
@@ -927,6 +944,9 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
         onAuction: !!auctionOf(world, artist.id),
         lendListed: (world.lendings ?? []).some((l) => l.artistId === artist.id && l.status === 'listed'),
         fairFee: fairFee(world, artist.id, 8),
+        regions: fansByRegion(artist),
+        homeRegion: homeRegion(artist),
+        topRegion: topRegion(artist),
       };
     }),
     songs: label
@@ -962,6 +982,11 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
             spent: Math.round(s.cost + s.marketingCost),
             releasedTick: s.state === 'released' ? s.releaseTick : null,
             hitScore: s.hitScore,
+            region: s.region ?? null,
+            radio: radioOf(world, s, label),
+            reactions: reactionsOf(world, s),
+            regionTops: (s.regionTops ?? []) as RegionId[],
+            flop: (s.promo ?? []).some((p) => p.flop),
             peakGlobal: s.peakGlobal,
             peakGenre: s.peakGenre,
             weeksOut: s.weeksOut,
@@ -972,6 +997,8 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     charts: {
       global: top(world.charts.global, 50),
       genres: Object.fromEntries(Object.entries(world.charts.genres).map(([genre, entries]) => [genre, top(entries, 20)])),
+      regions: Object.fromEntries(Object.entries(world.charts.regions ?? {}).map(([region, entries]) => [region, top(entries, 20)])),
+      radio: radioChart(world, label?.id ?? null),
     },
     session: label ? sessionOfLabel(world, label) : null,
     talks: label ? talksOfLabel(world, label.id) : [],

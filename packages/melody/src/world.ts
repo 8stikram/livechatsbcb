@@ -1,6 +1,7 @@
 // Creating a world and the actions a label can take between two ticks.
 // Every action checks the rules and throws a GameError with a message the player can read.
 import { artistFromCatalog, generalRating } from './artists.ts';
+import type { RegionId } from './regions.ts';
 import { CFG } from './config.ts';
 import { CATALOG_ARTISTS, CATALOG_LABELS } from './data/catalog.gen.ts';
 import { BEATS, THEMES } from './data/content.ts';
@@ -260,7 +261,7 @@ export const releaseBlocked = (world: World, labelId: string, artistId: string, 
 };
 
 /** Schedules a single. The marketing is paid now. */
-export const scheduleRelease = (world: World, labelId: string, songId: string, releaseTick: number, marketingIds: string[]): Song => {
+export const scheduleRelease = (world: World, labelId: string, songId: string, releaseTick: number, marketingIds: string[], region?: RegionId): Song => {
   const label = labelOf(world, labelId);
   const song = world.songs.find((s) => s.id === songId && s.labelId === labelId) ?? fail('Son introuvable.');
   if (song.state !== 'vault') return fail('Ce son est déjà programmé ou sorti.');
@@ -279,6 +280,7 @@ export const scheduleRelease = (world: World, labelId: string, songId: string, r
   // The views of the promo depend on the artist's buzz the week of the release.
   song.marketingIds = options.map((o) => o.id);
   song.marketingReach = 0;
+  if (region) song.region = region;
   return song;
 };
 

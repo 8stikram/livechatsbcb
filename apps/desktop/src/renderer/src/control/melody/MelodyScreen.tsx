@@ -5,6 +5,9 @@ import { createPortal } from 'react-dom';
 import {
   BEATS,
   CFG,
+  REGION_IDS,
+  REGION_NAMES,
+  type RegionId,
   seasonFit,
   seasonTip,
   GENRES,
@@ -228,6 +231,89 @@ const FoundLabel = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: M
         Créer le label
       </button>
     </div>
+  );
+};
+
+/* ---------------------------------- Regions, radio, press ---------------------------------- */
+
+// His fans per region, in bars.
+const FanMap = ({ artist }: { artist: RosterView }) => {
+  const top = Math.max(1, ...REGION_IDS.map((r) => artist.regions[r]));
+  return (
+    <section className="mt-section mt-fanmap">
+      <Label>Ses fans dans le monde</Label>
+      {REGION_IDS.map((r) => (
+        <div key={r} className={`mt-fanmap-row${r === artist.topRegion ? ' is-top' : ''}`}>
+          <span>
+            {REGION_NAMES[r]}
+            {r === artist.homeRegion ? ' · chez lui' : ''}
+          </span>
+          <i style={{ width: `${Math.max(1, (artist.regions[r] / top) * 100)}%` }} />
+          <b>{fmt(artist.regions[r])}</b>
+        </div>
+      ))}
+    </section>
+  );
+};
+
+// On the song page: the radio rotation, or the button to start one.
+const RadioBlock = ({ song, cash, onAct, busy }: { song: SongView; cash: number; onAct?: (action: MelodyAction) => void; busy?: boolean }) => {
+  const r = song.radio;
+  if (song.state !== 'released') return null;
+  return (
+    <section className="mt-section mt-radio">
+      <Label>Radio</Label>
+      {r.on ? (
+        <span>
+          En rotation sur <b>{r.station}</b>
+          {r.mainstream ? ' (la grosse radio !)' : ''} · encore {r.weeksLeft} semaine{r.weeksLeft > 1 ? 's' : ''} · {money(r.money)} de droits radio.
+        </span>
+      ) : r.money > 0 ? (
+        <span className="mt-sub">
+          Rotation finie sur {r.station} : {money(r.money)} de droits radio.
+        </span>
+      ) : (
+        <>
+          <span className="mt-sub">
+            Ton son part sur <b>{r.station}</b> ({fmt(r.audience)} auditeurs) pendant 4 semaines : {r.note} S’il entre dans le top 50, il monte sur la grosse radio.
+          </span>
+          {onAct && (
+            <button type="button" className="mt-go" disabled={busy || !r.canStart || cash < r.cost} title={r.why ?? undefined} onClick={() => onAct({ type: 'radio', songId: song.id })}>
+              Envoyer à la radio · {money(r.cost)}
+            </button>
+          )}
+          {r.why && <span className="mt-sub">{r.why}</span>}
+        </>
+      )}
+    </section>
+  );
+};
+
+// On the song page: what the press and the networks say.
+const PressBlock = ({ song }: { song: SongView }) => {
+  const r = song.reactions;
+  if (!r) return null;
+  return (
+    <section className="mt-section mt-pressbox">
+      <Label>La presse</Label>
+      {r.reviews.map((rev) => (
+        <div key={rev.media} className="mt-review">
+          <span className="mt-review-score">{rev.score}/10</span>
+          <div>
+            <b>{rev.media}</b>
+            <p>{rev.text}</p>
+          </div>
+        </div>
+      ))}
+      <Label>Sur les réseaux</Label>
+      {r.tweets.map((t) => (
+        <div key={t.handle} className="mt-tweet">
+          <b>{t.handle}</b>
+          <p>{t.text}</p>
+          <span className="mt-sub">♥ {fmt(t.likes)}</span>
+        </div>
+      ))}
+    </section>
   );
 };
 
@@ -1060,6 +1146,7 @@ const Squad = ({
             )}
             <TourBlock key={`t${artist.id}`} view={view} artist={artist} onAct={onAct} busy={busy} />
             <EvolutionBlock key={`e${artist.id}`} artist={artist} cash={view.label?.cash ?? 0} onAct={onAct} busy={busy} />
+            <FanMap key={`f${artist.id}`} artist={artist} />
           </div>
         )}
       </div>
@@ -1365,7 +1452,7 @@ const noted = (entries: NotebookEntry[], season: number, themeId: string | null,
 const SURPRISE_WORD = { boom: 'Bien mieux que prévu', flop: 'Moins bon que prévu' } as const;
 
 // Everything about one song: cover, note, promo and its streams week by week.
-const SongPage = ({ song, onClose }: { song: SongView; onClose: () => void }) => {
+const SongPage = ({ song, onClose, cash = 0, onAct, busy }: { song: SongView; onClose: () => void; cash?: number; onAct?: (action: MelodyAction) => void; busy?: boolean }) => {
   const top = Math.max(1, ...song.history);
   return (
     <div className="mt-panel mt-songpage mt-in">
@@ -1435,6 +1522,19 @@ const SongPage = ({ song, onClose }: { song: SongView; onClose: () => void }) =>
           </ul>
         </>
       )}
+      {song.state === 'released' && (song.region || song.regionTops.length > 0 || song.flop) && (
+        <div className="mt-pills">
+          {song.region && <span className="mt-pill">Promo visée : {REGION_NAMES[song.region]}</span>}
+          {song.regionTops.map((r) => (
+            <span key={r} className="mt-pill mt-pill-hot">
+              N°1 {REGION_NAMES[r]}
+            </span>
+          ))}
+          {song.flop && <span className="mt-pill mt-pill-warn">Influenceur raté</span>}
+        </div>
+      )}
+      <RadioBlock song={song} cash={cash} onAct={onAct} busy={busy} />
+      <PressBlock song={song} />
       {song.state === 'scheduled' && song.promoNames.length > 0 && (
         <span className="mt-sub">Promo prévue : {song.promoNames.join(', ')}. Les vues dépendront du buzz de l’artiste le jour de la sortie.</span>
       )}
@@ -2358,7 +2458,8 @@ const Studio = ({
 
 /* ---------------------------------- Releases ---------------------------------- */
 
-const ReleasePlanner = ({ song, cash, onAct, onClose, busy }: { song: SongView; cash: number; onAct: (action: MelodyAction) => void; onClose: () => void; busy: boolean }) => {
+const ReleasePlanner = ({ song, cash, home, onAct, onClose, busy }: { song: SongView; cash: number; home: RegionId; onAct: (action: MelodyAction) => void; onClose: () => void; busy: boolean }) => {
+  const [region, setRegion] = useState<RegionId>(home);
   const soonest = Math.max(1, song.readyInWeeks);
   const why = (w: number): string | null => song.blockedWeeks[w - 1] ?? null;
   const [weeks, setWeeks] = useState(() => [1, 2, 3, 4, 6, 8].find((w) => w >= soonest && !why(w)) ?? soonest);
@@ -2397,16 +2498,26 @@ const ReleasePlanner = ({ song, cash, onAct, onClose, busy }: { song: SongView; 
             <b>{m.name}</b>
             <span className="mt-price">{m.cost ? money(m.cost) : 'Gratuit'}</span>
             <span className="mt-sub">{m.note}</span>
+            {m.risky && <span className="mt-sub mt-risky">Plus de chance de viral, mais 1 fois sur 10 il se plante.</span>}
           </button>
         ))}
       </div>
+      <Label>Viser une région</Label>
+      <div className="mt-chips">
+        {REGION_IDS.map((r) => (
+          <button key={r} type="button" className="mt-chipbtn" aria-pressed={region === r} onClick={() => setRegion(r)}>
+            {REGION_NAMES[r]}
+          </button>
+        ))}
+      </div>
+      <span className="mt-sub">La plupart des nouveaux fans arriveront là. Loin de sa plus grosse région, la promo marche un peu moins (−20 %).</span>
       <div className="mt-acts">
         <button
           type="button"
           className="mt-go mt-go-big"
           data-tuto="release-go"
           disabled={busy || total > cash || why(weeks) !== null}
-          onClick={() => onAct({ type: 'release', songId: song.id, inWeeks: weeks, marketing: promo })}
+          onClick={() => onAct({ type: 'release', songId: song.id, inWeeks: weeks, marketing: promo, region })}
         >
           Programmer · {money(total)}
         </button>
@@ -2460,7 +2571,7 @@ const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (actio
   const [deluxeOf, setDeluxeOf] = useState<string | null>(null);
   const song = view.songs.find((s) => s.id === planning && s.state === 'vault');
   const page = view.songs.find((s) => s.id === opened);
-  if (page) return <SongPage song={page} onClose={() => setOpened(null)} />;
+  if (page) return <SongPage song={page} onClose={() => setOpened(null)} cash={view.label?.cash ?? 0} onAct={onAct} busy={busy} />;
   if (making) return <ProjectMaker view={view} onAct={onAct} onClose={() => setMaking(false)} busy={busy} />;
   const deluxe = view.projects.find((p) => p.id === deluxeOf);
   if (deluxe) return <DeluxeMaker view={view} project={deluxe} onAct={onAct} onClose={() => setDeluxeOf(null)} busy={busy} />;
@@ -2472,7 +2583,7 @@ const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (actio
   const weekStreams = out.reduce((sum, s) => sum + s.streamsLast, 0);
   const best = out.reduce<SongView | null>((top, s) => (!top || s.streamsLast > top.streamsLast ? s : top), null);
   const peak = Math.max(1, ...view.labelWeeks);
-  if (song) return <ReleasePlanner song={song} cash={view.label?.cash ?? 0} onAct={onAct} onClose={() => setPlanning(null)} busy={busy} />;
+  if (song) return <ReleasePlanner song={song} cash={view.label?.cash ?? 0} home={view.roster.find((a) => a.id === song.artistId)?.topRegion ?? 'fr'} onAct={onAct} onClose={() => setPlanning(null)} busy={busy} />;
   return (
     <div className="mt-view mt-in">
       <ReleaseCalendar view={view} />
@@ -5286,7 +5397,8 @@ const LabelsTab = ({
 const Charts = ({ view }: { view: MelodyView }) => {
   const [chart, setChart] = useState<string>('global');
   const [players, setPlayers] = useState(false);
-  const entries = (chart === 'global' ? view.charts.global : (view.charts.genres[chart] ?? [])).filter((e) => !players || e.player).slice(0, 20);
+  const source = chart === 'global' ? view.charts.global : chart.startsWith('region:') ? (view.charts.regions[chart.slice(7)] ?? []) : (view.charts.genres[chart] ?? []);
+  const entries = chart === 'radio' ? [] : source.filter((e) => !players || e.player).slice(0, 20);
   const mine = view.label?.id;
   const duels = view.duels.filter((d) => d.status === 'accepted' || d.status === 'done');
   return (
@@ -5304,6 +5416,14 @@ const Charts = ({ view }: { view: MelodyView }) => {
           <button type="button" className="mt-chipbtn" aria-pressed={chart === 'global'} onClick={() => setChart('global')}>
             Top global
           </button>
+          {REGION_IDS.map((r) => (
+            <button key={r} type="button" className="mt-chipbtn" aria-pressed={chart === `region:${r}`} onClick={() => setChart(`region:${r}`)}>
+              {REGION_NAMES[r]}
+            </button>
+          ))}
+          <button type="button" className="mt-chipbtn" aria-pressed={chart === 'radio'} onClick={() => setChart('radio')}>
+            Top radio
+          </button>
           {Object.keys(view.charts.genres)
             .filter((genre) => (view.charts.genres[genre]?.length ?? 0) > 0)
             .map((genre) => (
@@ -5316,6 +5436,24 @@ const Charts = ({ view }: { view: MelodyView }) => {
           <input type="checkbox" checked={players} onChange={(event) => setPlayers(event.target.checked)} />
           Seulement les joueurs du serveur
         </label>
+        {chart === 'radio' && (
+          <ol className="mt-chart">
+            {view.charts.radio.map((line, i) => (
+              <li key={line.songId} className={line.mine ? 'is-me' : ''}>
+                <span className="mt-rank">{i + 1}</span>
+                <Cover id={line.songId} className="mt-chart-art" />
+                <span className="mt-chart-title">
+                  <b>{line.title}</b>
+                  <span className="mt-sub">
+                    {line.artistName} · {line.station}
+                  </span>
+                </span>
+                <span className="mt-mute">{compact(line.plays)} auditeurs</span>
+              </li>
+            ))}
+            {view.charts.radio.length === 0 && <li className="mt-sub mt-chart-empty">Aucun son de joueur à la radio cette semaine.</li>}
+          </ol>
+        )}
         <ol className="mt-chart">
           {entries.map((entry) => (
             <li key={`${entry.rank}-${entry.title}`} className={entry.labelId === mine ? 'is-me' : ''}>
@@ -5328,7 +5466,7 @@ const Charts = ({ view }: { view: MelodyView }) => {
               <span className="mt-mute">{compact(entry.streams)}</span>
             </li>
           ))}
-          {entries.length === 0 && <li className="mt-sub mt-chart-empty">{players ? 'Aucun son de joueur dans ce chart pour l’instant.' : 'Le chart se remplit après la première semaine.'}</li>}
+          {entries.length === 0 && chart !== 'radio' && <li className="mt-sub mt-chart-empty">{players ? 'Aucun son de joueur dans ce chart pour l’instant.' : 'Le chart se remplit après la première semaine.'}</li>}
         </ol>
       </section>
     </div>
@@ -5681,6 +5819,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'enemy_add') say('Guerre déclarée !');
       if (action.type === 'enemy_remove') say('La paix est faite.');
       if (action.type === 'gift') say('Argent envoyé.');
+      if (action.type === 'radio') say('Ton son part à la radio pour 4 semaines !');
       if (action.type === 'scandal') say(answer.data.view.scandals.log[0]?.outcome ?? 'Réponse envoyée.');
       if (action.type === 'festival_register') say('Inscrit au festival !');
       if (action.type === 'festival_withdraw') say('Inscription retirée : argent rendu.');

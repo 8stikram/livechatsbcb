@@ -120,6 +120,8 @@ export interface Artist {
   wishSeason?: number;
   /** Scandals: away (health, excess) until this tick, and a higher risk of excess until this one. */
   outUntil?: number;
+  /** His fans per region, as shares (none: 60 % at home). */
+  regions?: Record<import('./regions.ts').RegionId, number>;
   relapseUntil?: number;
 }
 
@@ -254,6 +256,10 @@ export interface Song {
   eventMult?: number;
   /** Pulled from the platforms (plagiarism) until this tick: it earns nothing. */
   pulledUntil?: number;
+  /** Region the promo aimed at, the radio rotation, and the regions where it was n°1. */
+  region?: import('./regions.ts').RegionId;
+  radio?: import('./radio.ts').Rotation;
+  regionTops?: string[];
   /** A disstrack: the label it goes after. */
   diss?: string;
   /** The EP or album it belongs to. */
@@ -266,6 +272,8 @@ export interface PromoResult {
   id: string;
   views: number;
   viral: boolean;
+  /** An influencer who missed: half the views, and a little bad buzz. */
+  flop?: boolean;
 }
 
 export interface Loan {
@@ -327,7 +335,7 @@ export interface World {
   gigs: Gig[];
   npcSongs: NpcSong[];
   trends: Trends;
-  charts: { global: ChartEntry[]; genres: Record<string, ChartEntry[]> };
+  charts: { global: ChartEntry[]; genres: Record<string, ChartEntry[]>; regions?: Record<string, ChartEntry[]> };
   /** The song each label is recording right now (studio events, featuring). Missing in worlds saved before. */
   sessions?: Record<string, StudioSession>;
   /** Featuring talks per label and guest: tries this week, and how long he refuses after an insult. */

@@ -424,3 +424,27 @@ Choix du propriétaire :
   - Soutenir : moral +15, mais les dégâts restent.
   - Virer : l'artiste part libre. Réputation +1, ou −2 s'il a plus d'1 million de fans. Moral du label −5.
 - **Toujours public** : « Scandale chez X » dans les news, et un gros bandeau « Scandale » sur l'Accueil de tout le monde, la semaine où il tombe. La fiche du label compte ses scandales.
+
+## Étape 25 — radio, influenceurs, charts par région, presse (fait)
+
+Choix du propriétaire :
+- **Radio** : une rotation de 4 semaines. Le son part tout seul sur la radio de son genre, et monte sur la grosse radio s'il entre dans le top 50. Les radios ont des noms inventés et marrants.
+- **Influenceurs** : 3 tailles, avec un risque de flop.
+- **Régions** : les fans sont répartis par région, chaque région a son top 50, et on vise une région à chaque sortie.
+- **Les plus** : une news pour un n°1 dans une région, une carte des fans, une news drôle quand un influenceur se plante, un Top radio, et (son idée) la presse et des tweets sur la page de chaque son.
+
+- **Radio** (page du son, sortie depuis 8 semaines au plus, une fois par son) : 2 500 € × palier.
+  - Les radios : Bitume FM (rap, trap, drill), Radio Guimauve (pop, variété), Velours FM (R&B), Tropical Pression (afro, latin), Boum Boum Radio (électro), Larsen FM (rock, métal), Skank Express (reggae), Radio Pixel (hyperpop), France Feutrée (jazz). Les autres genres vont sur Radio Cocktail.
+  - Chaque radio a son public : de 250 000 à 3 millions d'auditeurs.
+  - Dans le top 50 global : le son monte sur **Méga Tubes FM** (8 millions d'auditeurs), avec une news.
+  - Chaque semaine : des streams en plus (3 % des passages), des droits radio (0,001 € par passage) et +1 de buzz.
+  - Les passages dépendent de la note du son et de la célébrité de l'artiste : un petit artiste passe peu.
+- **Influenceurs** : micro (3 000 €), gros (20 000 €), star des réseaux (100 000 €).
+  - Ils apportent leurs propres vues (30 000, 300 000 ou 2 millions), plus le buzz de l'artiste.
+  - Leur chance de viral est doublée, mais 1 fois sur 10 l'influenceur se plante : moitié moins de vues, buzz −3, et une news qui se moque.
+- **Régions** : France-Belgique-Suisse, États-Unis, Royaume-Uni, Afrique, reste du monde.
+  - Au départ, un artiste a 60 % de ses fans chez lui, 25 % dans une deuxième région, et le reste ailleurs.
+  - À la sortie, on vise une région : 70 % des nouveaux fans y arrivent. Loin de sa plus grosse région, la promo fait −20 %.
+- **Charts** : un top par région (les streams comptés selon les fans de l'artiste dans la région) et un Top radio. Le premier n°1 d'un son de joueur dans une région part dans les news. La page du son montre ses n°1.
+- **Effectif** : la carte des fans par région de chaque artiste.
+- **Page du son** : 2 critiques notées sur 10 (médias inventés) et 4 tweets (comptes inventés). Ils suivent la note et le succès, avec toujours une voix contre la foule. Ils restent les mêmes pour un même son.

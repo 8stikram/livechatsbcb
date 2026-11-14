@@ -3780,3 +3780,60 @@ button.mt-goal:hover {
     display: none;
   }
 }
+
+/* Regions, radio, press */
+.mt-fanmap-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.mt-fanmap-row i {
+  display: block;
+  height: 8px;
+  background: var(--mt-line);
+}
+.mt-fanmap-row.is-top i {
+  background: var(--mt-grad);
+}
+.mt-fanmap-row b {
+  text-align: right;
+}
+.mt-radio .mt-go {
+  align-self: flex-start;
+}
+.mt-review {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.mt-review-score {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--mt-a2);
+}
+.mt-review p,
+.mt-tweet p {
+  margin: 2px 0 0;
+}
+.mt-tweet {
+  padding: 8px 10px;
+  border: 1px solid var(--mt-line);
+  background: var(--mt-panel2);
+}
+.mt-tweet b {
+  color: var(--mt-a1);
+}
+.mt-risky {
+  color: var(--mt-warn);
+}
+@media (max-width: 560px) {
+  .mt-fanmap-row {
+    grid-template-columns: minmax(0, 1fr) 70px;
+  }
+  .mt-fanmap-row i {
+    display: none;
+  }
+}
