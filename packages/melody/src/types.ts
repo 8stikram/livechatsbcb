@@ -118,6 +118,9 @@ export interface Artist {
   genreSeason?: number;
   wish?: { genre: GenreId; until: number };
   wishSeason?: number;
+  /** Scandals: away (health, excess) until this tick, and a higher risk of excess until this one. */
+  outUntil?: number;
+  relapseUntil?: number;
 }
 
 export interface Contract {
@@ -149,6 +152,7 @@ export interface LabelStats {
   duelWins?: number;
   duelLosses?: number;
   duelFled?: number;
+  scandals?: number;
   clashLosses?: number;
 }
 
@@ -248,6 +252,8 @@ export interface Song {
   seized?: { tick: number };
   /** This week's streams were multiplied by this (server event, card): taken off before the next decay. */
   eventMult?: number;
+  /** Pulled from the platforms (plagiarism) until this tick: it earns nothing. */
+  pulledUntil?: number;
   /** A disstrack: the label it goes after. */
   diss?: string;
   /** The EP or album it belongs to. */
@@ -359,6 +365,8 @@ export interface World {
   /** Alliance offers and loans between players. */
   allyOffers?: import('./coop.ts').AllyOffer[];
   friendLoans?: import('./coop.ts').FriendLoan[];
+  /** Scandals, open and recent. */
+  scandals?: import('./scandals.ts').Scandal[];
   /** The coming Festival du Serveur (registrations) and the past ones. */
   festival?: import('./festival.ts').Festival | undefined;
   festivals?: import('./festival.ts').FestivalResult[];

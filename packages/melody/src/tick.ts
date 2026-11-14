@@ -15,6 +15,7 @@ import { applyStreamEvents, tickCards, tickServerEvents } from './events.ts';
 import { tickDuels } from './wars.ts';
 import { COOP, tickCoop } from './coop.ts';
 import { tickFestival } from './festival.ts';
+import { tickScandals } from './scandals.ts';
 import { judgeRelease } from './letdown.ts';
 import { lightUp, supportBoost } from './support.ts';
 import { tickSeason } from './seasons.ts';
@@ -335,7 +336,7 @@ export const runTick = (world: World): TickReport => {
   // 4. Streaming money. The artist's royalties first repay his advance.
   for (const song of world.songs) {
     const label = world.labels[song.labelId];
-    if (song.state !== 'released' || song.seized || !label || label.kind !== 'player' || label.bankrupt) continue;
+    if (song.state !== 'released' || song.seized || (song.pulledUntil ?? 0) > tick || !label || label.kind !== 'player' || label.bankrupt) continue;
     const gross = song.streamsLast * CFG.release.payPerStream;
     const contract = contractOf(world, song.artistId);
     let paidToArtist = 0;
@@ -520,6 +521,8 @@ export const runTick = (world: World): TickReport => {
     },
     tell,
   );
+  // Scandals: unanswered ones take their hit, new ones may fall.
+  tickScandals(world, tell);
   // Label cards: old ones answer themselves, new ones come.
   tickCards(world, tell);
   for (const label of players) if (!label.bankrupt) report(reports, label).cash = Math.round(label.cash);

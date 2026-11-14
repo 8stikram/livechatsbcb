@@ -109,6 +109,7 @@ export const MelodyActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ally_break'), labelId: IdSchema }),
   z.object({ type: z.literal('enemy_add'), labelId: IdSchema }),
   z.object({ type: z.literal('enemy_remove'), labelId: IdSchema }),
+  z.object({ type: z.literal('scandal'), scandalId: IdSchema, answer: z.enum(['talk', 'pay', 'deny', 'fire', 'support']) }),
   z.object({ type: z.literal('festival_register'), artistId: IdSchema, stage: z.enum(['main', 'discovery']) }),
   z.object({ type: z.literal('festival_withdraw'), artistId: IdSchema }),
   z.object({ type: z.literal('festival_bid'), artistId: IdSchema, amount: z.number().int().min(100).max(1_000_000_000) }),

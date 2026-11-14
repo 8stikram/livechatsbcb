@@ -58,6 +58,8 @@ export {
 export { LETDOWN, usualNote, isLetdown, judgeRelease } from './letdown.ts';
 export { studioCardsFor, STUDIO_CONTENT } from './studio.ts';
 export { CARD_IDS, EVENTS, EVENT_CONTENT, SERVER_CONTENT, SERVER_IDS, answerCard, applyStreamEvents, describeEffect, eventsView, streamMult, tickCards, tickServerEvents, type Card, type CardChoice, type CardEffect, type CardView, type EventsView, type ServerEvent } from './events.ts';
+export { SCANDALS, SCANDAL_TEXTS, KIND_NAMES, ANSWER_NAMES, answerScandal, awayFor, describeDamage, payCost, scandalRisk, scandalChance, scandalsView, startScandal, talkOdds, tickScandals, type Scandal, type ScandalAnswer, type ScandalDamage, type ScandalKind, type ScandalView } from './scandals.ts';
+export { PERIODS, MONTHS, calendarView, liveBoost, merchBoost, monthOf, periodAt, salesBoost, seasonFit, seasonTip, weekOfYear, type CalendarView, type Period, type PeriodId } from './calendar.ts';
 export { FESTIVAL, bestHeadBid, bidHeadliner, currentFestival, festivalPrizes, festivalView, headStart, mainFee, nextFestivalTick, nextHeadBid, registerFestival, runFestival, tickFestival, withdrawFestival, type Festival, type FestivalAct, type FestivalEntry, type FestivalResult, type FestivalView, type Stage } from './festival.ts';
 export { COOP, addEnemy, alliesOf, answerAlly, answerLoan, areAllies, askAlly, breakAlly, checkTarget, enemiesOf, enemyBoost, giveMoney, inDanger, offerLoan, relationsView, removeEnemy, tickCoop, type AllyOffer, type FriendLoan, type FriendLoanStatus, type RelationsView } from './coop.ts';
 export { WARS, answerDuel, askDuel, duelsView, pressConference, pressOdds, pressUsed, pressView, replyPress, tickDuels, type Duel, type DuelStatus, type DuelView, type PressConf, type PressView } from './wars.ts';

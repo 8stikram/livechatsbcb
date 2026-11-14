@@ -2,7 +2,7 @@
 // The simulator (src/sim.ts) exists to tune these values.
 
 export const CFG = {
-  ticksPerSeason: 28,
+  ticksPerSeason: 52,
   ticksPerMonth: 4,
 
   start: { cash: 10_000, reputation: 10 },

@@ -2,6 +2,7 @@
 // Hired like the scouts: candidates with stars and funny names, a new list every week, a wage every week.
 // A member gains a star after a season at the label, and another player can try to poach him.
 import { CFG } from './config.ts';
+import { liveBoost } from './calendar.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
 import type { Label, Producer, World } from './types.ts';
 import { GameError } from './world.ts';
@@ -192,7 +193,8 @@ export const houseProducer = (world: World, labelId: string, producer: Producer)
 export const viewsBoost = (world: World, labelId: string): number => 1 + STAFF.communityViews * starsOf(world, labelId, 'community');
 
 /** Crowd of every concert and tour date, times this. */
-export const crowdBoost = (world: World, labelId: string): number => 1 + STAFF.bookerCrowd * starsOf(world, labelId, 'booker');
+/** Bigger crowds: the booker, and the summer. */
+export const crowdBoost = (world: World, labelId: string): number => (1 + STAFF.bookerCrowd * starsOf(world, labelId, 'booker')) * liveBoost(world.tick);
 
 /** Energy one concert costs an artist of this label. */
 export const gigEnergy = (world: World, labelId: string): number => Math.round(CFG.energy.gig * (1 - STAFF.bookerEnergy * starsOf(world, labelId, 'booker')));

@@ -148,6 +148,8 @@ export const moraleBlock = (world: World, artist: Artist, what: 'studio' | 'gig'
   const contract = contractOf(world, artist.id);
   const label = contract ? world.labels[contract.labelId] : undefined;
   if (!label || label.kind !== 'player') return null;
+  const away = (artist.outUntil ?? 0) - world.tick;
+  if (away > 0) return `${artist.name} est indisponible encore ${away} semaine${away > 1 ? 's' : ''} (scandale).`;
   if (artist.morale < MORALE.strike) return `${artist.name} est en grève. Remonte-lui le moral dans l’onglet Dynamique.`;
   if (what === 'studio' && artist.morale < MORALE.refuse && rngFor(world.seed, world.tick, `refuse:${artist.id}`).chance(MORALE.refuseChance))
     return `${artist.name} n’a pas envie d’aller en studio cette semaine : son moral est trop bas.`;

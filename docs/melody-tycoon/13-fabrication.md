@@ -391,3 +391,36 @@ Choix du propriétaire : le festival a lieu **chaque mois de jeu (toutes les 7 s
 - **Forfait** : un artiste en grève, sous 20 d'énergie ou parti du label annule. Il perd l'inscription, le label perd 1 de réputation, et la news « X a annulé » part.
 - **Prix du public** : il va au meilleur artiste d'un joueur. Son label gagne +3 de réputation, et la fiche du label compte ses prix.
 - **Accueil** : l'affiche du festival à venir (tête d'affiche, scène principale, découverte). Ensuite, pendant 2 semaines, les résultats tombent un par un (découverte, principale, tête d'affiche), puis le Prix du public s'allume. Un bouton permet de revoir.
+
+## Étape 24 — scandales et saisonnalité (fait)
+
+Choix du propriétaire :
+- **Scandales rares**, de **tous les types**, avec **les 5 réponses**, **toujours visibles** par toute la party.
+- **Une saison = une année** : la saison passe de **28 à 52 semaines**, toujours 1 semaine de jeu par vrai jour.
+- **Périodes** : Saint-Valentin, été, automne, Noël (pas de rentrée).
+- **Les plus** : calendrier sur l'Accueil, calendrier des sorties des autres joueurs, bandeau « Scandale » en une, nombre de scandales sur la fiche.
+- **Limite** : le propriétaire voulait les scandales lourds (drogue, procès) aussi sur les vrais artistes. **Refusé**, ce serait inventer des accusations sur de vraies personnes. Les vrais artistes n'ont que le **bad buzz** et le **départ en public**, avec des textes neutres. Les artistes inventés ont tout, en version trash : drogues nommées, procès absurdes.
+
+- **Saison de 52 semaines** : elle commence en janvier. L'objectif « streams » grandit avec la saison, et l'objectif « sortir des sons » passe à 10. Le festival reste toutes les 7 semaines.
+- **Périodes** :
+  - Saint-Valentin (semaines 6-7) : amour, rupture et love toxique +15 %, lovetrap +10 %.
+  - Été (24-35) : fête, danse, voyage et soleil +15 % ; afrobeats, dancehall, jersey et amapiano +5 % ; concerts et tournées +30 % de public ; mélancolie −10 %.
+  - Automne (41-47) : mélancolie, nostalgie et santé mentale +10 %.
+  - Noël (48-52) : merch des tournées ×2, CD et vinyles ×1,5 ; famille +10 %, nostalgie +5 %.
+- **Accueil** : la semaine, le mois, la période en cours et la suivante. **Studio** : étiquettes « De saison » et « Hors saison » sur les thèmes et les prods, plus un conseil quand une période arrive.
+- **Sorties** : le calendrier des sorties programmées par les joueurs. On voit l'artiste, le genre, le label et la semaine, jamais le titre.
+- **Chance d'un scandale**, par artiste et par semaine : 0,12 % × risque (0,5 à 2, tiré par monde) × (1 + buzz/100), ×1,3 si le moral est sous 30, ×3 pendant 26 semaines après un excès. Cela fait environ 1 scandale par saison pour 10 artistes.
+- **Types** :
+  - bad buzz : buzz −10 à −20, fans −2 % ;
+  - départ en public : réputation −2, moral du label −5 ;
+  - procès : une amende ;
+  - plagiat : le dernier son ne rapporte plus rien pendant 3 semaines, réputation −3 ;
+  - santé : indisponible 2 à 6 semaines (ni studio, ni concert, ni tournée, ni festival) ;
+  - excès : discipline −15, énergie −30 %, buzz −5, et un risque de rechute.
+- **Réponses**, avec 2 semaines pour répondre ; sans réponse, tous les dégâts tombent :
+  - Communiquer : la chance dépend des médias et du community manager ; réussi, dégâts ÷ 2 ; raté, buzz −3 de plus.
+  - Payer : 5 à 30 % de la valeur de l'artiste ; dégâts ÷ 3, semaines d'absence ÷ 2.
+  - Nier (pas pour la santé ni le départ) : une chance sur deux de n'avoir rien ; sinon dégâts ×2 et réputation −3.
+  - Soutenir : moral +15, mais les dégâts restent.
+  - Virer : l'artiste part libre. Réputation +1, ou −2 s'il a plus d'1 million de fans. Moral du label −5.
+- **Toujours public** : « Scandale chez X » dans les news, et un gros bandeau « Scandale » sur l'Accueil de tout le monde, la semaine où il tombe. La fiche du label compte ses scandales.

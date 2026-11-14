@@ -30,6 +30,8 @@ import { cancelSession, finishSession, offerFeat, useDeal, reactToEvent, session
 import { formWeeks, setRole, supportBoost } from './support.ts';
 import { buyBack, estateView, repayLoans, takeAssetLoan, type EstateView } from './estate.ts';
 import { answerCard, eventsView, type EventsView } from './events.ts';
+import { answerScandal, scandalsView, type ScandalAnswer, type ScandalView } from './scandals.ts';
+import { calendarView, type CalendarView } from './calendar.ts';
 import { bidHeadliner, festivalPrizes, festivalView, registerFestival, withdrawFestival, type FestivalView } from './festival.ts';
 import { addEnemy, alliesOf, answerAlly, answerLoan, askAlly, breakAlly, enemiesOf, giveMoney, offerLoan, relationsView, removeEnemy, type RelationsView } from './coop.ts';
 import { answerDuel, askDuel, duelsView, pressConference, pressView, replyPress, type DuelView, type PressView } from './wars.ts';
@@ -188,6 +190,7 @@ export type MelodyAction =
   | { type: 'enemy_add'; labelId: string }
   | { type: 'enemy_remove'; labelId: string }
   | { type: 'gift'; targetLabelId: string; amount: number }
+  | { type: 'scandal'; scandalId: string; answer: ScandalAnswer }
   | { type: 'festival_register'; artistId: string; stage: 'main' | 'discovery' }
   | { type: 'festival_withdraw'; artistId: string }
   | { type: 'festival_bid'; artistId: string; amount: number }
@@ -461,6 +464,9 @@ const runAction = (world: World, label: Label, action: Exclude<MelodyAction, { t
     case 'enemy_remove':
       removeEnemy(world, label, action.labelId);
       return;
+    case 'scandal':
+      answerScandal(world, label, action.scandalId, action.answer);
+      return;
     case 'festival_register':
       registerFestival(world, label, action.artistId, action.stage);
       return;
@@ -608,6 +614,7 @@ export interface LabelCard {
   duelLosses: number;
   duelFled: number;
   festivalPrizes: number;
+  scandals: number;
   allies: string[];
   enemies: string[];
   clashLosses: number;
@@ -634,6 +641,7 @@ const labelCards = (world: World): LabelCard[] =>
       duelLosses: l.stats.duelLosses ?? 0,
       duelFled: l.stats.duelFled ?? 0,
       festivalPrizes: festivalPrizes(world, l.id),
+      scandals: l.stats.scandals ?? 0,
       allies: alliesOf(l).map((id) => world.labels[id]?.name ?? '?'),
       enemies: enemiesOf(l).map((id) => world.labels[id]?.name ?? '?'),
       clashLosses: l.stats.clashLosses ?? 0,
@@ -684,6 +692,8 @@ export interface MelodyView {
   /** Allies, enemies, alliance offers and loans between players. */
   relations: RelationsView | null;
   festival: FestivalView;
+  scandals: ScandalView;
+  calendar: CalendarView;
   duels: DuelView[];
   /** The centre de formation: youths, scout, mission. Null without a label. */
   academy: AcademyView | null;
@@ -860,6 +870,8 @@ export const buildView = (world: World, ownerId: string): MelodyView => {
     press: label ? pressView(world, label) : null,
     relations: label ? relationsView(world, label) : null,
     festival: festivalView(world, label ?? undefined),
+    scandals: scandalsView(world, label ?? undefined),
+    calendar: calendarView(world, label?.id ?? null),
     duels: duelsView(world, label?.id ?? null),
     trends: world.trends,
     label: label && {

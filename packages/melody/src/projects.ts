@@ -1,6 +1,7 @@
 // Projects (docs/melody-tycoon/03-creation-de-son.md, formats): an EP or an album gathers songs made in the studio
 // and puts them out the same week, with a first-week boost. A deluxe adds songs to an album just out and relaunches it.
 import { contractOf } from './economy.ts';
+import { salesBoost } from './calendar.ts';
 import { priceScale } from './quality.ts';
 import { clamp } from './rng.ts';
 import { albumBonus } from './skills.ts';
@@ -224,7 +225,7 @@ export const tickProjects = (
       const label = world.labels[project.labelId];
       const artist = world.artists[project.artistId];
       if (label && artist) {
-        const sale = salesQuote({ fans: artist.fans, hype: artist.hype, kind: project.kind, quality: project.quality ?? 0, cover: !!project.cover, signing: false, boost: supportBoost(world, label.id, artist.id, 'sales') });
+        const sale = salesQuote({ fans: artist.fans, hype: artist.hype, kind: project.kind, quality: project.quality ?? 0, cover: !!project.cover, signing: false, boost: supportBoost(world, label.id, artist.id, 'sales') * salesBoost(world.tick) });
         project.deluxe.sales = Math.round(sale.units * SALES.deluxe);
         project.deluxe.money = project.deluxe.sales * SALES.price;
         if (project.deluxe.money > 0) pay(label.id, project.deluxe.money, artist.id);
@@ -247,7 +248,7 @@ export const tickProjects = (
     const name = `${PROJECTS[project.kind].name} « ${project.title} »`;
     let sold = '';
     if (label && artist) {
-      const sale = salesQuote({ fans: artist.fans, hype: artist.hype, kind: project.kind, quality: project.quality, cover: !!project.cover, signing: !!project.signing, boost: supportBoost(world, label.id, artist.id, 'sales') });
+      const sale = salesQuote({ fans: artist.fans, hype: artist.hype, kind: project.kind, quality: project.quality, cover: !!project.cover, signing: !!project.signing, boost: supportBoost(world, label.id, artist.id, 'sales') * salesBoost(world.tick) });
       if (project.signing) artist.energy = Math.max(0, artist.energy - SALES.signingEnergy);
       project.sales = sale.units;
       project.salesMoney = sale.money;

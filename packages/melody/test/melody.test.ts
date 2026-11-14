@@ -11,6 +11,7 @@ import {
   shareLoan, returnLoans, STUDIO_CONTENT, studioCardsFor, usualNote, isLetdown, judgeRelease,
   SALES, salesQuote, createProject, tickProjects, supportBoost, ROLES, ROLE_RULES, FORM, roleSlots, inForm, lightUp, experienceBonus,
   WARS, pressOdds, COOP, relationsView, enemyBoost, tickCoop, FESTIVAL, festivalView, nextFestivalTick, runFestival,
+  SCANDALS, SCANDAL_TEXTS, startScandal, scandalChance, tickScandals, scandalsView, PERIODS, periodAt, weekOfYear, seasonFit, liveBoost, salesBoost, merchBoost, seasonTip, calendarView,
   CARD_IDS, EVENTS, EVENT_CONTENT, SERVER_CONTENT, SERVER_IDS, eventsView, streamMult, tickCards, tickServerEvents, applyStreamEvents,
   ESTATE, TIER_TABLE, assetBase, assetLoanCap, buybackPrice, tickAssetLoan, tierProgress, catalogueValue,
   SKILL_IDS, skillsOf, skillLevel, skillPlus, stageBoost, tirelessFactor, PROFILES, EVOLUTION, GENRE_CHANGE, profileOf, profileGrowth, afterRelease, tickEvolution, GENRES,
@@ -963,7 +964,7 @@ describe('saisons', () => {
     expect(labelId).toBeTruthy();
   });
 
-  it('closes the season after 28 weeks: ranking, trophies, rewards for the goals kept, and a new season', () => {
+  it('closes the season after 52 weeks: ranking, trophies, rewards for the goals kept, and a new season', () => {
     const { world, labelId } = worldWithLabel();
     const label = world.labels[labelId]!;
     label.cash = 500_000;
@@ -974,8 +975,8 @@ describe('saisons', () => {
     const reputation = label.reputation;
     let last = runTick(world);
     expect(last.labels[labelId]!.events.some((e) => e.includes('Objectif de saison atteint'))).toBe(true);
-    for (let i = 1; i < 28; i += 1) last = runTick(world);
-    expect(world.tick).toBe(28);
+    for (let i = 1; i < CFG.ticksPerSeason; i += 1) last = runTick(world);
+    expect(world.tick).toBe(CFG.ticksPerSeason);
     const view = buildView(world, 'u1');
     expect(view.seasonInfo).toMatchObject({ number: 2, week: 1, picked: false, unseen: true });
     const result = view.seasonInfo.last!;
@@ -1005,7 +1006,7 @@ describe('saisons', () => {
     const small = Object.values(world.labels).find((l) => l.ownerId === 'u2')!;
     big.cash = 2_000_000;
     small.cash = 300_000;
-    for (let i = 0; i < 28; i += 1) runTick(world);
+    for (let i = 0; i < CFG.ticksPerSeason; i += 1) runTick(world);
     const result = seasonsOf(world).history[0]!;
     expect(result.ranking.map((r) => r.labelId)).toEqual([big.id, small.id]);
     expect(result.labels[small.id]!.cash).toBeGreaterThanOrEqual(10_000);
@@ -2654,5 +2655,146 @@ describe('Festival du Serveur', () => {
     expect(world.festivals?.length).toBe(1);
     expect(world.festivals![0]!.acts.length).toBeGreaterThan(0);
     expect(runFestival).toBeTypeOf('function');
+  });
+});
+
+describe('scandales', () => {
+  const setup = () => {
+    const world = createWorld(42);
+    applyAction(world, 'u1', { type: 'found', name: 'Label u1' });
+    applyAction(world, 'u1', { type: 'tuto', move: 'skip' });
+    world.lastServerEvents = [...SERVER_IDS];
+    const label = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    const artist = rosterOf(world, label.id)[0]!;
+    artist.real = false;
+    label.cash = 1_000_000;
+    return { world, label, artist };
+  };
+
+  it('is rare: about one a season for ten average artists', () => {
+    const { world, artist } = setup();
+    artist.hype = 40;
+    artist.morale = 60;
+    const perSeason = scandalChance(world, artist) * CFG.ticksPerSeason * 10;
+    expect(perSeason).toBeGreaterThan(0.3);
+    expect(perSeason).toBeLessThan(3);
+  });
+
+  it('gives real artists only neutral bad buzz or departure', () => {
+    const { world, label, artist } = setup();
+    artist.real = true;
+    for (const kind of ['lawsuit', 'plagiarism', 'health', 'excess', 'badbuzz'] as const) {
+      const sc = startScandal(world, label, artist, kind);
+      expect(sc.kind).toBe('badbuzz');
+      expect(SCANDAL_TEXTS.real.badbuzz.map((t) => t.replaceAll('{a}', artist.name))).toContain(sc.text);
+      sc.status = 'done';
+    }
+    expect(startScandal(world, label, artist, 'departure').kind).toBe('departure');
+  });
+
+  it('is always in the news, counted on the label card, and on the front page this week', () => {
+    const { world, label, artist } = setup();
+    startScandal(world, label, artist, 'badbuzz');
+    expect(world.marketNews!.some((n) => n.text.startsWith('Scandale chez'))).toBe(true);
+    const view = buildView(world, 'u1');
+    expect(view.scandals.front).toHaveLength(1);
+    expect(view.scandals.open[0]).toMatchObject({ kind: 'badbuzz', canDeny: true });
+    expect(view.labels.find((l) => l.id === label.id)!.scandals).toBe(1);
+  });
+
+  it('pays to divide the damage by 3, and halves the weeks away', () => {
+    const { world, label, artist } = setup();
+    const sc = startScandal(world, label, artist, 'health');
+    const weeks = sc.damage.weeks;
+    const cash = label.cash;
+    applyAction(world, 'u1', { type: 'scandal', scandalId: sc.id, answer: 'pay' });
+    expect(label.cash).toBeLessThan(cash);
+    expect(artist.outUntil).toBe(world.tick + Math.round(weeks / 2));
+    if (artist.outUntil! > world.tick) expect(moraleBlock(world, artist, 'studio')).toMatch(/indisponible/);
+    expect(() => applyAction(world, 'u1', { type: 'scandal', scandalId: sc.id, answer: 'pay' })).toThrow(/réglé/);
+  });
+
+  it('cannot deny health, and denial goes all or nothing', () => {
+    const { world, label, artist } = setup();
+    const h = startScandal(world, label, artist, 'health');
+    expect(() => applyAction(world, 'u1', { type: 'scandal', scandalId: h.id, answer: 'deny' })).toThrow(/nier/);
+    h.status = 'done';
+    const results = new Set<string>();
+    for (let i = 0; i < 12; i += 1) {
+      artist.hype = 50;
+      const sc = startScandal(world, label, artist, 'badbuzz');
+      applyAction(world, 'u1', { type: 'scandal', scandalId: sc.id, answer: 'deny' });
+      results.add(artist.hype === 50 ? 'none' : 'worse');
+      world.tick += 1;
+    }
+    expect(results).toEqual(new Set(['none', 'worse']));
+  });
+
+  it('fires the artist: he is free, and the plagiarism still pulls the song', () => {
+    const { world, label, artist } = setup();
+    const song = world.songs.find((x) => x.artistId === artist.id) ?? (world.songs.push({ ...world.songs[0]!, id: 'test_song', artistId: artist.id, labelId: label.id }), world.songs.at(-1)!);
+    song.state = 'released';
+    song.labelId = label.id;
+    song.releaseTick = world.tick;
+    const sc = startScandal(world, label, artist, 'plagiarism');
+    expect(sc.songId).toBe(song.id);
+    world.tick = Math.max(world.tick, 9);
+    applyAction(world, 'u1', { type: 'scandal', scandalId: sc.id, answer: 'fire' });
+    expect(contractOf(world, artist.id)).toBeUndefined();
+    expect(song.pulledUntil).toBe(world.tick + 3);
+  });
+
+  it('takes the full hit after 2 weeks without an answer, and support lifts morale', () => {
+    const { world, label, artist } = setup();
+    artist.hype = 60;
+    const sc = startScandal(world, label, artist, 'badbuzz');
+    world.tick += SCANDALS.answerWeeks;
+    tickScandals(world, () => {});
+    expect(sc.status).toBe('done');
+    expect(sc.answer).toBe('none');
+    expect(artist.hype).toBe(60 - sc.damage.hype);
+    artist.morale = 40;
+    const dep = startScandal(world, label, artist, 'departure');
+    applyAction(world, 'u1', { type: 'scandal', scandalId: dep.id, answer: 'support' });
+    expect(artist.morale).toBe(40 + SCANDALS.supportMorale - dep.damage.team);
+  });
+});
+
+describe('calendrier', () => {
+  it('makes a season a year of 52 weeks that starts in January', () => {
+    expect(CFG.ticksPerSeason).toBe(52);
+    expect(weekOfYear(0)).toBe(1);
+    expect(weekOfYear(52)).toBe(1);
+    expect(periodAt(5)?.id).toBe('valentin');
+    expect(periodAt(23)?.id).toBe('ete');
+    expect(periodAt(47)?.id).toBe('noel');
+    expect(periodAt(10)).toBeNull();
+  });
+
+  it('changes fit, crowds, merch and sales with the period', () => {
+    expect(seasonFit(23, 'fete', 'trap')).toBeCloseTo(1.15);
+    expect(seasonFit(23, 'melancolie', 'trap')).toBeCloseTo(0.9);
+    expect(seasonFit(42, 'melancolie', 'trap')).toBeCloseTo(1.1);
+    expect(seasonFit(10, 'fete', 'trap')).toBe(1);
+    expect(liveBoost(30)).toBe(1.3);
+    expect(merchBoost(50)).toBe(2);
+    expect(salesBoost(50)).toBe(1.5);
+    expect(seasonTip(23, 'soleil', 'trap')).toMatch(/été/);
+    expect(seasonTip(20, 'soleil', 'trap')).toMatch(/qui arrive/);
+  });
+
+  it('shows the period, the next one, and the releases planned by the players without their titles', () => {
+    const world = createWorld(42);
+    applyAction(world, 'u1', { type: 'found', name: 'Label u1' });
+    applyAction(world, 'u1', { type: 'tuto', move: 'skip' });
+    const label = Object.values(world.labels).find((l) => l.ownerId === 'u1')!;
+    const artist = rosterOf(world, label.id)[0]!;
+    world.songs.push({ ...(world.songs[0] ?? ({} as Song)), id: 'cal_song', artistId: artist.id, labelId: label.id, state: 'scheduled', releaseTick: world.tick + 3, beatId: 'trap', title: 'Secret' } as Song);
+    const cal = calendarView(world, label.id);
+    expect(cal.week).toBe(weekOfYear(world.tick));
+    expect(cal.next?.id).toBe('valentin');
+    expect(cal.releases.find((r) => r.inWeeks === 3)).toMatchObject({ artistName: artist.name, mine: true });
+    expect(JSON.stringify(cal)).not.toContain('Secret');
+    expect(PERIODS).toHaveLength(4);
   });
 });

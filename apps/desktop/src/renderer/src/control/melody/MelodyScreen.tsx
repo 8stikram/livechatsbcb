@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom';
 import {
   BEATS,
   CFG,
+  seasonFit,
+  seasonTip,
   GENRES,
   featChance,
   MARKETING,
@@ -229,6 +231,137 @@ const FoundLabel = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: M
   );
 };
 
+/* ---------------------------------- Calendar and scandals ---------------------------------- */
+
+// The calendar on the home screen: the week, the month, the period now and the next one.
+const CalendarStrip = ({ view }: { view: MelodyView }) => {
+  const cal = view.calendar;
+  return (
+    <div className={`mt-cal${cal.now ? ` is-${cal.now.id}` : ''}`}>
+      <span className="mt-cal-date">
+        Semaine {cal.week} · {cal.month}
+      </span>
+      {cal.now ? (
+        <span className="mt-cal-now">
+          <b>{cal.now.name}</b> {cal.now.text} <span className="mt-sub">Encore {cal.now.weeksLeft} sem.</span>
+        </span>
+      ) : (
+        <span className="mt-sub">Pas de période spéciale.</span>
+      )}
+      {cal.next && (
+        <span className="mt-sub">
+          Ensuite : {cal.next.name} dans {cal.next.inWeeks} semaine{cal.next.inWeeks > 1 ? 's' : ''}.
+        </span>
+      )}
+    </div>
+  );
+};
+
+// The releases the players planned: who, which genre, when. Never the title.
+const ReleaseCalendar = ({ view }: { view: MelodyView }) => {
+  const list = view.calendar.releases;
+  return (
+    <section className="mt-section">
+      <Label>Calendrier des sorties des joueurs</Label>
+      {list.length === 0 ? (
+        <span className="mt-sub">Personne n’a encore programmé de sortie.</span>
+      ) : (
+        <div className="mt-relcal">
+          {list.map((r, i) => (
+            <div key={i} className={`mt-relcal-row${r.mine ? ' is-me' : ''}`}>
+              <span className="mt-relcal-when">{r.inWeeks === 1 ? 'Semaine pro' : `Dans ${r.inWeeks} sem.`}</span>
+              <b>{r.artistName}</b>
+              <span className="mt-sub">
+                {genreName(r.genre)}
+                {r.project ? ' · projet' : ''} · {r.labelName}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <span className="mt-sub">Titres cachés. Sortir la même semaine qu’un gros son du même genre coûte de la portée.</span>
+    </section>
+  );
+};
+
+// The front page: this week's scandals of the whole server.
+const ScandalFront = ({ view }: { view: MelodyView }) => {
+  const front = view.scandals.front;
+  if (front.length === 0) return null;
+  return (
+    <div className="mt-scandal-front mt-in" role="alert">
+      <span className="mt-scandal-stamp">Scandale</span>
+      {front.map((s) => (
+        <div key={s.id} className="mt-scandal-line">
+          <b>
+            {s.artistName} · {s.labelName}
+          </b>
+          <span>{s.text}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// My open scandals: 2 weeks to answer.
+const ScandalPanel = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const sc = view.scandals;
+  const [showLog, setShowLog] = useState(false);
+  if (sc.open.length === 0 && sc.log.length === 0) return null;
+  const cash = view.label?.cash ?? 0;
+  return (
+    <section className="mt-section mt-scandals">
+      {sc.open.map((s) => (
+        <div key={s.id} className="mt-ecard mt-scandal-card mt-in">
+          <div className="mt-ecard-top">
+            <Label>
+              {s.kindName} · {s.artistName}
+            </Label>
+            <span className={`mt-sub${s.weeksLeft <= 1 ? ' mt-ecard-late' : ''}`}>{s.weeksLeft <= 1 ? 'Dernière semaine pour répondre' : `${s.weeksLeft} sem. pour répondre`}</span>
+          </div>
+          <p className="mt-ecard-text">{s.text}</p>
+          <span className="mt-sub">Si tu ne fais rien : {s.damage}.</span>
+          <div className="mt-acts mt-scandal-acts">
+            <button type="button" className="mt-ghost" disabled={busy || !s.still} onClick={() => onAct({ type: 'scandal', scandalId: s.id, answer: 'talk' })}>
+              Communiquer · {s.talkOdds} %
+            </button>
+            <button type="button" className="mt-ghost" disabled={busy || !s.still || cash < s.payCost} title="Dégâts divisés par 3" onClick={() => onAct({ type: 'scandal', scandalId: s.id, answer: 'pay' })}>
+              Payer · {money(s.payCost)}
+            </button>
+            {s.canDeny && (
+              <button type="button" className="mt-ghost" disabled={busy} title="1 chance sur 2 : rien. Sinon dégâts ×2 et réputation −3." onClick={() => onAct({ type: 'scandal', scandalId: s.id, answer: 'deny' })}>
+                Nier · 50/50
+              </button>
+            )}
+            <button type="button" className="mt-ghost" disabled={busy} title="Moral +15, les dégâts restent" onClick={() => onAct({ type: 'scandal', scandalId: s.id, answer: 'support' })}>
+              Soutenir
+            </button>
+            {s.canFire && (
+              <button type="button" className="mt-ghost mt-rel-war" disabled={busy} title="Il part libre. Réputation +1, ou −2 s’il a plus d’1 million de fans. Moral du label −5." onClick={() => onAct({ type: 'scandal', scandalId: s.id, answer: 'fire' })}>
+                Virer
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+      {sc.log.length > 0 && (
+        <button type="button" className="mt-ghost" onClick={() => setShowLog(!showLog)}>
+          {showLog ? 'Cacher les anciens scandales' : 'Voir les anciens scandales'}
+        </button>
+      )}
+      {showLog &&
+        sc.log.map((l) => (
+          <span key={l.id} className="mt-sub">
+            <b>
+              {l.kindName} · {l.artistName}
+            </b>{' '}
+            ({l.answer}) : {l.outcome}
+          </span>
+        ))}
+    </section>
+  );
+};
+
 /* ---------------------------------- Festival du Serveur ---------------------------------- */
 
 const FEST_STAGES: Record<'head' | 'main' | 'discovery', string> = { head: 'Tête d’affiche', main: 'Scène principale', discovery: 'Scène découverte' };
@@ -445,7 +578,10 @@ const Home = ({ view, onGo, onAct, busy }: { view: MelodyView; onGo: (tab: Tab) 
   return (
     <div className="mt-view mt-in">
       <TrendBanner trend={view.trend} />
+      <ScandalFront view={view} />
+      <CalendarStrip view={view} />
       <ServerNews view={view} />
+      <ScandalPanel view={view} onAct={onAct} busy={busy} />
       <FestivalPoster view={view} onGo={onGo} />
       <LabelCards view={view} onAct={onAct} busy={busy} />
       <div className="mt-hub">
@@ -1933,6 +2069,8 @@ const Studio = ({
               }}
             >
               {offer.star && <span className="mt-hot mt-hot-ok">★ Son style</span>}
+              {seasonFit(view.tick, offer.id, '') > 1 && <span className="mt-hot">De saison</span>}
+              {seasonFit(view.tick, offer.id, '') < 1 && <span className="mt-hot mt-hot-bad">Hors saison</span>}
               <b>{themeName(offer.id)}</b>
             </button>
           ))}
@@ -1944,6 +2082,7 @@ const Studio = ({
       <>
         <Label>Étape 3 · sur quelle prod ?</Label>
         <span className="mt-sub">Un beat loin de son style, c’est un pari : ça peut faire un flop… ou un tube.</span>
+        {themeId && seasonTip(view.tick, themeId, '') && <span className="mt-sub mt-season-tip">{seasonTip(view.tick, themeId, '')}</span>}
         <div className="mt-opts">
           {(artist?.offers.beats ?? []).map((offer) => {
             const b = BEATS.find((x) => x.id === offer.id);
@@ -1962,6 +2101,7 @@ const Studio = ({
                 <span className="mt-tags">
                   {offer.star && <span className="mt-hot mt-hot-ok">★ Son style</span>}
                   {noted(view.notebook, view.season, themeId, b.id) && <span className="mt-hot">Carnet ✓</span>}
+                  {seasonFit(view.tick, '', b.id) > 1 && <span className="mt-hot">De saison</span>}
                 </span>
                 <b>{b.name}</b>
                 <span className="mt-sub">{b.genres.map(genreName).join(' · ')}</span>
@@ -2335,6 +2475,7 @@ const Releases = ({ view, onAct, busy, onGo }: { view: MelodyView; onAct: (actio
   if (song) return <ReleasePlanner song={song} cash={view.label?.cash ?? 0} onAct={onAct} onClose={() => setPlanning(null)} busy={busy} />;
   return (
     <div className="mt-view mt-in">
+      <ReleaseCalendar view={view} />
       <section className="mt-section">
         <Label>Au coffre · choisis un son à sortir</Label>
         {vault.length === 0 ? (
@@ -4968,6 +5109,7 @@ const LabelPage = ({ card, onClose }: { card: LabelCard; onClose: () => void }) 
       </span>
       {card.allies.length > 0 && <span className="mt-pill mt-pill-ally">Alliés : {card.allies.join(', ')}</span>}
       {card.enemies.length > 0 && <span className="mt-pill mt-pill-enemy">Ennemis : {card.enemies.join(', ')}</span>}
+      {card.scandals > 0 && <span className="mt-pill mt-pill-enemy">Scandales : {card.scandals}</span>}
       {card.festivalPrizes > 0 && <span className="mt-pill mt-pill-ally">Prix du public : {card.festivalPrizes}</span>}
       <span className="mt-pill">
         Duels : {card.duelWins} gagné{card.duelWins > 1 ? 's' : ''} · {card.duelLosses} perdu{card.duelLosses > 1 ? 's' : ''}
@@ -5539,6 +5681,7 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'enemy_add') say('Guerre déclarée !');
       if (action.type === 'enemy_remove') say('La paix est faite.');
       if (action.type === 'gift') say('Argent envoyé.');
+      if (action.type === 'scandal') say(answer.data.view.scandals.log[0]?.outcome ?? 'Réponse envoyée.');
       if (action.type === 'festival_register') say('Inscrit au festival !');
       if (action.type === 'festival_withdraw') say('Inscription retirée : argent rendu.');
       if (action.type === 'festival_bid') say('Tu mènes les enchères pour la tête d’affiche !');

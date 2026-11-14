@@ -212,7 +212,7 @@ const power = (a: Artist): number => a.fans * (1 + a.hype / 100);
 
 const canPlay = (world: World, e: FestivalEntry): boolean => {
   const artist = world.artists[e.artistId];
-  return !!artist && contractOf(world, e.artistId)?.labelId === e.labelId && !artist.onStrike && artist.energy >= FESTIVAL.minEnergy;
+  return !!artist && contractOf(world, e.artistId)?.labelId === e.labelId && !artist.onStrike && (artist.outUntil ?? 0) <= world.tick && artist.energy >= FESTIVAL.minEnergy;
 };
 
 /** The week of the show: line-up, shows, results, fees, fans, buzz and the Prix du public. */

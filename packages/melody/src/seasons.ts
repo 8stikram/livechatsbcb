@@ -164,11 +164,11 @@ const GOALS: Record<GoalId, GoalDef> = {
     check: (c) => (c.world.tours ?? []).some((t) => t.labelId === c.label.id && t.state === 'done' && t.updatedTick > Math.max(c.season.startTick, c.mine.start.tick)),
   },
   releases: {
-    text: () => 'Sortir 6 sons',
+    text: () => 'Sortir 10 sons',
     reputation: 1,
     cash: 1_500,
-    check: (c) => outThisSeason(c).length >= 6,
-    progress: (c) => `${Math.min(6, outThisSeason(c).length)} / 6`,
+    check: (c) => outThisSeason(c).length >= 10,
+    progress: (c) => `${Math.min(10, outThisSeason(c).length)} / 10`,
   },
   streams: {
     text: (start) => `Faire ${fr(start.streamsTarget)} streams sur la saison`,
@@ -204,7 +204,8 @@ const snapshot = (world: World, label: Label): Snapshot => {
     numberOnes: label.stats.numberOnes,
     clashWins: label.stats.clashWins ?? 0,
     roster: rosterOf(world, label.id).map((a) => a.id),
-    streamsTarget: round2(Math.max(50_000, fans * 25)),
+    // Scaled to the length of the season (25 streams per fan over 28 weeks).
+    streamsTarget: round2(Math.max(50_000, (fans * 25 * CFG.ticksPerSeason) / 28)),
   };
 };
 

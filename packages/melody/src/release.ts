@@ -2,6 +2,7 @@
 import { genreAffinity } from './artists.ts';
 import { CFG } from './config.ts';
 import { trendBoost } from './craft.ts';
+import { seasonFit } from './calendar.ts';
 import { beatById, coherence } from './data/content.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
 import { viewsBoost } from './staff.ts';
@@ -147,7 +148,11 @@ export const releaseWeek = (world: World, song: Song, artist: Artist, tick: numb
     : [];
   const reach = song.marketingIds ? promo.reduce((sum, p) => sum + p.views, 0) : song.marketingReach;
   const genres = [artist.genre, ...beatById(song.beatId).genres];
-  const fit = clamp(publicFit(artist, song.themeId, song.beatId, world.trends) * trendBoost(world, tick, genres, song.themeId, song.beatId), 0.5, 2.2);
+  const fit = clamp(
+    publicFit(artist, song.themeId, song.beatId, world.trends) * trendBoost(world, tick, genres, song.themeId, song.beatId) * seasonFit(tick, song.themeId, song.beatId),
+    0.5,
+    2.2,
+  );
   const week = firstWeek(
     {
       quality: song.quality,

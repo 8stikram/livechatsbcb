@@ -3,6 +3,7 @@
 // (a crowd that sings every word, a speech that gets booed...), the buzz goes up, fans come, merch sells.
 // Options: a co-headliner (even a friend's artist, who must accept) and an opening act.
 import { CFG } from './config.ts';
+import { merchBoost } from './calendar.ts';
 import { contractOf, rosterOf } from './economy.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
 import type { Artist, Label, World } from './types.ts';
@@ -281,7 +282,7 @@ export const tickTours = (
       crowd += venue.audience;
       money += venue.profit > 0 ? venue.profit * CFG.live.labelShare : venue.profit;
       if (tour.merch && tour.merchStock > 0) {
-        const sold = Math.min(tour.merchStock, Math.round(venue.audience * TOURS.merchBuy));
+        const sold = Math.min(tour.merchStock, Math.round(venue.audience * TOURS.merchBuy * merchBoost(world.tick)));
         tour.merchStock -= sold;
         merch += sold * TOURS.merchPrice;
       }

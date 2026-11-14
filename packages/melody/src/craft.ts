@@ -2,6 +2,7 @@
 // "Studio & sorties"). Each week the studio offers a few themes and beats; good choices fit the artist,
 // fit each other and follow the trend; a few secret combos give more; a bold choice can make a hit or a flop.
 import { genreAffinity } from './artists.ts';
+import { CFG } from './config.ts';
 import { CATALOG_ARTISTS } from './data/catalog.gen.ts';
 import { BEATS, GENRES, THEMES, beatById, coherence } from './data/content.ts';
 import { clamp, rngFor, type Rng } from './rng.ts';
@@ -134,7 +135,7 @@ const secretKey = (themeId: string, beatId: string) => `${themeId}|${beatId}`;
 
 /** The secret combos of the season: theme + beat pairs that make a song better, found by playing. */
 export const secretCombos = (world: World, tick = world.tick): Set<string> => {
-  const season = Math.floor(tick / 28);
+  const season = Math.floor(tick / CFG.ticksPerSeason);
   const rng = rngFor(world.seed, season, 'secret-combos');
   const combos = new Set<string>();
   while (combos.size < CRAFT.secrets) combos.add(secretKey(rng.pick(THEMES).id, rng.pick(BEATS).id));
