@@ -372,3 +372,22 @@ Choix du propriétaire : **pas de co-marketing, pas de pacte**. À la place, son
 - **Attaques** : la pique, le disstrack, la conférence de presse et le duel de charts ne visent que les ennemis déclarés parmi les joueurs (les listes ne montrent qu'eux). Un label attaqué peut toujours répondre (disstrack, riposte, duel). Contre un ennemi (dans un sens ou l'autre) : +25 % de buzz, de fans pris et d'effet.
 - **Alliés** : un featuring avec l'artiste d'un label allié donne +2 de qualité et ×1,5 de fans croisés. Un retard de remboursement entre alliés ne coûte pas de réputation. Quand un allié passe dans le rouge, tu reçois une alerte (puis toutes les 4 semaines s'il y reste).
 - **Aider un joueur** : donner une somme, ou proposer un prêt (taux 0, 5 ou 10 %, sur 4, 8 ou 12 semaines). L'autre accepte ou refuse sous 2 semaines. Chaque semaine, la même part est prise sur son cash. S'il n'a pas assez, c'est reporté, il perd 1 de réputation (sauf entre alliés) et le prêteur est prévenu. Si l'aidé est en danger, « X vient au secours de Y » dans les news.
+
+## Étape 23 — Festival du Serveur (fait)
+
+Choix du propriétaire : le festival a lieu **chaque mois de jeu (toutes les 7 semaines)**, avec **3 scènes**. La tête d'affiche se gagne aux **enchères visibles**, **3 artistes au plus par label**, et un **forfait coûte une petite honte**. Les plus : **affiche sur l'Accueil**, **résultats en direct**, **Prix du public = trophée**, **mauvais concert = buzz −5**. **Pas de Nuit des Charts, pas de compilation.** Les trophées de fin de saison existaient déjà (Étape 17).
+
+- **Inscriptions** : elles ouvrent 4 semaines avant (news pour toute la party), dans l'onglet Label.
+  - **Scène principale** : 3 000 € × palier. Les 4 plus gros inscrits jouent (fans × (1 + buzz/100)).
+  - **Scène découverte** : 500 €, pour moins de 100 000 fans. 8 places, tirage au sort s'il y a trop d'inscrits.
+  - Un inscrit pas retenu récupère son argent. On peut retirer un artiste avant le jour J.
+- **Tête d'affiche** : enchère visible, départ à 10 000 € × palier moyen des joueurs, hausse mini 5 %. L'argent de la meilleure offre est bloqué ; il est rendu, avec une alerte, quand quelqu'un surenchérit.
+- **Places vides** : prises par les artistes des labels du jeu.
+- **Le jour J** : note = scène × 0,5 + buzz × 0,2 + énergie × 0,1 + tirage (0 à 20) + 5 par niveau de Bête de scène.
+  - Cachet : 30 % (tête d'affiche) ou 8 % (principale) de la billetterie, mais au plus 0,5 € ou 0,2 € par fan de l'artiste.
+  - Fans : jusqu'à 5 % des siens, plus une part du public.
+  - Buzz : +5 à +15. Sous 40, buzz −5 et une news moqueuse.
+  - Énergie −15.
+- **Forfait** : un artiste en grève, sous 20 d'énergie ou parti du label annule. Il perd l'inscription, le label perd 1 de réputation, et la news « X a annulé » part.
+- **Prix du public** : il va au meilleur artiste d'un joueur. Son label gagne +3 de réputation, et la fiche du label compte ses prix.
+- **Accueil** : l'affiche du festival à venir (tête d'affiche, scène principale, découverte). Ensuite, pendant 2 semaines, les résultats tombent un par un (découverte, principale, tête d'affiche), puis le Prix du public s'allume. Un bouton permet de revoir.

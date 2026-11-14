@@ -14,6 +14,7 @@ import { ESTATE, tickAssetLoan } from './estate.ts';
 import { applyStreamEvents, tickCards, tickServerEvents } from './events.ts';
 import { tickDuels } from './wars.ts';
 import { COOP, tickCoop } from './coop.ts';
+import { tickFestival } from './festival.ts';
 import { judgeRelease } from './letdown.ts';
 import { lightUp, supportBoost } from './support.ts';
 import { tickSeason } from './seasons.ts';
@@ -503,6 +504,15 @@ export const runTick = (world: World): TickReport => {
   );
   // Loans between players, alliance offers, allies in danger.
   tickCoop(
+    world,
+    (labelId, amount) => {
+      const label = world.labels[labelId];
+      if (label) earn(reports, label, amount);
+    },
+    tell,
+  );
+  // The Festival du Serveur: registrations, outbid alerts, and the show every 7 weeks.
+  tickFestival(
     world,
     (labelId, amount) => {
       const label = world.labels[labelId];

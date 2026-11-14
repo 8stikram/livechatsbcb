@@ -10,7 +10,7 @@ import {
   MORALE, RANKS, ranksOf, isLeader, worriesOf, moraleBlock, tickMorale, dynamicsView,
   shareLoan, returnLoans, STUDIO_CONTENT, studioCardsFor, usualNote, isLetdown, judgeRelease,
   SALES, salesQuote, createProject, tickProjects, supportBoost, ROLES, ROLE_RULES, FORM, roleSlots, inForm, lightUp, experienceBonus,
-  WARS, pressOdds, COOP, relationsView, enemyBoost, tickCoop,
+  WARS, pressOdds, COOP, relationsView, enemyBoost, tickCoop, FESTIVAL, festivalView, nextFestivalTick, runFestival,
   CARD_IDS, EVENTS, EVENT_CONTENT, SERVER_CONTENT, SERVER_IDS, eventsView, streamMult, tickCards, tickServerEvents, applyStreamEvents,
   ESTATE, TIER_TABLE, assetBase, assetLoanCap, buybackPrice, tickAssetLoan, tierProgress, catalogueValue,
   SKILL_IDS, skillsOf, skillLevel, skillPlus, stageBoost, tirelessFactor, PROFILES, EVOLUTION, GENRE_CHANGE, profileOf, profileGrowth, afterRelease, tickEvolution, GENRES,
@@ -2547,4 +2547,112 @@ describe('coopérations : alliés, ennemis et renflouement', () => {
     expect(make(true) - make(false)).toBe(COOP.allyQuality);
   });
 
+});
+
+describe('Festival du Serveur', () => {
+  const setup = () => {
+    const world = createWorld(42);
+    for (const u of ['u1', 'u2']) {
+      applyAction(world, u, { type: 'found', name: 'Label ' + u });
+      applyAction(world, u, { type: 'tuto', move: 'skip' });
+    }
+    world.lastServerEvents = [...SERVER_IDS];
+    const [a, b] = ['u1', 'u2'].map((u) => Object.values(world.labels).find((l) => l.ownerId === u)!);
+    // Go to the week the registrations open.
+    while (nextFestivalTick(world.tick) - world.tick !== FESTIVAL.openWeeks) runTick(world);
+    return { world, a: a!, b: b! };
+  };
+
+  it('opens registrations 4 weeks before, every 7 weeks', () => {
+    const { world } = setup();
+    expect(world.festival?.tick).toBe(nextFestivalTick(world.tick));
+    expect(world.festival!.tick % FESTIVAL.every).toBe(0);
+    expect(festivalView(world, undefined).open).toBe(true);
+  });
+
+  it('takes fees, at most 3 artists per label, small artists only in discovery', () => {
+    const { world, a } = setup();
+    a.cash = 1_000_000;
+    const roster = rosterOf(world, a.id);
+    const big = roster[0]!;
+    big.fans = 500_000;
+    expect(() => applyAction(world, 'u1', { type: 'festival_register', artistId: big.id, stage: 'discovery' })).toThrow(/100 000/);
+    const cash = a.cash;
+    applyAction(world, 'u1', { type: 'festival_register', artistId: big.id, stage: 'main' });
+    expect(a.cash).toBe(cash - FESTIVAL.mainFee * a.tier);
+    expect(() => applyAction(world, 'u1', { type: 'festival_register', artistId: big.id, stage: 'main' })).toThrow(/déjà/);
+    applyAction(world, 'u1', { type: 'festival_withdraw', artistId: big.id });
+    expect(a.cash).toBe(cash);
+    // Fill to 3, the 4th is refused.
+    const extra = Object.values(world.artists).filter((x) => !contractOf(world, x.id) && x.fans < 50_000).slice(0, 4);
+    for (const x of extra) world.contracts.push({ artistId: x.id, labelId: a.id, startTick: world.tick, endTick: world.tick + 100, advance: 0, unrecouped: 0 } as never);
+    for (const x of extra.slice(0, 3)) applyAction(world, 'u1', { type: 'festival_register', artistId: x.id, stage: 'discovery' });
+    expect(() => applyAction(world, 'u1', { type: 'festival_register', artistId: extra[3]!.id, stage: 'discovery' })).toThrow(/3 artistes/);
+  });
+
+  it('holds only the best headliner bid and gives the money back to the outbid', () => {
+    const { world, a, b } = setup();
+    a.cash = 1_000_000;
+    b.cash = 1_000_000;
+    const artA = rosterOf(world, a.id)[0]!;
+    const artB = rosterOf(world, b.id)[0]!;
+    const start = festivalView(world, a).nextHeadBid;
+    expect(() => applyAction(world, 'u1', { type: 'festival_bid', artistId: artA.id, amount: start - 1 })).toThrow(/trop basse/);
+    applyAction(world, 'u1', { type: 'festival_bid', artistId: artA.id, amount: start });
+    expect(a.cash).toBe(1_000_000 - start);
+    const next = festivalView(world, b).nextHeadBid;
+    expect(next).toBeGreaterThan(start);
+    applyAction(world, 'u2', { type: 'festival_bid', artistId: artB.id, amount: next });
+    expect(a.cash).toBe(1_000_000);
+    expect(b.cash).toBe(1_000_000 - next);
+    expect(festivalView(world, a).head).toMatchObject({ artistName: artB.name, mine: false });
+  });
+
+  it('plays the show: line-up filled by the game, notes, fees, prize, and cancels a striker', () => {
+    const { world, a, b } = setup();
+    a.cash = 1_000_000;
+    b.cash = 1_000_000;
+    const artA = rosterOf(world, a.id)[0]!;
+    const artB = rosterOf(world, b.id)[0]!;
+    applyAction(world, 'u1', { type: 'festival_bid', artistId: artA.id, amount: festivalView(world, a).nextHeadBid });
+    artB.fans = 20_000;
+    applyAction(world, 'u2', { type: 'festival_register', artistId: artB.id, stage: 'discovery' });
+    const repB = b.reputation;
+    artB.onStrike = true;
+    artA.energy = 100;
+    artA.onStrike = false;
+    const show = world.festival!.tick;
+    while (world.tick < show) {
+      artA.energy = 100;
+      artB.morale = 0;
+      artB.onStrike = true;
+      runTick(world);
+    }
+    const r = world.festivals!.at(-1)!;
+    expect(r.tick).toBe(show);
+    expect(r.acts.filter((x) => x.stage === 'head')).toHaveLength(1);
+    expect(r.acts.filter((x) => x.stage === 'main')).toHaveLength(FESTIVAL.places.main);
+    expect(r.acts.filter((x) => x.stage === 'discovery').length).toBeLessThanOrEqual(FESTIVAL.places.discovery);
+    const head = r.acts.find((x) => x.stage === 'head')!;
+    expect(head.artistId).toBe(artA.id);
+    expect(head.fee).toBeGreaterThan(0);
+    expect(head.note).toBeGreaterThan(0);
+    expect(r.acts.map((x) => x.stage)[0]).toBe('discovery');
+    const cancelled = r.acts.find((x) => x.artistId === artB.id)!;
+    expect(cancelled.cancelled).toBe(true);
+    expect(b.reputation).toBeLessThanOrEqual(repB - FESTIVAL.cancelReputation + 1);
+    expect(r.prize?.labelId).toBe(a.id);
+    expect(head.fee).toBeLessThanOrEqual(Math.ceil(world.artists[artA.id]!.fans * FESTIVAL.feePerFan.head));
+    expect(world.festival).toBeUndefined();
+    expect(buildView(world, 'u1').festival.last?.number).toBe(r.number);
+  });
+
+  it('runs with the labels of the game alone when nobody registers', () => {
+    const world = createWorld(7);
+    world.lastServerEvents = [...SERVER_IDS];
+    while (world.tick < FESTIVAL.every) runTick(world);
+    expect(world.festivals?.length).toBe(1);
+    expect(world.festivals![0]!.acts.length).toBeGreaterThan(0);
+    expect(runFestival).toBeTypeOf('function');
+  });
 });

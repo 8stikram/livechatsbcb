@@ -359,6 +359,9 @@ export interface World {
   /** Alliance offers and loans between players. */
   allyOffers?: import('./coop.ts').AllyOffer[];
   friendLoans?: import('./coop.ts').FriendLoan[];
+  /** The coming Festival du Serveur (registrations) and the past ones. */
+  festival?: import('./festival.ts').Festival | undefined;
+  festivals?: import('./festival.ts').FestivalResult[];
   /** Press conferences and chart duels between players. */
   pressConfs?: import('./wars.ts').PressConf[];
   duels?: import('./wars.ts').Duel[];

@@ -3534,3 +3534,142 @@ button.mt-goal:hover {
 .mt-pill-enemy {
   border-color: var(--mt-bad);
 }
+
+/* Festival du Serveur */
+.mt-fest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--mt-line);
+  background: var(--mt-panel);
+  text-align: left;
+  width: 100%;
+}
+.mt-fest-soon {
+  cursor: pointer;
+}
+.mt-fest-poster {
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  padding: 18px 14px;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--mt-a2) 22%, transparent), transparent 70%),
+    var(--mt-panel);
+  border-color: color-mix(in srgb, var(--mt-a2) 45%, var(--mt-line));
+}
+.mt-fest-title {
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--mt-a2);
+}
+.mt-fest-top {
+  font-size: 26px;
+  font-weight: 800;
+  text-transform: uppercase;
+  background: var(--mt-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  overflow-wrap: anywhere;
+}
+.mt-fest-mid {
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.mt-fest-low {
+  font-size: 12px;
+  color: var(--mt-mute);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.mt-fest-head,
+.mt-fest-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.mt-fest-acts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mt-fest-act {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-left: 3px solid var(--mt-line);
+  opacity: 0.35;
+  transition: opacity 0.3s ease, border-color 0.3s ease, background 0.3s ease;
+}
+.mt-fest-act.is-on {
+  opacity: 1;
+}
+.mt-fest-act.is-main {
+  border-left-color: var(--mt-a1);
+}
+.mt-fest-act.is-head {
+  border-left-color: var(--mt-a2);
+  font-size: 16px;
+}
+.mt-fest-act.is-player b {
+  color: var(--mt-a2);
+}
+.mt-fest-act.is-prize {
+  background: color-mix(in srgb, var(--mt-warn) 14%, transparent);
+  border-left-color: var(--mt-warn);
+}
+.mt-fest-act b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mt-fest-stage {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--mt-mute);
+}
+.mt-fest-note {
+  font-weight: 800;
+  min-width: 56px;
+  text-align: right;
+}
+.mt-fest-note.is-bad,
+.mt-fest-note.is-off {
+  color: var(--mt-bad);
+}
+.mt-fest-prize b {
+  color: var(--mt-warn);
+}
+.mt-festpanel {
+  gap: 8px;
+}
+.mt-deal.mt-fest-bid {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 560px) {
+  .mt-fest-act {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .mt-fest-act .mt-fest-stage,
+  .mt-fest-act .mt-sub {
+    display: none;
+  }
+}
+.mt-fest-poster .mt-go {
+  align-self: center;
+  margin-top: 6px;
+}

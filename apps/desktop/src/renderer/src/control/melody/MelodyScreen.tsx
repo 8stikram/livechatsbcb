@@ -229,6 +229,208 @@ const FoundLabel = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: M
   );
 };
 
+/* ---------------------------------- Festival du Serveur ---------------------------------- */
+
+const FEST_STAGES: Record<'head' | 'main' | 'discovery', string> = { head: 'Tête d’affiche', main: 'Scène principale', discovery: 'Scène découverte' };
+const SEEN_FEST = 'mt-fest-seen';
+const festSeen = (): number => {
+  try {
+    return Number(localStorage.getItem(SEEN_FEST) ?? 0) || 0;
+  } catch {
+    return 0;
+  }
+};
+
+// The festival poster on the home screen: the coming line-up, or the results revealed one by one.
+const FestivalPoster = ({ view, onGo }: { view: MelodyView; onGo: (tab: Tab) => void }) => {
+  const fest = view.festival;
+  const last = fest.last;
+  const [shown, setShown] = useState(() => (last && festSeen() >= last.number ? last.acts.length : 0));
+  useEffect(() => {
+    if (!last) return undefined;
+    if (festSeen() >= last.number) {
+      setShown(last.acts.length);
+      return undefined;
+    }
+    setShown(0);
+    let i = 0;
+    const timer = window.setInterval(() => {
+      i += 1;
+      setShown(i);
+      if (i >= last.acts.length) {
+        window.clearInterval(timer);
+        try {
+          localStorage.setItem(SEEN_FEST, String(last.number));
+        } catch {
+          // Not remembered: the reveal plays again next time.
+        }
+      }
+    }, 650);
+    return () => window.clearInterval(timer);
+  }, [last?.number]);
+  if (last) {
+    const best = last.prize ? last.acts.find((a) => a.artistId === last.prize!.artistId) : undefined;
+    const replay = () => {
+      try {
+        localStorage.setItem(SEEN_FEST, String(last.number - 1));
+      } catch {
+        // Nothing to do.
+      }
+      setShown(0);
+      let i = 0;
+      const timer = window.setInterval(() => {
+        i += 1;
+        setShown(i);
+        if (i >= last.acts.length) {
+          window.clearInterval(timer);
+          try {
+            localStorage.setItem(SEEN_FEST, String(last.number));
+          } catch {
+            // Nothing to do.
+          }
+        }
+      }, 650);
+    };
+    return (
+      <section className="mt-fest mt-in" aria-label="Résultats du festival">
+        <div className="mt-fest-head">
+          <Label>Festival du Serveur n°{last.number} · résultats</Label>
+          <span className="mt-sub">{fmt(last.crowd)} spectateurs</span>
+        </div>
+        <ol className="mt-fest-acts">
+          {last.acts.map((act, i) => (
+            <li key={act.artistId} className={`mt-fest-act is-${act.stage}${i < shown ? ' is-on' : ''}${act.player ? ' is-player' : ''}${last.prize?.artistId === act.artistId && shown >= last.acts.length ? ' is-prize' : ''}`}>
+              <span className="mt-fest-stage">{FEST_STAGES[act.stage]}</span>
+              <b>{act.artistName}</b>
+              <span className="mt-sub">{act.labelName}</span>
+              <span className={`mt-fest-note${act.cancelled ? ' is-off' : act.note < 40 ? ' is-bad' : ''}`}>{i < shown ? (act.cancelled ? 'Annulé' : `${act.note}/100`) : '…'}</span>
+            </li>
+          ))}
+        </ol>
+        {shown >= last.acts.length ? (
+          <div className="mt-fest-foot">
+            {best && (
+              <span className="mt-fest-prize">
+                Prix du public{best.player ? " des joueurs" : ""} : <b>{best.artistName}</b> ({best.labelName}), {best.note}/100
+              </span>
+            )}
+            <button type="button" className="mt-ghost" onClick={replay}>
+              Revoir
+            </button>
+          </div>
+        ) : (
+          <span className="mt-sub">Les notes tombent…</span>
+        )}
+      </section>
+    );
+  }
+  if (!fest.open) {
+    return (
+      <button type="button" className="mt-fest mt-fest-soon" onClick={() => onGo('labels')}>
+        <Label>Festival du Serveur n°{fest.number}</Label>
+        <span className="mt-sub">Dans {fest.weeksLeft} semaine{fest.weeksLeft > 1 ? 's' : ''}. Inscriptions {fest.weeksLeft - 4 <= 1 ? 'la semaine prochaine' : `dans ${fest.weeksLeft - 4} semaines`}.</span>
+      </button>
+    );
+  }
+  const by = (stage: 'head' | 'main' | 'discovery') => fest.entries.filter((e) => e.stage === stage);
+  return (
+    <button type="button" className="mt-fest mt-fest-poster mt-in" onClick={() => onGo('labels')}>
+      <span className="mt-fest-title">Festival du Serveur</span>
+      <span className="mt-sub">n°{fest.number} · {fest.weeksLeft <= 1 ? 'la semaine prochaine' : `dans ${fest.weeksLeft} semaines`} · inscriptions ouvertes</span>
+      <span className="mt-fest-top">{fest.head ? fest.head.artistName : 'Tête d’affiche à prendre'}</span>
+      {fest.head && <span className="mt-sub">{fest.head.labelName} · {money(fest.head.amount)}</span>}
+      <span className="mt-fest-mid">{by('main').map((e) => e.artistName).join(' · ') || 'Scène principale : 4 places'}</span>
+      <span className="mt-fest-low">{by('discovery').map((e) => e.artistName).join(' · ') || 'Scène découverte : 8 places'}</span>
+      <span className="mt-go">S’inscrire</span>
+    </button>
+  );
+};
+
+// Registration in the Label tab: main stage, discovery stage, and the headliner auction.
+const FestivalPanel = ({ view, onAct, busy }: { view: MelodyView; onAct: (action: MelodyAction) => void; busy: boolean }) => {
+  const fest = view.festival;
+  const [headArtist, setHeadArtist] = useState('');
+  const [amount, setAmount] = useState(0);
+  if (!view.label) return null;
+  const cash = view.label.cash;
+  const mine = fest.entries.filter((e) => e.mine);
+  const full = fest.myCount >= fest.perLabel;
+  const bid = Math.max(amount, fest.nextHeadBid);
+  return (
+    <section className="mt-section mt-festpanel">
+      <Label>Festival du Serveur n°{fest.number} · toutes les 7 semaines</Label>
+      {!fest.open ? (
+        <span className="mt-sub">Prochain festival dans {fest.weeksLeft} semaine{fest.weeksLeft > 1 ? 's' : ''}. Les inscriptions ouvrent 4 semaines avant.</span>
+      ) : (
+        <>
+          <span className="mt-sub">
+            Le jour J dans {fest.weeksLeft} semaine{fest.weeksLeft > 1 ? 's' : ''}. {fest.perLabel} artistes au plus par label. Note = scène, buzz, énergie et un peu de chance. Grève ou fatigue (moins de 20 d’énergie) le jour J : annulé, inscription perdue, réputation −1.
+          </span>
+          <div className="mt-deal mt-fest-bid">
+            <div className="mt-deal-text">
+              <b>Tête d’affiche (1 place, aux enchères)</b>
+              <span className="mt-sub">
+                {fest.head ? `Meilleure offre : ${money(fest.head.amount)} pour ${fest.head.artistName} (${fest.head.labelName})${fest.head.mine ? ', c’est toi' : ''}.` : `Départ à ${money(fest.headStart)}.`} Ton argent est bloqué tant que tu mènes, rendu si on te dépasse. Cachet : 30 % de la billetterie.
+              </span>
+            </div>
+            {!fest.head?.mine && (
+              <div className="mt-acts mt-deal-acts">
+                <select className="mt-select" aria-label="Artiste en tête d’affiche" value={headArtist} onChange={(e) => setHeadArtist(e.target.value)}>
+                  <option value="">Choisis un artiste</option>
+                  {fest.candidates.filter((c) => !c.strike).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} · {fmt(c.fans)} fans
+                    </option>
+                  ))}
+                </select>
+                <MoneyInput value={bid} onChange={setAmount} label="Offre" />
+                <button type="button" className="mt-go" disabled={busy || !headArtist || (full && !mine.some((m) => m.stage === 'head')) || cash < bid} onClick={() => onAct({ type: 'festival_bid', artistId: headArtist, amount: bid })}>
+                  Enchérir
+                </button>
+              </div>
+            )}
+          </div>
+          {mine.filter((e) => e.stage !== 'head').map((e) => (
+            <div key={e.artistId} className="mt-deal mt-rel-row">
+              <div className="mt-deal-text">
+                <b>{e.artistName}</b>
+                <span className="mt-sub">Inscrit : {FEST_STAGES[e.stage]}</span>
+              </div>
+              <div className="mt-acts mt-deal-acts">
+                <button type="button" className="mt-ghost" disabled={busy} onClick={() => onAct({ type: 'festival_withdraw', artistId: e.artistId })}>
+                  Retirer
+                </button>
+              </div>
+            </div>
+          ))}
+          {!full && fest.candidates.map((c) => (
+            <div key={c.id} className="mt-deal mt-rel-row">
+              <div className="mt-deal-text">
+                <b>{c.name}</b>
+                <span className="mt-sub">
+                  {fmt(c.fans)} fans · scène {c.scene} · énergie {c.energy}
+                  {c.strike ? ' · en grève' : c.tired ? ' · trop fatigué pour l’instant' : ''}
+                </span>
+              </div>
+              <div className="mt-acts mt-deal-acts">
+                <button type="button" className="mt-go" disabled={busy || cash < fest.mainFee} title="Les 4 plus gros inscrits jouent. Sinon, inscription rendue." onClick={() => onAct({ type: 'festival_register', artistId: c.id, stage: 'main' })}>
+                  Principale · {money(fest.mainFee)}
+                </button>
+                {c.discovery && (
+                  <button type="button" className="mt-ghost" disabled={busy || cash < fest.discoveryFee} title="Moins de 100 000 fans. Tirage si plus de 8 inscrits." onClick={() => onAct({ type: 'festival_register', artistId: c.id, stage: 'discovery' })}>
+                    Découverte · {money(fest.discoveryFee)}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          {full && <span className="mt-sub">Tu as inscrit {fest.perLabel} artistes : c’est le maximum.</span>}
+        </>
+      )}
+    </section>
+  );
+};
+
 /* ---------------------------------- Home ---------------------------------- */
 
 const Home = ({ view, onGo, onAct, busy }: { view: MelodyView; onGo: (tab: Tab) => void; onAct: (action: MelodyAction) => void; busy: boolean }) => {
@@ -244,6 +446,7 @@ const Home = ({ view, onGo, onAct, busy }: { view: MelodyView; onGo: (tab: Tab) 
     <div className="mt-view mt-in">
       <TrendBanner trend={view.trend} />
       <ServerNews view={view} />
+      <FestivalPoster view={view} onGo={onGo} />
       <LabelCards view={view} onAct={onAct} busy={busy} />
       <div className="mt-hub">
         <button type="button" className="mt-tile mt-t-create" data-tuto="hub-studio" onClick={() => onGo('studio')}>
@@ -4765,6 +4968,7 @@ const LabelPage = ({ card, onClose }: { card: LabelCard; onClose: () => void }) 
       </span>
       {card.allies.length > 0 && <span className="mt-pill mt-pill-ally">Alliés : {card.allies.join(', ')}</span>}
       {card.enemies.length > 0 && <span className="mt-pill mt-pill-enemy">Ennemis : {card.enemies.join(', ')}</span>}
+      {card.festivalPrizes > 0 && <span className="mt-pill mt-pill-ally">Prix du public : {card.festivalPrizes}</span>}
       <span className="mt-pill">
         Duels : {card.duelWins} gagné{card.duelWins > 1 ? 's' : ''} · {card.duelLosses} perdu{card.duelLosses > 1 ? 's' : ''}
         {card.duelFled > 0 ? ` · ${card.duelFled} fui${card.duelFled > 1 ? 's' : ''}` : ''}
@@ -4893,6 +5097,7 @@ const LabelsTab = ({
       <Beef view={view} onAct={onAct} busy={busy} />
       <PressPanel view={view} onAct={onAct} busy={busy} />
       <DuelPanel view={view} onAct={onAct} busy={busy} />
+      <FestivalPanel view={view} onAct={onAct} busy={busy} />
       <section className="mt-section">
         <Label>Labels du serveur</Label>
         <div className="mt-labels">
@@ -5334,6 +5539,9 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
       if (action.type === 'enemy_add') say('Guerre déclarée !');
       if (action.type === 'enemy_remove') say('La paix est faite.');
       if (action.type === 'gift') say('Argent envoyé.');
+      if (action.type === 'festival_register') say('Inscrit au festival !');
+      if (action.type === 'festival_withdraw') say('Inscription retirée : argent rendu.');
+      if (action.type === 'festival_bid') say('Tu mènes les enchères pour la tête d’affiche !');
       if (action.type === 'friend_loan') say('Prêt proposé. Il a 2 semaines pour accepter.');
       if (action.type === 'friend_loan_answer') say(action.accept ? 'Prêt accepté : l’argent est sur ton compte.' : 'Prêt refusé.');
       if (action.type === 'card') say(answer.data.view.events?.log[0] ?? 'Réponse envoyée.');
