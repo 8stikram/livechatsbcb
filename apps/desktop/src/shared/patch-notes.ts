@@ -4,8 +4,14 @@ export type PatchNote = { version: string; date: string; items: string[] };
 export const PATCH_NOTES: PatchNote[] = [
   {
     version: '0.25.0',
-    date: '14 novembre 2026',
+    date: '18 novembre 2026',
     items: [
+      'Nouveau jeu, Melody Tycoon : crée ton label de musique avec les membres de ton serveur Discord. Une semaine de jeu passe chaque jour',
+      'Melody Tycoon : recrute des artistes, enregistre des sons, des EP et des albums, puis grimpe dans les charts',
+      'Melody Tycoon : tournées, merch, CD et vinyles, disques d’or, staff, transferts, enchères et prêts d’artistes',
+      'Melody Tycoon : clashs, disstracks, conférences de presse, duels de charts, alliés et ennemis entre joueurs',
+      'Melody Tycoon : Festival du Serveur toutes les 7 semaines, saisons d’un an avec Saint-Valentin, été et Noël, scandales à gérer',
+      'Melody Tycoon : rotations radio, influenceurs, charts par région, critiques de presse et tweets sur chaque sortie',
       'Question débile : le vote marche pour tout le monde. Les réponses passent une par une sur l’écran des joueurs, comme un vrai LiveChat (sans le nom), puis tout le monde vote pour sa préférée, sauf la sienne',
       'Qui l’a envoyé ? : plus de coche « prêt » sur les joueurs, juste un compteur « 2 / 4 prêts ». Celui qui a envoyé le meme vote aussi, pour ne pas se griller',
       'Undercover refait : chacun reçoit un mot secret, l’undercover un mot proche sans le savoir. Chacun son tour poste une image pour son mot (bibliothèque, PC ou Ctrl+V), 3 tours, puis un seul vote',
