@@ -1691,8 +1691,7 @@ export const GamesScreen = (props: GamesProps) => {
     if (gameId) setTab("party");
   }, [gameId]);
   if (!guildId) return <PartyGames {...props} />;
-  return (
-    <>
+  const switcher = (
       <div className="tabs games-switch" role="group" aria-label="Choix du jeu">
         <button type="button" className={tab === "melody" ? "tab is-active" : "tab"} aria-pressed={tab === "melody"} onClick={() => setTab("melody")}>
           Melody Tycoon
@@ -1701,7 +1700,21 @@ export const GamesScreen = (props: GamesProps) => {
           Jeux de party
         </button>
       </div>
-      {tab === "melody" ? <MelodyScreen key={guildId} guildId={guildId} active={props.active} /> : <PartyGames {...props} />}
+  );
+  if (tab === "melody") {
+    return (
+      <div className="melody-page">
+        {switcher}
+        <div className="melody-scroll">
+          <MelodyScreen key={guildId} guildId={guildId} active={props.active} />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <>
+      {switcher}
+      <PartyGames {...props} />
     </>
   );
 };

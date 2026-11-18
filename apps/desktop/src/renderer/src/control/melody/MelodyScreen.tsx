@@ -5744,6 +5744,9 @@ export const MelodyScreen = ({ guildId, active }: { guildId: string; active: boo
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<Tab>('home');
   const [picked, setPicked] = useState<string | null>(null);
+  useEffect(() => {
+    document.querySelector('.melody-scroll')?.scrollTo({ top: 0 });
+  }, [tab, picked]);
   const [studioArtist, setStudioArtist] = useState<string | null>(null);
   const [studioKey, setStudioKey] = useState(0);
   const [talkWith, setTalkWith] = useState<string | null>(null);
