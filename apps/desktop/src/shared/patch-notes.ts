@@ -3,6 +3,14 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.25.1',
+    date: '18 novembre 2026',
+    items: [
+      'Melody Tycoon : toutes les pages défilent, avec une barre bien visible à droite. Plus rien n’est coupé en bas',
+      'Melody Tycoon : les listes et les grandes fenêtres défilent aussi, et chaque onglet s’ouvre en haut de la page',
+    ],
+  },
+  {
     version: '0.25.0',
     date: '18 novembre 2026',
     items: [

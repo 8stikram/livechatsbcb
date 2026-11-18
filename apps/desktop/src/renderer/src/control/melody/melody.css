@@ -210,7 +210,6 @@
   padding: 0 10px;
   border-bottom: 1px solid var(--mt-line);
   overflow-x: auto;
-  scrollbar-width: thin;
 }
 .mt-nav button {
   padding: 12px 11px 10px;
@@ -1216,20 +1215,30 @@ button.mt-song:not(:disabled):hover {
   overflow-y: scroll;
   padding-right: 6px;
 }
-.melody-scroll::-webkit-scrollbar {
+.melody-scroll::-webkit-scrollbar,
+.mt::-webkit-scrollbar,
+.mt *::-webkit-scrollbar {
   width: 12px;
+  height: 12px;
 }
-.melody-scroll::-webkit-scrollbar-track {
+.melody-scroll::-webkit-scrollbar-track,
+.mt::-webkit-scrollbar-track,
+.mt *::-webkit-scrollbar-track {
   background: #14121c;
   border-radius: 8px;
 }
-.melody-scroll::-webkit-scrollbar-thumb {
+.melody-scroll::-webkit-scrollbar-thumb,
+.mt::-webkit-scrollbar-thumb,
+.mt *::-webkit-scrollbar-thumb {
   min-height: 48px;
+  min-width: 48px;
   background: linear-gradient(180deg, #8b5cff, #ff4fa3);
   border: 2px solid #14121c;
   border-radius: 8px;
 }
-.melody-scroll::-webkit-scrollbar-thumb:hover {
+.melody-scroll::-webkit-scrollbar-thumb:hover,
+.mt::-webkit-scrollbar-thumb:hover,
+.mt *::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #a07dff, #ff74b6);
 }
 .games-switch {
@@ -2009,7 +2018,8 @@ img.mt-cover-img {
   inset: 0;
   z-index: 60;
   display: grid;
-  place-items: center;
+  place-items: safe center;
+  overflow-y: auto;
   background: color-mix(in srgb, #000 72%, transparent);
   border: 0;
   border-radius: 0;
