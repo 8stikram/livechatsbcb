@@ -126,6 +126,7 @@ Pas fait : le vrai test à deux PC, tu as choisi de t'en passer pour l'instant.
 
 - 0.23.0 publiée le 9 novembre 2026 : effets 3D, apparitions/sorties 3D, fond de fenêtre en direct dans LiveChat avancé, violet au centre de Party
 - 0.24.0 publiée le 11 novembre 2026 : texte déplaçable dans LiveChat avancé, onglet Presse-papier dans la bibliothèque, nouvelles règles des jeux et bots, nouveau jeu Devine Vite (serveur redéployé avec), présentateurs animés et décors des 5 jeux (le présentateur en grand dans le jeu, têtes sur les cartes et l'invitation, réglage « Effets dans les jeux »), bouton ↻ dans la bibliothèque
+- 0.25.2 publiée le 23 novembre 2026 : Question débile (réponses une par une sur l'écran, vote réparé), Qui l'a envoyé (compteur de prêts), Undercover refait (mots secrets, une image par tour sur 3 tours, sous chaque pseudo, en grand, mots trash), rappel « C'est ton tour ! » (serveur redéployé avec)
 - Bug : l'overlay par-dessus Fortnite d'un pote, qui se ferme / crash
 
 ### Publiée : 0.21.0 (motion design)
