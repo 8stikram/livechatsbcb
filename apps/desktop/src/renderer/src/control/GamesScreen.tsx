@@ -817,6 +817,7 @@ const GuessTurn = ({ game, party }: { game: GameView; party: PartyView }) => {
       </p>
       {speaking ? (
         <>
+          <TurnNudge />
           <p className="game-ask">À toi de faire deviner !</p>
           <div className="guess-card" key={game.secret ?? ""} data-testid="guess-secret">
             {game.secret}
@@ -1057,14 +1058,16 @@ const Write = ({ game, party, now }: { game: GameView; party: PartyView; now: nu
     );
   }
 
-  // Undercover: a picture for your word, each in turn, three laps.
+  // Undercover: a picture for your word, each in turn, three laps. The last one posted, big.
   const myTurn = game.turn === me;
+  const last = game.entries.filter((entry) => entry.files.length > 0).at(-1);
   return (
     <div className="game-step">
       <MyWord game={game} />
       {myTurn ? (
         <>
-          <p className="game-ask">À toi ! Poste une image qui va avec ton mot.</p>
+          <TurnNudge />
+          <p className="game-ask">Poste une image qui va avec ton mot.</p>
           {game.sending > 0 ? <p className="hint">Envoi en cours…</p> : <GuessShow game={game} />}
         </>
       ) : (
@@ -1072,10 +1075,23 @@ const Write = ({ game, party, now }: { game: GameView; party: PartyView; now: nu
           {game.turn ? `${nameOf(party, game, game.turn)} cherche une image…` : "Tout le monde a posté."}
         </p>
       )}
+      {last && (
+        <div className="under-last" key={last.id} data-testid="under-last">
+          <span className="under-last-who">{last.ownerId === me ? "Toi" : nameOf(party, game, last.ownerId)}</span>
+          <GameMedia files={last.files} big press />
+        </div>
+      )}
       <UnderColumns game={game} party={party} />
     </div>
   );
 };
+
+// Your turn: big, so that nobody misses it.
+const TurnNudge = () => (
+  <div className="turn-nudge" role="alert" data-testid="turn-nudge">
+    🔔 C’est ton tour !
+  </div>
+);
 
 const MyWord = ({ game }: { game: GameView }) => (
   <div className="under-word-card" data-testid="under-word">
@@ -1090,8 +1106,16 @@ const UnderColumns = ({ game, party, voting = false }: { game: GameView; party: 
   const shown = game.phase === "reveal";
   const revealed = useReveal(game.players.length, shown);
   const allShown = revealed >= game.players.length;
+  const [zoom, setZoom] = useState<GameView["entries"][number] | null>(null);
   return (
     <div className="under-columns" data-testid="under-columns">
+      {zoom &&
+        createPortal(
+          <button type="button" className="under-zoom" data-testid="under-zoom" aria-label="Fermer" onClick={() => setZoom(null)}>
+            <GameMedia files={zoom.files} big press />
+          </button>,
+          document.body,
+        )}
       {game.players.map((id, index) => {
         const posts = game.entries.filter((entry) => entry.ownerId === id && entry.files.length > 0);
         const tally = game.entries.find((entry) => entry.id === id && entry.files.length === 0);
@@ -1111,7 +1135,9 @@ const UnderColumns = ({ game, party, voting = false }: { game: GameView; party: 
             {tally && index < revealed && <span className="under-their-word">{tally.caption}</span>}
             <div className="under-posts">
               {posts.map((post) => (
-                <GameMedia key={post.id} files={post.files} />
+                <button key={post.id} type="button" className="under-post" title="Voir en grand" onClick={() => setZoom(post)}>
+                  <GameMedia files={post.files} />
+                </button>
               ))}
               {game.phase === "write" &&
                 Array.from({ length: Math.max(0, game.rounds - posts.length) }, (_, slot) => (

@@ -3,6 +3,15 @@ export type PatchNote = { version: string; date: string; items: string[] };
 // Newest first, as they are shown. Publishing refuses a version that has no notes here.
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '0.25.2',
+    date: '23 novembre 2026',
+    items: [
+      'Undercover : 50 mots trash de plus quand « Mots trash » est activé',
+      'Undercover : la dernière image postée s’affiche en grand, et un clic sur une image l’ouvre en plein écran',
+      'Undercover et Devine Vite : « C’est ton tour ! » en gros dans le jeu, un bandeau par-dessus ton jeu vidéo, et l’icône de l’app clignote dans la barre des tâches',
+    ],
+  },
+  {
     version: '0.25.1',
     date: '18 novembre 2026',
     items: [

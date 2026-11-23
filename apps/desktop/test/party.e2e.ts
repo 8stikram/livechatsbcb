@@ -2391,17 +2391,34 @@ describe.skipIf(online)('party flow in the real app', () => {
     expect(await host.control.getByTestId('under-column').count()).toBe(3);
     // Each one posts in turn, three laps: mine from the PC when asked.
     let pictured = false;
+    let nudged = false;
     const deadline = Date.now() + 150_000;
     while (!(await host.control.getByTestId('under-vote').first().isVisible())) {
       const fromPc = host.control.getByRole('button', { name: 'Depuis le PC' });
-      if (await fromPc.isVisible()) await fromPc.click().catch(() => undefined);
+      if (await fromPc.isVisible()) {
+        // My turn: a big reminder in the app, and over the game.
+        if (!nudged) {
+          await host.control.getByTestId('turn-nudge').waitFor();
+          await host.stage.getByTestId('turn-banner').waitFor({ timeout: 5_000 });
+          await host.stage.screenshot({ path: join(artifacts, 'turn-banner.png') });
+          nudged = true;
+        }
+        await fromPc.click().catch(() => undefined);
+      }
       if (!pictured && (await host.control.locator('.under-posts .game-media').count()) >= 2) {
+        // The last picture posted is big, and any picture opens big on a click.
+        await host.control.getByTestId('under-last').waitFor();
         await picture(host.control, 'world-insp-game.png');
+        await host.control.locator('.under-post').first().click();
+        await host.control.getByTestId('under-zoom').waitFor();
+        await host.control.screenshot({ path: join(artifacts, 'world-insp-zoom.png') });
+        await host.control.getByTestId('under-zoom').click();
         pictured = true;
       }
       if (Date.now() > deadline) throw new Error('No vote in Undercover');
       await new Promise((done) => setTimeout(done, 300));
     }
+    expect(nudged).toBe(true);
     // Every picture sits under the name of whoever posted it.
     expect(await host.control.locator('.under-column').first().locator('.under-posts > *').count()).toBeGreaterThan(0);
     await host.control.screenshot({ path: join(artifacts, 'world-insp-vote.png') });

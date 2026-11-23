@@ -389,6 +389,8 @@ export type AppState = {
   gameInvite: GameInviteView | null;
   // Question débile: the answer on screen now, like a LiveChat, only for the players of the game.
   gameShow: PlaybackView | null;
+  // Undercover or Devine Vite: it is this player's turn. On screen for a few seconds, even in game.
+  turnNudge: { gameId: string; kind: GameKind } | null;
   // One of the excluded apps is in front: nothing shows or plays here until it isn't.
   excludedNow: boolean;
   favorites: FavoriteView[];

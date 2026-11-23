@@ -460,6 +460,7 @@ function start(): void {
       gameReactions,
       gameInvite: gameInvite(),
       gameShow: gameShow(),
+      turnNudge: turnNudge(),
       favorites: library.favorites(),
       localReplay: localReplayView(),
       skippedBy,
@@ -498,6 +499,31 @@ function start(): void {
       }, INVITE_MS + 100);
     }
     return Date.now() < inviteSeen.until ? { gameId: game.id, kind: game.kind, starterName: game.starterName } : null;
+  };
+
+  // Undercover or Devine Vite: a reminder when it becomes this player's turn, over the game for a few seconds,
+  // and the taskbar blinks while the app is behind.
+  const NUDGE_MS = 5_000;
+  let nudgeSeen: { key: string; until: number } | null = null;
+  const turnNudge = (): AppState['turnNudge'] => {
+    const current = connection?.current();
+    const game = current?.game;
+    if (!current || !game || (game.kind !== 'undercover' && game.kind !== 'guess') || game.phase !== 'write' || game.turn !== current.memberId)
+      return null;
+    const key = `${game.id}:${game.round}:${game.endsAt}`;
+    if (nudgeSeen?.key !== key) {
+      nudgeSeen = { key, until: Date.now() + NUDGE_MS };
+      if (!controlWindow.isDestroyed() && !controlWindow.isFocused()) controlWindow.flashFrame(true);
+      setTimeout(() => {
+        syncOverlay();
+        publishState();
+      }, 50);
+      setTimeout(() => {
+        syncOverlay();
+        publishState();
+      }, NUDGE_MS + 100);
+    }
+    return Date.now() < nudgeSeen.until ? { gameId: game.id, kind: game.kind } : null;
   };
 
   // Question débile: each answer goes over the screen of the players like a LiveChat, without who sent it.
@@ -579,7 +605,7 @@ function start(): void {
     const playing = head?.startAt != null && hiddenReason(head) === null && !excludedNow();
     // Asked for on this PC, like the test: it shows even for someone who keeps the overlay off.
     const showsPoll =
-      settings.current.overlayEnabled && !settings.current.clean && !excludedNow() && (pollOnScreen() || gameInvite() !== null || gameShow() !== null);
+      settings.current.overlayEnabled && !settings.current.clean && !excludedNow() && (pollOnScreen() || gameInvite() !== null || gameShow() !== null || turnNudge() !== null);
     const wanted = wheelOpen !== null || overlayTest || localReplay?.startAt != null || (playing && settings.current.overlayEnabled) || showsPoll;
 
     if (wanted && !stageWindow.isVisible()) {

@@ -211,6 +211,15 @@ export const SPICY_PAIRS: [string, string][] = [
   ["Coup d’un soir", "Rencard"], ["Body shot", "Beer pong"], ["Sexto", "Nude"], ["Poitrine", "Pectoraux"], ["Aubergine", "Pêche"],
   ["Club libertin", "Boîte de nuit"], ["Cougar", "Milf"], ["Gode", "Banane"], ["Kamasutra", "Yoga"], ["Chippendale", "Maître-nageur"],
   ["Lit qui grince", "Voisins bruyants"],
+  ["Capote percée", "Test de grossesse"], ["Gâterie", "Massage"], ["Levrette", "Missionnaire"], ["Fellation", "Sucette"], ["Vibromasseur", "Brosse à dents électrique"],
+  ["Pornhub", "OnlyFans"], ["Branlette", "Pouce levé"], ["Éjac précoce", "Panne"], ["Poils pubiens", "Barbe"], ["Mycose", "Herpès"],
+  ["Morning glory", "Réveil"], ["Plan cul raté", "Rencard Tinder"], ["Sugar daddy", "Papy riche"], ["Strip poker", "Action ou vérité"], ["Sex-shop", "Pharmacie"],
+  ["Pet foireux", "Caca nerveux"], ["Chiasse", "Gastro"], ["Crotte de nez", "Cérumen"], ["Pisse", "Bière tiède"], ["Toilettes bouchées", "Fosse septique"],
+  ["Vomir dans le Uber", "Vomir dans le taxi"], ["Pipi au lit", "Sueur nocturne"], ["Haleine de chacal", "Pieds qui puent"], ["Slip sale", "Chaussette sale"], ["Gerbe", "Soupe"],
+  ["Joint", "Chicha"], ["Bad trip", "Gueule de bois"], ["Rail de coke", "Sucre glace"], ["Champignons", "Truffes"], ["Dealer", "Livreur Uber Eats"],
+  ["Cuite", "Coma éthylique"], ["Garde à vue", "Retenue"], ["Bracelet électronique", "Montre connectée"], ["Braquage", "Soldes"], ["Proxénète", "Agent immobilier"],
+  ["Enterrement", "Mariage"], ["Testament", "Liste de courses"], ["Croque-mort", "Traiteur"], ["Cercueil", "Placard"], ["Urne funéraire", "Pot de fleurs"],
+  ["Ex toxique", "Belle-mère"], ["Cocu", "Célibataire"], ["Tromperie", "Mensonge"], ["Dick pic", "Selfie"], ["Ghosting", "Vu à 3 h"],
 ];
 
 export const BOT_NAMES =["Bot Gaston", "Bot Josiane", "Bot Kevin", "Bot Mamie Lulu", "Bot Fernand", "Bot Jessica"];

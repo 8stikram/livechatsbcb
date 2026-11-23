@@ -6348,12 +6348,81 @@ html.calm body::before {
 .under-posts video {
   display: block;
   width: 100%;
-  max-height: 110px;
-  object-fit: cover;
+  max-height: 170px;
+  object-fit: contain;
   border-radius: 10px;
 }
+.under-post {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  transition: transform 120ms;
+}
+.under-post:hover {
+  transform: scale(1.03);
+}
+.under-last {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  animation: question-show-in 320ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
+}
+.under-last-who {
+  font-weight: 700;
+}
+.under-last .game-media {
+  width: min(100%, 460px);
+}
+.under-last img,
+.under-last video {
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  object-fit: contain;
+}
+.under-zoom {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  border: 0;
+  background: rgb(0 0 0 / 82%);
+  cursor: zoom-out;
+}
+.under-zoom img,
+.under-zoom video {
+  max-width: 90vw;
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: 14px;
+}
+.turn-nudge {
+  align-self: center;
+  padding: 10px 26px;
+  border-radius: 999px;
+  background: var(--accent, #9b6bff);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #9b6bff) 60%, transparent);
+  animation: turn-nudge-pulse 1.2s ease-in-out infinite;
+}
+@keyframes turn-nudge-pulse {
+  50% { transform: scale(1.06); box-shadow: 0 0 0 12px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn-nudge,
+  .under-last {
+    animation: none;
+  }
+}
 .under-slot {
-  height: 52px;
+  height: 26px;
   border: 1px dashed var(--line);
   border-radius: 10px;
   opacity: 0.6;
@@ -6367,4 +6436,20 @@ html.calm body::before {
   .under-posts > * {
     animation: none;
   }
+}
+
+/* Undercover: the pictures are the game, so the card takes more room and the last one is big. */
+.panel.game-main.has-host.world-insp {
+  padding-left: 30%;
+}
+.panel.game-main .under-last .game-file {
+  height: clamp(200px, 38vh, 380px);
+  max-height: none;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+.panel.game-main .under-posts .game-file {
+  max-height: 140px;
+  padding: 4px 4px 12px;
 }
